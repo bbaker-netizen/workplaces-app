@@ -79,3 +79,32 @@ export async function withTenantContext<T>(
     return fn(tx);
   });
 }
+
+/**
+ * Bootstrap a brand-new tenant. Functionally identical to
+ * `withTenantContext`, but named to make intent clear at the orgs-row
+ * creation call site: `newOrgId` is a UUID generated in app code that
+ * will become the new tenant's `id`. Setting the GUC to that UUID first
+ * lets the orgs INSERT pass `WITH CHECK (id = auth.org_id())`.
+ */
+export const withBootstrapContext = withTenantContext;
+
+/**
+ * System-context helper — runs the callback inside a transaction WITHOUT
+ * the role drop. The active role stays `neondb_owner` (BYPASSRLS), so
+ * RLS does NOT bind. Use ONLY for legitimate pre-tenant-context
+ * operations where there is no orgId to scope to:
+ *
+ *   - First-time provisioning lookups (find user_profile by clerk_user_id
+ *     before we know which org to scope to).
+ *   - Admin scripts and one-off maintenance.
+ *
+ * Never reach for this in tenant-data queries. `withTenantContext` is
+ * the audit point for RLS enforcement; this helper is the deliberate,
+ * narrow exception.
+ */
+export async function withSystemContext<T>(
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => fn(tx));
+}

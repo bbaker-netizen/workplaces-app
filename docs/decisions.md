@@ -81,6 +81,61 @@ changes needed.
 
 ---
 
+## 2026-05-02 — Phase 0 provisioning: personal org, first-visit, master_admin, manual master flip
+
+**Context.** Step 5 needed a way to land a new Clerk-authenticated user
+on `/portal` with a row in `user_profiles`. Several shortcuts were taken
+to keep Phase 0 focused on proving the loop works; each one has a Phase 1
+follow-up.
+
+**Decisions (all Phase 0 only — Phase 1 replaces).**
+
+1. **Personal org per signup, `clerk_org_id = clerk_user_id` placeholder.**
+   Each new user gets one `orgs` row with `type='client'` and
+   `clerk_org_id` set to their Clerk *user* id (not a real Clerk Org id —
+   Clerk Organizations isn't enabled yet). Phase 1 introduces a real
+   invitation-based multi-tenant model where `clerk_org_id` references a
+   genuine Clerk Organization.
+
+2. **First-visit auto-provision, not webhook.** `lib/db/provisioning.ts`
+   `ensureUserProfile` runs from `app/portal/page.tsx` on every portal
+   load; if no `user_profiles` row exists for the Clerk user, it creates
+   org + profile in a single bootstrap transaction. The kickoff plan
+   called for a Clerk webhook (`user.created → server action`) — deferred
+   to Phase 1 to avoid the local-dev tunneling friction (ngrok/Clerk CLI)
+   and the `svix` dependency.
+
+3. **`role = 'master_admin'` for every Phase 0 sign-up.** Single test
+   user (Bruce) needs full visibility. Phase 1 swaps to email-conditional
+   or invitation-driven role assignment.
+
+4. **Bruce's org manually flipped to `type='master'` post-signup.** The
+   provisioning handler can't know which signup is the Workplaces master
+   org vs. a regular client org — it always defaults to `'client'`.
+   Bruce's row needs `type='master'` for downstream coach-side queries.
+   One-shot SQL, recorded here for traceability:
+
+   ```sql
+   UPDATE orgs SET type = 'master'
+   WHERE name = 'bbaker@4workplaces.com';
+   ```
+
+   Run as `neondb_owner` (BYPASSRLS) on 2026-05-02. Org id
+   `29af29d7-3ad1-47fd-81af-24151aa78ecf`. `updated_at` trigger
+   confirmed firing.
+
+**Phase 1 backlog** (record only — not for now):
+
+- Clerk webhook handler (`/api/webhooks/clerk`) for `user.created` and
+  Clerk Organization events; `svix` dependency.
+- Real Clerk Organizations: `clerk_org_id` references a true Clerk Org;
+  membership and invites managed in Clerk UI.
+- Email-or-invitation-conditional role assignment.
+- Replace the manual master flip with either an env-var allowlist of
+  master-org emails or an admin-only flip endpoint.
+
+---
+
 ## 2026-05-02 — Dual-role pattern: `neondb_owner` for DDL, `workplaces_app` for runtime
 
 **Context.** RLS policies were applied in migration `0001_rls_policies.sql`
