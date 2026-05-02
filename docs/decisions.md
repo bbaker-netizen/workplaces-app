@@ -81,6 +81,51 @@ changes needed.
 
 ---
 
+## 2026-05-02 — Dual-role pattern: `neondb_owner` for DDL, `workplaces_app` for runtime
+
+**Context.** RLS policies were applied in migration `0001_rls_policies.sql`
+with `FORCE ROW LEVEL SECURITY` so even the table owner is bound. First
+verification run still showed cross-tenant rows leaking through. Root
+cause: Neon's `neondb_owner` role has the `BYPASSRLS` role attribute by
+default, and `BYPASSRLS` beats `FORCE`. The current connection user was
+silently bypassing every policy.
+
+**Decision.** Two roles. `neondb_owner` retains `BYPASSRLS` and is used
+only for DDL — migrations, drizzle-kit, the occasional admin script. A
+new role `workplaces_app` (created in `0002_app_role.sql`) is `NOBYPASSRLS
+NOLOGIN`, granted to `neondb_owner`, with SELECT / INSERT / UPDATE / DELETE
+on the public schema and EXECUTE on `auth.org_id()`. Every tenant-scoped
+runtime transaction does `SET LOCAL ROLE workplaces_app` immediately
+before `set_config('app.current_org_id', uuid, true)` — the role drop
+removes the bypass for the duration of the txn, the GUC feeds the policy
+predicate, and `SET LOCAL` resets both at COMMIT/ROLLBACK so nothing
+leaks across the connection pool.
+
+**Single audit point: `withTenantContext`.** All runtime DB access for
+tenant-scoped tables goes through `lib/db/tenant.ts`. The helper opens a
+Drizzle transaction, runs the role drop and GUC set, then invokes the
+caller's callback against the transaction handle. Server actions, server
+components, and route handlers must use this helper — never `drizzle()` or
+raw SQL clients directly. Centralising the role/GUC setup means RLS can't
+be silently bypassed by future contributors copy-pasting the wrong
+pattern.
+
+**Why not separate connection strings (`DATABASE_URL_APP`).**
+Considered. Strictest separation but introduces password management
+(rotation, env hygiene, Netlify dashboard sync) for marginal benefit
+once the `withTenantContext` boundary is enforced. The role-drop
+approach uses one connection string and gets equivalent RLS binding.
+Re-evaluate when there's a concrete reason to physically separate
+read/write paths.
+
+**Verification.** `scripts/verify-rls.mjs` exercises five scenarios end-
+to-end: bootstrap, positive isolation, negative read, negative write
+(asserting `42501`), and cleanup. Pre-flight cleanup runs as
+`neondb_owner` (no role drop) so stale `test_clerk_%` rows from prior
+failed runs get swept idempotently.
+
+---
+
 ## 2026-05-02 — Multi-tenancy: Clerk Organizations + Postgres RLS via session GUC
 
 **Context.** Two viable patterns for tenant scoping with Clerk: (1) app-managed
