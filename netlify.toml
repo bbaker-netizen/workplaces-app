@@ -1,0 +1,13 @@
+[build]
+  command = "pnpm build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--version"  # Disable npm install; pnpm handles deps via lockfile.
+  PNPM_FLAGS = "--frozen-lockfile"
+
+# Netlify's official Next.js plugin handles routing, SSR, image
+# optimization, and edge functions for the App Router.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

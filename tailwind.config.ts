@@ -15,6 +15,7 @@ const config: Config = {
     },
     extend: {
       colors: {
+        // shadcn semantic tokens (driven by CSS vars in globals.css)
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -48,6 +49,19 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+
+        // The Builder named tokens — direct hex for non-shadcn utilities
+        "foreman-black": "#1A1A1A",
+        "drafting-cream": "#F5F1E8",
+        "steel-blue": "#2E4057",
+        "safety-vest": "#E87722",
+        "neutral-grey-1": "#666666",
+        "neutral-grey-2": "#CCCCCC",
+      },
+      fontFamily: {
+        display: ['"Big Shoulders Display"', "sans-serif"],
+        sans: ['"Work Sans"', "system-ui", "sans-serif"],
+        mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",
