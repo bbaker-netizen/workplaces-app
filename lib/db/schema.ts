@@ -229,7 +229,8 @@ export const actionItems = pgTable(
     engagementId: uuid("engagement_id")
       .notNull()
       .references(() => engagements.id, { onDelete: "cascade" }),
-    description: text("description").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
     status: actionItemStatusEnum("status").notNull().default("open"),
     assigneeUserProfileId: uuid("assignee_user_profile_id").references(
       () => userProfiles.id,

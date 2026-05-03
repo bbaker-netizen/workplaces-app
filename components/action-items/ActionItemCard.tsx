@@ -1,0 +1,117 @@
+/**
+ * ActionItemCard — server-rendered card display.
+ *
+ * Used by both portal and coach views. The optional `engagementName`
+ * surfaces the engagement label only on coach-view cards (where items
+ * span engagements).
+ */
+
+import Link from "next/link";
+import {
+  formatDueDate,
+  isOverdueFromAny,
+  type ActionItemStatus,
+} from "./utils";
+import { StatusPill } from "./StatusPill";
+
+export type ActionItemCardData = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: ActionItemStatus;
+  assigneeName: string | null;
+  dueDate: Date | string | null;
+  revenueImpact: boolean;
+  marginImpact: boolean;
+  engagementName?: string | null;
+};
+
+export function ActionItemCard({
+  item,
+  detailHref,
+  statusOptions,
+  pillDisabled,
+}: {
+  item: ActionItemCardData;
+  detailHref: string;
+  statusOptions: readonly ActionItemStatus[];
+  pillDisabled?: boolean;
+}) {
+  const overdue = isOverdueFromAny(item.dueDate, item.status);
+
+  return (
+    <article
+      className={
+        "group relative bg-white border rounded-md transition-colors " +
+        (overdue
+          ? "border-[#E87722] shadow-[inset_4px_0_0_0_#E87722]"
+          : "border-[#CCCCCC] hover:border-[#666666]")
+      }
+    >
+      <div className="p-4 sm:p-5">
+        {/* Top row: status pill + revenue/margin badges */}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <StatusPill
+            itemId={item.id}
+            status={item.status}
+            options={statusOptions}
+            disabled={pillDisabled}
+          />
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            {item.revenueImpact && (
+              <span className="font-mono text-[9px] uppercase tracking-[0.15em] px-2 py-0.5 rounded-sm border border-[#1A1A1A] text-[#1A1A1A]">
+                Revenue
+              </span>
+            )}
+            {item.marginImpact && (
+              <span className="font-mono text-[9px] uppercase tracking-[0.15em] px-2 py-0.5 rounded-sm border border-[#1A1A1A] text-[#1A1A1A]">
+                Margin
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Title — clickable to detail */}
+        <Link
+          href={detailHref}
+          className="block font-display font-bold text-foreground tracking-tight text-xl sm:text-2xl leading-tight hover:underline underline-offset-4 decoration-2"
+        >
+          {item.title}
+        </Link>
+
+        {/* Optional description excerpt */}
+        {item.description && (
+          <p className="mt-2 font-sans text-sm text-muted-foreground line-clamp-2 whitespace-pre-line">
+            {item.description}
+          </p>
+        )}
+
+        {/* Bottom row: assignee + due + (optional) engagement label */}
+        <div className="mt-4 flex items-center flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-muted-foreground">
+          <span>
+            <span className="uppercase tracking-[0.15em] mr-1.5">Owner</span>
+            <span className={item.assigneeName ? "text-foreground" : ""}>
+              {item.assigneeName ?? "Unassigned"}
+            </span>
+          </span>
+          <span>
+            <span className="uppercase tracking-[0.15em] mr-1.5">Due</span>
+            <span
+              className={
+                overdue ? "text-[#E87722] font-bold" : "text-foreground"
+              }
+            >
+              {formatDueDate(item.dueDate)}
+            </span>
+          </span>
+          {item.engagementName && (
+            <span>
+              <span className="uppercase tracking-[0.15em] mr-1.5">Client</span>
+              <span className="text-foreground">{item.engagementName}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}

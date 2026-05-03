@@ -409,18 +409,39 @@ Tagged `v0.2.0` on 2026-05-03.
 
 ---
 
+## What was built in Sub-Phase 1.2
+
+Tagged `v0.3.0` on 2026-05-03.
+
+**Schema:** migration `0004_action_items_title.sql` added `title text NOT NULL` to `action_items` and dropped `NOT NULL` on `description` (which becomes the optional markdown body). Zero rows in the table at migration time, so no backfill required.
+
+**Server actions** (`lib/actions/action-items.ts`): `createActionItem`, `updateActionItem`, `deleteActionItem`. All Zod-validated, all wrapped in `withTenantContext`. Role-based authz: `master_admin` / `coach` / `client_lead` get full edit; `client_manager` / `client_employee` are restricted to status updates on items assigned to them. Delete is hard delete (soft-delete deferred). Notifications fan out on assignment when `assignee !== creator`.
+
+**Read queries** (`lib/db/queries/`): `action-items.ts` (`listEngagementActionItems` + `listCoachActionItems` + `getActionItem`), `engagements.ts` (`getCurrentEngagement` + `listCoachEngagements`), `user-profiles.ts` (`listEngagementMembers`), `notifications.ts` (`getUnreadNotificationCount` + `listNotifications`). Coach-side cross-engagement reads use `withSystemContext` because items live in client orgs but the coach session is in the master org.
+
+**Portal layout shell** (`app/portal/layout.tsx`): module-per-route pattern locked in. New routes: `/portal/action-items`, `/portal/action-items/new`, `/portal/action-items/[id]`, `/portal/notifications`. Shared `PortalNav` with brand wordmark, Action items link, notification bell with unread badge, sign out. EngagementSlug-scoped routing deferred to Phase 2+ when users span engagements.
+
+**Coach view** (`/coach/action-items` + sub-routes): cross-engagement list with engagement labels on each card. New form has an engagement picker (`CoachNewActionItemForm`) that recomputes the default assignee when engagement switches.
+
+**Action item card UX:** mobile-first card list with overdue items pinned at top in Safety Vest Orange treatment, then due-date ascending, no-due-date items at bottom. Status pill click = inline native dropdown for fast updates; full card click = edit page. Filter chips above the list with status counts; "Draft" chip visible to coach roles only.
+
+**In-app notifications:** `notification_type='action_item_assigned'` rows created on assign/reassign with `sent_via='in_app'`. `MarkAllReadOnMount` clears the unread count when the notifications page is visited (per-item read tracking is Phase 2). Email triggers wait for Phase 1.4 + Resend.
+
+**Test setup script:** `scripts/setup-bruce-test-engagement.mjs` (idempotent) creates a "Bruce Test" engagement directly in the master org so the manual test scenario has somewhere to write items into. The engagement form at `/coach/engagements/new` would have created a fresh client Clerk Org, which we don't want for solo-coach testing.
+
+---
+
 ## Active Phase
 
-**Phase 1.2 — Action Items Module (Manual).** Build the manual creation, edit, assignment, and status-tracking experience for action items. Foundations for AI extraction in 1.6.
+**Phase 1.3 — Communication Module + Contextual Conversations.** Build threaded messaging tied to per-entity threads (action items, deliverables, engagement-level general thread) plus a Recent Activity view that aggregates the latest messages across all entities in the engagement.
 
 Per `docs/Phase-1-Plan.md`:
-- Action Items CRUD UI on top of the `action_items` table from 1.1
-- Status pills: Open / In Progress / Done / Blocked
-- Assignee picker (any `user_profile` in the engagement)
-- Due-date picker, revenue / margin impact tags
-- Coach view (cross-engagement) + client view (single engagement)
-- "Drafts" section visible to coach only — empty until 1.6's Fireflies AI extraction lands
+- Threaded messaging UI: composer, message list, reply, edit, delete
+- Per-entity threads via the existing `messages.parent_entity_type` + `parent_entity_id` columns from 1.1
+- General engagement thread (`parent_entity_type = 'engagement'`)
+- Recent Activity view across all the engagement's threads
+- Markdown rendering in messages (replaces 1.2's plain-text description rendering for action items, too — same renderer)
 
-**Acceptance:** coach creates 3 test action items in an engagement, sets due dates and assignees, updates status; assigned client can update status on items assigned to them.
+**Acceptance:** coach posts a message on an action item; it appears in the action item detail view AND in the engagement's Recent Activity. Same for the general thread.
 
-When Phase 1.2 completes, this section moves to Phase 1.3 (Communication Module).
+When Phase 1.3 completes, this section moves to Phase 1.4 (@mentions + Resend wiring).

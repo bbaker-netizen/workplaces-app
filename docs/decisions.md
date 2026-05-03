@@ -6,6 +6,34 @@ decision, follow-up (if any).
 
 ---
 
+## 2026-05-03 — Sub-Phase 1.2: Action Items module — UX + structural decisions
+
+**Context.** Building the first portal module on top of the `action_items` table from 1.1. Five clarifying questions resolved up front; a sixth (schema gap) surfaced once I read the table definition.
+
+**Decisions locked.**
+
+1. **Form defaults** (Q1, option b): new action items default to `status='open'`, `due_date=+14 days from today`, `assignee=client_lead` resolved via fallback chain (engagement's `client_lead` → first non-coach member → current user). Bruce's solo-test scenario hits the third rung — assignee defaults to himself.
+
+2. **List structure** (Q2, option a): single chronological list with filter chips above. Counts on each chip. Tabs and section headers were rejected — chips are the most mobile-friendly and the most compact. Implemented in `components/action-items/FilterChips.tsx`.
+
+3. **Sort** (Q3, option b): overdue items pinned at the top with Safety Vest Orange (`#E87722`) left-border treatment, then due-date ascending, then no-due-date items at the bottom. "Done" items never count as overdue regardless of due date. Pure server-side sort in `components/action-items/sort.ts`; client doesn't re-sort after filters change.
+
+4. **Status update UX** (Q4, option c): both. Status pill click on a card opens an inline native `<select>` dropdown (fast path for the most common interaction); full card click navigates to the edit page (everything else — title, description, assignee, due, flags, delete). Native `<select>` instead of a custom Radix popover keeps Phase 1.2 dependency-free; mobile-friendly without extra effort.
+
+5. **Portal routing pattern** (Q5, option a): module-per-route. `/portal/page.tsx` is a thin dashboard with welcome + module quick-links; each module gets its own sub-route (`/portal/action-items`, `/portal/notifications`, future `/portal/communication` and `/portal/documents`). EngagementSlug-scoped routing deferred to Phase 2+ when a user can belong to multiple engagements. The new `/portal/layout.tsx` holds the shared shell (brand wordmark, nav links, notification bell, sign out).
+
+**Schema gap fixed in `0004_action_items_title.sql`.** The 1.1 schema had `description text NOT NULL` as the action's only text field. The 1.2 form needs both a short `title` (required) and an optional markdown `description`. Added `title text NOT NULL`; dropped `NOT NULL` on `description`. Zero rows in the table at migration time, so no backfill / default value required.
+
+**Coach edit cross-org gap.** `updateActionItem` / `deleteActionItem` use `withTenantContext(profile.orgId)`, which works for same-org users (client roles in their own org, or Bruce in his master org's "Bruce Test" engagement). For a coach editing an item in a CLIENT org (Phase 1.7+), the GUC won't match the item's `org_id` and RLS would block. Phase 1.2 testing happens entirely in the master org (the test engagement lives there), so the gap doesn't bite. Phase 1.7 will need either: per-action lookup of the item's org_id and `withTenantContext(item.orgId)`, or a coach-aware variant of the helper. Defer.
+
+**Notifications scope for 1.2.** Only `action_item_assigned`, `sent_via='in_app'`. Self-assignments don't fire notifications (kickoff explicit). Per-item read tracking is Phase 2 polish; for now `MarkAllReadOnMount` on the notifications page clears all unread on visit. Email triggers wait for Phase 1.4 + Resend.
+
+**Test setup.** `scripts/setup-bruce-test-engagement.mjs` creates a "Bruce Test" engagement directly in the master org. Doesn't go through `/coach/engagements/new` because that creates a fresh client Clerk Org — overkill for solo-coach testing where Bruce just needs a local writable engagement. Idempotent; re-runs are no-ops.
+
+**New deps:** none. `lucide-react` (Bell icon), `date-fns` (formatting), `clsx`/`tailwind-merge` (already installed for shadcn) all carry their weight here. No new package additions in 1.2.
+
+---
+
 ## 2026-05-03 — Sub-Phase 1.1 cutover: real Clerk Organizations replace personal-org placeholder
 
 **Context.** Phase 0 stored `orgs.clerk_org_id = clerk_user_id` (a `user_…`-prefixed placeholder) because Clerk's Organizations feature wasn't enabled. Phase 1.1 enables Organizations, migrates Bruce's master org row to a real Clerk Org id (`org_…`), and routes every new engagement through Clerk's invitation flow. Personal-org auto-creation in `provisioning.ts` is retired entirely.
