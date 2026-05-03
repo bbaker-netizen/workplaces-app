@@ -393,8 +393,51 @@ Bruce's working hours are Monday–Friday, 8:30 AM–6:00 PM Mountain Time. Do n
 
 ---
 
+## What was built in Phase 0
+
+Tagged `v0.1.0` on 2026-05-02. Live at <https://workplaces-the-builder.netlify.app>.
+
+**Stack stood up end-to-end:** Next.js 14 (App Router, TypeScript strict, no `src/`) → Neon Postgres 17 → Clerk auth → Netlify hosting via the official `@netlify/plugin-nextjs`. Node 20 LTS pinned in CI via `.nvmrc`. pnpm 9 as the package manager.
+
+**Brand locked: The Builder.** Palette (Foreman Black, Drafting Cream, Steel Blue, Safety Vest Orange, two neutral greys), typography (Big Shoulders Display / Work Sans / IBM Plex Mono via fontsource), and Tailwind theme tokens are all committed; ledger-modernism design philosophy in `docs/`. Phase 0 wordmark renders on the public landing and the post-auth portal.
+
+**Multi-tenancy as a first-class concern.** Postgres Row-Level Security policies on every tenant-scoped table (`orgs`, `user_profiles`, `coaches`, `engagements`), gated by `auth.org_id()` reading a session GUC. Dual-role pattern: `neondb_owner` (BYPASSRLS) for DDL/migrations only; `workplaces_app` (NOBYPASSRLS, NOLOGIN, granted to neondb_owner) for runtime + tests via `SET LOCAL ROLE`. Three helpers in `lib/db/tenant.ts` make the right pattern the easy pattern:
+- `withTenantContext(orgId, fn)` — runtime tenant queries; opens a transaction, drops to `workplaces_app`, sets `app.current_org_id`, runs callback.
+- `withBootstrapContext(newOrgId, fn)` — alias of `withTenantContext` for the orgs-row creation case.
+- `withSystemContext(fn)` — pre-tenant lookups and admin paths only; runs as `neondb_owner` with no role drop.
+
+`scripts/verify-rls.mjs` exercises bootstrap, positive isolation, negative read, negative write (asserts `42501`), and cleanup across two synthetic tenants — 14 assertions, idempotent.
+
+**Auth wired through Clerk + first-visit provisioning.** Clerk middleware protects `/portal(.*)`. `app/sign-in/[[...sign-in]]` and `app/sign-up/[[...sign-up]]` host themed Clerk components. `app/portal/page.tsx` is a server component that calls `currentUser()` and `ensureUserProfile()`; first visit lazily creates a personal org (`type='client'`, `clerk_org_id = clerk_user_id` placeholder) plus a `master_admin` user_profile in a single bootstrap transaction. Webhook-driven provisioning, real Clerk Organizations, and conditional role assignment are Phase 1 backlog — see `docs/decisions.md`.
+
+**Deploy pipeline live.** `git push origin main` triggers Netlify auto-deploy via the connected GitHub App; build runs `pnpm build` against the same Neon database used in dev. Bruce signed up locally and on the deployed site; same DB row, identical org UUID and role on both — proves the round-trip.
+
+### Phase 0 commit log
+
+```
+70de194  feat(auth): wire Clerk + first-visit provisioning + portal MVP
+a1de8b6  feat(db): tenant isolation via RLS + dual-role pattern
+147be81  feat(db): add Phase 0 schema and apply migration to Neon
+77e1c26  feat: apply Builder palette and Phase 0 landing
+7af0a61  chore: tighten .gitignore env rules
+72e6024  feat: scaffold Next.js 14 app with Builder dependencies
+a8bae2e  docs: lock The Builder brand in CLAUDE.md
+```
+
+Phase 0 documentation closes with the commit that lands this section + `README.md`, tagged `v0.1.0`.
+
+---
+
 ## Active Phase
 
-**Phase 0 — Foundation.** Goal: stand up the empty scaffold and confirm every layer works end-to-end.
+**Phase 1 — Client Portal MVP.** Build the first three Portal Modules end-to-end on the Phase 0 foundation:
 
-When Phase 0 completes, this section moves to Phase 1.
+1. **Action Items** — draft/publish flow per CLAUDE.md "Action Items"; Fireflies transcript ingestion likely arrives in a later phase, but the data model + manual create path lands in Phase 1.
+2. **Communication** — threaded module with @mentions, file attachments, AI summaries.
+3. **Documents** — versioned files per engagement; uploads to Netlify Blobs.
+
+These three exercise the patterns we'll re-use across the rest of the module library: a custom module shape, server actions through `withTenantContext`, file storage, and (for Communication) the realtime + AI surfaces. See CLAUDE.md "The Portal Module System" for the complete library and "Conventions" for the boilerplate.
+
+Phase 1 also picks up the Phase 0 backlog flagged in `docs/decisions.md`: Clerk webhook-driven provisioning (replacing first-visit auto-provision), real Clerk Organizations (replacing the `clerk_org_id = clerk_user_id` placeholder), email-or-invitation-conditional role assignment, and an `engagements.started_at` column once the first reporting use case surfaces.
+
+When Phase 1 completes, this section moves to Phase 2.
