@@ -6,6 +6,50 @@ decision, follow-up (if any).
 
 ---
 
+## 2026-05-03 — Sub-Phase 1.1 cutover: real Clerk Organizations replace personal-org placeholder
+
+**Context.** Phase 0 stored `orgs.clerk_org_id = clerk_user_id` (a `user_…`-prefixed placeholder) because Clerk's Organizations feature wasn't enabled. Phase 1.1 enables Organizations, migrates Bruce's master org row to a real Clerk Org id (`org_…`), and routes every new engagement through Clerk's invitation flow. Personal-org auto-creation in `provisioning.ts` is retired entirely.
+
+**Decisions.**
+
+1. **One Clerk Organization per engagement.** "Workplaces" is the master Org (Bruce admin). Each client engagement gets its own Clerk Org; the client lead is an `org:admin` of *their* org only. Bruce is *not* a member of client orgs (auto-removed after the invitation goes out — see ordering decision below). This keeps `user.organizationMemberships` clean and keeps Clerk's session model unambiguous about which org is active.
+
+2. **`Membership required` ON in Clerk dashboard.** Personal accounts disabled. Every authenticated session must have an active org context. Backed by app-level enforcement in `ensureUserProfile` (no active org → return `{ status: 'no_invitation' }` → redirect to `/no-invitation`). Defence in depth.
+
+3. **Roles assigned from invitation `publicMetadata.app_role`.** The engagement creation flow encodes our app's `client_lead` role in the invitation's `publicMetadata`; Clerk copies it to the resulting `OrganizationMembership.publicMetadata` when the invitee accepts. First-visit provisioning reads it via `clerkClient.users.getOrganizationMembershipList`, validates against the role enum, defaults to `client_employee` (lowest privilege) on missing/invalid input.
+
+4. **First-visit auto-provision continues; webhook deferred to Phase 2.** Provisioning happens lazily on first portal load instead of via a Clerk `user.created` webhook. Avoids the local-dev tunneling friction (ngrok/Clerk CLI) and the `svix` dependency. Phase 2 swaps in webhooks for production correctness.
+
+5. **`@clerk/backend` added as a direct dep.** Was transitive via `@clerk/nextjs`; pnpm's strict isolation hides transitives from `.mjs` scripts. Made it explicit so `scripts/migrate-real-clerk-orgs.mjs` and `scripts/cleanup-impactica-test.mjs` resolve it cleanly.
+
+**One-shot migration:** `scripts/migrate-real-clerk-orgs.mjs` (idempotent — re-runs are no-ops once `clerk_org_id` starts with `org_`). Run once on 2026-05-03; created Clerk Org `org_3DE6hCoL4MJtDAxa5JCq20KxzgT`, joined Bruce as admin, updated Bruce's master orgs row.
+
+**Acceptance gap (same shape as Phase 0 Step 5).** The receive-side of the invitation flow — invitee opens the email, signs up, lands in their portal as `client_lead` — is verified by code review and by the *sending* side ending in a correctly-shaped pending invitation (verified via Clerk Backend API listing). Live receive-side test was blocked by Bruce's single phone number for Clerk verification; same blocker as Phase 0 Step 5. The real test happens in Phase 1.7 with the actual Impactica client lead.
+
+---
+
+## 2026-05-03 — Engagement creation server action: step ordering
+
+**Context.** First attempt at the engagement creation flow ordered the Clerk operations as:
+1. `createOrganization({ createdBy: bruce })` — Clerk auto-adds Bruce as admin
+2. `deleteOrganizationMembership(bruce)` — strip Bruce's auto-membership
+3. DB inserts
+4. `createOrganizationInvitation` — **403 Forbidden**
+
+**Why it failed.** Clerk's invitation API requires `inviterUserId` to be an active admin of the org. Step 2 stripped that before step 4 needed it.
+
+**Decision: reorder.** Final order in `app/coach/engagements/new/actions.ts`:
+1. `createOrganization` (Bruce auto-admin)
+2. DB inserts (orgs + engagements). On failure, attempt to delete the orphan Clerk Org so we don't leak resources.
+3. `createOrganizationInvitation` (works because Bruce is still admin). On failure, surface "engagement created but invitation failed; you can resend manually" — Bruce stays admin so he has dashboard access.
+4. `deleteOrganizationMembership(bruce)`. Non-fatal on failure (Bruce can clean up via dashboard).
+
+**Side note: self-invitation also fails.** Inviting an email that belongs to the inviter's own Clerk user (e.g. Bruce inviting `bbaker@4workplaces.com` while admin of the new org) returns `400 Bad Request`. For test invitations to Bruce's inbox, use `bbaker+impactica@4workplaces.com` so Clerk treats it as a distinct user identity. Real engagements use the actual client lead's email and won't hit this.
+
+**Error message extraction.** Initial implementation of the catch block surfaced `e.message` only — Clerk API errors set that to the bare HTTP status text ("Bad Request", "Forbidden"). Added a `clerkErrorMessage()` helper that pulls from `e.errors[0].longMessage` first, falling back to the plain message. Future Clerk failures show the actual reason in the form's error band.
+
+---
+
 ## 2026-05-02 — Trigger drift: new tenant-scoped tables need `set_updated_at`
 
 **Context.** The shared `set_updated_at()` trigger function and per-table

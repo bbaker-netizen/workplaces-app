@@ -383,44 +383,8 @@ Bruce's working hours are Monday–Friday, 8:30 AM–6:00 PM Mountain Time. Do n
 
 ---
 
-## What was built in Phase 0
-
-Tagged `v0.1.0` on 2026-05-02. Live at <https://workplaces-the-builder.netlify.app>.
-
-Foundation scaffold proving every layer end-to-end: Next.js 14 + Neon Postgres 17 + Clerk auth + Netlify deploy. Brand locked to The Builder. Multi-tenancy via Postgres RLS + dual-role pattern (`neondb_owner` for DDL, `workplaces_app` for runtime queries). Three tenant helpers in `lib/db/tenant.ts` — `withTenantContext`, `withBootstrapContext`, `withSystemContext` — make the right RLS pattern the easy pattern. Verified by `scripts/verify-rls.mjs` (14 assertions across two synthetic tenants).
-
-Phase 0 used `clerk_org_id = clerk_user_id` as a placeholder while Clerk's Organizations feature was disabled — retired during the 1.1 cutover.
-
----
-
-## What was built in Sub-Phase 1.1
-
-Tagged `v0.2.0` on 2026-05-03.
-
-**Schema additions** (`lib/db/migrations/0003_phase_1_1_tables.sql`): `action_items`, `messages` (contextual conversations via `parent_entity_type` + `parent_entity_id`), `documents`, `document_tags`, `notifications`. Plus `engagements.started_at` (timestamptz nullable) for the operational-vs-record distinction. RLS + `set_updated_at` triggers on all new tenant-scoped tables; same pattern as 0001/0000.
-
-**Real Clerk Organizations.** Personal-org placeholder retired. `provisioning.ts` rewritten to read the active Clerk Org from `auth()`, look up our `orgs` row by `clerk_org_id`, and provision a `user_profiles` row with role read from `OrganizationMembership.publicMetadata.app_role`. Sign-ups without an active org bounce to `/no-invitation`. Bruce's existing master org migrated via `scripts/migrate-real-clerk-orgs.mjs` to a real Clerk Org `org_3DE6hCoL4MJtDAxa5JCq20KxzgT` named "Workplaces".
-
-**Coach Console + engagement creation.** `/coach` routes added with role gate (`master_admin` only) in `app/coach/layout.tsx`. The form at `/coach/engagements/new` collects name, type, client lead full name + email, start date; the server action creates a Clerk Organization, inserts `orgs` + `engagements` rows, sends the Clerk invitation with `app_role: client_lead` in `publicMetadata`, then removes Bruce as auto-admin. Order matters — invitation must precede admin removal because Clerk requires `inviterUserId` to be an active admin. See `docs/decisions.md` for the ordering bug we hit and fixed.
-
-**Clerk dashboard config:** Organizations enabled, `Membership required` ON (every session must have an active org). New runtime dep: `@clerk/backend` (was transitive via `@clerk/nextjs`; promoted to direct so `.mjs` scripts can import it).
-
-**Acceptance gap, documented:** the live receive-side test (invitee accepts the invitation, signs up, lands as `client_lead`) is blocked by the same single-phone constraint as Phase 0 Step 5. Sending side fully verified via Clerk Backend API listing pending invitations with correct shape; receive-side trusted via code review. Real exercise happens in Phase 1.7 with the actual Impactica client lead.
-
----
-
 ## Active Phase
 
-**Phase 1.2 — Action Items Module (Manual).** Build the manual creation, edit, assignment, and status-tracking experience for action items. Foundations for AI extraction in 1.6.
+**Phase 0 — Foundation.** Goal: stand up the empty scaffold and confirm every layer works end-to-end. Use The Builder brand colours and typography from the first commit.
 
-Per `docs/Phase-1-Plan.md`:
-- Action Items CRUD UI on top of the `action_items` table from 1.1
-- Status pills: Open / In Progress / Done / Blocked
-- Assignee picker (any `user_profile` in the engagement)
-- Due-date picker, revenue / margin impact tags
-- Coach view (cross-engagement) + client view (single engagement)
-- "Drafts" section visible to coach only — empty until 1.6's Fireflies AI extraction lands
-
-**Acceptance:** coach creates 3 test action items in an engagement, sets due dates and assignees, updates status; assigned client can update status on items assigned to them.
-
-When Phase 1.2 completes, this section moves to Phase 1.3 (Communication Module).
+When Phase 0 completes, this section moves to Phase 1.

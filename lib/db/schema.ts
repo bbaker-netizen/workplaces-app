@@ -1,27 +1,35 @@
 /**
- * The Builder — Phase 0 core schema.
+ * The Builder — application schema.
  *
- * Scope (Phase 0 only): orgs, user_profiles, coaches, engagements,
- * and the supporting enums. Other entities listed in CLAUDE.md
- * "Domain Model" land in later phases.
+ * Phase 0: orgs, user_profiles, coaches, engagements, role/org_type/
+ *   engagement_type/engagement_status/coach_status enums.
+ * Phase 1.1: action_items, messages, documents, document_tags,
+ *   notifications + supporting enums; engagements gains a started_at
+ *   column to distinguish record-creation from active-engagement time.
  *
  * Multi-tenancy: every tenant-scoped table carries an `org_id` column.
- * Row-Level Security policies referencing `auth.org_id()` are added
- * in a separate migration (Phase 0, Step 4). Phase 0 RLS predicate is
- * `org_id = auth.org_id()`; cross-org coach visibility is a Phase 1+
- * concern handled via a future engagement_membership junction.
+ * Row-Level Security policies referencing `auth.org_id()` are added in
+ * separate migrations (0001 for Phase 0 tables, 0003 for Phase 1.1
+ * tables). All RLS predicates are `org_id = auth.org_id()`; cross-org
+ * coach visibility (Coach My Work) is a Phase 2+ concern handled via a
+ * future engagement_membership junction.
  */
 
 import {
+  bigint,
+  boolean,
+  index,
+  jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
-  index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
-// ---------- Enums ----------
+// ---------- Phase 0 enums ----------
 
 export const roleEnum = pgEnum("role", [
   "coach",
@@ -53,17 +61,51 @@ export const coachStatusEnum = pgEnum("coach_status", [
   "archived",
 ]);
 
-// ---------- Tables ----------
+// ---------- Phase 1.1 enums ----------
+
+export const actionItemStatusEnum = pgEnum("action_item_status", [
+  "draft",
+  "open",
+  "in_progress",
+  "done",
+  "blocked",
+]);
+
+export const actionItemCreatedByEnum = pgEnum("action_item_created_by", [
+  "coach",
+  "claude",
+]);
+
+export const confidenceFlagEnum = pgEnum("confidence_flag", [
+  "high",
+  "medium",
+  "low",
+]);
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "mention",
+  "action_item_assigned",
+  "action_item_due_soon",
+]);
+
+export const notificationSentViaEnum = pgEnum("notification_sent_via", [
+  "email",
+  "in_app",
+  "both",
+]);
+
+// ---------- Phase 0 tables ----------
 
 /**
  * `orgs` — tenants.
  *
- * One row per Workplaces org (the master) and per client engagement
- * org. The row's `id` IS the tenant discriminator that RLS compares
- * against, so this table doesn't carry a separate `org_id` column.
+ * One row per Workplaces master org and per client engagement org.
+ * The row's `id` IS the tenant discriminator that RLS compares against,
+ * so this table doesn't carry a separate `org_id` column.
  *
- * `clerk_org_id` is the foreign reference to Clerk Organizations,
- * which manage membership and auth. Domain-specific data lives here.
+ * `clerk_org_id` references a real Clerk Organization (Phase 1.1 onward;
+ * Phase 0 used the user's own Clerk id as a placeholder, retired during
+ * the 1.1 cutover).
  */
 export const orgs = pgTable("orgs", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -78,14 +120,13 @@ export const orgs = pgTable("orgs", {
  * `user_profiles` — app-side extension of a Clerk user.
  *
  * One row per person with a login. `clerk_user_id` is the stable
- * identifier sourced from Clerk; everything else is what The Builder
- * needs that Clerk doesn't store (role, org affiliation, display
- * preferences once we add them).
+ * identifier from Clerk; `org_id` is the user's home org (the master
+ * org for coaches, the client org for client members). Multi-org
+ * membership for coaches is a Phase 2+ junction-table concern.
  *
- * `org_id` is the user's *home* org — Workplaces master for coaches,
- * the client org for client members. A user belonging to multiple orgs
- * (e.g. a coach with read access into a client portal) is modeled in a
- * later phase via a junction; Phase 0 keeps a single row per user.
+ * `role` is set from invitation metadata at provisioning time
+ * (Phase 1.1 onward); Phase 0 set everyone to master_admin during
+ * its single-test-user phase.
  */
 export const userProfiles = pgTable(
   "user_profiles",
@@ -108,11 +149,6 @@ export const userProfiles = pgTable(
 
 /**
  * `coaches` — Workplaces coaches (Bruce, Jen, future hires).
- *
- * One row per coach person, FK to their user_profile. Coach-specific
- * fields live here; identity/auth lives on user_profile. The owning
- * org is always the Workplaces master org (enforced in seeds and at
- * the application layer; a CHECK constraint can be added later).
  */
 export const coaches = pgTable(
   "coaches",
@@ -138,13 +174,10 @@ export const coaches = pgTable(
 /**
  * `engagements` — the active coaching relationship.
  *
- * Belongs to a CLIENT org (the `org_id`). Owned by a Coach from the
- * master org. `type` is Accelerator or Implementer per the
- * methodology; `status` tracks the lifecycle from prospect to renewal.
- *
- * Phase 0 RLS predicate is `org_id = auth.org_id()`, so a client
- * sees only their own engagement. Coach cross-org visibility is
- * handled in a later phase (Phase 1+).
+ * `started_at` (Phase 1.1) is the moment the engagement actually became
+ * live in the methodology sense — distinct from `created_at` (the row's
+ * birth) and from `start_date` (a planned/scheduled start). Backfill
+ * from Adobe Sign envelope timestamps when we have them.
  */
 export const engagements = pgTable(
   "engagements",
@@ -160,6 +193,7 @@ export const engagements = pgTable(
     status: engagementStatusEnum("status").notNull().default("active"),
     name: text("name"),
     startDate: timestamp("start_date", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
     endDate: timestamp("end_date", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -167,6 +201,212 @@ export const engagements = pgTable(
   (t) => ({
     orgIdx: index("engagements_org_idx").on(t.orgId),
     coachIdx: index("engagements_coach_idx").on(t.coachId),
+  })
+);
+
+// ---------- Phase 1.1 tables ----------
+
+/**
+ * `action_items` — owned, dated commitments per engagement.
+ *
+ * Created either by a coach manually (status=open) or by Claude from a
+ * Fireflies transcript (status=draft, confidence_flag set, fireflies_
+ * transcript_id populated). Drafts are visible only to coaches;
+ * publishing a draft transitions status from draft → open and surfaces
+ * the item in the assignee's portal.
+ *
+ * Quality Gate: every item flags whether it moves top-line revenue,
+ * margin, or both. Items that flag neither should be questioned before
+ * publish.
+ */
+export const actionItems = pgTable(
+  "action_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    status: actionItemStatusEnum("status").notNull().default("open"),
+    assigneeUserProfileId: uuid("assignee_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    revenueImpact: boolean("revenue_impact").notNull().default(false),
+    marginImpact: boolean("margin_impact").notNull().default(false),
+    firefliesTranscriptId: text("fireflies_transcript_id"),
+    confidenceFlag: confidenceFlagEnum("confidence_flag"),
+    createdBy: actionItemCreatedByEnum("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("action_items_org_idx").on(t.orgId),
+    engagementIdx: index("action_items_engagement_idx").on(t.engagementId),
+    assigneeIdx: index("action_items_assignee_idx").on(t.assigneeUserProfileId),
+    statusIdx: index("action_items_status_idx").on(t.status),
+  })
+);
+
+/**
+ * `messages` — contextual conversations.
+ *
+ * Threaded messages tied to a parent entity via the (parent_entity_type,
+ * parent_entity_id) pair. `parent_entity_type` is text rather than an
+ * enum so new entity types (deliverables, projects, hires) can attach
+ * threads without a schema migration; the application layer validates.
+ *
+ * `engagement_id` is denormalized so "all messages in this engagement"
+ * (the Recent Activity view) is a single index hit instead of a join
+ * through the parent entity.
+ *
+ * `mentions` is a JSONB array of user_profile UUIDs parsed from @mentions
+ * in `body`; Phase 1.4 reads it to fan out notifications.
+ */
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    parentEntityType: text("parent_entity_type").notNull(),
+    parentEntityId: uuid("parent_entity_id").notNull(),
+    body: text("body").notNull(),
+    authorUserProfileId: uuid("author_user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id),
+    mentions: jsonb("mentions").notNull().default(sql`'[]'::jsonb`),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("messages_org_idx").on(t.orgId),
+    engagementIdx: index("messages_engagement_idx").on(t.engagementId),
+    parentIdx: index("messages_parent_idx").on(
+      t.parentEntityType,
+      t.parentEntityId,
+    ),
+    authorIdx: index("messages_author_idx").on(t.authorUserProfileId),
+  })
+);
+
+/**
+ * `documents` — files uploaded per engagement.
+ *
+ * Storage backend: Netlify Blobs (Phase 1.5). `blob_key` is the stable
+ * key under which the file lives in the Blobs store; the engagement's
+ * `org_id` namespace is encoded into the key. `original_filename`
+ * preserves the user-supplied name for display and download; `file_type`
+ * is the MIME type.
+ */
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    blobKey: text("blob_key").notNull().unique(),
+    originalFilename: text("original_filename").notNull(),
+    fileType: text("file_type").notNull(),
+    sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+    uploaderUserProfileId: uuid("uploader_user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("documents_org_idx").on(t.orgId),
+    engagementIdx: index("documents_engagement_idx").on(t.engagementId),
+    uploaderIdx: index("documents_uploader_idx").on(t.uploaderUserProfileId),
+  })
+);
+
+/**
+ * `document_tags` — many-to-many of free-text tags on documents.
+ *
+ * Composite primary key (document_id, tag) — a document can carry many
+ * tags, each unique within that document. `org_id` is denormalized for
+ * RLS efficiency: filtering by org_id is a direct index hit instead of
+ * a join through documents. Application code copies org_id from the
+ * parent document at insert time; consistency is enforced at the
+ * application boundary, not by a CHECK constraint, for Phase 1 simplicity.
+ *
+ * Free-text tags now; controlled vocabulary is a Phase 2 concern.
+ */
+export const documentTags = pgTable(
+  "document_tags",
+  {
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    tag: text("tag").notNull(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.documentId, t.tag] }),
+    orgIdx: index("document_tags_org_idx").on(t.orgId),
+    tagIdx: index("document_tags_tag_idx").on(t.tag),
+  })
+);
+
+/**
+ * `notifications` — in-app and email notification records.
+ *
+ * One row per recipient per event. `parent_entity_type` + `parent_
+ * entity_id` point at whatever the notification is about (a message
+ * for @mentions, an action_item for assignments and due-soon nudges).
+ * `read_at` null means unread. `sent_via` records how the notification
+ * was delivered ('email', 'in_app', 'both').
+ *
+ * Notification body text is rendered at display time from the parent
+ * entity rather than snapshotted here — Phase 2 may add a snapshot
+ * column once we have a real reason to denormalize.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    type: notificationTypeEnum("type").notNull(),
+    parentEntityType: text("parent_entity_type").notNull(),
+    parentEntityId: uuid("parent_entity_id").notNull(),
+    sentVia: notificationSentViaEnum("sent_via").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("notifications_org_idx").on(t.orgId),
+    userProfileIdx: index("notifications_user_profile_idx").on(
+      t.userProfileId,
+    ),
+    unreadIdx: index("notifications_unread_idx").on(
+      t.userProfileId,
+      t.readAt,
+    ),
   })
 );
 
@@ -180,3 +420,14 @@ export type Coach = typeof coaches.$inferSelect;
 export type NewCoach = typeof coaches.$inferInsert;
 export type Engagement = typeof engagements.$inferSelect;
 export type NewEngagement = typeof engagements.$inferInsert;
+
+export type ActionItem = typeof actionItems.$inferSelect;
+export type NewActionItem = typeof actionItems.$inferInsert;
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
+export type DocumentTag = typeof documentTags.$inferSelect;
+export type NewDocumentTag = typeof documentTags.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

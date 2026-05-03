@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
+    "@clerk/backend": "^3.4.4",
     "@clerk/nextjs": "^6",
     "@fontsource/big-shoulders-display": "^5.2.5",
     "@fontsource/ibm-plex-mono": "^5.2.7",
