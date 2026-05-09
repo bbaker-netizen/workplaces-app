@@ -4,6 +4,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { getHire } from "@/lib/db/queries/hires";
 import { HireForm } from "@/components/hires/HireForm";
+import { HireGenerateButtons } from "@/components/hires/HireGenerateButtons";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -74,14 +75,17 @@ export default async function HireDetailPage({
         )
       )}
 
-      <section className="space-y-2">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          AI assist
-        </h2>
-        <p className="font-sans text-sm text-muted-foreground">
-          Generate buttons (gap analysis, interview guide, hiring assessment, onboarding pack) wire into the existing Workplaces skills via the Anthropic API. Coming in Phase 2 once the Claude integration lands.
-        </p>
-      </section>
+      {canEdit && (
+        <section className="space-y-3">
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            AI assist
+          </h2>
+          <p className="font-sans text-sm text-muted-foreground">
+            Each button reads the candidate&apos;s attached gap report (and resume / interview transcript when relevant), runs it through Claude using the Workplaces methodology prompts, and appends the result to the candidate&apos;s notes.
+          </p>
+          <HireGenerateButtons hireId={hire.id} />
+        </section>
+      )}
     </main>
   );
 }
