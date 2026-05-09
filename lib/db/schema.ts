@@ -146,6 +146,80 @@ export const hireStatusEnum = pgEnum("hire_status", [
   "declined",
 ]);
 
+// ---------- Phase 1.16–1.19 enums ----------
+
+export const formTypeEnum = pgEnum("form_type", [
+  "diagnostic",
+  "intake",
+  "pulse",
+  "nps",
+  "custom",
+]);
+
+export const deliverableTypeEnum = pgEnum("deliverable_type", [
+  "sop",
+  "org_chart",
+  "job_profile",
+  "financial_dashboard",
+  "onboarding_guide",
+  "operations_setup_guide",
+  "business_plan",
+  "marketing_plan",
+  "stages_of_growth_assessment",
+]);
+
+export const deliverableStatusEnum = pgEnum("deliverable_status", [
+  "not_started",
+  "in_progress",
+  "review",
+  "delivered",
+  "archived",
+]);
+
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "draft",
+  "sent",
+  "paid",
+  "overdue",
+  "void",
+]);
+
+export const subscriptionAssetModelEnum = pgEnum("subscription_asset_model", [
+  "model_a", // transferred at end
+  "model_b", // client-owned from day one
+  "model_c", // Bruce-maintained (default)
+]);
+
+export const subscriptionTransferStatusEnum = pgEnum(
+  "subscription_transfer_status",
+  ["retained", "pending_transfer", "transferred"],
+);
+
+export const embeddedAppAuthModeEnum = pgEnum("embedded_app_auth_mode", [
+  "public",
+  "token_passthrough",
+  "clerk_sso",
+]);
+
+export const courseDeliveryModeEnum = pgEnum("course_delivery_mode", [
+  "self_paced",
+  "cohort",
+]);
+
+export const cohortStatusEnum = pgEnum("cohort_status", [
+  "upcoming",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
+
+export const enrollmentStatusEnum = pgEnum("enrollment_status", [
+  "enrolled",
+  "in_progress",
+  "completed",
+  "dropped",
+]);
+
 // ---------- Phase 0 tables ----------
 
 /**
@@ -828,6 +902,327 @@ export const notifications = pgTable(
   })
 );
 
+// ---------- Phase 1.16: Forms ----------
+
+/**
+ * `forms` — diagnostic / intake / pulse / NPS / custom forms.
+ *
+ * Schema is JSONB — an array of question definitions. Submission
+ * answers are likewise JSONB. Phase 1.16 ships a minimal structure
+ * (text / textarea / radio / scale / checkbox question types) and
+ * a public-facing token URL so prospects can fill diagnostics
+ * without a Clerk account. Token-only access path lands in Phase 2;
+ * for 1.16 forms are filled by authenticated users only.
+ */
+export const forms = pgTable(
+  "forms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    type: formTypeEnum("type").notNull(),
+    schema: jsonb("schema").notNull().default(sql`'[]'::jsonb`),
+    isActive: boolean("is_active").notNull().default(true),
+    publicToken: text("public_token").unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("forms_org_idx").on(t.orgId),
+    engagementIdx: index("forms_engagement_idx").on(t.engagementId),
+    typeIdx: index("forms_type_idx").on(t.type),
+  }),
+);
+
+export const formSubmissions = pgTable(
+  "form_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => forms.id, { onDelete: "cascade" }),
+    submittedByUserProfileId: uuid("submitted_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    respondentName: text("respondent_name"),
+    respondentEmail: text("respondent_email"),
+    answers: jsonb("answers").notNull().default(sql`'{}'::jsonb`),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("form_submissions_org_idx").on(t.orgId),
+    formIdx: index("form_submissions_form_idx").on(t.formId),
+  }),
+);
+
+// ---------- Phase 1.17: Deliverables ----------
+
+/**
+ * `deliverables` — one of the 9 methodology-defined deliverable
+ * types per engagement. Generated content lives on a linked
+ * document; the row tracks lifecycle status.
+ */
+export const deliverables = pgTable(
+  "deliverables",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    type: deliverableTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: deliverableStatusEnum("status").notNull().default("not_started"),
+    documentId: uuid("document_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("deliverables_org_idx").on(t.orgId),
+    engagementIdx: index("deliverables_engagement_idx").on(t.engagementId),
+    typeIdx: index("deliverables_type_idx").on(t.type),
+    statusIdx: index("deliverables_status_idx").on(t.status),
+  }),
+);
+
+// ---------- Phase 1.18: Invoices + Subscriptions + Embedded Apps ----------
+
+/**
+ * `invoices` — Stripe-driven subscription billing for the Model C
+ * retainer plus ad-hoc invoices. Stripe is the source of truth;
+ * this table mirrors what the portal needs to show. `stripe_invoice_id`
+ * is the bridge.
+ */
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    stripeInvoiceId: text("stripe_invoice_id").unique(),
+    number: text("number"),
+    description: text("description"),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+    currency: text("currency").notNull().default("CAD"),
+    status: invoiceStatusEnum("status").notNull().default("draft"),
+    issuedAt: timestamp("issued_at", { withTimezone: true }),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    hostedInvoiceUrl: text("hosted_invoice_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("invoices_org_idx").on(t.orgId),
+    engagementIdx: index("invoices_engagement_idx").on(t.engagementId),
+    statusIdx: index("invoices_status_idx").on(t.status),
+  }),
+);
+
+/**
+ * `subscription_assets` — itemized inventory of every external
+ * service Bruce maintains under his accounts on the client's behalf
+ * (Netlify, Make.com, Resend, Clerk, custom domains). Per the
+ * Model C default, Bruce maintains these indefinitely; Models A & B
+ * are graduation paths.
+ */
+export const subscriptionAssets = pgTable(
+  "subscription_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    vendor: text("vendor").notNull(),
+    monthlyCostCents: bigint("monthly_cost_cents", { mode: "number" })
+      .notNull()
+      .default(0),
+    currency: text("currency").notNull().default("CAD"),
+    paidBy: text("paid_by").notNull().default("workplaces"),
+    model: subscriptionAssetModelEnum("model").notNull().default("model_c"),
+    transferStatus: subscriptionTransferStatusEnum("transfer_status")
+      .notNull()
+      .default("retained"),
+    notes: text("notes"),
+    renewalDate: timestamp("renewal_date", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("subscription_assets_org_idx").on(t.orgId),
+    engagementIdx: index("subscription_assets_engagement_idx").on(t.engagementId),
+    transferIdx: index("subscription_assets_transfer_idx").on(t.transferStatus),
+  }),
+);
+
+/**
+ * `embedded_apps` — Netlify projects surfaced as portal modules.
+ *
+ * Coach configures: pick a Netlify project, name it for the client,
+ * choose auth mode. The Builder renders an iframe widget on the
+ * portal pointing at the project's URL. Phase 1.18 supports the
+ * `public` and `token_passthrough` auth modes; `clerk_sso` lands
+ * in Phase 2 once the SSO bridge is wired.
+ */
+export const embeddedApps = pgTable(
+  "embedded_apps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    netlifyProjectId: text("netlify_project_id").notNull(),
+    displayName: text("display_name").notNull(),
+    description: text("description"),
+    appUrl: text("app_url").notNull(),
+    authMode: embeddedAppAuthModeEnum("auth_mode")
+      .notNull()
+      .default("public"),
+    isVisible: boolean("is_visible").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("embedded_apps_org_idx").on(t.orgId),
+    engagementIdx: index("embedded_apps_engagement_idx").on(t.engagementId),
+  }),
+);
+
+// ---------- Phase 1.19: Courses (LMS) ----------
+
+/**
+ * `courses` — programs (LMDS, ELS, etc.) delivered through The
+ * Builder's native LMS. Either self-paced (one user at a time
+ * works through lessons) or cohort (group moves together).
+ */
+export const courses = pgTable(
+  "courses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    deliveryMode: courseDeliveryModeEnum("delivery_mode").notNull(),
+    isPublished: boolean("is_published").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("courses_org_idx").on(t.orgId),
+    engagementIdx: index("courses_engagement_idx").on(t.engagementId),
+  }),
+);
+
+export const lessons = pgTable(
+  "lessons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body"), // markdown
+    orderIndex: bigint("order_index", { mode: "number" })
+      .notNull()
+      .default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("lessons_org_idx").on(t.orgId),
+    courseIdx: index("lessons_course_idx").on(t.courseId),
+  }),
+);
+
+export const cohorts = pgTable(
+  "cohorts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    status: cohortStatusEnum("status").notNull().default("upcoming"),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("cohorts_org_idx").on(t.orgId),
+    courseIdx: index("cohorts_course_idx").on(t.courseId),
+  }),
+);
+
+export const enrollments = pgTable(
+  "enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    cohortId: uuid("cohort_id").references(() => cohorts.id, {
+      onDelete: "set null",
+    }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    status: enrollmentStatusEnum("status").notNull().default("enrolled"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("enrollments_org_idx").on(t.orgId),
+    courseIdx: index("enrollments_course_idx").on(t.courseId),
+    cohortIdx: index("enrollments_cohort_idx").on(t.cohortId),
+    userIdx: index("enrollments_user_idx").on(t.userProfileId),
+  }),
+);
+
 // ---------- Inferred TypeScript types ----------
 
 export type Org = typeof orgs.$inferSelect;
@@ -865,3 +1260,23 @@ export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type Hire = typeof hires.$inferSelect;
 export type NewHire = typeof hires.$inferInsert;
+export type Form = typeof forms.$inferSelect;
+export type NewForm = typeof forms.$inferInsert;
+export type FormSubmission = typeof formSubmissions.$inferSelect;
+export type NewFormSubmission = typeof formSubmissions.$inferInsert;
+export type Deliverable = typeof deliverables.$inferSelect;
+export type NewDeliverable = typeof deliverables.$inferInsert;
+export type Invoice = typeof invoices.$inferSelect;
+export type NewInvoice = typeof invoices.$inferInsert;
+export type SubscriptionAsset = typeof subscriptionAssets.$inferSelect;
+export type NewSubscriptionAsset = typeof subscriptionAssets.$inferInsert;
+export type EmbeddedApp = typeof embeddedApps.$inferSelect;
+export type NewEmbeddedApp = typeof embeddedApps.$inferInsert;
+export type Course = typeof courses.$inferSelect;
+export type NewCourse = typeof courses.$inferInsert;
+export type Lesson = typeof lessons.$inferSelect;
+export type NewLesson = typeof lessons.$inferInsert;
+export type Cohort = typeof cohorts.$inferSelect;
+export type NewCohort = typeof cohorts.$inferInsert;
+export type Enrollment = typeof enrollments.$inferSelect;
+export type NewEnrollment = typeof enrollments.$inferInsert;

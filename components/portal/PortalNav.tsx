@@ -13,6 +13,8 @@
  * Phase 1.10/1.11/1.12 added: goals, team, methodology resources.
  * Phase 1.14 added: projects.
  * Phase 1.15 added: hiring pipeline.
+ * Phase 1.16/1.17/1.18/1.19 added: forms, deliverables, invoices,
+ *   subscriptions, embedded apps, courses.
  */
 
 import Link from "next/link";
@@ -102,7 +104,13 @@ export function PortalNav({
           <Link href="/portal/action-items" className="font-sans text-sm text-foreground">Action items</Link>
           <Link href="/portal/goals" className="font-sans text-sm text-foreground">Goals</Link>
           <Link href="/portal/projects" className="font-sans text-sm text-foreground">Projects</Link>
+          <Link href="/portal/deliverables" className="font-sans text-sm text-foreground">Deliverables</Link>
           <Link href="/portal/hiring" className="font-sans text-sm text-foreground">Hiring</Link>
+          <Link href="/portal/forms" className="font-sans text-sm text-foreground">Forms</Link>
+          <Link href="/portal/courses" className="font-sans text-sm text-foreground">Courses</Link>
+          <Link href="/portal/apps" className="font-sans text-sm text-foreground">Apps</Link>
+          <Link href="/portal/subscriptions" className="font-sans text-sm text-foreground">Subscriptions</Link>
+          <Link href="/portal/invoices" className="font-sans text-sm text-foreground">Invoices</Link>
           <Link href="/portal/sessions" className="font-sans text-sm text-foreground">Sessions</Link>
           <Link href="/portal/communication" className="font-sans text-sm text-foreground">Communication</Link>
           <Link href="/portal/documents" className="font-sans text-sm text-foreground">Documents</Link>
