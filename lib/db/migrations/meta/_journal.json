@@ -64,6 +64,13 @@
       "when": 1778359552596,
       "tag": "0008_soul_files",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778361896591,
+      "tag": "0009_goals",
+      "breakpoints": true
     }
   ]
 }

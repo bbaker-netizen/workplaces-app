@@ -108,6 +108,16 @@ export const bbsSessionStatusEnum = pgEnum("bbs_session_status", [
   "cancelled",
 ]);
 
+// ---------- Phase 1.10 enums ----------
+
+export const goalStatusEnum = pgEnum("goal_status", [
+  "open",
+  "in_progress",
+  "achieved",
+  "missed",
+  "abandoned",
+]);
+
 // ---------- Phase 0 tables ----------
 
 /**
@@ -219,6 +229,52 @@ export const engagements = pgTable(
 );
 
 // ---------- Phase 1.1 tables ----------
+
+/**
+ * `goals` — SMART goals per engagement.
+ *
+ * Phase 1.10. Each goal pairs a SMART statement with a measurable
+ * target and a deadline. The Quality Gate (revenue_impact /
+ * margin_impact) is mandatory — every goal must move top-line revenue,
+ * protect margin, or both. Items that flag neither should be
+ * questioned before publish.
+ *
+ * `target_metric` and `target_value` are free-text (e.g. "Q4 ARR" /
+ * "$1.2M") — formal metric registry is deferred.
+ */
+export const goals = pgTable(
+  "goals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    targetMetric: text("target_metric"),
+    targetValue: text("target_value"),
+    targetDate: timestamp("target_date", { withTimezone: true }),
+    status: goalStatusEnum("status").notNull().default("open"),
+    revenueImpact: boolean("revenue_impact").notNull().default(false),
+    marginImpact: boolean("margin_impact").notNull().default(false),
+    ownerUserProfileId: uuid("owner_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("goals_org_idx").on(t.orgId),
+    engagementIdx: index("goals_engagement_idx").on(t.engagementId),
+    ownerIdx: index("goals_owner_idx").on(t.ownerUserProfileId),
+    statusIdx: index("goals_status_idx").on(t.status),
+    targetDateIdx: index("goals_target_date_idx").on(t.targetDate),
+  }),
+);
 
 /**
  * `soul_files` — long-form context document per engagement.
@@ -630,3 +686,5 @@ export type BbsSession = typeof bbsSessions.$inferSelect;
 export type NewBbsSession = typeof bbsSessions.$inferInsert;
 export type SoulFile = typeof soulFiles.$inferSelect;
 export type NewSoulFile = typeof soulFiles.$inferInsert;
+export type Goal = typeof goals.$inferSelect;
+export type NewGoal = typeof goals.$inferInsert;

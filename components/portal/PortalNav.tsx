@@ -10,6 +10,7 @@
  * Phase 1.5 added: documents.
  * Phase 1.6 added: sessions.
  * Phase 1.7 added: soul file.
+ * Phase 1.10/1.11/1.12 added: goals, team, methodology resources.
  */
 
 import Link from "next/link";
@@ -40,6 +41,12 @@ export function PortalNav({
             Action items
           </Link>
           <Link
+            href="/portal/goals"
+            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
+          >
+            Goals
+          </Link>
+          <Link
             href="/portal/sessions"
             className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
           >
@@ -62,6 +69,12 @@ export function PortalNav({
             className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
           >
             Soul File
+          </Link>
+          <Link
+            href="/portal/team"
+            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
+          >
+            Team
           </Link>
         </div>
         <div className="flex items-center gap-3 sm:gap-4">
@@ -77,37 +90,15 @@ export function PortalNav({
         </div>
       </div>
       <div className="sm:hidden border-t border-[#CCCCCC]">
-        <div className="max-w-5xl mx-auto px-6 py-2 flex gap-5">
-          <Link
-            href="/portal/action-items"
-            className="font-sans text-sm text-foreground"
-          >
-            Action items
-          </Link>
-          <Link
-            href="/portal/sessions"
-            className="font-sans text-sm text-foreground"
-          >
-            Sessions
-          </Link>
-          <Link
-            href="/portal/communication"
-            className="font-sans text-sm text-foreground"
-          >
-            Communication
-          </Link>
-          <Link
-            href="/portal/documents"
-            className="font-sans text-sm text-foreground"
-          >
-            Documents
-          </Link>
-          <Link
-            href="/portal/soul-file"
-            className="font-sans text-sm text-foreground"
-          >
-            Soul File
-          </Link>
+        <div className="max-w-5xl mx-auto px-6 py-2 flex gap-5 overflow-x-auto whitespace-nowrap">
+          <Link href="/portal/action-items" className="font-sans text-sm text-foreground">Action items</Link>
+          <Link href="/portal/goals" className="font-sans text-sm text-foreground">Goals</Link>
+          <Link href="/portal/sessions" className="font-sans text-sm text-foreground">Sessions</Link>
+          <Link href="/portal/communication" className="font-sans text-sm text-foreground">Communication</Link>
+          <Link href="/portal/documents" className="font-sans text-sm text-foreground">Documents</Link>
+          <Link href="/portal/soul-file" className="font-sans text-sm text-foreground">Soul File</Link>
+          <Link href="/portal/team" className="font-sans text-sm text-foreground">Team</Link>
+          <Link href="/portal/methodology" className="font-sans text-sm text-foreground">Methodology</Link>
         </div>
       </div>
     </nav>
