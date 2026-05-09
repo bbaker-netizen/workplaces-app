@@ -6,6 +6,30 @@ decision, follow-up (if any).
 
 ---
 
+## 2026-05-09 — Communication module: MS Teams parity scope
+
+**Context.** Bruce asked whether messaging could mimic Microsoft Teams — rich text toolbar, emojis, file attachments, reactions, etc. Surveyed the gap and split features by effort, then locked the next session's scope so the deferred items have a documented home and don't get forgotten.
+
+**Locked next session: Sub-Phase 1.3.5 — Composer UX upgrades.**
+
+1. **Rich text toolbar in the composer.** Replace the plain `<textarea>` with a Tiptap-based WYSIWYG editor (same library the HR app uses, so we have a working reference). Toolbar: bold / italic / strike / link / bullet list / numbered list / blockquote / inline code. Output stored as Markdown in `messages.body` so the existing `MarkdownBody` renderer keeps working without changes; reads stay backwards-compatible with messages typed under 1.3's plain-textarea regime.
+2. **Emoji picker.** A 😀 button in the composer opens a searchable picker; selection inserts the unicode glyph into the editor at cursor. Library: `emoji-picker-react` (already proven in similar apps; no Giphy/sticker pulls). Renderer needs no changes — Markdown handles unicode natively.
+3. **Emoji reactions on messages.** Hover a message → "+ reaction" button surfaces a quick-pick row of common reactions (👍 ❤️ 😂 🎉 👀 ✅) plus an "Other" button that opens the full picker. Reactions render as small pill chips below the message body with author names on hover and a count when more than one person uses the same emoji. Click your own reaction to remove it. New table: `message_reactions(message_id, user_profile_id, emoji)` with a composite PK preventing duplicate reactions, RLS via the parent message's `org_id`. Migration `0005_message_reactions.sql`.
+
+**Deferred to Phase 1.5 (Documents Module): file attachments on messages.** The original Phase-1-Plan.md already slates the Netlify Blobs upload pipeline for 1.5. Folding message attachments into 1.5 means we build the upload + preview surface once and use it both as standalone Documents and as message attachments — paperclip icon in the composer triggers the same upload flow that powers `/portal/documents`. Doing it earlier means duplicating the Blobs work.
+
+**Deferred to Phase 2+: reply-to-specific-message** (sub-threads inside a thread). Adds a `parent_message_id` column to `messages` plus a UI for indented replies. Useful but not on the path to running one BBS through The Builder.
+
+**Out of scope (no current plans):**
+- **Read receipts** ("Seen by Bruce 2 min ago") — needs a per-recipient tracking table, complicates the schema for marginal value at one pilot client.
+- **Typing indicators** ("Bruce is typing…") — needs real-time WebSocket / Postgres LISTEN/NOTIFY plumbing. CLAUDE.md already names that infrastructure for SSE; surfacing typing on top of it is non-trivial UI work for a low-payoff feature.
+- **GIFs / Giphy / stickers** — third-party API + content moderation surface; not aligned with the heritage-industrial brand.
+- **Voice / video calls** — out of scope; The Builder is not a Slack/Teams replacement, just a coaching ops surface.
+
+**How to apply.** When the next session kicks off, the Active Phase section of CLAUDE.md will point at 1.3.5. After 1.3.5 ships, Active Phase moves to 1.4 (@mentions + Resend wiring per the original Phase-1-Plan.md). 1.5 picks up the documents module + message attachments together.
+
+---
+
 ## 2026-05-09 — Sub-Phase 1.3: Communication Module + Contextual Conversations
 
 **Context.** Building threaded messaging on top of the `messages` table introduced in 1.1. Bruce expanded the original Phase-1-Plan.md scope mid-session: rather than a single engagement-wide thread, he required role-based audience compartmentalization from day one. Specifically: when a client eventually invites managers/employees to the engagement, there must be a private channel just between coach and owner/lead that team members can't see. Original plan called the general thread `parent_entity_type='engagement'`; the audience requirement forced a richer model.

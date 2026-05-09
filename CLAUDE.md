@@ -475,15 +475,13 @@ The audience rules live in `lib/communication/audience.ts` — `canViewThread` a
 
 ## Active Phase
 
-**Phase 1.4 — @Mentions + Resend Wiring.** Make `@mention` parsing live in the composer, fan out notifications via Resend (verified sender domain), and add email templates for `@mention`, `action_item_assigned`, and `action_item_due_soon`. The `messages.mentions` JSONB column from 1.1 + the `notifications` table are already in place; 1.4 wires the pipeline.
+**Sub-Phase 1.3.5 — Composer UX upgrades (MS Teams parity, lite).** Replace the plain textarea with a real WYSIWYG editor, add an emoji picker, and add emoji reactions on messages. Inserted between 1.3 and 1.4 because Bruce asked for "feels like Teams" before going further. See `docs/decisions.md` "2026-05-09 — Communication module: MS Teams parity scope" for the full split between what's coming in 1.3.5 vs deferred to 1.5 vs out of scope.
 
-Per `docs/Phase-1-Plan.md`:
-- @mention parser in the composer (renders chips, stores parsed user_profile_ids in `messages.mentions`)
-- Notification fan-out: in-app row + Resend email send for each mentioned user
-- Resend integration via verified sender domain (Bruce's prerequisite — see Phase-1-Plan.md "Open Operational Items")
-- Email templates for: @mention, action_item_assigned, action_item_due_soon
-- Confirm Clerk's invitation email still ships from 1.1 (it does — Clerk handles it natively)
+**Build:**
+- Rich text toolbar via Tiptap (same library the HR app uses). Output stored as Markdown in `messages.body` so existing reads stay compatible with the `MarkdownBody` renderer.
+- Emoji picker via `emoji-picker-react` — 😀 button in the composer, searchable grid, inserts unicode glyph at cursor.
+- Emoji reactions: hover a message → "+ reaction" → quick-pick row (👍 ❤️ 😂 🎉 👀 ✅) plus full picker. New table `message_reactions(message_id, user_profile_id, emoji)` with composite PK + RLS via the parent message's `org_id`. Migration `0005_message_reactions.sql`. Reactions render as pill chips below the message body.
 
-**Acceptance:** Bruce @-mentions Impactica's lead in a message. Lead receives an email within seconds. Clicking the email lands them on the relevant message thread.
+**Acceptance:** Bruce can format messages with toolbar buttons, drop in an emoji from the picker, and react to messages with thumbs/heart/etc. Reactions persist and surface to every viewer in the audience.
 
-When Phase 1.4 completes, this section moves to Phase 1.5 (Documents Module).
+**After 1.3.5:** Active Phase moves to **Phase 1.4 — @Mentions + Resend Wiring** (per the original Phase-1-Plan.md): `@mention` parsing in the composer, fan-out notifications via Resend on a verified sender domain, email templates for `@mention` / `action_item_assigned` / `action_item_due_soon`. Then Phase 1.5 (Documents Module) which folds message attachments in alongside standalone documents — same upload pipeline serves both.
