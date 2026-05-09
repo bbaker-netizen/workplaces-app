@@ -5,11 +5,13 @@
 import { MessageRow } from "./MessageRow";
 import type { ListedMessage } from "@/lib/db/queries/messages";
 import type { ReactionsByEmoji } from "@/lib/db/queries/message-reactions";
+import type { AttachedDocument } from "@/lib/db/queries/documents";
 import type { MentionMember } from "./MentionList";
 
 export function MessageList({
   messages,
   reactionsByMessageId,
+  attachmentsByMessageId,
   viewerUserProfileId,
   viewerCanModerate,
   members,
@@ -17,6 +19,7 @@ export function MessageList({
 }: {
   messages: ListedMessage[];
   reactionsByMessageId?: Map<string, ReactionsByEmoji>;
+  attachmentsByMessageId?: Map<string, AttachedDocument[]>;
   viewerUserProfileId: string;
   viewerCanModerate: boolean;
   members?: MentionMember[];
@@ -37,6 +40,7 @@ export function MessageList({
           key={m.id}
           message={m}
           reactions={reactionsByMessageId?.get(m.id) ?? []}
+          attachments={attachmentsByMessageId?.get(m.id) ?? []}
           viewerUserProfileId={viewerUserProfileId}
           viewerCanModerate={viewerCanModerate}
           members={members}

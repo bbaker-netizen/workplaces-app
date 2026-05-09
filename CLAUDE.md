@@ -531,14 +531,51 @@ Tagged `v0.6.0` on 2026-05-09. First sub-phase to actually send email.
 
 ---
 
+## What was built in Sub-Phase 1.5
+
+Tagged `v0.7.0` on 2026-05-09.
+
+**Schema:** migration `0006_message_attachments.sql` adds the `message_attachments(message_id, document_id, org_id)` join table — composite PK prevents duplicate attaches, RLS policy mirrors every other tenant-scoped table (`org_id = auth.org_id()`), three indexes, the shared `set_updated_at` trigger. The `documents` and `document_tags` tables were already shaped from Phase 1.1.
+
+**Storage backend.** `lib/storage/blobs.ts` wraps `@netlify/blobs` with three operations: `uploadDocumentBlob`, `downloadDocumentBlob`, `deleteDocumentBlob`. Storage key shape: `<orgId>/<documentId>/<sanitizedFilename>` — defence-in-depth against any future RLS-skip bug (two orgs cannot collide on the same key). 25 MB cap on individual files; rejected at the wrapper. Local dev requires either `netlify dev` or explicit `NETLIFY_BLOBS_SITE_ID` + `NETLIFY_BLOBS_TOKEN` env vars; plain `pnpm dev` will throw a clear error from `getStore`.
+
+**Server actions** (`lib/actions/documents.ts`):
+- `uploadDocument(formData)` accepts `engagementId`, `file`, optional `tags`, writes the blob, inserts the `documents` row, populates `document_tags`. Cleans up the orphan blob if the DB write fails.
+- `deleteDocument(id)` — uploader-or-leadership-only. Deletes row first, then the blob; orphan-blob risk is non-fatal (logged, sweepable later).
+- `setDocumentTags(documentId, tags)` — whole-list replace. Cleaner than partial diff and matches how the chip-row UI presents tags.
+- `abandonDocument(id)` — uploader-only delete used by the composer paperclip when a draft attachment is removed before the message sends. Silent no-op if the caller isn't the uploader.
+- `verifyAttachments(engagementId, documentIds)` — boundary check; not currently wired but available for future compose-page flows.
+
+**Read queries** (`lib/db/queries/documents.ts`):
+- `listEngagementDocuments(engagementId)` — joins uploader name, batch-loads tags into a single follow-up query.
+- `getDocument(id)` — single doc with tags. Used by the download route before streaming bytes.
+- `listAttachmentsForMessages(messageIds)` — batched, returns a `Map<messageId, AttachedDocument[]>` mirroring the Phase 1.3.5 `listReactionsForMessages` shape so `MessageThread` can fan out three batched reads (reactions + attachments + members) in `Promise.all`.
+
+**Download route.** `/api/documents/[id]/download` (Node runtime, force-dynamic) RLS-checks the document via `getDocument` (which goes through `withTenantContext`), pulls the bytes from Blobs, and streams back with `Content-Disposition: attachment` plus the original filename. No public Blob URLs — every download passes through the auth boundary.
+
+**Pages.**
+- `/portal/documents` — header, upload form, document list. List rows show file icon, filename (clickable link to download route), size, uploader, date, tag chips, edit-tags inline drawer, and a delete button (visible only when the viewer is the uploader OR a leadership role).
+- `/coach/documents/[engagementId]` — same shape with the per-engagement chooser the coach communication page uses.
+- PortalNav got a "Documents" link in both the desktop and mobile rows.
+
+**Composer paperclip + attachment chips.** `ComposerAttachmentPicker.tsx` adds a paperclip button beside the existing toolbar. Clicking it opens a multi-select file picker; each picked file uploads immediately to the documents store via `uploadDocument` (so it also shows up on the engagement's Documents page). While in flight, a chip with a spinner renders; on success, the chip becomes removable. Clicking the X on a chip calls `abandonDocument` to purge the blob — keeps storage clean if the user changes their mind. Submit is blocked while any upload is in flight. After submit, the validated attachment ids are linked via `message_attachments` rows.
+
+**Existing-message chips** (`MessageAttachmentChips.tsx`) render below each message body — server component, plain anchor tags pointing at the download route. No client state, no extra JS.
+
+**Cross-cutting wiring.** `createMessage` schema gained an `attachments: string[]` field. Server validates that each attached document id belongs to the same engagement as the message (RLS-scoped via `withTenantContext`), then inserts one `message_attachments` row per valid id. Tampered clients can't cross-link documents from other engagements.
+
+**New deps:** `@netlify/blobs@^9`. No other.
+
+**Acceptance:** Bruce uploads a PDF to the Documents page; the file appears in the engagement's list with tags and download link. Bruce attaches files in the composer; the recipient sees attachment chips and clicking one downloads the file. Files attached via the composer are also accessible from the Documents page (single source of truth — same `documents` row).
+
+**Local dev caveat.** Document uploads require either `netlify dev` (Netlify CLI managing local Blob credentials) or explicit `NETLIFY_BLOBS_SITE_ID` + `NETLIFY_BLOBS_TOKEN` env vars in `.env.local`. Documented in `.env.example`. Plain `pnpm dev` runs every other module fine; trying to upload a document throws a clear "configure Netlify Blobs" error rather than silently corrupting state.
+
+**Production setup outside this repo** (Bruce, when ready):
+1. Confirm Netlify Blobs is enabled on the site (typically auto-on for Pro and above; verify under Site → Configuration → Blobs).
+2. Production deploy auto-detects credentials — no extra env vars needed beyond the four from 1.4.
+
+---
+
 ## Active Phase
 
-**Sub-Phase 1.5 — Documents Module + message attachments.** Per `Phase-1-Plan.md` and the 2026-05-09 decisions log:
-
-**Build:**
-- Netlify Blobs upload pipeline (server actions wrapping `@netlify/blobs`).
-- `documents` table reads + writes (schema already shipped in 1.1).
-- `/portal/documents` and `/coach/documents/[engagementId]` pages — list, upload, tag, download, delete.
-- Paperclip icon in the message composer hits the same upload flow; attachment metadata is stored on the message via a new `message_attachments` join table OR by adding an `attachments` JSONB column to `messages` (decide at sub-phase kickoff).
-
-**Acceptance:** Bruce uploads a PDF to a client's documents module; the client sees and downloads it. Bruce attaches a file to a message; the recipient sees the attachment chip and can download.
+**Sub-Phase 1.6 — TBD.** Per `Phase-1-Plan.md`, the remaining Phase 1 work is the Soul File ingest + read-only summary view, the BBS Sessions module skeleton, and the engagement-level dashboard ("Today" view). The order is open — re-evaluate at the next session kickoff with Bruce.

@@ -380,6 +380,43 @@ export const documents = pgTable(
 );
 
 /**
+ * `message_attachments` — join table linking messages to documents.
+ *
+ * Phase 1.5. Uploading a file via the message composer's paperclip
+ * persists it to the `documents` table (so it also shows up on the
+ * engagement's Documents page) and creates one row here pointing the
+ * message at it. A document can be attached to multiple messages
+ * (rare, but free); a single message can carry many attachments.
+ *
+ * Composite PK (message_id, document_id) prevents duplicate attaches.
+ * `org_id` denormalized for RLS — same pattern as `document_tags`,
+ * `message_reactions`. App code copies it from the parent message at
+ * insert time.
+ */
+export const messageAttachments = pgTable(
+  "message_attachments",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.messageId, t.documentId] }),
+    orgIdx: index("message_attachments_org_idx").on(t.orgId),
+    messageIdx: index("message_attachments_message_idx").on(t.messageId),
+    documentIdx: index("message_attachments_document_idx").on(t.documentId),
+  }),
+);
+
+/**
  * `document_tags` — many-to-many of free-text tags on documents.
  *
  * Composite primary key (document_id, tag) — a document can carry many
@@ -477,3 +514,5 @@ export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type NewMessageReaction = typeof messageReactions.$inferInsert;
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+export type NewMessageAttachment = typeof messageAttachments.$inferInsert;

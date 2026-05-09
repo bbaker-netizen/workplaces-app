@@ -21,6 +21,10 @@ import {
   type RichTextEditorHandle,
 } from "./RichTextEditor";
 import { EmojiPickerButton } from "./EmojiPickerButton";
+import {
+  ComposerAttachmentPicker,
+  type PendingAttachment,
+} from "./ComposerAttachmentPicker";
 import type { MentionMember } from "./MentionList";
 
 export function MessageComposer({
@@ -40,13 +44,22 @@ export function MessageComposer({
   const editorRef = useRef<RichTextEditorHandle | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const submit = () => {
     if (!editorRef.current) return;
     const body = editorRef.current.getMarkdown();
     if (!body) return;
+    // Block submit while an attachment upload is still in flight.
+    if (attachments.some((a) => a.uploading)) {
+      setError("Wait for attachments to finish uploading.");
+      return;
+    }
     const mentions = editorRef.current.getMentionIds();
+    const attachmentIds = attachments
+      .filter((a) => !a.uploading && !a.id.startsWith("pending-"))
+      .map((a) => a.id);
     setError(null);
     startTransition(async () => {
       const result = await createMessage({
@@ -55,15 +68,18 @@ export function MessageComposer({
         parentEntityId,
         body,
         mentions,
+        attachments: attachmentIds,
       });
       if (!result.ok) {
         setError(result.error);
       } else {
         editorRef.current?.clear();
         setIsEmpty(true);
+        setAttachments([]);
       }
     });
   };
+
 
   return (
     <form
@@ -95,6 +111,12 @@ export function MessageComposer({
           </span>
         )}
       </div>
+      <ComposerAttachmentPicker
+        engagementId={engagementId}
+        attachments={attachments}
+        onAttachmentsChange={setAttachments}
+        disabled={isPending}
+      />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <EmojiPickerButton

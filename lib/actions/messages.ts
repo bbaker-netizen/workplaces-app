@@ -19,12 +19,14 @@
  *     Bruce 2026-05-09: WhatsApp-style readability.
  */
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
+  documents,
+  messageAttachments,
   messages,
   notifications,
   userProfiles,
@@ -71,6 +73,12 @@ const createSchema = z.object({
    * so a tampered client can't inject arbitrary ids.
    */
   mentions: z.array(z.string().uuid()).default([]),
+  /**
+   * document UUIDs the author attached via the composer paperclip.
+   * Server verifies each belongs to the same engagement before
+   * creating `message_attachments` rows. Phase 1.5.
+   */
+  attachments: z.array(z.string().uuid()).default([]),
 });
 
 export type CreateMessageInput = z.input<typeof createSchema>;
@@ -200,6 +208,32 @@ export async function createMessage(
             mentions: mentionIds,
           })
           .returning({ id: messages.id });
+
+        // Attachments: validate each document id belongs to this
+        // engagement (RLS already scopes to the org), then create one
+        // message_attachments row per. A tampered client can't attach
+        // documents from a different engagement — the engagementId
+        // filter rejects them.
+        if (data.attachments.length > 0) {
+          const validDocs = await tx
+            .select({ id: documents.id })
+            .from(documents)
+            .where(
+              and(
+                eq(documents.engagementId, data.engagementId),
+                inArray(documents.id, data.attachments),
+              ),
+            );
+          if (validDocs.length > 0) {
+            await tx.insert(messageAttachments).values(
+              validDocs.map((d) => ({
+                messageId: row.id,
+                documentId: d.id,
+                orgId: profile.orgId,
+              })),
+            );
+          }
+        }
 
         // Fan out: one notification row per mentioned user. We mark
         // `sent_via='in_app'` here unconditionally; the email send

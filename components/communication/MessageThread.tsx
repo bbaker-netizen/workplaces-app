@@ -17,6 +17,7 @@ import {
   type ListedMessage,
 } from "@/lib/db/queries/messages";
 import { listReactionsForMessages } from "@/lib/db/queries/message-reactions";
+import { listAttachmentsForMessages } from "@/lib/db/queries/documents";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { THREAD_TYPE, type ThreadType } from "@/lib/communication/audience";
@@ -62,10 +63,12 @@ export async function MessageThread({
   const messages =
     preloadedMessages ??
     (await listMessagesForEntity(threadType, parentEntityId));
-  const [reactionsByMessageId, members] = await Promise.all([
-    listReactionsForMessages(messages.map((m) => m.id)),
-    listEngagementMembers(engagementId),
-  ]);
+  const [reactionsByMessageId, attachmentsByMessageId, members] =
+    await Promise.all([
+      listReactionsForMessages(messages.map((m) => m.id)),
+      listAttachmentsForMessages(messages.map((m) => m.id)),
+      listEngagementMembers(engagementId),
+    ]);
   const mentionMembers = members.map((m) => ({
     id: m.id,
     label: m.fullName,
@@ -77,6 +80,7 @@ export async function MessageThread({
       <MessageList
         messages={messages}
         reactionsByMessageId={reactionsByMessageId}
+        attachmentsByMessageId={attachmentsByMessageId}
         viewerUserProfileId={profile.userProfileId}
         viewerCanModerate={isModerator(profile.role)}
         members={mentionMembers}

@@ -29,7 +29,9 @@ import {
 } from "./RichTextEditor";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { MessageReactionBar } from "./MessageReactionBar";
+import { MessageAttachmentChips } from "./MessageAttachmentChips";
 import type { ReactionsByEmoji } from "@/lib/db/queries/message-reactions";
+import type { AttachedDocument } from "@/lib/db/queries/documents";
 import type { MentionMember } from "./MentionList";
 
 function initialsOf(name: string): string {
@@ -46,12 +48,14 @@ export function MessageRow({
   viewerUserProfileId,
   viewerCanModerate,
   reactions = [],
+  attachments = [],
   members,
 }: {
   message: ListedMessage;
   viewerUserProfileId: string;
   viewerCanModerate: boolean;
   reactions?: ReactionsByEmoji;
+  attachments?: AttachedDocument[];
   members?: MentionMember[];
 }) {
   const editorRef = useRef<RichTextEditorHandle | null>(null);
@@ -287,6 +291,9 @@ export function MessageRow({
             </div>
           )}
         </div>
+        {!editing && !isTombstone && attachments.length > 0 && (
+          <MessageAttachmentChips attachments={attachments} />
+        )}
         {!editing && !isTombstone && (
           <MessageReactionBar
             messageId={message.id}

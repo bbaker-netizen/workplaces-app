@@ -7,6 +7,7 @@
  *
  * Phase 1.2 added: action items.
  * Phase 1.3 added: communication.
+ * Phase 1.5 added: documents.
  */
 
 import Link from "next/link";
@@ -42,6 +43,12 @@ export function PortalNav({
           >
             Communication
           </Link>
+          <Link
+            href="/portal/documents"
+            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
+          >
+            Documents
+          </Link>
         </div>
         <div className="flex items-center gap-3 sm:gap-4">
           <NotificationBell unreadCount={unreadCount} />
@@ -68,6 +75,12 @@ export function PortalNav({
             className="font-sans text-sm text-foreground"
           >
             Communication
+          </Link>
+          <Link
+            href="/portal/documents"
+            className="font-sans text-sm text-foreground"
+          >
+            Documents
           </Link>
         </div>
       </div>

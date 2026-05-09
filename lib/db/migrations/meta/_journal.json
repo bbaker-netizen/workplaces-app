@@ -43,6 +43,13 @@
       "when": 1778347919996,
       "tag": "0005_message_reactions",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778355485155,
+      "tag": "0006_message_attachments",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,7 @@
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/work-sans": "^5.2.8",
     "@neondatabase/serverless": "^1.1.0",
+    "@netlify/blobs": "^9",
     "@netlify/functions": "^4",
     "@tiptap/extension-link": "^2",
     "@tiptap/extension-mention": "^2",
