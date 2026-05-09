@@ -25,6 +25,8 @@ import {
   reopenSession,
   updateSession,
 } from "@/lib/actions/bbs-sessions";
+import { extractActionItemsFromFireflies } from "@/lib/actions/fireflies-extract";
+import { Sparkles } from "lucide-react";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import {
   fromDateTimeLocalValue,
@@ -105,6 +107,24 @@ export function SessionDetail({
         setError(result.error);
       } else {
         onAfterDelete?.();
+      }
+    });
+  };
+
+  const [extractMessage, setExtractMessage] = useState<string | null>(null);
+  const onExtract = () => {
+    setError(null);
+    setExtractMessage(null);
+    startTransition(async () => {
+      const result = await extractActionItemsFromFireflies({
+        sessionId: session.id,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setExtractMessage(
+          `${result.data.created} draft action items created.`,
+        );
       }
     });
   };
@@ -256,6 +276,20 @@ export function SessionDetail({
           )}
           <button
             type="button"
+            onClick={onExtract}
+            disabled={isPending || !session.firefliesRecordingId}
+            title={
+              session.firefliesRecordingId
+                ? "Pull the Fireflies transcript and extract action item drafts"
+                : "Add a Fireflies recording id to this session first"
+            }
+            className="font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md border border-[#2E4057] text-[#2E4057] hover:bg-[#F5F1E8] disabled:opacity-50 inline-flex items-center gap-1"
+          >
+            <Sparkles className="w-3.5 h-3.5" aria-hidden />
+            Extract action items
+          </button>
+          <button
+            type="button"
             onClick={onDelete}
             disabled={isPending}
             className="ml-auto inline-flex items-center gap-1 font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-[#E87722] hover:bg-[#F5F1E8] disabled:opacity-50"
@@ -270,6 +304,11 @@ export function SessionDetail({
             className="font-sans text-sm text-[#E87722]"
           >
             {error}
+          </p>
+        )}
+        {extractMessage && !isPending && (
+          <p className="font-sans text-sm text-[#2E4057] border border-[#CCCCCC] rounded-md px-3 py-2 bg-[#F5F1E8]">
+            {extractMessage}
           </p>
         )}
       </header>
