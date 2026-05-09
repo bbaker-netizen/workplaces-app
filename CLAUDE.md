@@ -663,9 +663,35 @@ Tagged `v0.10.0` on 2026-05-09 (same tag as 1.8 — 1.9 is a runbook, not new co
 
 ---
 
+## What was built in Sub-Phases 1.10–1.20
+
+Tagged across `v0.11.0` through `v0.16.0` on 2026-05-09. Phase 1 is feature-complete — every default module from CLAUDE.md ships, plus the coach cross-org fix and the Workplaces MCP bridge.
+
+| Tag | Sub-phases | Modules |
+| --- | --- | --- |
+| v0.11.0 | 1.10 / 1.11 / 1.12 | Goals, Team, Methodology Resources |
+| v0.12.0 | 1.13 | Coach cross-org tenant helper (`withEngagementContext`) |
+| v0.13.0 | 1.14 | Projects + tasks |
+| v0.14.0 | 1.15 | Hiring Pipeline |
+| v0.15.0 | 1.16 / 1.17 / 1.18 / 1.19 | Forms, Deliverables, Invoices, Subscriptions, Embedded Apps, Courses |
+| v0.16.0 | 1.20 | Workplaces MCP server |
+
+**Schema:** five new migrations (0009–0013) added 14 new tables across the modules. Every tenant-scoped table follows the same pattern — `org_id` denormalized for RLS, `set_updated_at` trigger, `org_id = auth.org_id()` policy.
+
+**Coach cross-org fix.** `withEngagementContext(callerOrgId, callerRole, engagementId, fn)` resolves the engagement's owning org and binds the GUC to that — coach roles can read/write in any client engagement they own. Client roles are still gated to their home org. `resolveEngagementIdFromRecord` looks up the parent engagement for any record id, including nested ones (tasks → projects, lessons → courses, message_reactions → messages, form_submissions → forms). All server actions and read queries refactored to use it.
+
+**Workplaces MCP.** `app/api/mcp/route.ts` exposes a JSON-RPC HTTP endpoint. Bearer auth: `Bearer <MCP_BEARER_TOKEN>:<clerk_user_id>`. The Workplaces Plugin in Cowork holds the secret, pairs it with the calling coach's Clerk id, and the route resolves it back to a `user_profiles.id` to scope tool results. Read-only tools shipped: `list_engagements`, `list_my_work`, `list_upcoming_sessions`, `list_hiring_pipeline`, `list_projects`, `list_subscription_inventory`, `get_bbs_prep`, `list_recent_activity`. Writes are Phase 2.
+
+**New env vars (Phase 1.10–1.20):**
+- `MCP_BEARER_TOKEN` — secret guarding `/api/mcp` for the Workplaces Plugin in Cowork.
+
+**Acceptance:** every page in `/portal/*` and the cross-org coach flows compile and render. `pnpm typecheck` + `pnpm build` clean; 36 routes ship. Real receive-side testing happens during the Live Impactica handoff (runbook below).
+
+---
+
 ## Active Phase
 
-**Phase 2 kickoff — TBD.** Phase 1 is feature-complete on the modules in `Phase-1-Plan.md`. Phase 2 candidates (per CLAUDE.md and `docs/decisions.md`):
+**Phase 2 kickoff — TBD.** Phase 1 is feature-complete. Phase 2 candidates (per CLAUDE.md and `docs/decisions.md`):
 - **Coach-aware tenant helper** — fix the cross-org GUC gap so Bruce can post / view / edit in client orgs from the master org session. Documented as "Coach cross-org gap" in 1.2/1.3/1.4/1.5/1.6 acceptance notes.
 - **Scheduling module** — Calendly-style booking, Google Calendar sync, Reclaim/Motion-style auto-scheduling. Elevated from deferred to Phase 2 per the 2026-05-09 reference-apps decision.
 - **Soul File vector embeddings + semantic search** — pgvector + Voyage AI (or another embedding vendor).

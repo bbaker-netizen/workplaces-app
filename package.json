@@ -16,6 +16,7 @@
     "@fontsource/big-shoulders-display": "^5.2.5",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/work-sans": "^5.2.8",
+    "@modelcontextprotocol/sdk": "^1",
     "@neondatabase/serverless": "^1.1.0",
     "@netlify/blobs": "^9",
     "@netlify/functions": "^4",
