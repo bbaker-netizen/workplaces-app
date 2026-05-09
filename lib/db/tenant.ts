@@ -220,7 +220,18 @@ export async function resolveEngagementIdFromRecord(
     | "soul_files"
     | "message_reactions"
     | "projects"
-    | "tasks",
+    | "tasks"
+    | "hires"
+    | "forms"
+    | "form_submissions"
+    | "deliverables"
+    | "invoices"
+    | "subscription_assets"
+    | "embedded_apps"
+    | "courses"
+    | "cohorts"
+    | "lessons"
+    | "enrollments",
   recordId: string,
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
@@ -241,6 +252,46 @@ export async function resolveEngagementIdFromRecord(
         sql`SELECT p.engagement_id AS "engagementId"
             FROM tasks t JOIN projects p ON p.id = t.project_id
             WHERE t.id = ${recordId}
+            LIMIT 1`,
+      );
+      const rows = result.rows as Array<{ engagementId: string }>;
+      return rows[0]?.engagementId ?? null;
+    }
+    if (table === "form_submissions") {
+      const result = await tx.execute(
+        sql`SELECT f.engagement_id AS "engagementId"
+            FROM form_submissions s JOIN forms f ON f.id = s.form_id
+            WHERE s.id = ${recordId}
+            LIMIT 1`,
+      );
+      const rows = result.rows as Array<{ engagementId: string }>;
+      return rows[0]?.engagementId ?? null;
+    }
+    if (table === "cohorts") {
+      const result = await tx.execute(
+        sql`SELECT c.engagement_id AS "engagementId"
+            FROM cohorts h JOIN courses c ON c.id = h.course_id
+            WHERE h.id = ${recordId}
+            LIMIT 1`,
+      );
+      const rows = result.rows as Array<{ engagementId: string }>;
+      return rows[0]?.engagementId ?? null;
+    }
+    if (table === "lessons") {
+      const result = await tx.execute(
+        sql`SELECT c.engagement_id AS "engagementId"
+            FROM lessons l JOIN courses c ON c.id = l.course_id
+            WHERE l.id = ${recordId}
+            LIMIT 1`,
+      );
+      const rows = result.rows as Array<{ engagementId: string }>;
+      return rows[0]?.engagementId ?? null;
+    }
+    if (table === "enrollments") {
+      const result = await tx.execute(
+        sql`SELECT c.engagement_id AS "engagementId"
+            FROM enrollments e JOIN courses c ON c.id = e.course_id
+            WHERE e.id = ${recordId}
             LIMIT 1`,
       );
       const rows = result.rows as Array<{ engagementId: string }>;

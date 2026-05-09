@@ -135,6 +135,17 @@ export const taskStatusEnum = pgEnum("task_status", [
   "blocked",
 ]);
 
+// ---------- Phase 1.15 enums ----------
+
+export const hireStatusEnum = pgEnum("hire_status", [
+  "assessing",
+  "interview_scheduled",
+  "decision_pending",
+  "offer_sent",
+  "hired",
+  "declined",
+]);
+
 // ---------- Phase 0 tables ----------
 
 /**
@@ -327,6 +338,66 @@ export const tasks = pgTable(
     projectIdx: index("tasks_project_idx").on(t.projectId),
     assigneeIdx: index("tasks_assignee_idx").on(t.assigneeUserProfileId),
     statusIdx: index("tasks_status_idx").on(t.status),
+  }),
+);
+
+/**
+ * `hires` — candidates moving through the hiring pipeline.
+ *
+ * Phase 1.15. Per CLAUDE.md spec: gap report PDF uploaded → stored
+ * on the candidate record, generate buttons trigger existing
+ * Workplaces skills via Claude API (gap-analysis, interview,
+ * hiring, new-employee-onboarding). The AI generation buttons
+ * land in Phase 2; for 1.15 we ship the data + manual upload paths.
+ *
+ * Document references (gap_report / resume / offer) point at the
+ * shared `documents` table — uploaded via the existing /api/documents
+ * pipeline so the same files appear under Documents AND on the
+ * candidate's record.
+ */
+export const hires = pgTable(
+  "hires",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    candidateName: text("candidate_name").notNull(),
+    candidateEmail: text("candidate_email"),
+    roleName: text("role_name").notNull(),
+    status: hireStatusEnum("status").notNull().default("assessing"),
+    gapReportDocumentId: uuid("gap_report_document_id").references(
+      () => documents.id,
+      { onDelete: "set null" },
+    ),
+    resumeDocumentId: uuid("resume_document_id").references(
+      () => documents.id,
+      { onDelete: "set null" },
+    ),
+    offerDocumentId: uuid("offer_document_id").references(
+      () => documents.id,
+      { onDelete: "set null" },
+    ),
+    notes: text("notes"),
+    interviewScheduledAt: timestamp("interview_scheduled_at", {
+      withTimezone: true,
+    }),
+    decisionAt: timestamp("decision_at", { withTimezone: true }),
+    offerSentAt: timestamp("offer_sent_at", { withTimezone: true }),
+    hiredAt: timestamp("hired_at", { withTimezone: true }),
+    createdByUserProfileId: uuid("created_by_user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("hires_org_idx").on(t.orgId),
+    engagementIdx: index("hires_engagement_idx").on(t.engagementId),
+    statusIdx: index("hires_status_idx").on(t.status),
   }),
 );
 
@@ -792,3 +863,5 @@ export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
+export type Hire = typeof hires.$inferSelect;
+export type NewHire = typeof hires.$inferInsert;

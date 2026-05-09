@@ -1,0 +1,87 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import { getHire } from "@/lib/db/queries/hires";
+import { HireForm } from "@/components/hires/HireForm";
+import { MarkdownBody } from "@/components/markdown/MarkdownBody";
+
+const STATUS_LABEL: Record<string, string> = {
+  assessing: "Assessing",
+  interview_scheduled: "Interview scheduled",
+  decision_pending: "Decision pending",
+  offer_sent: "Offer sent",
+  hired: "Hired",
+  declined: "Declined",
+};
+
+export default async function HireDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") redirect("/no-invitation");
+  const engagement = await getCurrentEngagement();
+  if (!engagement) redirect("/portal");
+  const hire = await getHire(params.id);
+  if (!hire) notFound();
+
+  const canEdit =
+    profile.role === "master_admin" ||
+    profile.role === "coach" ||
+    profile.role === "client_lead" ||
+    profile.role === "client_manager";
+
+  return (
+    <main className="max-w-3xl mx-auto px-6 py-12 space-y-8">
+      <header className="space-y-2">
+        <Link
+          href="/portal/hiring"
+          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+        >
+          ← Hiring pipeline
+        </Link>
+        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+          {hire.candidateName}
+        </h1>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span>{hire.roleName}</span>
+          <span>· {STATUS_LABEL[hire.status] ?? hire.status}</span>
+          {hire.candidateEmail && <span>· {hire.candidateEmail}</span>}
+        </div>
+      </header>
+
+      {canEdit ? (
+        <HireForm
+          engagementId={engagement.id}
+          initial={{
+            id: hire.id,
+            candidateName: hire.candidateName,
+            candidateEmail: hire.candidateEmail ?? "",
+            roleName: hire.roleName,
+            status: hire.status,
+            notes: hire.notes ?? "",
+          }}
+          redirectTo="/portal/hiring"
+          showDelete
+        />
+      ) : (
+        hire.notes && (
+          <section className="border border-[#CCCCCC] rounded-md bg-white p-4">
+            <MarkdownBody body={hire.notes} />
+          </section>
+        )
+      )}
+
+      <section className="space-y-2">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          AI assist
+        </h2>
+        <p className="font-sans text-sm text-muted-foreground">
+          Generate buttons (gap analysis, interview guide, hiring assessment, onboarding pack) wire into the existing Workplaces skills via the Anthropic API. Coming in Phase 2 once the Claude integration lands.
+        </p>
+      </section>
+    </main>
+  );
+}
