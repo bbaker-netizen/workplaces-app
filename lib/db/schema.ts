@@ -221,6 +221,47 @@ export const engagements = pgTable(
 // ---------- Phase 1.1 tables ----------
 
 /**
+ * `soul_files` — long-form context document per engagement.
+ *
+ * Phase 1.7. Free-form markdown body, exactly one row per engagement
+ * (UNIQUE constraint on engagement_id). The methodology calls this
+ * the "Soul File" — the engagement's deep context: who the leadership
+ * is, what they're trying to build, the strategic backdrop, the
+ * business model nuances, hard-won learnings.
+ *
+ * Vector embeddings + pgvector semantic search are Phase 2 — added
+ * here as a separate migration when there's enough Soul File content
+ * across engagements to warrant cross-doc retrieval. For 1.7, lookup
+ * is by engagement, so a vector column would be premature.
+ *
+ * `last_editor_user_profile_id` is the most-recent author (not the
+ * creator). Useful for the "edited by … 3 days ago" footer.
+ */
+export const soulFiles = pgTable(
+  "soul_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .unique()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    body: text("body").notNull().default(""),
+    lastEditorUserProfileId: uuid(
+      "last_editor_user_profile_id",
+    ).references(() => userProfiles.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("soul_files_org_idx").on(t.orgId),
+    engagementIdx: index("soul_files_engagement_idx").on(t.engagementId),
+  }),
+);
+
+/**
  * `bbs_sessions` — Business Building Sessions per engagement.
  *
  * Methodology: twice-monthly 2-hour sessions with each client (one
@@ -587,3 +628,5 @@ export type MessageAttachment = typeof messageAttachments.$inferSelect;
 export type NewMessageAttachment = typeof messageAttachments.$inferInsert;
 export type BbsSession = typeof bbsSessions.$inferSelect;
 export type NewBbsSession = typeof bbsSessions.$inferInsert;
+export type SoulFile = typeof soulFiles.$inferSelect;
+export type NewSoulFile = typeof soulFiles.$inferInsert;

@@ -57,6 +57,13 @@
       "when": 1778358774116,
       "tag": "0007_bbs_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778359552596,
+      "tag": "0008_soul_files",
+      "breakpoints": true
     }
   ]
 }

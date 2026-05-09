@@ -9,6 +9,7 @@
  * Phase 1.3 added: communication.
  * Phase 1.5 added: documents.
  * Phase 1.6 added: sessions.
+ * Phase 1.7 added: soul file.
  */
 
 import Link from "next/link";
@@ -56,6 +57,12 @@ export function PortalNav({
           >
             Documents
           </Link>
+          <Link
+            href="/portal/soul-file"
+            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
+          >
+            Soul File
+          </Link>
         </div>
         <div className="flex items-center gap-3 sm:gap-4">
           <NotificationBell unreadCount={unreadCount} />
@@ -94,6 +101,12 @@ export function PortalNav({
             className="font-sans text-sm text-foreground"
           >
             Documents
+          </Link>
+          <Link
+            href="/portal/soul-file"
+            className="font-sans text-sm text-foreground"
+          >
+            Soul File
           </Link>
         </div>
       </div>

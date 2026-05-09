@@ -615,11 +615,112 @@ Tagged `v0.8.0` on 2026-05-09.
 
 ---
 
+## What was built in Sub-Phase 1.7
+
+Tagged `v0.9.0` on 2026-05-09.
+
+**Schema:** migration `0008_soul_files.sql` adds `soul_files(id, org_id, engagement_id UNIQUE, body, last_editor_user_profile_id, ...)`. RLS, indexes, `set_updated_at` trigger. UNIQUE on `engagement_id` enforces "one Soul File per engagement"; if Phase 2+ wants per-topic Soul Files, drop the constraint then.
+
+**Vector embeddings deferred.** CLAUDE.md flags pgvector + RAG semantic retrieval for Soul Files. For 1.7 we ship body-only; embeddings come in Phase 2 once enough Soul Files exist to make cross-doc semantic search worthwhile. No premature schema cost.
+
+**Server action** (`lib/actions/soul-files.ts`): `upsertSoulFileBody(engagementId, body)` — creates the row on first save, updates thereafter. Leadership-only (`master_admin` / `coach` / `client_lead` / `client_manager`); `client_employee` can VIEW.
+
+**Read query** (`lib/db/queries/soul-files.ts`): `getSoulFileForEngagement` returns body + last editor's name + updatedAt.
+
+**`SoulFileEditor.tsx`** is a client component — renders a starter template ("Why this engagement exists / Where it's at today / Where it wants to be in 12 months / Strategic backdrop / Founders / Hard-won learnings") if the body's empty. Read-only state uses the existing `MarkdownBody`. Edit mode swaps in a tall monospace textarea — Soul Files run long; markdown-fluent writers don't need a toolbar.
+
+**Pages:** `/portal/soul-file` and `/coach/soul-file/[engagementId]`. PortalNav got a Soul File link.
+
+**Acceptance:** Bruce opens the Soul File for an engagement, hits Start writing, drops in the deep context, saves. Re-opens the page later, sees the rendered markdown plus a "Last edited by … on …" footer. `client_employee` sees the same content read-only with no edit button.
+
+---
+
+## What was built in Sub-Phase 1.8
+
+Tagged `v0.10.0` on 2026-05-09.
+
+**`/portal` is now a real "Today" dashboard.** Was a thin welcome card; now a five-card grid covering everything Phase 1 ships:
+
+- **Next session** — date/time/format pulled via `getNextSession`, with the notes preview. Empty state if nothing scheduled.
+- **Your open items** — action items assigned to the viewer, not done, sorted overdue-first. Up to 5. Each links to its detail page.
+- **Latest activity** — last 5 messages from threads the viewer can audience-see. Renders author + parent + flattened excerpt.
+- **Soul File** — preview of the body's first lines, last-editor footer.
+- **Recent documents** — three most recent uploads, click to download.
+
+All five run as one `Promise.all` in the page handler — five batched round-trips overlap rather than chain. First-load JS for `/portal` went from ~96 kB to ~97 kB; render is server-side rendered in one pass.
+
+**Greeting** ("Good morning / afternoon / evening") and first-name address. Brand palette intact (Drafting Cream cards, Foreman Black ink, Steel Blue links).
+
+**Acceptance:** Land on https://workplaces-the-builder.netlify.app/portal (or http://localhost:3000/portal in dev). See the five cards populated with real data from your engagement. Each card links into its full module page.
+
+---
+
+## What was built in Sub-Phase 1.9
+
+Tagged `v0.10.0` on 2026-05-09 (same tag as 1.8 — 1.9 is a runbook, not new code).
+
+**Live Impactica handoff runbook** added below in the Operations section.
+
+---
+
 ## Active Phase
 
-**Sub-Phase 1.7 — TBD.** Three candidates left in Phase 1 per `Phase-1-Plan.md`:
-- **Soul File** — long-form context document per engagement, vector-embedded for semantic retrieval. Heavy backend (pgvector, embeddings pipeline), small visible UI.
-- **Engagement dashboard** — "Today" view aggregating action items, latest messages, next session. Useful integrator, low individual scope.
-- **Live Impactica handoff** — first real client onboarded onto The Builder. Stress-tests every module, surfaces the coach cross-org gap (currently deferred), exercises Resend live receive, etc.
+**Phase 2 kickoff — TBD.** Phase 1 is feature-complete on the modules in `Phase-1-Plan.md`. Phase 2 candidates (per CLAUDE.md and `docs/decisions.md`):
+- **Coach-aware tenant helper** — fix the cross-org GUC gap so Bruce can post / view / edit in client orgs from the master org session. Documented as "Coach cross-org gap" in 1.2/1.3/1.4/1.5/1.6 acceptance notes.
+- **Scheduling module** — Calendly-style booking, Google Calendar sync, Reclaim/Motion-style auto-scheduling. Elevated from deferred to Phase 2 per the 2026-05-09 reference-apps decision.
+- **Soul File vector embeddings + semantic search** — pgvector + Voyage AI (or another embedding vendor).
+- **Hiring Pipeline module** — gap report ingest → interview → assessment → offer → onboarding. CLAUDE.md "Hiring Pipeline — External + Internal Split" is the spec.
+- **Inngest + scheduled functions** for richer background jobs (Fireflies auto-extract, daily summaries, etc.).
+- **Webhooks for Clerk** — replace the first-visit auto-provision with `user.created` + Org events for production correctness.
 
 Pick at the next session kickoff with Bruce.
+
+---
+
+## Operations
+
+### Live Impactica handoff runbook
+
+This is the manual checklist for onboarding the first real client (Impactica) onto The Builder. Phase 1.7 finished the last module. Bruce executes these steps; Claude doesn't have the credentials or human-in-the-loop authority for any of them.
+
+**Pre-handoff checks (do once, before any client touches it):**
+
+1. **Apply pending migrations to production.** Production Neon is on a separate branch from local dev. Run `pnpm drizzle-kit migrate` against the production `DATABASE_URL` (set it in shell, not `.env.local`, so it doesn't override). Or run a one-off Netlify build with the migrate command — confirm in https://console.neon.tech that tables `bbs_sessions`, `soul_files`, `message_attachments`, `message_reactions` all exist.
+
+2. **Add the four Phase 1.4 env vars to Netlify.** Open https://app.netlify.com/sites/workplaces-the-builder/settings/env and add:
+   - `RESEND_API_KEY` — value from https://resend.com/api-keys (the rotated key, not the original).
+   - `RESEND_FROM_EMAIL` — `The Builder <notifications@4workplaces.com>`
+   - `NEXT_PUBLIC_APP_URL` — `https://workplaces-the-builder.netlify.app`
+   - `CRON_SECRET` — same value as `.env.local`. (If it doesn't exist there, generate a new random 32-byte string and put it in both places.)
+
+3. **Confirm Netlify Blobs is enabled.** Open https://app.netlify.com/sites/workplaces-the-builder/configuration/blobs — should be on by default for paid plans. If off, click Enable.
+
+4. **Trigger a fresh deploy.** Push or click Deploy in the Netlify dashboard. Verify build green, all 23 routes listed.
+
+5. **Smoke-test as Bruce (master_admin).** Visit https://workplaces-the-builder.netlify.app/portal — see the dashboard. Visit each tab in the nav — Action items, Sessions, Communication, Documents, Soul File. Each should render without error. Upload a small PDF to Documents. Schedule a session. Post a message in the Leadership thread.
+
+**Per-client handoff (once per real client):**
+
+6. **Create the engagement.** Go to https://workplaces-the-builder.netlify.app/coach/engagements/new. Fill in: engagement name (e.g. "Impactica"), type (Accelerator or Implementer), client lead's full name and email, planned start date. Submit. The form creates a Clerk Organization, an `orgs` row, an `engagements` row, sends the invitation email, then strips Bruce as auto-admin of the new Clerk Org.
+
+7. **Verify the invitation.** Open https://dashboard.clerk.com/last-active/organizations/<org_id> (the URL shows up after the form succeeds). The invitation should appear under Pending. Optionally, ask the client lead to forward you the invitation email's subject line so you know it landed.
+
+8. **Client lead accepts.** They click the email link, sign up at https://workplaces-the-builder.netlify.app/sign-up, complete Clerk's sign-up flow, land at /portal. First-visit provisioning auto-creates their `user_profiles` row with `role=client_lead` from the invitation's `publicMetadata.app_role`.
+
+9. **Populate the Soul File.** As Bruce, open https://workplaces-the-builder.netlify.app/coach/soul-file/<engagement_id> (the engagement id is in the URL after step 6). Hit Start writing. Drop in the deep context for this client — the methodology IP that drives every BBS.
+
+10. **Schedule the first BBS.** https://workplaces-the-builder.netlify.app/coach/sessions/<engagement_id> → Schedule a session form. Date/time in MT, format (in-person or virtual), agenda in notes.
+
+11. **Send a welcome message.** https://workplaces-the-builder.netlify.app/coach/communication/<engagement_id> → Leadership tab. Welcome them, point them at the Sessions tab.
+
+**Known gaps (deferred to Phase 2+):**
+
+- **Coach cross-org gap.** When Bruce posts in a thread that lives in the client org from his master-org session, RLS would filter to nothing because the GUC binds to the master org id. Workaround for the pilot: post the welcome message after step 8 (client lead acceptance), so the client lead's session creates the first leadership-thread row. Bruce's subsequent posts will still hit the gap until the coach-aware tenant helper lands.
+- **Production migrate command.** No automated step yet — Bruce / a developer manually runs `pnpm drizzle-kit migrate` against the production URL. Future Inngest job will run this on deploy.
+- **Webhook for user.created.** First-visit auto-provision works for the pilot but won't scale to many concurrent sign-ups. Webhook is on the Phase 2 list.
+
+**Rollback plan if a step fails mid-handoff:**
+
+- **Engagement creation failed after Clerk Org created.** Manually delete the orphan org at https://dashboard.clerk.com/last-active/organizations/<org_id> → Settings → Delete. The form's catch block tries to do this automatically; if it didn't, do it by hand.
+- **Invitation went to wrong email.** Cancel via https://dashboard.clerk.com/last-active/organizations/<org_id>/invitations → three dots → Revoke. Re-issue from the form.
+- **Anything broke during smoke test (step 5).** Don't onboard yet. Re-check env vars (step 2), re-check migrations (step 1). If still broken, redeploy.
