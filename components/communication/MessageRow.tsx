@@ -30,6 +30,7 @@ import {
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { MessageReactionBar } from "./MessageReactionBar";
 import type { ReactionsByEmoji } from "@/lib/db/queries/message-reactions";
+import type { MentionMember } from "./MentionList";
 
 function initialsOf(name: string): string {
   return name
@@ -45,11 +46,13 @@ export function MessageRow({
   viewerUserProfileId,
   viewerCanModerate,
   reactions = [],
+  members,
 }: {
   message: ListedMessage;
   viewerUserProfileId: string;
   viewerCanModerate: boolean;
   reactions?: ReactionsByEmoji;
+  members?: MentionMember[];
 }) {
   const editorRef = useRef<RichTextEditorHandle | null>(null);
   const [editing, setEditing] = useState(false);
@@ -216,6 +219,7 @@ export function MessageRow({
                 onSubmit={saveEdit}
                 onChange={setDraft}
                 ariaLabel="Edit message"
+                members={members}
               />
               {error && (
                 <p role="alert" className="font-sans text-sm text-[#E87722]">

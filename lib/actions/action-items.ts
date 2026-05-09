@@ -22,9 +22,12 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
   notifications,
+  userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import { withTenantContext } from "@/lib/db/tenant";
+import { sendEmailQuietly } from "@/lib/email/send";
+import { actionItemAssignedEmail } from "@/lib/email/templates";
 
 type Role = UserProfile["role"];
 
@@ -112,7 +115,7 @@ export async function createActionItem(
   const data = parsed.data;
 
   try {
-    const created = await withTenantContext(profile.orgId, async (tx) => {
+    const txResult = await withTenantContext(profile.orgId, async (tx) => {
       const [item] = await tx
         .insert(actionItems)
         .values({
@@ -130,6 +133,10 @@ export async function createActionItem(
         .returning({ id: actionItems.id });
 
       // Notify assignee if it's not the creator.
+      let assigneeForEmail: {
+        email: string;
+        fullName: string;
+      } | null = null;
       if (
         data.assigneeUserProfileId &&
         data.assigneeUserProfileId !== profile.userProfileId
@@ -142,18 +149,62 @@ export async function createActionItem(
           parentEntityId: item.id,
           sentVia: "in_app",
         });
+        const [assignee] = await tx
+          .select({
+            email: userProfiles.email,
+            fullName: userProfiles.fullName,
+          })
+          .from(userProfiles)
+          .where(eq(userProfiles.id, data.assigneeUserProfileId))
+          .limit(1);
+        if (assignee) assigneeForEmail = assignee;
       }
 
-      return item;
+      return { item, assigneeForEmail };
     });
 
+    // Send the assignment email outside the transaction. Best-effort.
+    if (txResult.assigneeForEmail) {
+      const assignerName = await loadAuthorName(profile);
+      await sendEmailQuietly(
+        actionItemAssignedEmail({
+          to: txResult.assigneeForEmail.email,
+          recipientName: txResult.assigneeForEmail.fullName,
+          assignerName,
+          itemTitle: data.title,
+          itemDescription: data.description ?? null,
+          dueDate: data.dueDate ? new Date(data.dueDate) : null,
+          url: `/portal/action-items/${txResult.item.id}`,
+        }),
+      );
+    }
+
     revalidateActionItemPaths();
-    return { ok: true, data: created };
+    return { ok: true, data: txResult.item };
   } catch (e) {
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     };
+  }
+}
+
+async function loadAuthorName(profile: {
+  orgId: string;
+  userProfileId: string;
+}): Promise<string> {
+  try {
+    const name = await withTenantContext(profile.orgId, async (tx) => {
+      const [row] = await tx
+        .select({ fullName: userProfiles.fullName })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, profile.userProfileId))
+        .limit(1);
+      return row?.fullName ?? null;
+    });
+    return name ?? "Someone";
+  } catch {
+    return "Someone";
   }
 }
 
@@ -179,71 +230,75 @@ export async function updateActionItem(
   const data = parsed.data;
 
   try {
-    await withTenantContext(profile.orgId, async (tx) => {
-      // Read existing — RLS already scopes to the user's org.
-      const [existing] = await tx
-        .select()
-        .from(actionItems)
-        .where(eq(actionItems.id, id))
-        .limit(1);
-      if (!existing) {
-        throw new Error("Action item not found.");
-      }
-
-      // Role-based field restrictions.
-      if (!canEditAnything(profile.role)) {
-        const isAssignee =
-          existing.assigneeUserProfileId === profile.userProfileId;
-        if (!isAssignee) {
-          throw new Error("You can only update items assigned to you.");
+    const reassignmentEmail = await withTenantContext(
+      profile.orgId,
+      async (tx) => {
+        // Read existing — RLS already scopes to the user's org.
+        const [existing] = await tx
+          .select()
+          .from(actionItems)
+          .where(eq(actionItems.id, id))
+          .limit(1);
+        if (!existing) {
+          throw new Error("Action item not found.");
         }
-        const restrictedKeys = [
-          "title",
-          "description",
-          "assigneeUserProfileId",
-          "dueDate",
-          "revenueImpact",
-          "marginImpact",
-        ] as const;
-        for (const key of restrictedKeys) {
-          if (data[key] !== undefined) {
-            throw new Error(
-              `Your role can update status only — not ${key}.`,
-            );
+
+        // Role-based field restrictions.
+        if (!canEditAnything(profile.role)) {
+          const isAssignee =
+            existing.assigneeUserProfileId === profile.userProfileId;
+          if (!isAssignee) {
+            throw new Error("You can only update items assigned to you.");
+          }
+          const restrictedKeys = [
+            "title",
+            "description",
+            "assigneeUserProfileId",
+            "dueDate",
+            "revenueImpact",
+            "marginImpact",
+          ] as const;
+          for (const key of restrictedKeys) {
+            if (data[key] !== undefined) {
+              throw new Error(
+                `Your role can update status only — not ${key}.`,
+              );
+            }
           }
         }
-      }
 
-      // Build the partial update payload.
-      const update: Partial<typeof actionItems.$inferInsert> = {};
-      if (data.title !== undefined) update.title = data.title;
-      if (data.description !== undefined) update.description = data.description;
-      if (data.status !== undefined) update.status = data.status;
-      if (data.assigneeUserProfileId !== undefined)
-        update.assigneeUserProfileId = data.assigneeUserProfileId;
-      if (data.dueDate !== undefined)
-        update.dueDate = data.dueDate ? new Date(data.dueDate) : null;
-      if (data.revenueImpact !== undefined)
-        update.revenueImpact = data.revenueImpact;
-      if (data.marginImpact !== undefined)
-        update.marginImpact = data.marginImpact;
+        // Build the partial update payload.
+        const update: Partial<typeof actionItems.$inferInsert> = {};
+        if (data.title !== undefined) update.title = data.title;
+        if (data.description !== undefined)
+          update.description = data.description;
+        if (data.status !== undefined) update.status = data.status;
+        if (data.assigneeUserProfileId !== undefined)
+          update.assigneeUserProfileId = data.assigneeUserProfileId;
+        if (data.dueDate !== undefined)
+          update.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+        if (data.revenueImpact !== undefined)
+          update.revenueImpact = data.revenueImpact;
+        if (data.marginImpact !== undefined)
+          update.marginImpact = data.marginImpact;
 
-      if (Object.keys(update).length === 0) return; // no-op
+        if (Object.keys(update).length === 0) return null; // no-op
 
-      const [updated] = await tx
-        .update(actionItems)
-        .set(update)
-        .where(eq(actionItems.id, id))
-        .returning();
+        const [updated] = await tx
+          .update(actionItems)
+          .set(update)
+          .where(eq(actionItems.id, id))
+          .returning();
 
-      // Notify on reassignment to a different user (and not self-assign).
-      const newAssignee = data.assigneeUserProfileId;
-      if (
-        newAssignee !== undefined &&
-        newAssignee !== existing.assigneeUserProfileId &&
-        newAssignee &&
-        newAssignee !== profile.userProfileId
-      ) {
+        // Notify on reassignment to a different user (and not self-assign).
+        const newAssignee = data.assigneeUserProfileId;
+        const shouldNotify =
+          newAssignee !== undefined &&
+          newAssignee !== existing.assigneeUserProfileId &&
+          newAssignee &&
+          newAssignee !== profile.userProfileId;
+        if (!shouldNotify || !newAssignee) return null;
+
         await tx.insert(notifications).values({
           orgId: profile.orgId,
           userProfileId: newAssignee,
@@ -252,8 +307,41 @@ export async function updateActionItem(
           parentEntityId: updated.id,
           sentVia: "in_app",
         });
-      }
-    });
+
+        const [assignee] = await tx
+          .select({
+            email: userProfiles.email,
+            fullName: userProfiles.fullName,
+          })
+          .from(userProfiles)
+          .where(eq(userProfiles.id, newAssignee))
+          .limit(1);
+        if (!assignee) return null;
+        return {
+          to: assignee.email,
+          recipientName: assignee.fullName,
+          itemId: updated.id,
+          itemTitle: updated.title,
+          itemDescription: updated.description,
+          dueDate: updated.dueDate,
+        };
+      },
+    );
+
+    if (reassignmentEmail) {
+      const assignerName = await loadAuthorName(profile);
+      await sendEmailQuietly(
+        actionItemAssignedEmail({
+          to: reassignmentEmail.to,
+          recipientName: reassignmentEmail.recipientName,
+          assignerName,
+          itemTitle: reassignmentEmail.itemTitle,
+          itemDescription: reassignmentEmail.itemDescription,
+          dueDate: reassignmentEmail.dueDate,
+          url: `/portal/action-items/${reassignmentEmail.itemId}`,
+        }),
+      );
+    }
 
     revalidateActionItemPaths();
     return { ok: true, data: undefined };

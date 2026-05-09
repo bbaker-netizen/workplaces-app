@@ -32,10 +32,13 @@
  */
 
 import { useEffect, useRef } from "react";
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useEditor, EditorContent, ReactRenderer, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
+import Mention from "@tiptap/extension-mention";
+import type { SuggestionProps, SuggestionKeyDownProps } from "@tiptap/suggestion";
+import tippy, { type Instance as TippyInstance } from "tippy.js";
 import { Markdown } from "tiptap-markdown";
 import {
   Bold,
@@ -47,6 +50,11 @@ import {
   Quote,
   Link2,
 } from "lucide-react";
+import {
+  MentionList,
+  type MentionListHandle,
+  type MentionMember,
+} from "./MentionList";
 
 export type RichTextEditorHandle = {
   /** Returns the current markdown body (trimmed). */
@@ -61,6 +69,8 @@ export type RichTextEditorHandle = {
   isEmpty: () => boolean;
   /** Move focus into the editor. */
   focus: () => void;
+  /** Collect all distinct user_profile ids referenced by `@mentions`. */
+  getMentionIds: () => string[];
 };
 
 export function RichTextEditor({
@@ -72,6 +82,7 @@ export function RichTextEditor({
   onChange,
   editorRef,
   ariaLabel,
+  members,
 }: {
   initialMarkdown?: string;
   placeholder?: string;
@@ -84,17 +95,27 @@ export function RichTextEditor({
   /** Imperative handle; assigned via React ref-callback pattern. */
   editorRef?: React.MutableRefObject<RichTextEditorHandle | null>;
   ariaLabel?: string;
+  /**
+   * Engagement members for the @-mention typeahead. If omitted, the
+   * mention extension is still installed (so old messages with mentions
+   * render) but typing `@` produces no suggestions.
+   */
+  members?: MentionMember[];
 }) {
-  // Hold the latest onSubmit / onChange so ProseMirror handlers always
-  // see fresh closures without re-mounting the editor.
+  // Hold the latest onSubmit / onChange / members so ProseMirror
+  // handlers always see fresh closures without re-mounting the editor.
   const onSubmitRef = useRef(onSubmit);
   const onChangeRef = useRef(onChange);
+  const membersRef = useRef<MentionMember[]>(members ?? []);
   useEffect(() => {
     onSubmitRef.current = onSubmit;
   }, [onSubmit]);
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+  useEffect(() => {
+    membersRef.current = members ?? [];
+  }, [members]);
 
   const editor = useEditor({
     extensions: [
@@ -108,6 +129,22 @@ export function RichTextEditor({
         HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
       }),
       Placeholder.configure({ placeholder }),
+      Mention.configure({
+        HTMLAttributes: {
+          // Visual treatment for mentions in the editor surface.
+          class:
+            "mention text-[#2E4057] font-bold rounded px-1 py-px bg-[#F5F1E8]",
+        },
+        renderText({ options, node }) {
+          // tiptap-markdown serializes inline nodes by reading this
+          // value. So a Mention node becomes plain `@Label` in the
+          // saved markdown — readable to anyone, even without the
+          // editor. The user_profile_id flows separately via
+          // `getMentionIds()`.
+          return `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`;
+        },
+        suggestion: buildMentionSuggestion(membersRef),
+      }),
       Markdown.configure({
         html: false,
         breaks: false,
@@ -156,7 +193,7 @@ export function RichTextEditor({
     if (!editorRef) return;
     editorRef.current = makeHandle(editor);
     return () => {
-      if (editorRef.current && editorRef.current === makeHandle(editor)) {
+      if (editorRef && editor === null) {
         editorRef.current = null;
       }
     };
@@ -189,6 +226,94 @@ function makeHandle(editor: Editor | null): RichTextEditorHandle {
     },
     focus() {
       editor?.commands.focus();
+    },
+    getMentionIds() {
+      if (!editor) return [];
+      const ids = new Set<string>();
+      // Walk the doc; collect every Mention node's `id` attr.
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "mention") {
+          const id = node.attrs.id;
+          if (typeof id === "string" && id.length > 0) ids.add(id);
+        }
+        return true;
+      });
+      return Array.from(ids);
+    },
+  };
+}
+
+/* --------------------------- mention suggestion --------------------------- */
+
+function buildMentionSuggestion(
+  membersRef: React.MutableRefObject<MentionMember[]>,
+) {
+  return {
+    char: "@",
+    items({ query }: { query: string }) {
+      const q = query.toLowerCase();
+      return membersRef.current
+        .filter((m) =>
+          q ? m.label.toLowerCase().includes(q) : true,
+        )
+        .slice(0, 8);
+    },
+    render() {
+      let component: ReactRenderer<MentionListHandle, {
+        items: MentionMember[];
+        command: (props: { id: string; label: string }) => void;
+      }> | null = null;
+      let popup: TippyInstance | null = null;
+
+      return {
+        onStart: (props: SuggestionProps<MentionMember>) => {
+          component = new ReactRenderer(MentionList, {
+            props: {
+              items: props.items,
+              command: props.command,
+            },
+            editor: props.editor,
+          });
+          if (!props.clientRect) return;
+          popup = tippy("body", {
+            getReferenceClientRect: props.clientRect as () => DOMRect,
+            appendTo: () => document.body,
+            content: component.element,
+            showOnCreate: true,
+            interactive: true,
+            trigger: "manual",
+            placement: "bottom-start",
+            arrow: false,
+            theme: "light",
+            // Tippy default offset works for this use case.
+          })[0] ?? null;
+        },
+        onUpdate(props: SuggestionProps<MentionMember>) {
+          if (!component) return;
+          component.updateProps({
+            items: props.items,
+            command: props.command,
+          });
+          if (popup && props.clientRect) {
+            popup.setProps({
+              getReferenceClientRect: props.clientRect as () => DOMRect,
+            });
+          }
+        },
+        onKeyDown(props: SuggestionKeyDownProps) {
+          if (props.event.key === "Escape") {
+            popup?.hide();
+            return true;
+          }
+          return component?.ref?.onKeyDown(props) ?? false;
+        },
+        onExit() {
+          popup?.destroy();
+          popup = null;
+          component?.destroy();
+          component = null;
+        },
+      };
     },
   };
 }

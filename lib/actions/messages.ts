@@ -19,22 +19,28 @@
  *     Bruce 2026-05-09: WhatsApp-style readability.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
   messages,
+  notifications,
+  userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import { withTenantContext } from "@/lib/db/tenant";
 import {
   THREAD_TYPE,
   canPostInThread,
+  canViewThread,
   isKnownThreadType,
+  threadTypeLabel,
 } from "@/lib/communication/audience";
 import { TOMBSTONE_BODY } from "@/lib/communication/tombstone";
+import { sendEmailQuietly } from "@/lib/email/send";
+import { mentionEmail } from "@/lib/email/templates";
 
 type Role = UserProfile["role"];
 
@@ -59,6 +65,12 @@ const createSchema = z.object({
     .string()
     .min(1, "Message can't be empty")
     .max(20000, "Message is too long"),
+  /**
+   * user_profile UUIDs the author tagged via the @-typeahead. Server
+   * validates each id is a real engagement member before persisting,
+   * so a tampered client can't inject arbitrary ids.
+   */
+  mentions: z.array(z.string().uuid()).default([]),
 });
 
 export type CreateMessageInput = z.input<typeof createSchema>;
@@ -113,59 +125,166 @@ export async function createMessage(
   }
 
   try {
-    const created = await withTenantContext(profile.orgId, async (tx) => {
-      // For action-item threads, sanity-check the parent exists in the
-      // same engagement the caller claims. RLS already binds to the org;
-      // this catches typos.
-      if (data.parentEntityType === THREAD_TYPE.actionItem) {
-        const [parent] = await tx
-          .select({
-            engagementId: actionItems.engagementId,
-          })
-          .from(actionItems)
-          .where(eq(actionItems.id, data.parentEntityId))
-          .limit(1);
-        if (!parent) {
-          throw new Error("Parent action item not found.");
+    const txResult = await withTenantContext(
+      profile.orgId,
+      async (tx) => {
+        // For action-item threads, sanity-check the parent exists in the
+        // same engagement the caller claims. RLS already binds to the org;
+        // this catches typos.
+        let parentTitle: string | null = null;
+        if (data.parentEntityType === THREAD_TYPE.actionItem) {
+          const [parent] = await tx
+            .select({
+              engagementId: actionItems.engagementId,
+              title: actionItems.title,
+            })
+            .from(actionItems)
+            .where(eq(actionItems.id, data.parentEntityId))
+            .limit(1);
+          if (!parent) {
+            throw new Error("Parent action item not found.");
+          }
+          if (parent.engagementId !== data.engagementId) {
+            throw new Error(
+              "Action item belongs to a different engagement.",
+            );
+          }
+          parentTitle = parent.title;
+        } else {
+          // Engagement-level thread: parent_entity_id MUST equal
+          // engagementId.
+          if (data.parentEntityId !== data.engagementId) {
+            throw new Error(
+              "Engagement-level threads use the engagement id as the parent id.",
+            );
+          }
         }
-        if (parent.engagementId !== data.engagementId) {
-          throw new Error("Action item belongs to a different engagement.");
-        }
-      } else {
-        // Engagement-level thread: parent_entity_id MUST equal
-        // engagementId (we use the engagement's UUID as the thread key).
-        if (data.parentEntityId !== data.engagementId) {
-          throw new Error(
-            "Engagement-level threads use the engagement id as the parent id.",
+
+        // Validate mentions: each must be a real user_profile in the
+        // SAME org (RLS already enforces) AND able to view this thread.
+        // Self-mentions are dropped (no point notifying yourself).
+        let validMentionRecipients: Array<{
+          id: string;
+          email: string;
+          fullName: string;
+          role: UserProfile["role"];
+        }> = [];
+        const requested = data.mentions.filter(
+          (id) => id !== profile.userProfileId,
+        );
+        if (requested.length > 0) {
+          const candidates = await tx
+            .select({
+              id: userProfiles.id,
+              email: userProfiles.email,
+              fullName: userProfiles.fullName,
+              role: userProfiles.role,
+            })
+            .from(userProfiles)
+            .where(inArray(userProfiles.id, requested));
+          validMentionRecipients = candidates.filter((c) =>
+            canViewThread(data.parentEntityType, c.role),
           );
         }
-      }
+        const mentionIds = validMentionRecipients.map((m) => m.id);
 
-      const [row] = await tx
-        .insert(messages)
-        .values({
-          orgId: profile.orgId,
-          engagementId: data.engagementId,
-          parentEntityType: data.parentEntityType,
-          parentEntityId: data.parentEntityId,
-          body: data.body,
-          authorUserProfileId: profile.userProfileId,
-        })
-        .returning({ id: messages.id });
-      return row;
-    });
+        const [row] = await tx
+          .insert(messages)
+          .values({
+            orgId: profile.orgId,
+            engagementId: data.engagementId,
+            parentEntityType: data.parentEntityType,
+            parentEntityId: data.parentEntityId,
+            body: data.body,
+            authorUserProfileId: profile.userProfileId,
+            mentions: mentionIds,
+          })
+          .returning({ id: messages.id });
+
+        // Fan out: one notification row per mentioned user. We mark
+        // `sent_via='in_app'` here unconditionally; the email send
+        // happens AFTER the transaction commits so a failed send
+        // doesn't roll back the message.
+        if (mentionIds.length > 0) {
+          await tx.insert(notifications).values(
+            mentionIds.map((uid) => ({
+              orgId: profile.orgId,
+              userProfileId: uid,
+              type: "mention" as const,
+              parentEntityType: data.parentEntityType,
+              parentEntityId: row.id, // points at the message itself
+              sentVia: "in_app" as const,
+            })),
+          );
+        }
+
+        return { messageId: row.id, parentTitle, validMentionRecipients };
+      },
+    );
+
+    // Send mention emails outside the transaction. Best-effort —
+    // failures log, don't surface to the user. Working-hours guard
+    // inside `sendEmailQuietly` handles outside-hours queueing.
+    if (txResult.validMentionRecipients.length > 0) {
+      const authorName = await loadAuthorName(profile);
+      const contextLabel =
+        data.parentEntityType === THREAD_TYPE.actionItem
+          ? `Action item${txResult.parentTitle ? `: ${txResult.parentTitle}` : ""}`
+          : `${threadTypeLabel(data.parentEntityType)} thread`;
+      const url =
+        data.parentEntityType === THREAD_TYPE.actionItem
+          ? `/portal/action-items/${data.parentEntityId}`
+          : `/portal/communication?tab=${
+              data.parentEntityType === THREAD_TYPE.engagementLeadership
+                ? "leadership"
+                : "team"
+            }`;
+      await Promise.all(
+        txResult.validMentionRecipients.map((r) =>
+          sendEmailQuietly(
+            mentionEmail({
+              to: r.email,
+              recipientName: r.fullName,
+              authorName,
+              contextLabel,
+              messageBody: data.body,
+              url,
+            }),
+          ),
+        ),
+      );
+    }
 
     revalidateForParent(
       data.parentEntityType,
       data.parentEntityId,
       data.engagementId,
     );
-    return { ok: true, data: created };
+    return { ok: true, data: { id: txResult.messageId } };
   } catch (e) {
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     };
+  }
+}
+
+async function loadAuthorName(profile: {
+  orgId: string;
+  userProfileId: string;
+}): Promise<string> {
+  try {
+    const name = await withTenantContext(profile.orgId, async (tx) => {
+      const [row] = await tx
+        .select({ fullName: userProfiles.fullName })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, profile.userProfileId))
+        .limit(1);
+      return row?.fullName ?? null;
+    });
+    return name ?? "Someone";
+  } catch {
+    return "Someone";
   }
 }
 

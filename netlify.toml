@@ -11,3 +11,10 @@
 # optimization, and edge functions for the App Router.
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# Phase 1.4: Netlify Scheduled Functions live under `netlify/functions/`.
+# The Next.js plugin owns the build artifacts in `.next/`; the
+# `functions` directory is a separate, plain-Node target.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

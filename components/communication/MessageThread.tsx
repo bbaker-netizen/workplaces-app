@@ -17,6 +17,7 @@ import {
   type ListedMessage,
 } from "@/lib/db/queries/messages";
 import { listReactionsForMessages } from "@/lib/db/queries/message-reactions";
+import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { THREAD_TYPE, type ThreadType } from "@/lib/communication/audience";
 import type { UserProfile } from "@/lib/db/schema";
@@ -61,9 +62,15 @@ export async function MessageThread({
   const messages =
     preloadedMessages ??
     (await listMessagesForEntity(threadType, parentEntityId));
-  const reactionsByMessageId = await listReactionsForMessages(
-    messages.map((m) => m.id),
-  );
+  const [reactionsByMessageId, members] = await Promise.all([
+    listReactionsForMessages(messages.map((m) => m.id)),
+    listEngagementMembers(engagementId),
+  ]);
+  const mentionMembers = members.map((m) => ({
+    id: m.id,
+    label: m.fullName,
+    email: m.email,
+  }));
 
   return (
     <section className="space-y-6">
@@ -72,6 +79,7 @@ export async function MessageThread({
         reactionsByMessageId={reactionsByMessageId}
         viewerUserProfileId={profile.userProfileId}
         viewerCanModerate={isModerator(profile.role)}
+        members={mentionMembers}
         emptyState={emptyState}
       />
       <div className="border-t border-[#CCCCCC] pt-4">
@@ -80,6 +88,7 @@ export async function MessageThread({
           parentEntityType={threadType}
           parentEntityId={parentEntityId}
           placeholder={composerPlaceholder}
+          members={mentionMembers}
         />
       </div>
     </section>

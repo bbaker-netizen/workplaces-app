@@ -21,17 +21,21 @@ import {
   type RichTextEditorHandle,
 } from "./RichTextEditor";
 import { EmojiPickerButton } from "./EmojiPickerButton";
+import type { MentionMember } from "./MentionList";
 
 export function MessageComposer({
   engagementId,
   parentEntityType,
   parentEntityId,
   placeholder,
+  members,
 }: {
   engagementId: string;
   parentEntityType: string;
   parentEntityId: string;
   placeholder?: string;
+  /** Members the @-typeahead can offer as candidates. */
+  members?: MentionMember[];
 }) {
   const editorRef = useRef<RichTextEditorHandle | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
@@ -42,6 +46,7 @@ export function MessageComposer({
     if (!editorRef.current) return;
     const body = editorRef.current.getMarkdown();
     if (!body) return;
+    const mentions = editorRef.current.getMentionIds();
     setError(null);
     startTransition(async () => {
       const result = await createMessage({
@@ -49,6 +54,7 @@ export function MessageComposer({
         parentEntityType,
         parentEntityId,
         body,
+        mentions,
       });
       if (!result.ok) {
         setError(result.error);
@@ -78,6 +84,7 @@ export function MessageComposer({
           onSubmit={submit}
           onChange={(md) => setIsEmpty(md.trim().length === 0)}
           ariaLabel="Write a message"
+          members={members}
         />
         {isPending && (
           <span

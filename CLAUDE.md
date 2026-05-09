@@ -495,20 +495,50 @@ Tagged `v0.5.0` on 2026-05-09.
 
 ---
 
-## Active Phase
+## What was built in Sub-Phase 1.4
 
-**Sub-Phase 1.4 — @Mentions + Resend wiring.** First sub-phase to send actual emails. Per the original `Phase-1-Plan.md`:
+Tagged `v0.6.0` on 2026-05-09. First sub-phase to actually send email.
 
-**Build:**
-- **`@mention` parsing in the composer.** Typing `@` opens a typeahead of engagement members (`listEngagementMembers` from 1.2 already returns the right shape). Selection inserts a mention token; the message body persists the mention as both readable text AND an entry in the existing `messages.mentions` JSONB column (parsed at submit time so older clients without the typeahead still produce parseable bodies).
-- **Mention fan-out.** `createMessage` parses `mentions[]` and inserts one `notification_type='mention'` row per mentioned user. `sent_via='both'` once Resend is wired; `'in_app'` while it isn't yet.
-- **Email plumbing via Resend.** New `lib/email/send.ts` wraps the Resend client. Sender locked to `The Builder <notifications@4workplaces.com>` against the verified `4workplaces.com` domain. Three email templates: `mention`, `action_item_assigned` (was already firing in-app from 1.2 — now also goes by email), `action_item_due_soon` (new — triggered by a daily Netlify Scheduled Function). Templates rendered as plain HTML strings keeping the heritage-industrial brand: cream background, Foreman Black ink, Steel Blue link colour.
-- **Bruce's working-hours guard.** Email send wrapper checks Mountain Time clock — outside Mon–Fri 8:30 AM–6:00 PM, emails get queued (notifications row written, `sent_via='in_app'`, an `email_pending_send_at` future timestamp added later). The daily scheduled function also flushes the queue at the next valid window. CLAUDE.md scheduling constraint, finally enforced in code.
+**`@mention` typeahead in the composer.** Tiptap's `Mention` + `Suggestion` extensions wired into `RichTextEditor.tsx`. Typing `@` opens a popover of engagement members (rendered via `MentionList.tsx`, positioned by Tippy.js). Arrow keys navigate, Enter / Tab confirm, Escape cancels. The mention is stored as a Tiptap node with the user_profile UUID; on submit, the editor's `getMentionIds()` walks the doc and collects them. Markdown serialization (via `tiptap-markdown`) reads `renderText` to produce plain `@Label` in the body — readable to anyone, even pre-1.4 viewers.
+
+**Server-side mention validation.** `createMessage` now accepts a `mentions: string[]` field, validates each id is a real `user_profile` AND that user can view the thread (`canViewThread` from 1.3). Self-mentions are dropped. The validated id list is stored in `messages.mentions` (JSONB column already shaped from 1.1) and used to fan out one `notification_type='mention'` row per recipient.
+
+**Resend client wrapper** (`lib/email/send.ts`). Lazy-initialized, env-driven. Sender pinned to `RESEND_FROM_EMAIL` (`The Builder <notifications@4workplaces.com>` against the verified `4workplaces.com` domain). Two helpers: `sendEmail` (returns a discriminated result so callers can decide) and `sendEmailQuietly` (best-effort fire-and-forget for inside server actions, where a send failure shouldn't roll back the message write). The `outside_working_hours` branch returns `nextSendAt` so a future queue can pick up where the live send left off.
+
+**Working-hours guard.** `isWithinWorkingHours()` checks the current moment against Mon–Fri 08:30–18:00 in `America/Edmonton` (DST-aware via Luxon). `nextValidWorkingMoment()` returns the next moment the window opens. CLAUDE.md scheduling constraint now enforced in code rather than convention. The cron endpoint can `bypassWorkingHours` for manual operator runs.
+
+**Three email templates** (`lib/email/templates.ts`): `mentionEmail`, `actionItemAssignedEmail`, `actionItemDueSoonEmail`. Plain HTML strings (no template engine) plus matching plain-text fallbacks. Heritage-industrial brand: Drafting Cream background, Foreman Black ink, Steel Blue button. Safety Vest Orange used as the heading rule on the due-soon template only — single-accent rule from CLAUDE.md.
+
+**Action-item assignment now emails too.** `createActionItem` and `updateActionItem` (the reassignment path) load the assignee's email + name in the same transaction, then call `sendEmailQuietly(actionItemAssignedEmail(…))` after the commit. In-app notification rows still fire as before.
+
+**Daily due-soon nudge.** `app/api/cron/email-due-soon/route.ts` is a Bearer-`CRON_SECRET`-guarded GET that scans `action_items` for rows due in (now, now+30h] with status not done/draft and an assignee, that haven't already been nudged (existence check on `notifications` of type `action_item_due_soon`). Idempotent — re-runs send no duplicate mail. Cross-tenant scan via `withSystemContext`.
+
+**Schedule wiring.** `netlify/functions/email-due-soon.mts` is a Netlify Scheduled Function on `0 16 * * 1-5` — 16:00 UTC, Mon–Fri, which lands at 09:00 MST or 10:00 MDT (both inside Bruce's window year-round, no DST math). It self-fetches the cron route with the bearer header. `netlify.toml` got a `[functions]` block pointing at `netlify/functions` with `esbuild` as the bundler.
 
 **Env vars added in 1.4:**
-- `RESEND_API_KEY` — the API key from resend.com.
+- `RESEND_API_KEY` — Resend API key.
 - `RESEND_FROM_EMAIL` — `The Builder <notifications@4workplaces.com>`.
+- `NEXT_PUBLIC_APP_URL` — for the absolute link in email templates.
+- `CRON_SECRET` — bearer secret for `/api/cron/*`.
 
-**Acceptance:** Bruce sends a message containing `@SomeName`. The mentioned user gets an email (during working hours) AND an in-app notification. Action item assignment now also emails the assignee. Due-soon nudges fire 24h before the due date.
+**Acceptance:** Composer typeahead shows up on `@`; selecting a member sends them an email + in-app notification. Action item assignment emails the assignee. Due-soon route, when triggered, emails everyone with an item due in the next 30h and writes the matching notification rows. Real receive-side test still gated on Phase 1.7 (single-phone Clerk constraint); verified via `pnpm typecheck` + `pnpm build` (16 routes compile clean) and code review of the audience checks.
 
-**After 1.4:** Active Phase moves to **Phase 1.5 — Documents Module + message attachments** (per `Phase-1-Plan.md` and the 2026-05-09 decisions log) — Netlify Blobs upload pipeline serves both standalone Documents and message attachments, paperclip icon in the composer.
+**Production setup outside this repo** (Bruce, when ready):
+1. Add `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET` to the Netlify dashboard's environment variables. The values match `.env.local`.
+2. Deploy. The Netlify Scheduled Function appears under Site → Functions → Scheduled. First run will be the next 16:00 UTC weekday after the deploy.
+
+**Coach cross-org gap continues** (same as 1.2/1.3). When Bruce posts a mention from inside a CLIENT engagement, the GUC binds to the master org and the recipient lookup wouldn't find their user_profiles row. Phase 1.7 introduces the coach-aware tenant helper. Today's testing scope (master-org "Bruce Test" engagement) doesn't bite.
+
+---
+
+## Active Phase
+
+**Sub-Phase 1.5 — Documents Module + message attachments.** Per `Phase-1-Plan.md` and the 2026-05-09 decisions log:
+
+**Build:**
+- Netlify Blobs upload pipeline (server actions wrapping `@netlify/blobs`).
+- `documents` table reads + writes (schema already shipped in 1.1).
+- `/portal/documents` and `/coach/documents/[engagementId]` pages — list, upload, tag, download, delete.
+- Paperclip icon in the message composer hits the same upload flow; attachment metadata is stored on the message via a new `message_attachments` join table OR by adding an `attachments` JSONB column to `messages` (decide at sub-phase kickoff).
+
+**Acceptance:** Bruce uploads a PDF to a client's documents module; the client sees and downloads it. Bruce attaches a file to a message; the recipient sees the attachment chip and can download.
