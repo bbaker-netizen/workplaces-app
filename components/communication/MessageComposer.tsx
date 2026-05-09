@@ -13,6 +13,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { Loader2 } from "lucide-react";
 import { createMessage } from "@/lib/actions/messages";
 
 export function MessageComposer({
@@ -62,9 +63,12 @@ export function MessageComposer({
         e.preventDefault();
         submit();
       }}
-      className="space-y-2"
+      className={
+        "space-y-2 transition-opacity " + (isPending ? "opacity-60" : "")
+      }
+      aria-busy={isPending}
     >
-      <label className="block">
+      <label className="block relative">
         <span className="sr-only">Write a message</span>
         <textarea
           value={body}
@@ -73,18 +77,36 @@ export function MessageComposer({
           rows={3}
           placeholder={placeholder ?? "Write a message…"}
           disabled={isPending}
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-[#2E4057] disabled:opacity-60 resize-y"
+          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-[#2E4057] disabled:bg-[#F5F1E8] disabled:cursor-wait resize-y"
         />
+        {isPending && (
+          <span
+            aria-hidden
+            className="absolute right-3 top-3 text-[#2E4057]"
+          >
+            <Loader2 className="w-4 h-4 animate-spin" />
+          </span>
+        )}
       </label>
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-          Markdown supported · ⌘/Ctrl + Enter to send
+        <span
+          className={
+            "font-mono text-[11px] uppercase tracking-[0.15em] " +
+            (isPending ? "text-[#2E4057] font-bold" : "text-muted-foreground")
+          }
+        >
+          {isPending
+            ? "Posting your message…"
+            : "Markdown supported · ⌘/Ctrl + Enter to send"}
         </span>
         <button
           type="submit"
           disabled={isPending || body.trim().length === 0}
-          className="font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-wait transition-colors"
         >
+          {isPending && (
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+          )}
           {isPending ? "Posting…" : "Post"}
         </button>
       </div>

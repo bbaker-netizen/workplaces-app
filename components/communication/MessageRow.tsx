@@ -17,7 +17,7 @@
  */
 
 import { useState, useTransition } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { isTombstone as messageIsTombstone } from "@/lib/communication/tombstone";
 import { deleteMessage, updateMessage } from "@/lib/actions/messages";
@@ -45,9 +45,20 @@ export function MessageRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.body);
   const [error, setError] = useState<string | null>(null);
+  // Optimistic flags for instant UX. The server-revalidated render
+  // replaces the optimistic state seamlessly when the action settles.
+  const [optimisticDeleted, setOptimisticDeleted] = useState(false);
+  const [optimisticEditedBody, setOptimisticEditedBody] = useState<
+    string | null
+  >(null);
   const [isPending, startTransition] = useTransition();
 
-  const isTombstone = messageIsTombstone(message);
+  const realIsTombstone = messageIsTombstone(message);
+  // What the user should see RIGHT NOW. Optimistic state wins over the
+  // server snapshot until revalidation catches up.
+  const isTombstone = realIsTombstone || optimisticDeleted;
+  const displayBody = optimisticEditedBody ?? message.body;
+
   const isAuthor = message.authorUserProfileId === viewerUserProfileId;
   const canEdit = isAuthor && !isTombstone;
   const canDelete = (isAuthor || viewerCanModerate) && !isTombstone;
@@ -76,12 +87,25 @@ export function MessageRow({
       return;
     }
     setError(null);
+    // Optimistic: close the editor immediately and show the new body
+    // with a "saving" treatment. The server revalidation will replace
+    // it; on failure we revert.
+    setOptimisticEditedBody(trimmed);
+    setEditing(false);
     startTransition(async () => {
       const result = await updateMessage(message.id, { body: trimmed });
       if (!result.ok) {
+        // Revert: reopen the editor with the user's draft so they can
+        // retry without retyping.
+        setOptimisticEditedBody(null);
+        setDraft(trimmed);
+        setEditing(true);
         setError(result.error);
       } else {
-        setEditing(false);
+        // Server has the new body; clear the optimistic shim once the
+        // revalidated render lands. (Safe to clear immediately —
+        // worst case the row briefly re-renders with the same content.)
+        setOptimisticEditedBody(null);
       }
     });
   };
@@ -92,9 +116,16 @@ export function MessageRow({
     );
     if (!confirmed) return;
     setError(null);
+    // Optimistic: flip the row to its tombstone state instantly. No
+    // staring at an unchanged message wondering whether the click took.
+    setOptimisticDeleted(true);
     startTransition(async () => {
       const result = await deleteMessage(message.id);
-      if (!result.ok) setError(result.error);
+      if (!result.ok) {
+        // Revert and show error — the row reappears.
+        setOptimisticDeleted(false);
+        setError(result.error);
+      }
     });
   };
 
@@ -146,10 +177,16 @@ export function MessageRow({
             </span>
           )}
         </header>
-        <div className="mt-1">
+        <div className="mt-1 relative">
           {isTombstone ? (
-            <p className="font-sans text-sm italic text-muted-foreground">
+            <p className="font-sans text-sm italic text-muted-foreground inline-flex items-center gap-2">
               [Message deleted]
+              {optimisticDeleted && isPending && (
+                <Loader2
+                  className="w-3.5 h-3.5 animate-spin"
+                  aria-hidden
+                />
+              )}
             </p>
           ) : editing ? (
             <div className="space-y-2">
@@ -168,7 +205,7 @@ export function MessageRow({
                 rows={3}
                 autoFocus
                 disabled={isPending}
-                className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-[#2E4057] disabled:opacity-60 resize-y"
+                className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-[#2E4057] disabled:bg-[#F5F1E8] disabled:cursor-wait resize-y"
               />
               {error && (
                 <p role="alert" className="font-sans text-sm text-[#E87722]">
@@ -184,7 +221,7 @@ export function MessageRow({
                     type="button"
                     disabled={isPending}
                     onClick={cancelEdit}
-                    className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+                    className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -196,15 +233,34 @@ export function MessageRow({
                       draft.trim() === message.body.trim()
                     }
                     onClick={saveEdit}
-                    className="font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-wait"
                   >
+                    {isPending && (
+                      <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+                    )}
                     {isPending ? "Saving…" : "Save"}
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            <MarkdownBody body={message.body} />
+            <div
+              className={
+                "transition-opacity " +
+                (optimisticEditedBody !== null && isPending
+                  ? "opacity-60"
+                  : "")
+              }
+              aria-busy={optimisticEditedBody !== null && isPending}
+            >
+              <MarkdownBody body={displayBody} />
+              {optimisticEditedBody !== null && isPending && (
+                <span className="mt-1 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-[#2E4057]">
+                  <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+                  Saving edit…
+                </span>
+              )}
+            </div>
           )}
         </div>
         {!editing && error && (
