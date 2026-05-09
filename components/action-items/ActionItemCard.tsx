@@ -13,6 +13,7 @@ import {
   type ActionItemStatus,
 } from "./utils";
 import { StatusPill } from "./StatusPill";
+import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 
 export type ActionItemCardData = {
   id: string;
@@ -79,11 +80,14 @@ export function ActionItemCard({
           {item.title}
         </Link>
 
-        {/* Optional description excerpt */}
+        {/* Optional description excerpt — rendered through the shared
+            markdown renderer (Phase 1.3) so coach-authored descriptions
+            with **bold**, lists, links, etc., display correctly. The
+            line-clamp keeps cards compact in the list view. */}
         {item.description && (
-          <p className="mt-2 font-sans text-sm text-muted-foreground line-clamp-2 whitespace-pre-line">
-            {item.description}
-          </p>
+          <div className="mt-2 line-clamp-2 text-muted-foreground">
+            <MarkdownBody body={item.description} />
+          </div>
         )}
 
         {/* Bottom row: assignee + due + (optional) engagement label */}

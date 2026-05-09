@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -24,6 +25,9 @@
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.5.0",
     "ws": "^8.20.0",
     "zod": "^4.4.2"

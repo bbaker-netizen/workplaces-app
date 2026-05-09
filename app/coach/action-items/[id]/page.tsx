@@ -8,6 +8,8 @@ import {
   dateToInputValue,
   type ActionItemStatus,
 } from "@/components/action-items/utils";
+import { MessageThread } from "@/components/communication/MessageThread";
+import { THREAD_TYPE } from "@/lib/communication/audience";
 
 export default async function EditCoachActionItemPage({
   params,
@@ -30,8 +32,8 @@ export default async function EditCoachActionItemPage({
   }));
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12">
-      <header className="mb-8 space-y-2">
+    <main className="max-w-3xl mx-auto px-6 py-12 space-y-12">
+      <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
           Coach Console — edit action item
         </p>
@@ -58,6 +60,19 @@ export default async function EditCoachActionItemPage({
         cancelHref="/coach/action-items"
         successHref="/coach/action-items"
       />
+
+      <section className="space-y-4">
+        <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+          Discussion
+        </h2>
+        <MessageThread
+          engagementId={item.engagementId}
+          threadType={THREAD_TYPE.actionItem}
+          parentEntityId={item.id}
+          composerPlaceholder="Comment on this action item…"
+          emptyState="No comments yet."
+        />
+      </section>
     </main>
   );
 }

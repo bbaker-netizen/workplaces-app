@@ -2,11 +2,11 @@
  * PortalNav — top navigation shell for /portal/*.
  *
  * Server component: receives display data via props, renders static nav
- * with the brand wordmark, a primary nav link to action items, and the
- * sign-out button (Clerk's <SignOutButton> handles its own client logic).
+ * with the brand wordmark, primary module links, and the sign-out
+ * button (Clerk's <SignOutButton> handles its own client logic).
  *
- * Phase 1.2: action items is the only module. Notification bell lands
- * in Step 6.
+ * Phase 1.2 added: action items.
+ * Phase 1.3 added: communication.
  */
 
 import Link from "next/link";
@@ -36,6 +36,12 @@ export function PortalNav({
           >
             Action items
           </Link>
+          <Link
+            href="/portal/communication"
+            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
+          >
+            Communication
+          </Link>
         </div>
         <div className="flex items-center gap-3 sm:gap-4">
           <NotificationBell unreadCount={unreadCount} />
@@ -50,12 +56,18 @@ export function PortalNav({
         </div>
       </div>
       <div className="sm:hidden border-t border-[#CCCCCC]">
-        <div className="max-w-5xl mx-auto px-6 py-2">
+        <div className="max-w-5xl mx-auto px-6 py-2 flex gap-5">
           <Link
             href="/portal/action-items"
             className="font-sans text-sm text-foreground"
           >
             Action items
+          </Link>
+          <Link
+            href="/portal/communication"
+            className="font-sans text-sm text-foreground"
+          >
+            Communication
           </Link>
         </div>
       </div>

@@ -6,6 +6,41 @@ decision, follow-up (if any).
 
 ---
 
+## 2026-05-09 — Sub-Phase 1.3: Communication Module + Contextual Conversations
+
+**Context.** Building threaded messaging on top of the `messages` table introduced in 1.1. Bruce expanded the original Phase-1-Plan.md scope mid-session: rather than a single engagement-wide thread, he required role-based audience compartmentalization from day one. Specifically: when a client eventually invites managers/employees to the engagement, there must be a private channel just between coach and owner/lead that team members can't see. Original plan called the general thread `parent_entity_type='engagement'`; the audience requirement forced a richer model.
+
+**Decisions locked.**
+
+1. **Three-way audience model.** Threads come in three flavours, discriminated by `messages.parent_entity_type`:
+   - `engagement_leadership` — `master_admin` / `coach` / `client_lead` / `client_manager`. Hidden from `client_employee`.
+   - `engagement_team` — everyone in the engagement.
+   - `action_item` — everyone in the engagement (Phase 1.3). Per-item audience flag deferred to Phase 2 once team members are routinely on engagements.
+
+   Audience helpers live in `lib/communication/audience.ts` (`canViewThread`, `canPostInThread`). Single source of truth used by queries (filter), server actions (gate), and pages (tab visibility). For Impactica today (just Bruce + client lead), both audiences resolve to the same set of people — the wall has nobody to keep out yet but is in place for the day team members arrive.
+
+2. **WhatsApp-style soft-delete tombstone** (Bruce's call). Deleted messages stay in the thread as `[Message deleted]` so the conversation flow remains readable past them. Implemented as a sentinel string `TOMBSTONE_BODY` written into `body`; the renderer keys off it. Author or any leadership role may delete; tombstoned rows hide further edit/delete actions and are idempotent on repeat delete.
+
+3. **Inline edit drawer** for messages (mirrors 1.2's "fast path inline" pattern for action item status pills). Native `confirm()` for delete — Phase 1.3 stays dependency-free for confirmations.
+
+4. **Markdown rendering with sanitization.** `react-markdown` + `remark-gfm` + `rehype-sanitize`. Renderer is shared (`components/markdown/MarkdownBody.tsx`) and used for both message bodies and action item description previews on cards (per the Phase-1-Plan.md "same renderer" note). Sanitize plugin is the security boundary — every message body is multi-tenant UGC, so raw HTML in input is stripped against the default safe schema.
+
+5. **No new migration.** The `messages` table from 1.1 is already shaped for everything 1.3 needs. The `parent_entity_type` text column accepts the three new discriminators without schema change.
+
+**"use server" export-only-async constraint surfaced.** Initial draft of `lib/actions/messages.ts` co-located the `TOMBSTONE_BODY` constant and `isTombstone()` helper with the server actions. Next.js (14.2.35) refused to build: "Only async functions are allowed to be exported in a 'use server' file." Split into `lib/communication/tombstone.ts`. Same shape as the HR app's prior fix ("Fix Netlify build: split 'use server' files"). Rule going forward: any `"use server"` file holds only `async function` exports — constants and sync helpers live in a sibling non-server module.
+
+**Stale `docs/CLAUDE.md` removed.** Root `CLAUDE.md` and `docs/CLAUDE.md` had drifted out of sync (root v3 was current, docs v3 still claimed Active Phase = Phase 0). Root is canonical; deleted the duplicate to remove the bookkeeping trap.
+
+**Coach cross-org gap continues** (same as 1.2). `withTenantContext(profile.orgId)` binds to the caller's home org. When Bruce (in the master org) views a thread in a CLIENT org, RLS would filter to nothing. Phase 1.3 testing lives entirely in the master org's "Bruce Test" engagement, so the gap doesn't bite yet. Phase 1.7 will introduce a coach-aware tenant helper that resolves `parent_entity_id`'s home org and binds to it.
+
+**Acceptance gap, documented.** Live receive-side test (a real `client_lead` viewing the audience boundary in their browser) is still blocked by the single-phone Clerk verification constraint that's been carried since Phase 0 Step 5. Verified via code review and `pnpm build` static analysis (15 routes compile clean). Real exercise happens in Phase 1.7 with the actual Impactica client lead.
+
+**New deps.** `react-markdown@^10`, `remark-gfm@^4`, `rehype-sanitize@^6`. ~80kb gzipped on the message-rendering pages.
+
+**New top-level package.json script.** `pnpm typecheck` (`tsc --noEmit`) — should have been there since Phase 0 but slipped through. Added in 1.3 because 1.3 was the first sub-phase complex enough to warrant it as a standalone CI gate distinct from `pnpm build`.
+
+---
+
 ## 2026-05-03 — Sub-Phase 1.2: Action Items module — UX + structural decisions
 
 **Context.** Building the first portal module on top of the `action_items` table from 1.1. Five clarifying questions resolved up front; a sixth (schema gap) surfaced once I read the table definition.

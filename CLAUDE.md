@@ -431,17 +431,59 @@ Tagged `v0.3.0` on 2026-05-03.
 
 ---
 
+## What was built in Sub-Phase 1.3
+
+Tagged `v0.4.0` on 2026-05-09. No schema migration required — Sub-Phase 1.3 sits entirely on top of the `messages` table introduced in 1.1.
+
+**Audience model — Leadership / Team / Action item.** Per Bruce's 2026-05-09 direction, threads carry role-based audience compartmentalization from day one so private leadership conversations stay private the moment a client invites managers or employees. Three thread types, all stored in the existing text column `messages.parent_entity_type`:
+
+- `engagement_leadership` — visible to `master_admin` / `coach` / `client_lead` / `client_manager` only. Hidden from `client_employee`.
+- `engagement_team` — visible to everyone in the engagement.
+- `action_item` — visible to everyone in the engagement (per-item audience flag deferred to Phase 2 once team members are routine).
+
+The audience rules live in `lib/communication/audience.ts` — `canViewThread` and `canPostInThread` are the single source of truth, used by queries (filters), server actions (gates), and pages (tab visibility).
+
+**Server actions** (`lib/actions/messages.ts`): `createMessage`, `updateMessage`, `deleteMessage`. Zod-validated, `withTenantContext`-wrapped. Edit is author-only; delete allowed for the author OR a leadership role (moderation). Action item parent-entity sanity-checks the engagement match. Engagement-level threads enforce `parent_entity_id === engagement_id`.
+
+**Soft-delete tombstone (WhatsApp-style).** Per Bruce's call: deleted messages stay in the thread as `[Message deleted]` so the conversation flow stays readable. Implemented as a sentinel string `TOMBSTONE_BODY` in `lib/communication/tombstone.ts` (split out of the actions file because Next.js requires every `"use server"` export to be an async function — same constraint the HR app hit). Renderer keys off the sentinel; tombstoned rows hide edit/delete actions.
+
+**Markdown rendering** (`components/markdown/MarkdownBody.tsx`): GitHub-flavored markdown via `remark-gfm`, sanitized via `rehype-sanitize` against the default safe schema (XSS guard on multi-tenant UGC). Used for message bodies AND action item description previews on cards (per the Phase-1-Plan.md "same renderer" note).
+
+**Read queries** (`lib/db/queries/messages.ts`): `listMessagesForEntity` for a single thread (audience-checked at the boundary), `listEngagementRecentActivity` for the cross-thread feed (filtered to the caller's audience-allowed thread types). The Recent Activity query joins onto `action_items` for parent titles.
+
+**Communication pages.**
+- `/portal/communication` — Recent Activity section + Leadership / Team tabs. Tab is selected via `?tab=` query string; `?tab=leadership` falls back to the Team tab if the viewer can't see Leadership.
+- `/coach/communication/[engagementId]` — same shape, but the engagement is selected from the URL with a "Switch engagement" dropdown for coaches.
+
+**Per-entity threads on action items.** Both `/portal/action-items/[id]` and `/coach/action-items/[id]` now render a "Discussion" section below the edit form with a `MessageThread` for `(threadType=action_item, parentEntityId=actionItem.id)`.
+
+**Inline edit + delete UI** (`components/communication/MessageActions.tsx`): hover-revealed icons, native browser `confirm()` for delete, inline drawer textarea for edit with Save/Cancel. ⌘/Ctrl + Enter sends from the composer; plain Enter inserts a newline.
+
+**PortalNav update:** added "Communication" link (desktop + mobile rows).
+
+**New deps:** `react-markdown` ^10, `remark-gfm` ^4, `rehype-sanitize` ^6. Total ~80kb gzipped on message-rendering pages. No other deps added.
+
+**Test setup.** Phase 1.3 reuses the `setup-bruce-test-engagement.mjs` script from 1.2 — Bruce's master org has a "Bruce Test" engagement that holds his test threads.
+
+**Stale duplicate CLAUDE.md removed.** `docs/CLAUDE.md` had drifted (still said Active Phase 0); root `CLAUDE.md` is canonical.
+
+**Coach cross-org gap continues** (same as 1.2). `withTenantContext(profile.orgId)` binds to the master org when Bruce posts; Phase 1.3 testing lives entirely in the master org's Bruce Test engagement, so the gap doesn't bite. Phase 1.7 introduces the coach-aware tenant helper.
+
+**Acceptance:** Bruce posts a message on an action item — it appears in the action item detail view AND in the engagement's Recent Activity feed. Same for the Leadership and Team threads. Live receive-side test (a real client_lead viewing the leadership thread audience boundary in their browser) is blocked by the same single-phone Clerk constraint as Phase 0/1.1; verified via code review and the build's static analysis. Real exercise happens in Phase 1.7 with Impactica.
+
+---
+
 ## Active Phase
 
-**Phase 1.3 — Communication Module + Contextual Conversations.** Build threaded messaging tied to per-entity threads (action items, deliverables, engagement-level general thread) plus a Recent Activity view that aggregates the latest messages across all entities in the engagement.
+**Phase 1.4 — @Mentions + Resend Wiring.** Make `@mention` parsing live in the composer, fan out notifications via Resend (verified sender domain), and add email templates for `@mention`, `action_item_assigned`, and `action_item_due_soon`. The `messages.mentions` JSONB column from 1.1 + the `notifications` table are already in place; 1.4 wires the pipeline.
 
 Per `docs/Phase-1-Plan.md`:
-- Threaded messaging UI: composer, message list, reply, edit, delete
-- Per-entity threads via the existing `messages.parent_entity_type` + `parent_entity_id` columns from 1.1
-- General engagement thread (`parent_entity_type = 'engagement'`)
-- Recent Activity view across all the engagement's threads
-- Markdown rendering in messages (replaces 1.2's plain-text description rendering for action items, too — same renderer)
+- @mention parser in the composer (renders chips, stores parsed user_profile_ids in `messages.mentions`)
+- Notification fan-out: in-app row + Resend email send for each mentioned user
+- Resend integration via verified sender domain (Bruce's prerequisite — see Phase-1-Plan.md "Open Operational Items")
+- Email templates for: @mention, action_item_assigned, action_item_due_soon
+- Confirm Clerk's invitation email still ships from 1.1 (it does — Clerk handles it natively)
 
-**Acceptance:** coach posts a message on an action item; it appears in the action item detail view AND in the engagement's Recent Activity. Same for the general thread.
+**Acceptance:** Bruce @-mentions Impactica's lead in a message. Lead receives an email within seconds. Clicking the email lands them on the relevant message thread.
 
-When Phase 1.3 completes, this section moves to Phase 1.4 (@mentions + Resend wiring).
+When Phase 1.4 completes, this section moves to Phase 1.5 (Documents Module).
