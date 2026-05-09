@@ -22,7 +22,7 @@ import {
   userProfiles,
   type ActionItem,
 } from "../schema";
-import { withSystemContext, withTenantContext } from "../tenant";
+import { withEngagementContext, withSystemContext, withTenantContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
 export type ListedActionItem = ActionItem & {
@@ -41,24 +41,33 @@ export async function listEngagementActionItems(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
 
-  return withTenantContext(profile.orgId, async (tx) => {
-    const rows = await tx
-      .select({
-        item: actionItems,
-        assigneeName: userProfiles.fullName,
-      })
-      .from(actionItems)
-      .leftJoin(
-        userProfiles,
-        eq(userProfiles.id, actionItems.assigneeUserProfileId),
-      )
-      .where(eq(actionItems.engagementId, engagementId));
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const rows = await tx
+          .select({
+            item: actionItems,
+            assigneeName: userProfiles.fullName,
+          })
+          .from(actionItems)
+          .leftJoin(
+            userProfiles,
+            eq(userProfiles.id, actionItems.assigneeUserProfileId),
+          )
+          .where(eq(actionItems.engagementId, engagementId));
 
-    return rows.map((r) => ({
-      ...r.item,
-      assigneeName: r.assigneeName,
-    }));
-  });
+        return rows.map((r) => ({
+          ...r.item,
+          assigneeName: r.assigneeName,
+        }));
+      },
+    );
+  } catch {
+    return [];
+  }
 }
 
 export async function getActionItem(

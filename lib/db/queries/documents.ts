@@ -23,7 +23,11 @@ import {
   userProfiles,
   type Document,
 } from "../schema";
-import { withTenantContext } from "../tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+  withTenantContext,
+} from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
 export type ListedDocument = Document & {
@@ -37,7 +41,12 @@ export async function listEngagementDocuments(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
 
-  return withTenantContext(profile.orgId, async (tx) => {
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
     const rows = await tx
       .select({
         document: documents,
@@ -82,7 +91,11 @@ export async function listEngagementDocuments(
       }))
       // Reverse-chronological: newest first feels right for a docs feed.
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  });
+      },
+    );
+  } catch {
+    return [];
+  }
 }
 
 export async function getDocument(
@@ -91,32 +104,44 @@ export async function getDocument(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
 
-  return withTenantContext(profile.orgId, async (tx) => {
-    const [row] = await tx
-      .select({
-        document: documents,
-        uploaderName: userProfiles.fullName,
-      })
-      .from(documents)
-      .innerJoin(
-        userProfiles,
-        eq(userProfiles.id, documents.uploaderUserProfileId),
-      )
-      .where(eq(documents.id, id))
-      .limit(1);
-    if (!row) return null;
+  const engagementId = await resolveEngagementIdFromRecord("documents", id);
+  if (!engagementId) return null;
 
-    const tagRows = await tx
-      .select({ tag: documentTags.tag })
-      .from(documentTags)
-      .where(eq(documentTags.documentId, id));
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [row] = await tx
+          .select({
+            document: documents,
+            uploaderName: userProfiles.fullName,
+          })
+          .from(documents)
+          .innerJoin(
+            userProfiles,
+            eq(userProfiles.id, documents.uploaderUserProfileId),
+          )
+          .where(eq(documents.id, id))
+          .limit(1);
+        if (!row) return null;
 
-    return {
-      ...row.document,
-      uploaderName: row.uploaderName,
-      tags: tagRows.map((t) => t.tag).sort(),
-    };
-  });
+        const tagRows = await tx
+          .select({ tag: documentTags.tag })
+          .from(documentTags)
+          .where(eq(documentTags.documentId, id));
+
+        return {
+          ...row.document,
+          uploaderName: row.uploaderName,
+          tags: tagRows.map((t) => t.tag).sort(),
+        };
+      },
+    );
+  } catch {
+    return null;
+  }
 }
 
 /* ------------------------- message attachments ------------------------- */
@@ -130,6 +155,7 @@ export type AttachedDocument = {
 
 export async function listAttachmentsForMessages(
   messageIds: string[],
+  engagementId?: string,
 ): Promise<Map<string, AttachedDocument[]>> {
   const result = new Map<string, AttachedDocument[]>();
   if (messageIds.length === 0) return result;
@@ -137,7 +163,12 @@ export async function listAttachmentsForMessages(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return result;
 
-  const rows = await withTenantContext(profile.orgId, async (tx) =>
+  // Coach cross-org safety: if engagementId is provided, bind RLS to
+  // that engagement's org so master_admin / coach in their home org
+  // can read attachments on a client engagement's messages. If absent,
+  // fall back to the caller's home org (works only for client roles).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runQuery = async (tx: any) =>
     tx
       .select({
         messageId: messageAttachments.messageId,
@@ -153,8 +184,31 @@ export async function listAttachmentsForMessages(
         eq(documents.id, messageAttachments.documentId),
       )
       .where(inArray(messageAttachments.messageId, messageIds))
-      .orderBy(messageAttachments.createdAt),
-  );
+      .orderBy(messageAttachments.createdAt);
+
+  type RowShape = {
+    messageId: string;
+    documentId: string;
+    filename: string;
+    fileType: string;
+    sizeBytes: string | number | bigint;
+    createdAt: Date;
+  };
+  let rows: RowShape[] = [];
+  try {
+    if (engagementId) {
+      rows = await withEngagementContext(
+        profile.orgId,
+        profile.role,
+        engagementId,
+        runQuery,
+      );
+    } else {
+      rows = await withTenantContext(profile.orgId, runQuery);
+    }
+  } catch {
+    return result;
+  }
 
   for (const row of rows) {
     let bucket = result.get(row.messageId);

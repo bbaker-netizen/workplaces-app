@@ -7,7 +7,7 @@
 
 import { eq } from "drizzle-orm";
 import { soulFiles, userProfiles } from "../schema";
-import { withTenantContext } from "../tenant";
+import { withEngagementContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
 export type LoadedSoulFile = {
@@ -23,27 +23,36 @@ export async function getSoulFileForEngagement(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
 
-  return withTenantContext(profile.orgId, async (tx) => {
-    const [row] = await tx
-      .select({
-        id: soulFiles.id,
-        body: soulFiles.body,
-        updatedAt: soulFiles.updatedAt,
-        lastEditorName: userProfiles.fullName,
-      })
-      .from(soulFiles)
-      .leftJoin(
-        userProfiles,
-        eq(userProfiles.id, soulFiles.lastEditorUserProfileId),
-      )
-      .where(eq(soulFiles.engagementId, engagementId))
-      .limit(1);
-    if (!row) return null;
-    return {
-      id: row.id,
-      body: row.body,
-      lastEditorName: row.lastEditorName,
-      updatedAt: row.updatedAt,
-    };
-  });
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [row] = await tx
+          .select({
+            id: soulFiles.id,
+            body: soulFiles.body,
+            updatedAt: soulFiles.updatedAt,
+            lastEditorName: userProfiles.fullName,
+          })
+          .from(soulFiles)
+          .leftJoin(
+            userProfiles,
+            eq(userProfiles.id, soulFiles.lastEditorUserProfileId),
+          )
+          .where(eq(soulFiles.engagementId, engagementId))
+          .limit(1);
+        if (!row) return null;
+        return {
+          id: row.id,
+          body: row.body,
+          lastEditorName: row.lastEditorName,
+          updatedAt: row.updatedAt,
+        };
+      },
+    );
+  } catch {
+    return null;
+  }
 }

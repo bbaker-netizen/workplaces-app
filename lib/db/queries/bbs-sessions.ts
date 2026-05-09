@@ -10,7 +10,10 @@ import {
   bbsSessions,
   type BbsSession,
 } from "../schema";
-import { withTenantContext } from "../tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+} from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
 export type ListedSession = BbsSession;
@@ -21,7 +24,12 @@ export async function listEngagementSessions(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return { upcoming: [], past: [] };
 
-  return withTenantContext(profile.orgId, async (tx) => {
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
     const now = new Date();
     const [upcoming, past] = await Promise.all([
       tx
@@ -46,20 +54,38 @@ export async function listEngagementSessions(
         .orderBy(desc(bbsSessions.scheduledAt)),
     ]);
     return { upcoming, past };
-  });
+      },
+    );
+  } catch {
+    return { upcoming: [], past: [] };
+  }
 }
 
 export async function getSession(id: string): Promise<ListedSession | null> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
-  return withTenantContext(profile.orgId, async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(bbsSessions)
-      .where(eq(bbsSessions.id, id))
-      .limit(1);
-    return row ?? null;
-  });
+  const engagementId = await resolveEngagementIdFromRecord(
+    "bbs_sessions",
+    id,
+  );
+  if (!engagementId) return null;
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(bbsSessions)
+          .where(eq(bbsSessions.id, id))
+          .limit(1);
+        return row ?? null;
+      },
+    );
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -72,22 +98,31 @@ export async function getNextSession(
 ): Promise<ListedSession | null> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
-  return withTenantContext(profile.orgId, async (tx) => {
-    const now = new Date();
-    const [row] = await tx
-      .select()
-      .from(bbsSessions)
-      .where(
-        and(
-          eq(bbsSessions.engagementId, engagementId),
-          gt(bbsSessions.scheduledAt, now),
-          eq(bbsSessions.status, "scheduled"),
-        ),
-      )
-      .orderBy(asc(bbsSessions.scheduledAt))
-      .limit(1);
-    return row ?? null;
-  });
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const now = new Date();
+        const [row] = await tx
+          .select()
+          .from(bbsSessions)
+          .where(
+            and(
+              eq(bbsSessions.engagementId, engagementId),
+              gt(bbsSessions.scheduledAt, now),
+              eq(bbsSessions.status, "scheduled"),
+            ),
+          )
+          .orderBy(asc(bbsSessions.scheduledAt))
+          .limit(1);
+        return row ?? null;
+      },
+    );
+  } catch {
+    return null;
+  }
 }
 
 export type SessionActionItem = {
@@ -104,7 +139,17 @@ export async function listSessionActionItems(
 ): Promise<SessionActionItem[]> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
-  return withTenantContext(profile.orgId, async (tx) => {
+  const engagementId = await resolveEngagementIdFromRecord(
+    "bbs_sessions",
+    sessionId,
+  );
+  if (!engagementId) return [];
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
     const rows = await tx
       .select({
         id: actionItems.id,
@@ -116,6 +161,10 @@ export async function listSessionActionItems(
       .from(actionItems)
       .where(eq(actionItems.bbsSessionId, sessionId))
       .orderBy(asc(actionItems.createdAt));
-    return rows;
-  });
+        return rows;
+      },
+    );
+  } catch {
+    return [];
+  }
 }

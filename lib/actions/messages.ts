@@ -32,7 +32,11 @@ import {
   userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+  withTenantContext,
+} from "@/lib/db/tenant";
 import {
   THREAD_TYPE,
   canPostInThread,
@@ -133,9 +137,11 @@ export async function createMessage(
   }
 
   try {
-    const txResult = await withTenantContext(
+    const txResult = await withEngagementContext(
       profile.orgId,
-      async (tx) => {
+      profile.role,
+      data.engagementId,
+      async (tx, boundOrgId) => {
         // For action-item threads, sanity-check the parent exists in the
         // same engagement the caller claims. RLS already binds to the org;
         // this catches typos.
@@ -199,7 +205,7 @@ export async function createMessage(
         const [row] = await tx
           .insert(messages)
           .values({
-            orgId: profile.orgId,
+            orgId: boundOrgId,
             engagementId: data.engagementId,
             parentEntityType: data.parentEntityType,
             parentEntityId: data.parentEntityId,
@@ -229,7 +235,7 @@ export async function createMessage(
               validDocs.map((d) => ({
                 messageId: row.id,
                 documentId: d.id,
-                orgId: profile.orgId,
+                orgId: boundOrgId,
               })),
             );
           }
@@ -242,7 +248,7 @@ export async function createMessage(
         if (mentionIds.length > 0) {
           await tx.insert(notifications).values(
             mentionIds.map((uid) => ({
-              orgId: profile.orgId,
+              orgId: boundOrgId,
               userProfileId: uid,
               type: "mention" as const,
               parentEntityType: data.parentEntityType,
@@ -352,32 +358,41 @@ export async function updateMessage(
   const data = parsed.data;
 
   try {
-    const result = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(messages)
-        .where(eq(messages.id, id))
-        .limit(1);
-      if (!existing) {
-        throw new Error("Message not found.");
-      }
-      if (existing.authorUserProfileId !== profile.userProfileId) {
-        throw new Error("You can only edit your own messages.");
-      }
-      if (existing.body === TOMBSTONE_BODY) {
-        throw new Error("Deleted messages can't be edited.");
-      }
+    const engagementId = await resolveEngagementIdFromRecord("messages", id);
+    if (!engagementId) {
+      return { ok: false, error: "Message not found." };
+    }
+    const result = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(messages)
+          .where(eq(messages.id, id))
+          .limit(1);
+        if (!existing) {
+          throw new Error("Message not found.");
+        }
+        if (existing.authorUserProfileId !== profile.userProfileId) {
+          throw new Error("You can only edit your own messages.");
+        }
+        if (existing.body === TOMBSTONE_BODY) {
+          throw new Error("Deleted messages can't be edited.");
+        }
 
-      await tx
-        .update(messages)
-        .set({
-          body: data.body,
-          editedAt: new Date(),
-        })
-        .where(eq(messages.id, id));
+        await tx
+          .update(messages)
+          .set({
+            body: data.body,
+            editedAt: new Date(),
+          })
+          .where(eq(messages.id, id));
 
-      return existing;
-    });
+        return existing;
+      },
+    );
 
     revalidateForParent(
       result.parentEntityType,
@@ -410,35 +425,44 @@ export async function deleteMessage(id: string): Promise<ActionResult> {
   }
 
   try {
-    const result = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(messages)
-        .where(eq(messages.id, id))
-        .limit(1);
-      if (!existing) {
-        throw new Error("Message not found.");
-      }
-      const isAuthor =
-        existing.authorUserProfileId === profile.userProfileId;
-      if (!isAuthor && !isLeadership(profile.role)) {
-        throw new Error("You can't delete this message.");
-      }
-      if (existing.body === TOMBSTONE_BODY) {
-        // Idempotent — already deleted.
+    const engagementId = await resolveEngagementIdFromRecord("messages", id);
+    if (!engagementId) {
+      return { ok: false, error: "Message not found." };
+    }
+    const result = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(messages)
+          .where(eq(messages.id, id))
+          .limit(1);
+        if (!existing) {
+          throw new Error("Message not found.");
+        }
+        const isAuthor =
+          existing.authorUserProfileId === profile.userProfileId;
+        if (!isAuthor && !isLeadership(profile.role)) {
+          throw new Error("You can't delete this message.");
+        }
+        if (existing.body === TOMBSTONE_BODY) {
+          // Idempotent — already deleted.
+          return existing;
+        }
+
+        await tx
+          .update(messages)
+          .set({
+            body: TOMBSTONE_BODY,
+            editedAt: new Date(),
+          })
+          .where(eq(messages.id, id));
+
         return existing;
-      }
-
-      await tx
-        .update(messages)
-        .set({
-          body: TOMBSTONE_BODY,
-          editedAt: new Date(),
-        })
-        .where(eq(messages.id, id));
-
-      return existing;
-    });
+      },
+    );
 
     revalidateForParent(
       result.parentEntityType,

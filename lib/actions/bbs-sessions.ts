@@ -27,7 +27,10 @@ import {
   engagements,
   type UserProfile,
 } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+} from "@/lib/db/tenant";
 
 type Role = UserProfile["role"];
 
@@ -96,27 +99,32 @@ export async function scheduleSession(
   }
 
   try {
-    const created = await withTenantContext(profile.orgId, async (tx) => {
-      const [eng] = await tx
-        .select({ id: engagements.id })
-        .from(engagements)
-        .where(eq(engagements.id, data.engagementId))
-        .limit(1);
-      if (!eng) throw new Error("Engagement not found.");
+    const created = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      data.engagementId,
+      async (tx, boundOrgId) => {
+        const [eng] = await tx
+          .select({ id: engagements.id })
+          .from(engagements)
+          .where(eq(engagements.id, data.engagementId))
+          .limit(1);
+        if (!eng) throw new Error("Engagement not found.");
 
-      const [row] = await tx
-        .insert(bbsSessions)
-        .values({
-          orgId: profile.orgId,
-          engagementId: data.engagementId,
-          scheduledAt: scheduled,
-          type: data.type,
-          notes: data.notes ?? null,
-          createdByUserProfileId: profile.userProfileId,
-        })
-        .returning({ id: bbsSessions.id });
-      return row;
-    });
+        const [row] = await tx
+          .insert(bbsSessions)
+          .values({
+            orgId: boundOrgId,
+            engagementId: data.engagementId,
+            scheduledAt: scheduled,
+            type: data.type,
+            notes: data.notes ?? null,
+            createdByUserProfileId: profile.userProfileId,
+          })
+          .returning({ id: bbsSessions.id });
+        return row;
+      },
+    );
 
     revalidateSessionPaths(data.engagementId, created.id);
     return { ok: true, data: created };
@@ -163,34 +171,46 @@ export async function updateSession(
   const data = parsed.data;
 
   try {
-    const engagementId = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select({ engagementId: bbsSessions.engagementId })
-        .from(bbsSessions)
-        .where(eq(bbsSessions.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Session not found.");
+    const lookupEngId = await resolveEngagementIdFromRecord(
+      "bbs_sessions",
+      id,
+    );
+    if (!lookupEngId) {
+      return { ok: false, error: "Session not found." };
+    }
+    const engagementId = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      lookupEngId,
+      async (tx) => {
+        const [existing] = await tx
+          .select({ engagementId: bbsSessions.engagementId })
+          .from(bbsSessions)
+          .where(eq(bbsSessions.id, id))
+          .limit(1);
+        if (!existing) throw new Error("Session not found.");
 
-      const update: Partial<typeof bbsSessions.$inferInsert> = {};
-      if (data.scheduledAt !== undefined) {
-        const d = new Date(data.scheduledAt);
-        if (Number.isNaN(d.getTime())) {
-          throw new Error("Date and time isn't valid.");
+        const update: Partial<typeof bbsSessions.$inferInsert> = {};
+        if (data.scheduledAt !== undefined) {
+          const d = new Date(data.scheduledAt);
+          if (Number.isNaN(d.getTime())) {
+            throw new Error("Date and time isn't valid.");
+          }
+          update.scheduledAt = d;
         }
-        update.scheduledAt = d;
-      }
-      if (data.type !== undefined) update.type = data.type;
-      if (data.notes !== undefined) update.notes = data.notes;
-      if (data.firefliesRecordingId !== undefined) {
-        update.firefliesRecordingId = data.firefliesRecordingId;
-      }
-      if (Object.keys(update).length === 0) return existing.engagementId;
-      await tx
-        .update(bbsSessions)
-        .set(update)
-        .where(eq(bbsSessions.id, id));
-      return existing.engagementId;
-    });
+        if (data.type !== undefined) update.type = data.type;
+        if (data.notes !== undefined) update.notes = data.notes;
+        if (data.firefliesRecordingId !== undefined) {
+          update.firefliesRecordingId = data.firefliesRecordingId;
+        }
+        if (Object.keys(update).length === 0) return existing.engagementId;
+        await tx
+          .update(bbsSessions)
+          .set(update)
+          .where(eq(bbsSessions.id, id));
+        return existing.engagementId;
+      },
+    );
     revalidateSessionPaths(engagementId, id);
     return { ok: true, data: undefined };
   } catch (e) {
@@ -218,19 +238,31 @@ async function setStatus(
     return { ok: false, error: "Invalid id." };
   }
   try {
-    const engagementId = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select({ engagementId: bbsSessions.engagementId })
-        .from(bbsSessions)
-        .where(eq(bbsSessions.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Session not found.");
-      await tx
-        .update(bbsSessions)
-        .set({ status: next })
-        .where(eq(bbsSessions.id, id));
-      return existing.engagementId;
-    });
+    const lookupEngId = await resolveEngagementIdFromRecord(
+      "bbs_sessions",
+      id,
+    );
+    if (!lookupEngId) {
+      return { ok: false, error: "Session not found." };
+    }
+    const engagementId = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      lookupEngId,
+      async (tx) => {
+        const [existing] = await tx
+          .select({ engagementId: bbsSessions.engagementId })
+          .from(bbsSessions)
+          .where(eq(bbsSessions.id, id))
+          .limit(1);
+        if (!existing) throw new Error("Session not found.");
+        await tx
+          .update(bbsSessions)
+          .set({ status: next })
+          .where(eq(bbsSessions.id, id));
+        return existing.engagementId;
+      },
+    );
     revalidateSessionPaths(engagementId, id);
     return { ok: true, data: undefined };
   } catch (e) {
@@ -259,16 +291,28 @@ export async function deleteSession(id: string): Promise<ActionResult> {
     return { ok: false, error: "Invalid id." };
   }
   try {
-    const engagementId = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select({ engagementId: bbsSessions.engagementId })
-        .from(bbsSessions)
-        .where(eq(bbsSessions.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Session not found.");
-      await tx.delete(bbsSessions).where(eq(bbsSessions.id, id));
-      return existing.engagementId;
-    });
+    const lookupEngId = await resolveEngagementIdFromRecord(
+      "bbs_sessions",
+      id,
+    );
+    if (!lookupEngId) {
+      return { ok: false, error: "Session not found." };
+    }
+    const engagementId = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      lookupEngId,
+      async (tx) => {
+        const [existing] = await tx
+          .select({ engagementId: bbsSessions.engagementId })
+          .from(bbsSessions)
+          .where(eq(bbsSessions.id, id))
+          .limit(1);
+        if (!existing) throw new Error("Session not found.");
+        await tx.delete(bbsSessions).where(eq(bbsSessions.id, id));
+        return existing.engagementId;
+      },
+    );
     revalidateSessionPaths(engagementId);
     return { ok: true, data: undefined };
   } catch (e) {

@@ -10,7 +10,7 @@
 
 import { eq, inArray } from "drizzle-orm";
 import { messageReactions, userProfiles } from "../schema";
-import { withTenantContext } from "../tenant";
+import { withEngagementContext, withTenantContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
 export type ReactionUser = {
@@ -39,6 +39,7 @@ export type ReactionsByEmoji = ReactionGroup[];
  */
 export async function listReactionsForMessages(
   messageIds: string[],
+  engagementId?: string,
 ): Promise<Map<string, ReactionsByEmoji>> {
   const result = new Map<string, ReactionsByEmoji>();
   if (messageIds.length === 0) return result;
@@ -46,7 +47,8 @@ export async function listReactionsForMessages(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return result;
 
-  const rows = await withTenantContext(profile.orgId, async (tx) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runQuery = async (tx: any) =>
     tx
       .select({
         messageId: messageReactions.messageId,
@@ -60,8 +62,29 @@ export async function listReactionsForMessages(
         eq(messageReactions.userProfileId, userProfiles.id),
       )
       .where(inArray(messageReactions.messageId, messageIds))
-      .orderBy(messageReactions.createdAt),
-  );
+      .orderBy(messageReactions.createdAt);
+
+  type RowShape = {
+    messageId: string;
+    userProfileId: string;
+    emoji: string;
+    fullName: string;
+  };
+  let rows: RowShape[] = [];
+  try {
+    if (engagementId) {
+      rows = await withEngagementContext(
+        profile.orgId,
+        profile.role,
+        engagementId,
+        runQuery,
+      );
+    } else {
+      rows = await withTenantContext(profile.orgId, runQuery);
+    }
+  } catch {
+    return result;
+  }
 
   // Group by (messageId, emoji), preserving insertion order (=== reaction
   // creation order) so the chip row reads like a timeline.

@@ -30,7 +30,10 @@ import {
   documents,
   engagements,
 } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+} from "@/lib/db/tenant";
 import {
   deleteDocumentBlob,
   uploadDocumentBlob,
@@ -82,17 +85,24 @@ export async function uploadDocument(
           .slice(0, 12)
       : [];
 
-  // Verify the engagement exists in the caller's org. RLS already
-  // bounds the read to the same tenant.
+  // Resolve the engagement's org id once (works cross-org for coach
+  // roles) and re-use it for both the blob path and the row insert.
+  let boundOrgId: string;
   try {
-    await withTenantContext(profile.orgId, async (tx) => {
-      const [eng] = await tx
-        .select({ id: engagements.id })
-        .from(engagements)
-        .where(eq(engagements.id, engagementId))
-        .limit(1);
-      if (!eng) throw new Error("Engagement not found.");
-    });
+    boundOrgId = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx, orgId) => {
+        const [eng] = await tx
+          .select({ id: engagements.id })
+          .from(engagements)
+          .where(eq(engagements.id, engagementId))
+          .limit(1);
+        if (!eng) throw new Error("Engagement not found.");
+        return orgId;
+      },
+    );
   } catch (e) {
     return {
       ok: false,
@@ -102,7 +112,7 @@ export async function uploadDocument(
 
   let upload: Awaited<ReturnType<typeof uploadDocumentBlob>>;
   try {
-    upload = await uploadDocumentBlob(profile.orgId, file);
+    upload = await uploadDocumentBlob(boundOrgId, file);
   } catch (e) {
     return {
       ok: false,
@@ -111,12 +121,16 @@ export async function uploadDocument(
   }
 
   try {
-    const created = await withTenantContext(profile.orgId, async (tx) => {
+    const created = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx, txOrgId) => {
       const [row] = await tx
         .insert(documents)
         .values({
           id: upload.documentId,
-          orgId: profile.orgId,
+          orgId: txOrgId,
           engagementId,
           blobKey: upload.blobKey,
           originalFilename: upload.filename,
@@ -136,13 +150,14 @@ export async function uploadDocument(
           tags.map((tag) => ({
             documentId: row.id,
             tag,
-            orgId: profile.orgId,
+            orgId: txOrgId,
           })),
         );
       }
 
       return row;
-    });
+    },
+    );
 
     revalidatePath("/portal/documents");
     revalidatePath(`/coach/documents/${engagementId}`);
@@ -182,37 +197,49 @@ export async function deleteDocument(id: string): Promise<ActionResult> {
   }
 
   try {
-    const blobKey = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select({
-          blobKey: documents.blobKey,
-          uploaderId: documents.uploaderUserProfileId,
-          engagementId: documents.engagementId,
-        })
-        .from(documents)
-        .where(eq(documents.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Document not found.");
+    const engagementId = await resolveEngagementIdFromRecord(
+      "documents",
+      id,
+    );
+    if (!engagementId) {
+      return { ok: false, error: "Document not found." };
+    }
+    const blobKey = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [existing] = await tx
+          .select({
+            blobKey: documents.blobKey,
+            uploaderId: documents.uploaderUserProfileId,
+            engagementId: documents.engagementId,
+          })
+          .from(documents)
+          .where(eq(documents.id, id))
+          .limit(1);
+        if (!existing) throw new Error("Document not found.");
 
-      // Authorization: uploader, master_admin / coach, or
-      // client_lead / client_manager. Phase 2 may tighten this.
-      const isUploader =
-        existing.uploaderId === profile.userProfileId;
-      const isLeadership =
-        profile.role === "master_admin" ||
-        profile.role === "coach" ||
-        profile.role === "client_lead" ||
-        profile.role === "client_manager";
-      if (!isUploader && !isLeadership) {
-        throw new Error("You can't delete this document.");
-      }
+        // Authorization: uploader, master_admin / coach, or
+        // client_lead / client_manager. Phase 2 may tighten this.
+        const isUploader =
+          existing.uploaderId === profile.userProfileId;
+        const isLeadership =
+          profile.role === "master_admin" ||
+          profile.role === "coach" ||
+          profile.role === "client_lead" ||
+          profile.role === "client_manager";
+        if (!isUploader && !isLeadership) {
+          throw new Error("You can't delete this document.");
+        }
 
-      await tx.delete(documents).where(eq(documents.id, id));
-      return {
-        blobKey: existing.blobKey,
-        engagementId: existing.engagementId,
-      };
-    });
+        await tx.delete(documents).where(eq(documents.id, id));
+        return {
+          blobKey: existing.blobKey,
+          engagementId: existing.engagementId,
+        };
+      },
+    );
 
     // Drop the blob outside the transaction. If this fails we have an
     // orphan blob — non-fatal; surface in logs only.
@@ -262,9 +289,18 @@ export async function setDocumentTags(
   const cleaned = Array.from(new Set(parsed.data)).slice(0, 12);
 
   try {
-    const engagementId = await withTenantContext(
+    const lookupEngId = await resolveEngagementIdFromRecord(
+      "documents",
+      documentId,
+    );
+    if (!lookupEngId) {
+      return { ok: false, error: "Document not found." };
+    }
+    const engagementId = await withEngagementContext(
       profile.orgId,
-      async (tx) => {
+      profile.role,
+      lookupEngId,
+      async (tx, boundOrgId) => {
         const [doc] = await tx
           .select({ engagementId: documents.engagementId })
           .from(documents)
@@ -281,7 +317,7 @@ export async function setDocumentTags(
             cleaned.map((tag) => ({
               documentId,
               tag,
-              orgId: profile.orgId,
+              orgId: boundOrgId,
             })),
           );
         }
@@ -319,28 +355,38 @@ export async function abandonDocument(
   }
 
   try {
-    const blobKey = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select({
-          blobKey: documents.blobKey,
-          uploaderId: documents.uploaderUserProfileId,
-        })
-        .from(documents)
-        .where(
-          and(
-            eq(documents.id, id),
-            eq(documents.uploaderUserProfileId, profile.userProfileId),
-          ),
-        )
-        .limit(1);
-      if (!existing) {
-        // Either it doesn't exist or the caller isn't the uploader —
-        // either way, nothing to do.
-        return null;
-      }
-      await tx.delete(documents).where(eq(documents.id, id));
-      return existing.blobKey;
-    });
+    const engagementId = await resolveEngagementIdFromRecord(
+      "documents",
+      id,
+    );
+    if (!engagementId) {
+      return { ok: true, data: undefined }; // Already gone, no-op.
+    }
+    const blobKey = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [existing] = await tx
+          .select({
+            blobKey: documents.blobKey,
+            uploaderId: documents.uploaderUserProfileId,
+          })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.id, id),
+              eq(documents.uploaderUserProfileId, profile.userProfileId),
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          return null;
+        }
+        await tx.delete(documents).where(eq(documents.id, id));
+        return existing.blobKey;
+      },
+    );
     if (blobKey) {
       try {
         await deleteDocumentBlob(blobKey);
@@ -377,18 +423,23 @@ export async function verifyAttachments(
     return { ok: true, data: { valid: [] } };
   }
   try {
-    const valid = await withTenantContext(profile.orgId, async (tx) => {
-      const rows = await tx
-        .select({ id: documents.id })
-        .from(documents)
-        .where(
-          and(
-            eq(documents.engagementId, engagementId),
-            inArray(documents.id, documentIds),
-          ),
-        );
-      return rows.map((r) => r.id);
-    });
+    const valid = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const rows = await tx
+          .select({ id: documents.id })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.engagementId, engagementId),
+              inArray(documents.id, documentIds),
+            ),
+          );
+        return rows.map((r) => r.id);
+      },
+    );
     return { ok: true, data: { valid } };
   } catch (e) {
     return {

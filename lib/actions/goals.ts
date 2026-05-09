@@ -17,7 +17,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { goals, type UserProfile } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+} from "@/lib/db/tenant";
 
 type Role = UserProfile["role"];
 
@@ -97,11 +100,15 @@ export async function createGoal(
   }
 
   try {
-    const created = await withTenantContext(profile.orgId, async (tx) => {
+    const created = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      data.engagementId,
+      async (tx, boundOrgId) => {
       const [row] = await tx
         .insert(goals)
         .values({
-          orgId: profile.orgId,
+          orgId: boundOrgId,
           engagementId: data.engagementId,
           title: data.title,
           description: data.description ?? null,
@@ -115,7 +122,8 @@ export async function createGoal(
         })
         .returning({ id: goals.id });
       return row;
-    });
+    },
+    );
     revalidateGoalPaths();
     return { ok: true, data: created };
   } catch (e) {
@@ -149,43 +157,53 @@ export async function updateGoal(
   }
   const data = parsed.data;
   try {
-    await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(goals)
-        .where(eq(goals.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Goal not found.");
+    const lookupEngId = await resolveEngagementIdFromRecord("goals", id);
+    if (!lookupEngId) {
+      return { ok: false, error: "Goal not found." };
+    }
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      lookupEngId,
+      async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(goals)
+          .where(eq(goals.id, id))
+          .limit(1);
+        if (!existing) throw new Error("Goal not found.");
 
-      const update: Partial<typeof goals.$inferInsert> = {};
-      if (data.title !== undefined) update.title = data.title;
-      if (data.description !== undefined) update.description = data.description;
-      if (data.targetMetric !== undefined)
-        update.targetMetric = data.targetMetric;
-      if (data.targetValue !== undefined)
-        update.targetValue = data.targetValue;
-      if (data.targetDate !== undefined)
-        update.targetDate = data.targetDate ? new Date(data.targetDate) : null;
-      if (data.status !== undefined) update.status = data.status;
-      if (data.revenueImpact !== undefined)
-        update.revenueImpact = data.revenueImpact;
-      if (data.marginImpact !== undefined)
-        update.marginImpact = data.marginImpact;
-      if (data.ownerUserProfileId !== undefined)
-        update.ownerUserProfileId = data.ownerUserProfileId;
+        const update: Partial<typeof goals.$inferInsert> = {};
+        if (data.title !== undefined) update.title = data.title;
+        if (data.description !== undefined)
+          update.description = data.description;
+        if (data.targetMetric !== undefined)
+          update.targetMetric = data.targetMetric;
+        if (data.targetValue !== undefined)
+          update.targetValue = data.targetValue;
+        if (data.targetDate !== undefined)
+          update.targetDate = data.targetDate
+            ? new Date(data.targetDate)
+            : null;
+        if (data.status !== undefined) update.status = data.status;
+        if (data.revenueImpact !== undefined)
+          update.revenueImpact = data.revenueImpact;
+        if (data.marginImpact !== undefined)
+          update.marginImpact = data.marginImpact;
+        if (data.ownerUserProfileId !== undefined)
+          update.ownerUserProfileId = data.ownerUserProfileId;
 
-      // Quality Gate enforcement on the post-update state.
-      const finalRevenue =
-        update.revenueImpact ?? existing.revenueImpact;
-      const finalMargin = update.marginImpact ?? existing.marginImpact;
-      if (!finalRevenue && !finalMargin) {
-        throw new Error(
-          "Goals must move top-line revenue, protect margin, or both.",
-        );
-      }
-      if (Object.keys(update).length === 0) return;
-      await tx.update(goals).set(update).where(eq(goals.id, id));
-    });
+        const finalRevenue = update.revenueImpact ?? existing.revenueImpact;
+        const finalMargin = update.marginImpact ?? existing.marginImpact;
+        if (!finalRevenue && !finalMargin) {
+          throw new Error(
+            "Goals must move top-line revenue, protect margin, or both.",
+          );
+        }
+        if (Object.keys(update).length === 0) return;
+        await tx.update(goals).set(update).where(eq(goals.id, id));
+      },
+    );
     revalidateGoalPaths();
     return { ok: true, data: undefined };
   } catch (e) {
@@ -208,9 +226,18 @@ export async function deleteGoal(id: string): Promise<ActionResult> {
     return { ok: false, error: "Invalid id." };
   }
   try {
-    await withTenantContext(profile.orgId, async (tx) => {
-      await tx.delete(goals).where(eq(goals.id, id));
-    });
+    const lookupEngId = await resolveEngagementIdFromRecord("goals", id);
+    if (!lookupEngId) {
+      return { ok: false, error: "Goal not found." };
+    }
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      lookupEngId,
+      async (tx) => {
+        await tx.delete(goals).where(eq(goals.id, id));
+      },
+    );
     revalidateGoalPaths();
     return { ok: true, data: undefined };
   } catch (e) {

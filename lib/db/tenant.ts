@@ -108,3 +108,141 @@ export async function withSystemContext<T>(
 ): Promise<T> {
   return db.transaction(async (tx) => fn(tx));
 }
+
+/* -------------------- Engagement-aware tenant helper -------------------- */
+
+import { engagements } from "./schema";
+import { eq } from "drizzle-orm";
+
+/**
+ * Resolve the org id that owns a given engagement, using the system
+ * context (RLS off) so coaches can find engagements in any org.
+ *
+ * Used by `withEngagementContext` — every server action that takes an
+ * engagementId calls through this helper to produce the right tenant
+ * binding. Caching: per-request, in-memory, deduplicates lookups when
+ * a single action makes several queries against the same engagement.
+ */
+const engagementOrgCache = new Map<string, string>();
+async function resolveEngagementOrgId(
+  engagementId: string,
+): Promise<string | null> {
+  const cached = engagementOrgCache.get(engagementId);
+  if (cached) return cached;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ orgId: engagements.orgId })
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .limit(1);
+    if (!row) return null;
+    engagementOrgCache.set(engagementId, row.orgId);
+    return row.orgId;
+  });
+}
+
+/**
+ * `withEngagementContext` — bind RLS to the org that owns an engagement,
+ * not necessarily the caller's home org.
+ *
+ *   - Coach roles (`master_admin` / `coach`): GUC binds to the
+ *     engagement's org id, regardless of the caller's home org.
+ *     This is what lets Bruce post in a CLIENT engagement from the
+ *     master org session.
+ *   - Client roles: GUC binds to the caller's home org. If the
+ *     engagement doesn't live there, throws — RLS would have filtered
+ *     to nothing anyway, but throwing produces a clearer error.
+ *
+ * Use this helper instead of `withTenantContext(profile.orgId, ...)`
+ * for every server action and read query that takes an engagementId.
+ */
+export async function withEngagementContext<T>(
+  callerOrgId: string,
+  callerRole: string,
+  engagementId: string,
+  fn: (tx: Tx, boundOrgId: string) => Promise<T>,
+): Promise<T> {
+  const isCoachLike =
+    callerRole === "master_admin" || callerRole === "coach";
+
+  let targetOrgId = callerOrgId;
+  if (isCoachLike) {
+    const resolved = await resolveEngagementOrgId(engagementId);
+    if (!resolved) {
+      throw new Error("Engagement not found.");
+    }
+    targetOrgId = resolved;
+  }
+
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE workplaces_app`);
+    await tx.execute(
+      sql`SELECT set_config('app.current_org_id', ${targetOrgId}, true)`,
+    );
+
+    if (!isCoachLike) {
+      // Client roles: verify the engagement actually belongs to the
+      // caller's org. RLS would filter cross-org reads to nothing, but
+      // raising lets the caller surface a clear error instead of
+      // looking like a missing record.
+      const [row] = await tx
+        .select({ orgId: engagements.orgId })
+        .from(engagements)
+        .where(eq(engagements.id, engagementId))
+        .limit(1);
+      if (!row) throw new Error("Engagement not found.");
+      if (row.orgId !== callerOrgId) {
+        throw new Error("Engagement isn't in your org.");
+      }
+    }
+
+    return fn(tx, targetOrgId);
+  });
+}
+
+/**
+ * Resolve the engagement id for an arbitrary record (action item,
+ * message, document, session, goal, soul file, …) without RLS getting
+ * in the way. System context only — RLS off — so it works whether or
+ * not the caller can see the row in their tenant.
+ *
+ * Returns null if the record doesn't exist. Caller MUST then validate
+ * via `withEngagementContext`, which enforces audience rules for both
+ * coach and client roles.
+ */
+export async function resolveEngagementIdFromRecord(
+  table:
+    | "messages"
+    | "action_items"
+    | "documents"
+    | "bbs_sessions"
+    | "goals"
+    | "soul_files"
+    | "message_reactions",
+  recordId: string,
+): Promise<string | null> {
+  return db.transaction(async (tx) => {
+    if (table === "message_reactions") {
+      // Reaction rows don't carry engagement_id directly. Resolve via
+      // the parent message.
+      const result = await tx.execute(
+        sql`SELECT m.engagement_id AS "engagementId"
+            FROM message_reactions r
+            JOIN messages m ON m.id = r.message_id
+            WHERE r.message_id = ${recordId}
+            LIMIT 1`,
+      );
+      const rows = result.rows as Array<{ engagementId: string }>;
+      return rows[0]?.engagementId ?? null;
+    }
+    const tableSql = sql.raw(`"${table}"`);
+    const result = await tx.execute(
+      sql`SELECT engagement_id AS "engagementId"
+          FROM ${tableSql}
+          WHERE id = ${recordId}
+          LIMIT 1`,
+    );
+    const rows = result.rows as Array<{ engagementId: string }>;
+    return rows[0]?.engagementId ?? null;
+  });
+}

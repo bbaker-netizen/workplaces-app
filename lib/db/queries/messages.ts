@@ -28,7 +28,10 @@ import {
   userProfiles,
   type Message,
 } from "../schema";
-import { withTenantContext } from "../tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+} from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 import {
   THREAD_TYPE,
@@ -48,30 +51,53 @@ export async function listMessagesForEntity(
   if (profile.status !== "ok") return [];
   if (!canViewThread(threadType, profile.role)) return [];
 
-  return withTenantContext(profile.orgId, async (tx) => {
-    const rows = await tx
-      .select({
-        message: messages,
-        authorName: userProfiles.fullName,
-      })
-      .from(messages)
-      .innerJoin(
-        userProfiles,
-        eq(userProfiles.id, messages.authorUserProfileId),
-      )
-      .where(
-        and(
-          eq(messages.parentEntityType, threadType),
-          eq(messages.parentEntityId, parentEntityId),
-        ),
-      )
-      .orderBy(messages.createdAt);
+  // Resolve the engagement id so coach roles bind to the right org.
+  // For action-item threads, parentEntityId is the action item's id.
+  // For engagement-level threads, parentEntityId IS the engagement id.
+  let engagementId: string | null;
+  if (threadType === THREAD_TYPE.actionItem) {
+    engagementId = await resolveEngagementIdFromRecord(
+      "action_items",
+      parentEntityId,
+    );
+  } else {
+    engagementId = parentEntityId;
+  }
+  if (!engagementId) return [];
 
-    return rows.map((r) => ({
-      ...r.message,
-      authorName: r.authorName,
-    }));
-  });
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const rows = await tx
+          .select({
+            message: messages,
+            authorName: userProfiles.fullName,
+          })
+          .from(messages)
+          .innerJoin(
+            userProfiles,
+            eq(userProfiles.id, messages.authorUserProfileId),
+          )
+          .where(
+            and(
+              eq(messages.parentEntityType, threadType),
+              eq(messages.parentEntityId, parentEntityId),
+            ),
+          )
+          .orderBy(messages.createdAt);
+
+        return rows.map((r) => ({
+          ...r.message,
+          authorName: r.authorName,
+        }));
+      },
+    );
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -106,66 +132,87 @@ export async function listEngagementRecentActivity(
   }
   if (allowed.length === 0) return [];
 
-  return withTenantContext(profile.orgId, async (tx) => {
-    const rows = await tx
-      .select({
-        message: messages,
-        authorName: userProfiles.fullName,
-        actionItemTitle: actionItems.title,
-      })
-      .from(messages)
-      .innerJoin(
-        userProfiles,
-        eq(userProfiles.id, messages.authorUserProfileId),
-      )
-      .leftJoin(
-        actionItems,
-        and(
-          eq(messages.parentEntityType, THREAD_TYPE.actionItem),
-          eq(actionItems.id, messages.parentEntityId),
-        ),
-      )
-      .where(
-        and(
-          eq(messages.engagementId, engagementId),
-          inArray(messages.parentEntityType, allowed),
-        ),
-      )
-      .orderBy(desc(messages.createdAt))
-      .limit(limit);
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const rows = await tx
+          .select({
+            message: messages,
+            authorName: userProfiles.fullName,
+            actionItemTitle: actionItems.title,
+          })
+          .from(messages)
+          .innerJoin(
+            userProfiles,
+            eq(userProfiles.id, messages.authorUserProfileId),
+          )
+          .leftJoin(
+            actionItems,
+            and(
+              eq(messages.parentEntityType, THREAD_TYPE.actionItem),
+              eq(actionItems.id, messages.parentEntityId),
+            ),
+          )
+          .where(
+            and(
+              eq(messages.engagementId, engagementId),
+              inArray(messages.parentEntityType, allowed),
+            ),
+          )
+          .orderBy(desc(messages.createdAt))
+          .limit(limit);
 
-    return rows.map((r) => ({
-      message: { ...r.message, authorName: r.authorName },
-      parentEntityType: r.message.parentEntityType,
-      parentEntityId: r.message.parentEntityId,
-      parentTitle:
-        r.message.parentEntityType === THREAD_TYPE.actionItem
-          ? r.actionItemTitle ?? "Action item"
-          : r.message.parentEntityType === THREAD_TYPE.engagementLeadership
-            ? "Leadership thread"
-            : "Team thread",
-    }));
-  });
+        return rows.map((r) => ({
+          message: { ...r.message, authorName: r.authorName },
+          parentEntityType: r.message.parentEntityType,
+          parentEntityId: r.message.parentEntityId,
+          parentTitle:
+            r.message.parentEntityType === THREAD_TYPE.actionItem
+              ? r.actionItemTitle ?? "Action item"
+              : r.message.parentEntityType === THREAD_TYPE.engagementLeadership
+                ? "Leadership thread"
+                : "Team thread",
+        }));
+      },
+    );
+  } catch {
+    return [];
+  }
 }
 
 export async function getMessage(id: string): Promise<ListedMessage | null> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
 
-  return withTenantContext(profile.orgId, async (tx) => {
-    const [row] = await tx
-      .select({
-        message: messages,
-        authorName: userProfiles.fullName,
-      })
-      .from(messages)
-      .innerJoin(
-        userProfiles,
-        eq(userProfiles.id, messages.authorUserProfileId),
-      )
-      .where(eq(messages.id, id))
-      .limit(1);
-    if (!row) return null;
-    return { ...row.message, authorName: row.authorName };
-  });
+  const engagementId = await resolveEngagementIdFromRecord("messages", id);
+  if (!engagementId) return null;
+
+  try {
+    return await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [row] = await tx
+          .select({
+            message: messages,
+            authorName: userProfiles.fullName,
+          })
+          .from(messages)
+          .innerJoin(
+            userProfiles,
+            eq(userProfiles.id, messages.authorUserProfileId),
+          )
+          .where(eq(messages.id, id))
+          .limit(1);
+        if (!row) return null;
+        return { ...row.message, authorName: row.authorName };
+      },
+    );
+  } catch {
+    return null;
+  }
 }

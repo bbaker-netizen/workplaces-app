@@ -25,7 +25,11 @@ import {
   userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+  withTenantContext,
+} from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { actionItemAssignedEmail } from "@/lib/email/templates";
 
@@ -115,11 +119,15 @@ export async function createActionItem(
   const data = parsed.data;
 
   try {
-    const txResult = await withTenantContext(profile.orgId, async (tx) => {
+    const txResult = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      data.engagementId,
+      async (tx, boundOrgId) => {
       const [item] = await tx
         .insert(actionItems)
         .values({
-          orgId: profile.orgId,
+          orgId: boundOrgId,
           engagementId: data.engagementId,
           title: data.title,
           description: data.description ?? null,
@@ -142,7 +150,7 @@ export async function createActionItem(
         data.assigneeUserProfileId !== profile.userProfileId
       ) {
         await tx.insert(notifications).values({
-          orgId: profile.orgId,
+          orgId: boundOrgId,
           userProfileId: data.assigneeUserProfileId,
           type: "action_item_assigned",
           parentEntityType: "action_item",
@@ -161,7 +169,8 @@ export async function createActionItem(
       }
 
       return { item, assigneeForEmail };
-    });
+    },
+    );
 
     // Send the assignment email outside the transaction. Best-effort.
     if (txResult.assigneeForEmail) {
@@ -230,10 +239,19 @@ export async function updateActionItem(
   const data = parsed.data;
 
   try {
-    const reassignmentEmail = await withTenantContext(
+    const engagementId = await resolveEngagementIdFromRecord(
+      "action_items",
+      id,
+    );
+    if (!engagementId) {
+      return { ok: false, error: "Action item not found." };
+    }
+    const reassignmentEmail = await withEngagementContext(
       profile.orgId,
-      async (tx) => {
-        // Read existing — RLS already scopes to the user's org.
+      profile.role,
+      engagementId,
+      async (tx, boundOrgId) => {
+        // Read existing — RLS already scopes to the engagement's org.
         const [existing] = await tx
           .select()
           .from(actionItems)
@@ -300,7 +318,7 @@ export async function updateActionItem(
         if (!shouldNotify || !newAssignee) return null;
 
         await tx.insert(notifications).values({
-          orgId: profile.orgId,
+          orgId: boundOrgId,
           userProfileId: newAssignee,
           type: "action_item_assigned",
           parentEntityType: "action_item",
@@ -371,10 +389,21 @@ export async function deleteActionItem(
   }
 
   try {
-    await withTenantContext(profile.orgId, async (tx) => {
-      // RLS scopes the delete to our org.
-      await tx.delete(actionItems).where(eq(actionItems.id, id));
-    });
+    const engagementId = await resolveEngagementIdFromRecord(
+      "action_items",
+      id,
+    );
+    if (!engagementId) {
+      return { ok: false, error: "Action item not found." };
+    }
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        await tx.delete(actionItems).where(eq(actionItems.id, id));
+      },
+    );
     revalidateActionItemPaths();
     return { ok: true, data: undefined };
   } catch (e) {

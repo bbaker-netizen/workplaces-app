@@ -20,7 +20,7 @@ import {
   soulFiles,
   type UserProfile,
 } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import { withEngagementContext } from "@/lib/db/tenant";
 
 type Role = UserProfile["role"];
 
@@ -66,41 +66,46 @@ export async function upsertSoulFileBody(
   const data = parsed.data;
 
   try {
-    const id = await withTenantContext(profile.orgId, async (tx) => {
-      const [eng] = await tx
-        .select({ id: engagements.id })
-        .from(engagements)
-        .where(eq(engagements.id, data.engagementId))
-        .limit(1);
-      if (!eng) throw new Error("Engagement not found.");
+    const id = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      data.engagementId,
+      async (tx, boundOrgId) => {
+        const [eng] = await tx
+          .select({ id: engagements.id })
+          .from(engagements)
+          .where(eq(engagements.id, data.engagementId))
+          .limit(1);
+        if (!eng) throw new Error("Engagement not found.");
 
-      const [existing] = await tx
-        .select({ id: soulFiles.id })
-        .from(soulFiles)
-        .where(eq(soulFiles.engagementId, data.engagementId))
-        .limit(1);
+        const [existing] = await tx
+          .select({ id: soulFiles.id })
+          .from(soulFiles)
+          .where(eq(soulFiles.engagementId, data.engagementId))
+          .limit(1);
 
-      if (existing) {
-        await tx
-          .update(soulFiles)
-          .set({
+        if (existing) {
+          await tx
+            .update(soulFiles)
+            .set({
+              body: data.body,
+              lastEditorUserProfileId: profile.userProfileId,
+            })
+            .where(eq(soulFiles.id, existing.id));
+          return existing.id;
+        }
+        const [row] = await tx
+          .insert(soulFiles)
+          .values({
+            orgId: boundOrgId,
+            engagementId: data.engagementId,
             body: data.body,
             lastEditorUserProfileId: profile.userProfileId,
           })
-          .where(eq(soulFiles.id, existing.id));
-        return existing.id;
-      }
-      const [row] = await tx
-        .insert(soulFiles)
-        .values({
-          orgId: profile.orgId,
-          engagementId: data.engagementId,
-          body: data.body,
-          lastEditorUserProfileId: profile.userProfileId,
-        })
-        .returning({ id: soulFiles.id });
-      return row.id;
-    });
+          .returning({ id: soulFiles.id });
+        return row.id;
+      },
+    );
 
     revalidatePath("/portal/soul-file");
     revalidatePath(`/coach/soul-file/${data.engagementId}`);

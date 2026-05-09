@@ -28,7 +28,10 @@ import {
   messages,
   type UserProfile,
 } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import {
+  resolveEngagementIdFromRecord,
+  withEngagementContext,
+} from "@/lib/db/tenant";
 import {
   THREAD_TYPE,
   canViewThread,
@@ -63,23 +66,35 @@ function revalidateForParent(
 }
 
 async function loadParentMessage(
-  profile: { orgId: string },
+  profile: { orgId: string; role: UserProfile["role"] },
   messageId: string,
 ) {
-  return withTenantContext(profile.orgId, async (tx) => {
-    const [row] = await tx
-      .select({
-        id: messages.id,
-        orgId: messages.orgId,
-        engagementId: messages.engagementId,
-        parentEntityType: messages.parentEntityType,
-        parentEntityId: messages.parentEntityId,
-      })
-      .from(messages)
-      .where(eq(messages.id, messageId))
-      .limit(1);
-    return row ?? null;
-  });
+  // Resolve engagement first so we can bind to the correct org —
+  // important for coach roles posting in client engagements.
+  const engagementId = await resolveEngagementIdFromRecord(
+    "messages",
+    messageId,
+  );
+  if (!engagementId) return null;
+  return withEngagementContext(
+    profile.orgId,
+    profile.role,
+    engagementId,
+    async (tx, boundOrgId) => {
+      const [row] = await tx
+        .select({
+          id: messages.id,
+          orgId: messages.orgId,
+          engagementId: messages.engagementId,
+          parentEntityType: messages.parentEntityType,
+          parentEntityId: messages.parentEntityId,
+        })
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+      return row ? { ...row, boundOrgId } : null;
+    },
+  );
 }
 
 function audienceCheck(
@@ -129,40 +144,45 @@ export async function toggleReaction(
   if (!audience.ok) return audience;
 
   try {
-    const state = await withTenantContext(profile.orgId, async (tx) => {
-      const [existing] = await tx
-        .select({ messageId: messageReactions.messageId })
-        .from(messageReactions)
-        .where(
-          and(
-            eq(messageReactions.messageId, messageId),
-            eq(messageReactions.userProfileId, profile.userProfileId),
-            eq(messageReactions.emoji, emoji),
-          ),
-        )
-        .limit(1);
-
-      if (existing) {
-        await tx
-          .delete(messageReactions)
+    const state = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      parent.engagementId,
+      async (tx, boundOrgId) => {
+        const [existing] = await tx
+          .select({ messageId: messageReactions.messageId })
+          .from(messageReactions)
           .where(
             and(
               eq(messageReactions.messageId, messageId),
               eq(messageReactions.userProfileId, profile.userProfileId),
               eq(messageReactions.emoji, emoji),
             ),
-          );
-        return "removed" as const;
-      }
+          )
+          .limit(1);
 
-      await tx.insert(messageReactions).values({
-        messageId,
-        userProfileId: profile.userProfileId,
-        emoji,
-        orgId: parent.orgId,
-      });
-      return "added" as const;
-    });
+        if (existing) {
+          await tx
+            .delete(messageReactions)
+            .where(
+              and(
+                eq(messageReactions.messageId, messageId),
+                eq(messageReactions.userProfileId, profile.userProfileId),
+                eq(messageReactions.emoji, emoji),
+              ),
+            );
+          return "removed" as const;
+        }
+
+        await tx.insert(messageReactions).values({
+          messageId,
+          userProfileId: profile.userProfileId,
+          emoji,
+          orgId: boundOrgId,
+        });
+        return "added" as const;
+      },
+    );
 
     revalidateForParent(
       parent.parentEntityType,

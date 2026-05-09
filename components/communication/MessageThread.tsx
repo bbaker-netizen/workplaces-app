@@ -65,8 +65,8 @@ export async function MessageThread({
     (await listMessagesForEntity(threadType, parentEntityId));
   const [reactionsByMessageId, attachmentsByMessageId, members] =
     await Promise.all([
-      listReactionsForMessages(messages.map((m) => m.id)),
-      listAttachmentsForMessages(messages.map((m) => m.id)),
+      listReactionsForMessages(messages.map((m) => m.id), engagementId),
+      listAttachmentsForMessages(messages.map((m) => m.id), engagementId),
       listEngagementMembers(engagementId),
     ]);
   const mentionMembers = members.map((m) => ({
