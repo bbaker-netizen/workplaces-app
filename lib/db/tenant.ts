@@ -218,18 +218,29 @@ export async function resolveEngagementIdFromRecord(
     | "bbs_sessions"
     | "goals"
     | "soul_files"
-    | "message_reactions",
+    | "message_reactions"
+    | "projects"
+    | "tasks",
   recordId: string,
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
     if (table === "message_reactions") {
-      // Reaction rows don't carry engagement_id directly. Resolve via
-      // the parent message.
       const result = await tx.execute(
         sql`SELECT m.engagement_id AS "engagementId"
             FROM message_reactions r
             JOIN messages m ON m.id = r.message_id
             WHERE r.message_id = ${recordId}
+            LIMIT 1`,
+      );
+      const rows = result.rows as Array<{ engagementId: string }>;
+      return rows[0]?.engagementId ?? null;
+    }
+    if (table === "tasks") {
+      // Tasks resolve through their project.
+      const result = await tx.execute(
+        sql`SELECT p.engagement_id AS "engagementId"
+            FROM tasks t JOIN projects p ON p.id = t.project_id
+            WHERE t.id = ${recordId}
             LIMIT 1`,
       );
       const rows = result.rows as Array<{ engagementId: string }>;

@@ -11,6 +11,7 @@
  * Phase 1.6 added: sessions.
  * Phase 1.7 added: soul file.
  * Phase 1.10/1.11/1.12 added: goals, team, methodology resources.
+ * Phase 1.14 added: projects.
  */
 
 import Link from "next/link";
@@ -45,6 +46,12 @@ export function PortalNav({
             className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
           >
             Goals
+          </Link>
+          <Link
+            href="/portal/projects"
+            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
+          >
+            Projects
           </Link>
           <Link
             href="/portal/sessions"
@@ -93,6 +100,7 @@ export function PortalNav({
         <div className="max-w-5xl mx-auto px-6 py-2 flex gap-5 overflow-x-auto whitespace-nowrap">
           <Link href="/portal/action-items" className="font-sans text-sm text-foreground">Action items</Link>
           <Link href="/portal/goals" className="font-sans text-sm text-foreground">Goals</Link>
+          <Link href="/portal/projects" className="font-sans text-sm text-foreground">Projects</Link>
           <Link href="/portal/sessions" className="font-sans text-sm text-foreground">Sessions</Link>
           <Link href="/portal/communication" className="font-sans text-sm text-foreground">Communication</Link>
           <Link href="/portal/documents" className="font-sans text-sm text-foreground">Documents</Link>

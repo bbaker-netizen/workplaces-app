@@ -118,6 +118,23 @@ export const goalStatusEnum = pgEnum("goal_status", [
   "abandoned",
 ]);
 
+// ---------- Phase 1.14 enums ----------
+
+export const projectStatusEnum = pgEnum("project_status", [
+  "planning",
+  "active",
+  "blocked",
+  "completed",
+  "cancelled",
+]);
+
+export const taskStatusEnum = pgEnum("task_status", [
+  "todo",
+  "in_progress",
+  "done",
+  "blocked",
+]);
+
 // ---------- Phase 0 tables ----------
 
 /**
@@ -229,6 +246,89 @@ export const engagements = pgTable(
 );
 
 // ---------- Phase 1.1 tables ----------
+
+/**
+ * `projects` — discrete initiatives within an engagement.
+ *
+ * Phase 1.14. App builds, hiring drives, marketing campaigns,
+ * implementation rollouts. Each project has a lead, dates, status,
+ * and a task list. Per the methodology a project either moves
+ * top-line revenue, protects margin, or both — same Quality Gate
+ * as goals and action items.
+ */
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    status: projectStatusEnum("status").notNull().default("planning"),
+    leadUserProfileId: uuid("lead_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    startDate: timestamp("start_date", { withTimezone: true }),
+    targetDate: timestamp("target_date", { withTimezone: true }),
+    revenueImpact: boolean("revenue_impact").notNull().default(false),
+    marginImpact: boolean("margin_impact").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("projects_org_idx").on(t.orgId),
+    engagementIdx: index("projects_engagement_idx").on(t.engagementId),
+    leadIdx: index("projects_lead_idx").on(t.leadUserProfileId),
+    statusIdx: index("projects_status_idx").on(t.status),
+  }),
+);
+
+/**
+ * `tasks` — work items within a project.
+ *
+ * Phase 1.14 keeps it lightweight: title, status, assignee, due date,
+ * order index for manual drag-sort, percent_complete for progress
+ * roll-ups. Dependencies + parent_task_id (sub-tasks) are deferred.
+ */
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: taskStatusEnum("status").notNull().default("todo"),
+    assigneeUserProfileId: uuid("assignee_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    orderIndex: bigint("order_index", { mode: "number" })
+      .notNull()
+      .default(0),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    percentComplete: bigint("percent_complete", { mode: "number" })
+      .notNull()
+      .default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("tasks_org_idx").on(t.orgId),
+    projectIdx: index("tasks_project_idx").on(t.projectId),
+    assigneeIdx: index("tasks_assignee_idx").on(t.assigneeUserProfileId),
+    statusIdx: index("tasks_status_idx").on(t.status),
+  }),
+);
 
 /**
  * `goals` — SMART goals per engagement.
@@ -688,3 +788,7 @@ export type SoulFile = typeof soulFiles.$inferSelect;
 export type NewSoulFile = typeof soulFiles.$inferInsert;
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
+export type Project = typeof projects.$inferSelect;
+export type NewProject = typeof projects.$inferInsert;
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
