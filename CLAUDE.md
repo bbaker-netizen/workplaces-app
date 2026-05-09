@@ -473,15 +473,42 @@ The audience rules live in `lib/communication/audience.ts` — `canViewThread` a
 
 ---
 
+## What was built in Sub-Phase 1.3.5
+
+Tagged `v0.5.0` on 2026-05-09.
+
+**Schema:** migration `0005_message_reactions.sql` adds the `message_reactions` table — composite PK (`message_id`, `user_profile_id`, `emoji`), denormalized `org_id` for RLS efficiency (same pattern as `document_tags`), three indexes, the shared `set_updated_at` trigger, and the same RLS policy shape as every other tenant-scoped table (`org_id = auth.org_id()`).
+
+**Rich text composer.** `components/communication/RichTextEditor.tsx` wraps Tiptap (StarterKit minus heading + horizontal rule, plus Link, Placeholder, and `tiptap-markdown`). Output is Markdown so the existing `MarkdownBody` renderer keeps working unchanged — every message read path stays backwards-compatible with bodies typed under 1.3's plain-textarea regime. Toolbar exposes bold / italic / strike / inline code / bulleted list / numbered list / blockquote / link. Cmd/Ctrl+Enter submits, plain Enter inserts a paragraph break.
+
+**Emoji picker.** `components/communication/EmojiPickerButton.tsx` lazy-loads `emoji-picker-react` via `next/dynamic` so the ~250kb bundle doesn't block initial render. Used in two places: the composer toolbar (insertion at cursor via the editor's imperative handle) and the reaction "more" menu.
+
+**Reactions.** `lib/actions/message-reactions.ts` exports `toggleReaction`, idempotent (insert-or-delete on the composite key) and audience-checked via `canViewThread`. `lib/db/queries/message-reactions.ts` exports `listReactionsForMessages` — single batched query that joins reactor names and groups by `(messageId, emoji)` for the chip row's hover tooltips. `components/communication/MessageReactionBar.tsx` renders pill chips below each non-tombstoned message; hover-revealed dashed "react" trigger opens a quick-pick row (👍 ❤️ 😂 🎉 👀 ✅) with an "other" fallthrough to the full picker. Optimistic toggle: chip state flips locally before the server settles; failure reverts with an inline error.
+
+**Composer + edit drawer wiring.** `MessageComposer.tsx` and `MessageRow.tsx`'s inline edit drawer both swap their plain `<textarea>` for `RichTextEditor`. `MessageThread.tsx` now also fetches reactions in a single batched query and passes them down through `MessageList` → `MessageRow`.
+
+**New deps:** `@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extension-link`, `@tiptap/extension-placeholder`, `tiptap-markdown`, `emoji-picker-react`. Communication-page bundle grew to 388kB First Load (was ~130kB before 1.3.5); the heavy chunks (Tiptap + the emoji bundle) are lazy-split where possible.
+
+**a11y note.** Quick-pick reaction buttons inside the popover use `role="menuitemcheckbox"` + `aria-checked` rather than `aria-pressed` (the latter is unsupported on `menuitem`). Caught by `next lint`'s `jsx-a11y/role-supports-aria-props` rule.
+
+**Acceptance:** Bruce can format messages with toolbar buttons, drop in an emoji from the picker, and react to messages with thumbs/heart/etc. Reactions persist and surface to every viewer inside the thread's audience. Live receive-side test still blocked by the same single-phone Clerk constraint as Phase 0/1.1/1.3 — verified via `pnpm typecheck` + `pnpm build` (15 routes compile clean) and code review.
+
+---
+
 ## Active Phase
 
-**Sub-Phase 1.3.5 — Composer UX upgrades (MS Teams parity, lite).** Replace the plain textarea with a real WYSIWYG editor, add an emoji picker, and add emoji reactions on messages. Inserted between 1.3 and 1.4 because Bruce asked for "feels like Teams" before going further. See `docs/decisions.md` "2026-05-09 — Communication module: MS Teams parity scope" for the full split between what's coming in 1.3.5 vs deferred to 1.5 vs out of scope.
+**Sub-Phase 1.4 — @Mentions + Resend wiring.** First sub-phase to send actual emails. Per the original `Phase-1-Plan.md`:
 
 **Build:**
-- Rich text toolbar via Tiptap (same library the HR app uses). Output stored as Markdown in `messages.body` so existing reads stay compatible with the `MarkdownBody` renderer.
-- Emoji picker via `emoji-picker-react` — 😀 button in the composer, searchable grid, inserts unicode glyph at cursor.
-- Emoji reactions: hover a message → "+ reaction" → quick-pick row (👍 ❤️ 😂 🎉 👀 ✅) plus full picker. New table `message_reactions(message_id, user_profile_id, emoji)` with composite PK + RLS via the parent message's `org_id`. Migration `0005_message_reactions.sql`. Reactions render as pill chips below the message body.
+- **`@mention` parsing in the composer.** Typing `@` opens a typeahead of engagement members (`listEngagementMembers` from 1.2 already returns the right shape). Selection inserts a mention token; the message body persists the mention as both readable text AND an entry in the existing `messages.mentions` JSONB column (parsed at submit time so older clients without the typeahead still produce parseable bodies).
+- **Mention fan-out.** `createMessage` parses `mentions[]` and inserts one `notification_type='mention'` row per mentioned user. `sent_via='both'` once Resend is wired; `'in_app'` while it isn't yet.
+- **Email plumbing via Resend.** New `lib/email/send.ts` wraps the Resend client. Sender locked to `The Builder <notifications@4workplaces.com>` against the verified `4workplaces.com` domain. Three email templates: `mention`, `action_item_assigned` (was already firing in-app from 1.2 — now also goes by email), `action_item_due_soon` (new — triggered by a daily Netlify Scheduled Function). Templates rendered as plain HTML strings keeping the heritage-industrial brand: cream background, Foreman Black ink, Steel Blue link colour.
+- **Bruce's working-hours guard.** Email send wrapper checks Mountain Time clock — outside Mon–Fri 8:30 AM–6:00 PM, emails get queued (notifications row written, `sent_via='in_app'`, an `email_pending_send_at` future timestamp added later). The daily scheduled function also flushes the queue at the next valid window. CLAUDE.md scheduling constraint, finally enforced in code.
 
-**Acceptance:** Bruce can format messages with toolbar buttons, drop in an emoji from the picker, and react to messages with thumbs/heart/etc. Reactions persist and surface to every viewer in the audience.
+**Env vars added in 1.4:**
+- `RESEND_API_KEY` — the API key from resend.com.
+- `RESEND_FROM_EMAIL` — `The Builder <notifications@4workplaces.com>`.
 
-**After 1.3.5:** Active Phase moves to **Phase 1.4 — @Mentions + Resend Wiring** (per the original Phase-1-Plan.md): `@mention` parsing in the composer, fan-out notifications via Resend on a verified sender domain, email templates for `@mention` / `action_item_assigned` / `action_item_due_soon`. Then Phase 1.5 (Documents Module) which folds message attachments in alongside standalone documents — same upload pipeline serves both.
+**Acceptance:** Bruce sends a message containing `@SomeName`. The mentioned user gets an email (during working hours) AND an in-app notification. Action item assignment now also emails the assignee. Due-soon nudges fire 24h before the due date.
+
+**After 1.4:** Active Phase moves to **Phase 1.5 — Documents Module + message attachments** (per `Phase-1-Plan.md` and the 2026-05-09 decisions log) — Netlify Blobs upload pipeline serves both standalone Documents and message attachments, paperclip icon in the composer.
