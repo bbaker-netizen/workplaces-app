@@ -16,13 +16,20 @@
  * (WhatsApp-style; per Bruce 2026-05-09).
  */
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { isTombstone as messageIsTombstone } from "@/lib/communication/tombstone";
 import { deleteMessage, updateMessage } from "@/lib/actions/messages";
 import { formatMessageTimestamp } from "./utils";
 import type { ListedMessage } from "@/lib/db/queries/messages";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "./RichTextEditor";
+import { EmojiPickerButton } from "./EmojiPickerButton";
+import { MessageReactionBar } from "./MessageReactionBar";
+import type { ReactionsByEmoji } from "@/lib/db/queries/message-reactions";
 
 function initialsOf(name: string): string {
   return name
@@ -37,11 +44,14 @@ export function MessageRow({
   message,
   viewerUserProfileId,
   viewerCanModerate,
+  reactions = [],
 }: {
   message: ListedMessage;
   viewerUserProfileId: string;
   viewerCanModerate: boolean;
+  reactions?: ReactionsByEmoji;
 }) {
+  const editorRef = useRef<RichTextEditorHandle | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.body);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +87,7 @@ export function MessageRow({
   };
 
   const saveEdit = () => {
-    const trimmed = draft.trim();
+    const trimmed = (editorRef.current?.getMarkdown() ?? draft).trim();
     if (!trimmed) {
       setError("Message can't be empty.");
       return;
@@ -189,23 +199,23 @@ export function MessageRow({
               )}
             </p>
           ) : editing ? (
-            <div className="space-y-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    cancelEdit();
-                  } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                    e.preventDefault();
-                    saveEdit();
-                  }
-                }}
-                rows={3}
-                autoFocus
+            <div
+              className="space-y-2"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelEdit();
+                }
+              }}
+            >
+              <RichTextEditor
+                editorRef={editorRef}
+                initialMarkdown={message.body}
                 disabled={isPending}
-                className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-[#2E4057] disabled:bg-[#F5F1E8] disabled:cursor-wait resize-y"
+                autoFocus
+                onSubmit={saveEdit}
+                onChange={setDraft}
+                ariaLabel="Edit message"
               />
               {error && (
                 <p role="alert" className="font-sans text-sm text-[#E87722]">
@@ -213,9 +223,19 @@ export function MessageRow({
                 </p>
               )}
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                  Esc to cancel · ⌘/Ctrl + Enter to save
-                </span>
+                <div className="flex items-center gap-2">
+                  <EmojiPickerButton
+                    ariaLabel="Insert emoji"
+                    onSelect={(emoji) =>
+                      editorRef.current?.insertText(emoji)
+                    }
+                    anchor="top"
+                    align="left"
+                  />
+                  <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                    Esc to cancel · ⌘/Ctrl + Enter to save
+                  </span>
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -263,6 +283,13 @@ export function MessageRow({
             </div>
           )}
         </div>
+        {!editing && !isTombstone && (
+          <MessageReactionBar
+            messageId={message.id}
+            reactions={reactions}
+            viewerUserProfileId={viewerUserProfileId}
+          />
+        )}
         {!editing && error && (
           <p
             role="alert"

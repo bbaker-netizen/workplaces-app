@@ -301,6 +301,49 @@ export const messages = pgTable(
 );
 
 /**
+ * `message_reactions` — emoji reactions on a message.
+ *
+ * One row per (message, user, emoji). Composite primary key
+ * (message_id, user_profile_id, emoji) prevents duplicate reactions —
+ * a user can react to a message with multiple distinct emojis but only
+ * once per emoji. Toggling off is a DELETE; no soft-delete here, no
+ * audit need.
+ *
+ * `org_id` denormalized for RLS (same pattern as `document_tags`):
+ * filtering by org_id is a direct index hit and the RLS predicate
+ * stays the simple `org_id = auth.org_id()`. Application code copies
+ * org_id from the parent message at insert time.
+ *
+ * `emoji` stores the unicode glyph itself (e.g. "👍", "❤️"). Skin-tone
+ * variants are kept distinct (different glyph, different row).
+ */
+export const messageReactions = pgTable(
+  "message_reactions",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    emoji: text("emoji").notNull(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({
+      columns: [t.messageId, t.userProfileId, t.emoji],
+    }),
+    orgIdx: index("message_reactions_org_idx").on(t.orgId),
+    messageIdx: index("message_reactions_message_idx").on(t.messageId),
+    userIdx: index("message_reactions_user_idx").on(t.userProfileId),
+  }),
+);
+
+/**
  * `documents` — files uploaded per engagement.
  *
  * Storage backend: Netlify Blobs (Phase 1.5). `blob_key` is the stable
@@ -432,3 +475,5 @@ export type DocumentTag = typeof documentTags.$inferSelect;
 export type NewDocumentTag = typeof documentTags.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type MessageReaction = typeof messageReactions.$inferSelect;
+export type NewMessageReaction = typeof messageReactions.$inferInsert;

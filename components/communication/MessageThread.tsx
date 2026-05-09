@@ -16,6 +16,7 @@ import {
   listMessagesForEntity,
   type ListedMessage,
 } from "@/lib/db/queries/messages";
+import { listReactionsForMessages } from "@/lib/db/queries/message-reactions";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { THREAD_TYPE, type ThreadType } from "@/lib/communication/audience";
 import type { UserProfile } from "@/lib/db/schema";
@@ -60,11 +61,15 @@ export async function MessageThread({
   const messages =
     preloadedMessages ??
     (await listMessagesForEntity(threadType, parentEntityId));
+  const reactionsByMessageId = await listReactionsForMessages(
+    messages.map((m) => m.id),
+  );
 
   return (
     <section className="space-y-6">
       <MessageList
         messages={messages}
+        reactionsByMessageId={reactionsByMessageId}
         viewerUserProfileId={profile.userProfileId}
         viewerCanModerate={isModerator(profile.role)}
         emptyState={emptyState}

@@ -4,14 +4,17 @@
 
 import { MessageRow } from "./MessageRow";
 import type { ListedMessage } from "@/lib/db/queries/messages";
+import type { ReactionsByEmoji } from "@/lib/db/queries/message-reactions";
 
 export function MessageList({
   messages,
+  reactionsByMessageId,
   viewerUserProfileId,
   viewerCanModerate,
   emptyState,
 }: {
   messages: ListedMessage[];
+  reactionsByMessageId?: Map<string, ReactionsByEmoji>;
   viewerUserProfileId: string;
   viewerCanModerate: boolean;
   emptyState?: React.ReactNode;
@@ -30,6 +33,7 @@ export function MessageList({
         <MessageRow
           key={m.id}
           message={m}
+          reactions={reactionsByMessageId?.get(m.id) ?? []}
           viewerUserProfileId={viewerUserProfileId}
           viewerCanModerate={viewerCanModerate}
         />
