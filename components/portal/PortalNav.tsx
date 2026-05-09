@@ -8,6 +8,7 @@
  * Phase 1.2 added: action items.
  * Phase 1.3 added: communication.
  * Phase 1.5 added: documents.
+ * Phase 1.6 added: sessions.
  */
 
 import Link from "next/link";
@@ -36,6 +37,12 @@ export function PortalNav({
             className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
           >
             Action items
+          </Link>
+          <Link
+            href="/portal/sessions"
+            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
+          >
+            Sessions
           </Link>
           <Link
             href="/portal/communication"
@@ -69,6 +76,12 @@ export function PortalNav({
             className="font-sans text-sm text-foreground"
           >
             Action items
+          </Link>
+          <Link
+            href="/portal/sessions"
+            className="font-sans text-sm text-foreground"
+          >
+            Sessions
           </Link>
           <Link
             href="/portal/communication"

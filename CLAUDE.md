@@ -576,6 +576,50 @@ Tagged `v0.7.0` on 2026-05-09.
 
 ---
 
+## What was built in Sub-Phase 1.6
+
+Tagged `v0.8.0` on 2026-05-09.
+
+**Schema:** migration `0007_bbs_sessions.sql` adds:
+- New table `bbs_sessions(id, org_id, engagement_id, scheduled_at, type, status, notes, fireflies_recording_id, created_by_user_profile_id, ...)`. RLS, indexes on (org, engagement, scheduled_at, status), `set_updated_at` trigger.
+- New enums `bbs_session_type` (in_person | virtual) and `bbs_session_status` (scheduled | completed | cancelled).
+- `action_items.bbs_session_id uuid` FK with `ON DELETE SET NULL` so deleting a session preserves any items extracted from it. Index added.
+
+**Server actions** (`lib/actions/bbs-sessions.ts`): `scheduleSession`, `updateSession` (time / type / notes / fireflies recording id, partial), `completeSession`, `cancelSession`, `reopenSession`, `deleteSession`. All leadership-only (`master_admin` / `coach` / `client_lead` / `client_manager`); `client_employee` and `prospect` can VIEW but not write.
+
+**Read queries** (`lib/db/queries/bbs-sessions.ts`):
+- `listEngagementSessions` returns `{ upcoming, past }` based on `scheduledAt` vs now.
+- `getSession`, `getNextSession` (next upcoming with status=scheduled, used later for dashboard widgets).
+- `listSessionActionItems` returns the action items linked via `bbs_session_id`.
+
+**Mountain Time, end to end.** `components/sessions/utils.ts` formats every visible timestamp in `America/Edmonton` via Luxon (DST-aware). The `<input type="datetime-local">` value is interpreted as MT, converted to a UTC ISO string client-side via `fromDateTimeLocalValue`, and submitted to the server. The server stores UTC; reads project back into MT for display. CLAUDE.md scheduling constraint applied at the visible-time layer; the working-hours guard from 1.4 already covers the email layer.
+
+**Pages:**
+- `/portal/sessions` — schedule form (leadership only) + upcoming/past list.
+- `/portal/sessions/[id]` — detail with inline edit drawers for time/format and notes, status flip buttons (Mark complete / Re-open / Cancel session), delete, and a list of any action items linked to this session.
+- `/coach/sessions/[engagementId]` and `/coach/sessions/[engagementId]/[sessionId]` — same shape, per-engagement chooser like the other coach modules.
+
+**SessionList** (`components/sessions/SessionList.tsx`) is a server component, renders two sections (Upcoming, Past) with status pills. Overdue scheduled sessions render with the Safety Vest Orange accent rule from CLAUDE.md (single-accent rule reserved for high-attention moments). Completed gets Steel Blue. Cancelled is greyed-out and strikethrough.
+
+**SessionDetail** (`components/sessions/SessionDetail.tsx`) is the client component handling status flips, edit drawers, and notes editing. Notes use a plain textarea + the existing `MarkdownBody` renderer for the rendered view — Tiptap deferred for sessions until there's a clear ask (composer-quality formatting in long-form notes is overkill for the current pilot scope).
+
+**PortalNav** got a "Sessions" link in both desktop and mobile rows, sandwiched between Action items and Communication.
+
+**Acceptance:** Bruce schedules a session for next Tuesday 9 AM MT, comes back later, edits the notes, marks it complete after the meeting, and any action items captured during the session can be linked back via `action_items.bbs_session_id` (linkage UI in the action item edit form deferred to Phase 1.7+ when Fireflies auto-extract lands).
+
+**Out of scope for 1.6 (deferred):**
+- **Recurring schedules** — twice-monthly auto-create. Bruce will manually schedule for now; the rhythm is two-touch per month per client which is small.
+- **Fireflies API auto-extract** — paste a recording id into the field today; the extract pipeline that pulls transcript → action item drafts is Phase 1.7+.
+- **Attendee tracking** — who actually came. Defer until team members are routine on engagements.
+- **BBS Prep Live Artifact** in Cowork — that's a coach-side surface, not part of this repo.
+
+---
+
 ## Active Phase
 
-**Sub-Phase 1.6 — TBD.** Per `Phase-1-Plan.md`, the remaining Phase 1 work is the Soul File ingest + read-only summary view, the BBS Sessions module skeleton, and the engagement-level dashboard ("Today" view). The order is open — re-evaluate at the next session kickoff with Bruce.
+**Sub-Phase 1.7 — TBD.** Three candidates left in Phase 1 per `Phase-1-Plan.md`:
+- **Soul File** — long-form context document per engagement, vector-embedded for semantic retrieval. Heavy backend (pgvector, embeddings pipeline), small visible UI.
+- **Engagement dashboard** — "Today" view aggregating action items, latest messages, next session. Useful integrator, low individual scope.
+- **Live Impactica handoff** — first real client onboarded onto The Builder. Stress-tests every module, surfaces the coach cross-org gap (currently deferred), exercises Resend live receive, etc.
+
+Pick at the next session kickoff with Bruce.

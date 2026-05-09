@@ -16,6 +16,7 @@
  */
 
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   index,
@@ -92,6 +93,19 @@ export const notificationSentViaEnum = pgEnum("notification_sent_via", [
   "email",
   "in_app",
   "both",
+]);
+
+// ---------- Phase 1.6 enums ----------
+
+export const bbsSessionTypeEnum = pgEnum("bbs_session_type", [
+  "in_person",
+  "virtual",
+]);
+
+export const bbsSessionStatusEnum = pgEnum("bbs_session_status", [
+  "scheduled",
+  "completed",
+  "cancelled",
 ]);
 
 // ---------- Phase 0 tables ----------
@@ -207,6 +221,57 @@ export const engagements = pgTable(
 // ---------- Phase 1.1 tables ----------
 
 /**
+ * `bbs_sessions` — Business Building Sessions per engagement.
+ *
+ * Methodology: twice-monthly 2-hour sessions with each client (one
+ * in-person, one virtual). Each row represents a single planned or
+ * past session. Notes are markdown — the same renderer as messages.
+ *
+ * Phase 1.6 keeps the model tight:
+ *   - `scheduled_at`     when the session happens (or happened).
+ *   - `type`             in_person | virtual.
+ *   - `status`           scheduled | completed | cancelled. "Missed" is
+ *                        derived from (status=scheduled AND scheduled_at < now).
+ *   - `notes`            markdown body, written before / during / after.
+ *   - `fireflies_recording_id`  optional Fireflies meeting id once
+ *                        the recording is in. The auto-extract pipeline
+ *                        from the recording lives in Phase 1.7+.
+ *
+ * Recurring schedules, attendee tracking, and the "BBS prep" Live
+ * Artifact view are deliberately out of scope for 1.6 — they're
+ * higher-value once a real client engagement is running through The
+ * Builder (Phase 1.7+).
+ */
+export const bbsSessions = pgTable(
+  "bbs_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    type: bbsSessionTypeEnum("type").notNull(),
+    status: bbsSessionStatusEnum("status").notNull().default("scheduled"),
+    notes: text("notes"),
+    firefliesRecordingId: text("fireflies_recording_id"),
+    createdByUserProfileId: uuid("created_by_user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("bbs_sessions_org_idx").on(t.orgId),
+    engagementIdx: index("bbs_sessions_engagement_idx").on(t.engagementId),
+    scheduledAtIdx: index("bbs_sessions_scheduled_at_idx").on(t.scheduledAt),
+    statusIdx: index("bbs_sessions_status_idx").on(t.status),
+  }),
+);
+
+/**
  * `action_items` — owned, dated commitments per engagement.
  *
  * Created either by a coach manually (status=open) or by Claude from a
@@ -240,6 +305,10 @@ export const actionItems = pgTable(
     revenueImpact: boolean("revenue_impact").notNull().default(false),
     marginImpact: boolean("margin_impact").notNull().default(false),
     firefliesTranscriptId: text("fireflies_transcript_id"),
+    bbsSessionId: uuid("bbs_session_id").references(
+      (): AnyPgColumn => bbsSessions.id,
+      { onDelete: "set null" },
+    ),
     confidenceFlag: confidenceFlagEnum("confidence_flag"),
     createdBy: actionItemCreatedByEnum("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -516,3 +585,5 @@ export type MessageReaction = typeof messageReactions.$inferSelect;
 export type NewMessageReaction = typeof messageReactions.$inferInsert;
 export type MessageAttachment = typeof messageAttachments.$inferSelect;
 export type NewMessageAttachment = typeof messageAttachments.$inferInsert;
+export type BbsSession = typeof bbsSessions.$inferSelect;
+export type NewBbsSession = typeof bbsSessions.$inferInsert;
