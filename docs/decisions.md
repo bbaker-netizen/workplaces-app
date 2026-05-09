@@ -6,6 +6,25 @@ decision, follow-up (if any).
 
 ---
 
+## 2026-05-09 — Reference apps for The Builder + scheduling elevated to Phase 2
+
+**Context.** Bruce shared three reference apps as ongoing inspiration for The Builder:
+- **Motion** (usemotion.com) — AI-powered project + task management with auto-scheduling tasks into the calendar
+- **Reclaim.ai** (reclaim.ai) — smart calendar assistant; habits, focus blocks, smart 1:1s, buffer time
+- **CoachAccountable** (coachaccountable.com) — purpose-built coaching platform; closest direct analog to The Builder
+
+**Decisions.**
+
+1. **CoachAccountable is the validation lens for Phase 2/3 modules.** Its feature set (client portal, goals, worksheets, courses, scheduling, billing, forms, multi-coach) maps almost 1:1 onto our planned module library. When a Phase 2/3 module ships, before declaring it done compare its polish to CoachAccountable's equivalent — if ours is materially thinner, flag before tagging.
+
+2. **Scheduling/Calendar elevated from "deferred" to a Phase 2 module.** Two of Bruce's three references (Motion, Reclaim) are scheduling-first products; CoachAccountable has session scheduling baked in. Previously Phase-1-Plan.md parked "Scheduling & Calendars" in the Phase 2+ deferred list with no explicit slot. Now slated as a Phase 2 module — equal-footing with BBS Sessions, Soul File, Goals, Projects, Hiring, Person Profiles, Forms, Deliverables. Specific scope (Calendly-style booking link? Native calendar UI? Sync to Google Calendar?) to be designed when the sub-phase opens.
+
+3. **AI auto-scheduling (Motion-style) stays deferred to Phase 3+.** Heavy build (calendar diffing, conflict resolution, priority modeling, multi-user scheduling). Basics need to land first — basic calendar viewing, manual booking, sync — before the AI layer makes sense.
+
+**How future sessions should apply.** When Bruce describes a feature ambiguously ("can we add X like Y…"), default to the reference apps' UX as the mental model unless he specifies otherwise. Memory note `project_reference_apps.md` carries the same context for sessions that don't read this log first.
+
+---
+
 ## 2026-05-09 — Communication module: MS Teams parity scope
 
 **Context.** Bruce asked whether messaging could mimic Microsoft Teams — rich text toolbar, emojis, file attachments, reactions, etc. Surveyed the gap and split features by effort, then locked the next session's scope so the deferred items have a documented home and don't get forgotten.
