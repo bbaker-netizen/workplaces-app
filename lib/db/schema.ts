@@ -118,6 +118,20 @@ export const goalStatusEnum = pgEnum("goal_status", [
   "abandoned",
 ]);
 
+// ---------- Phase 2 audit log ----------
+
+export const auditEventTypeEnum = pgEnum("audit_event_type", [
+  "create",
+  "update",
+  "delete",
+  "publish",
+  "transfer",
+  "login",
+  "permission_change",
+  "ai_generation",
+  "webhook_received",
+]);
+
 // ---------- Phase 1.14 enums ----------
 
 export const projectStatusEnum = pgEnum("project_status", [
@@ -1223,6 +1237,47 @@ export const enrollments = pgTable(
   }),
 );
 
+// ---------- Phase 2: audit_log ----------
+
+/**
+ * `audit_log` — append-only event stream for compliance + debugging.
+ *
+ * Phase 2.9. Every meaningful state change writes a row here. The
+ * surface is open-ended via `entity_type` + `entity_id` so we don't
+ * have to pre-declare every entity. `actor_user_profile_id` is the
+ * caller; `metadata` is freeform JSONB for context.
+ *
+ * Tenant-scoped: the row carries `org_id` so RLS prevents one org's
+ * audit from leaking into another. `system` events (cron, webhooks,
+ * AI generations on system context) get the engagement's org id.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    actorUserProfileId: uuid("actor_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    eventType: auditEventTypeEnum("event_type").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id"),
+    summary: text("summary").notNull(),
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("audit_log_org_idx").on(t.orgId),
+    actorIdx: index("audit_log_actor_idx").on(t.actorUserProfileId),
+    entityIdx: index("audit_log_entity_idx").on(t.entityType, t.entityId),
+    createdAtIdx: index("audit_log_created_at_idx").on(t.createdAt),
+  }),
+);
+
 // ---------- Inferred TypeScript types ----------
 
 export type Org = typeof orgs.$inferSelect;
@@ -1280,3 +1335,5 @@ export type Cohort = typeof cohorts.$inferSelect;
 export type NewCohort = typeof cohorts.$inferInsert;
 export type Enrollment = typeof enrollments.$inferSelect;
 export type NewEnrollment = typeof enrollments.$inferInsert;
+export type AuditLog = typeof auditLog.$inferSelect;
+export type NewAuditLog = typeof auditLog.$inferInsert;
