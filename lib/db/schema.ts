@@ -383,6 +383,8 @@ export const engagements = pgTable(
     endDate: timestamp("end_date", { withTimezone: true }),
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
+    qboCustomerId: text("qbo_customer_id"),
+    qboRealmId: text("qbo_realm_id"),
     stageOfGrowthStage: bigint("stage_of_growth_stage", { mode: "number" }),
     stageAssessedAt: timestamp("stage_assessed_at", { withTimezone: true }),
     slug: text("slug"),
@@ -1098,7 +1100,10 @@ export const invoices = pgTable(
     engagementId: uuid("engagement_id")
       .notNull()
       .references(() => engagements.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull().default("stripe"),
     stripeInvoiceId: text("stripe_invoice_id").unique(),
+    qboInvoiceId: text("qbo_invoice_id"),
+    qboRealmId: text("qbo_realm_id"),
     number: text("number"),
     description: text("description"),
     amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
@@ -1115,6 +1120,37 @@ export const invoices = pgTable(
     orgIdx: index("invoices_org_idx").on(t.orgId),
     engagementIdx: index("invoices_engagement_idx").on(t.engagementId),
     statusIdx: index("invoices_status_idx").on(t.status),
+    qboIdx: uniqueIndex("invoices_qbo_id_idx").on(t.qboInvoiceId),
+  }),
+);
+
+/**
+ * `qbo_oauth_tokens` — per-coach OAuth refresh tokens for QuickBooks
+ * Online. Same shape as the (now-removed) adobe_sign_oauth_tokens
+ * table. `realm_id` is QBO's identifier for the company file (Bruce's
+ * company file vs. a partner coach's, in the multi-coach future).
+ */
+export const qboOauthTokens = pgTable(
+  "qbo_oauth_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachUserProfileId: uuid("coach_user_profile_id")
+      .notNull()
+      .unique()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    realmId: text("realm_id").notNull(),
+    companyName: text("company_name"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    refreshExpiresAt: timestamp("refresh_expires_at", {
+      withTimezone: true,
+    }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    coachIdx: index("qbo_oauth_tokens_coach_idx").on(t.coachUserProfileId),
   }),
 );
 
@@ -1831,6 +1867,8 @@ export type SignatureEnvelope = typeof signatureEnvelopes.$inferSelect;
 export type NewSignatureEnvelope = typeof signatureEnvelopes.$inferInsert;
 export type SignatureSigner = typeof signatureSigners.$inferSelect;
 export type NewSignatureSigner = typeof signatureSigners.$inferInsert;
+export type QboOauthToken = typeof qboOauthTokens.$inferSelect;
+export type NewQboOauthToken = typeof qboOauthTokens.$inferInsert;
 export type NotificationRead = typeof notificationReads.$inferSelect;
 export type NewNotificationRead = typeof notificationReads.$inferInsert;
 export type LessonCompletion = typeof lessonCompletions.$inferSelect;
