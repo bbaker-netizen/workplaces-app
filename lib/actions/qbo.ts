@@ -19,6 +19,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { qboOauthTokens } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { qboAuthorizeUrl, revokeQboTokens } from "@/lib/integrations/qbo";
+import { decryptSecret } from "@/lib/crypto/secret-vault";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -74,7 +75,7 @@ export async function disconnectQbo(): Promise<ActionResult> {
 
   if (stored) {
     try {
-      await revokeQboTokens(stored.refreshToken);
+      await revokeQboTokens(decryptSecret(stored.refreshToken));
     } catch (e) {
       console.warn("[qbo-disconnect] revoke failed (non-fatal):", e);
     }

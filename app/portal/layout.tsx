@@ -4,6 +4,7 @@ import { getUnreadNotificationCount } from "@/lib/db/queries/notifications";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { ALL_MODULES, getEnabledModules } from "@/lib/modules";
 import { PortalNav } from "@/components/portal/PortalNav";
+import { PortalFooter } from "@/components/portal/PortalFooter";
 
 /**
  * /portal/* layout shell. Auth + role gate plus the shared nav.
@@ -31,13 +32,14 @@ export default async function PortalLayout({
     : ALL_MODULES.filter((m) => m.visibleTo.includes(profile.role));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <PortalNav
         fullName={profile.fullName}
         unreadCount={unreadCount}
         modules={modules}
       />
-      {children}
+      <div className="flex-1">{children}</div>
+      <PortalFooter />
     </div>
   );
 }

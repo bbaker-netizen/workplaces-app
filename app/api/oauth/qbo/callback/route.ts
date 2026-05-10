@@ -20,6 +20,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { qboOauthTokens } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { exchangeAuthCode } from "@/lib/integrations/qbo";
+import { encryptSecret } from "@/lib/crypto/secret-vault";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -66,6 +67,12 @@ export async function GET(req: Request): Promise<Response> {
     );
   }
 
+  // Encrypt tokens at the application layer before persisting (Intuit
+  // QBO security policy requires this even though the database is also
+  // encrypted at rest by the managed provider).
+  const encryptedAccess = encryptSecret(tokens.accessToken);
+  const encryptedRefresh = encryptSecret(tokens.refreshToken);
+
   await withSystemContext(async (tx) => {
     const [existing] = await tx
       .select({ id: qboOauthTokens.id })
@@ -76,8 +83,8 @@ export async function GET(req: Request): Promise<Response> {
       await tx
         .update(qboOauthTokens)
         .set({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
+          accessToken: encryptedAccess,
+          refreshToken: encryptedRefresh,
           realmId,
           expiresAt: tokens.expiresAt,
           refreshExpiresAt: tokens.refreshExpiresAt,
@@ -86,8 +93,8 @@ export async function GET(req: Request): Promise<Response> {
     } else {
       await tx.insert(qboOauthTokens).values({
         coachUserProfileId: profile.userProfileId,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: encryptedAccess,
+        refreshToken: encryptedRefresh,
         realmId,
         expiresAt: tokens.expiresAt,
         refreshExpiresAt: tokens.refreshExpiresAt,

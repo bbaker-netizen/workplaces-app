@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { PortalFooter } from "@/components/portal/PortalFooter";
 
 /**
  * Coach Console layout — role gate for /coach/*.
@@ -17,5 +18,10 @@ export default async function CoachLayout({
   if (result.status !== "ok") redirect("/no-invitation");
   if (result.role !== "master_admin") redirect("/portal");
 
-  return <div className="min-h-screen bg-background">{children}</div>;
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="flex-1">{children}</div>
+      <PortalFooter />
+    </div>
+  );
 }

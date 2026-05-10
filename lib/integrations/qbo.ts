@@ -25,6 +25,7 @@
 import { eq } from "drizzle-orm";
 import { qboOauthTokens } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { decryptSecret } from "@/lib/crypto/secret-vault";
 
 const PROD_API_BASE = "https://quickbooks.api.intuit.com";
 const SANDBOX_API_BASE = "https://sandbox-quickbooks.api.intuit.com";
@@ -143,19 +144,26 @@ export async function getValidQboCredentials(
   });
   if (!stored) return null;
 
+  // Decrypt at-rest tokens. AES-256-GCM envelope encryption (Intuit
+  // security policy requires application-layer encryption of refresh
+  // tokens with the key stored separately from the database).
+  const decryptedAccess = decryptSecret(stored.accessToken);
+  const decryptedRefresh = decryptSecret(stored.refreshToken);
+
   const expiresSoon = stored.expiresAt.getTime() < Date.now() + 5 * 60 * 1000;
   if (!expiresSoon) {
-    return { accessToken: stored.accessToken, realmId: stored.realmId };
+    return { accessToken: decryptedAccess, realmId: stored.realmId };
   }
 
   // Refresh.
-  const refreshed = await refreshAccessToken(stored.refreshToken);
+  const refreshed = await refreshAccessToken(decryptedRefresh);
   await withSystemContext(async (tx) => {
+    const { encryptSecret } = await import("@/lib/crypto/secret-vault");
     await tx
       .update(qboOauthTokens)
       .set({
-        accessToken: refreshed.accessToken,
-        refreshToken: refreshed.refreshToken,
+        accessToken: encryptSecret(refreshed.accessToken),
+        refreshToken: encryptSecret(refreshed.refreshToken),
         expiresAt: refreshed.expiresAt,
         refreshExpiresAt: refreshed.refreshExpiresAt,
       })
@@ -183,7 +191,9 @@ export async function revokeQboTokens(refreshToken: string): Promise<void> {
 
 /**
  * Generic authenticated call against the QBO REST API. Handles base URL
- * + auth header + minor-version pinning.
+ * + auth header + minor-version pinning. Captures `intuit_tid` from the
+ * response header and logs it (without any payload data) for support
+ * traceability — Intuit recommends this for every API call.
  */
 async function qboFetch(
   accessToken: string,
@@ -202,7 +212,17 @@ async function qboFetch(
   ) {
     headers.set("Content-Type", "application/json");
   }
-  return fetch(url, { ...init, headers });
+  const resp = await fetch(url, { ...init, headers });
+  // Intuit's intuit_tid uniquely identifies every API call; logging it
+  // (with no payload data) lets Intuit support trace any issue back.
+  const tid = resp.headers.get("intuit_tid") ?? resp.headers.get("intuit-tid");
+  if (tid) {
+    const op = `${init.method ?? "GET"} ${path.split("?")[0]}`;
+    console.info(
+      `[qbo] op=${op} status=${resp.status} intuit_tid=${tid}`,
+    );
+  }
+  return resp;
 }
 
 export type QboCustomer = {
