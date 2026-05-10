@@ -3,27 +3,39 @@
 /**
  * Soul Files — server actions.
  *
- * Phase 1.7. Surface:
- *   - `upsertSoulFileBody(engagementId, body)` — write the markdown
- *     body. Creates the row if none exists. Leadership-only write
- *     (master_admin / coach / client_lead / client_manager).
+ * Phase 1.7 introduced upserting; Phase 2.6 added OpenAI-based
+ * embeddings; Phase 4.5 (this rewrite) drops the embedding pipeline
+ * and uses Claude directly for cross-engagement search.
+ *
+ * Why the swap: Anthropic doesn't make a public embeddings API, and
+ * Bruce works exclusively with Claude. Rather than maintain a second
+ * AI vendor (OpenAI / Voyage) for one feature, we just give Claude
+ * the candidate Soul Files and ask it to pick the most relevant
+ * snippet. Works for Bruce's scale (up to ~30 Soul Files easily fit
+ * Sonnet's context window) and removes a whole dependency.
+ *
+ * Surface:
+ *   - `upsertSoulFileBody(engagementId, body)` — write the markdown.
+ *     Leadership-only (master_admin / coach / client_lead /
+ *     client_manager).
+ *   - `searchSoulFiles(query, limit?)` — coach-only cross-engagement
+ *     semantic search via Claude.
  *
  * Reads live in `lib/db/queries/soul-files.ts`.
  */
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
+  coaches,
   engagements,
-  soulFileChunks,
   soulFiles,
   type UserProfile,
 } from "@/lib/db/schema";
-import { withEngagementContext } from "@/lib/db/tenant";
-import { embedText } from "@/lib/ai/embeddings";
-import { chunkMarkdown } from "@/lib/ai/chunking";
+import { withEngagementContext, withSystemContext } from "@/lib/db/tenant";
+import { complete } from "@/lib/ai/anthropic";
 
 type Role = UserProfile["role"];
 
@@ -110,71 +122,6 @@ export async function upsertSoulFileBody(
       },
     );
 
-    // Embed the new body for semantic search. Two layers:
-    //   1. Document-level embedding on `soul_files.embedding` — used
-    //      for "most relevant whole document" queries.
-    //   2. Chunk-level embeddings on `soul_file_chunks` — used for
-    //      finer-grained retrieval (most relevant paragraph).
-    // Best-effort — failures log but don't propagate. OPENAI_API_KEY
-    // being unset is the most common skip reason; acceptable.
-    if (data.body.trim().length > 0) {
-      try {
-        const documentVector = await embedText(data.body);
-        const formatted = `[${documentVector.join(",")}]`;
-        await withEngagementContext(
-          profile.orgId,
-          profile.role,
-          data.engagementId,
-          async (tx) => {
-            await tx.execute(
-              sql`UPDATE soul_files
-                  SET embedding = ${formatted}::vector,
-                      embedding_updated_at = now()
-                  WHERE id = ${id}`,
-            );
-          },
-        );
-      } catch (e) {
-        console.error("[soul-file] document embed failed (non-fatal):", e);
-      }
-
-      // Chunk-level. Replace the entire chunk set on each save —
-      // simpler than diffing and Soul Files don't update often enough
-      // to matter cost-wise.
-      try {
-        const chunks = chunkMarkdown(data.body);
-        const chunkVectors = await Promise.all(
-          chunks.map((chunk) => embedText(chunk)),
-        );
-        await withEngagementContext(
-          profile.orgId,
-          profile.role,
-          data.engagementId,
-          async (tx, boundOrgId) => {
-            await tx
-              .delete(soulFileChunks)
-              .where(eq(soulFileChunks.soulFileId, id));
-            for (let i = 0; i < chunks.length; i++) {
-              const formatted = `[${chunkVectors[i].join(",")}]`;
-              await tx.execute(
-                sql`INSERT INTO soul_file_chunks
-                      (soul_file_id, org_id, engagement_id, chunk_index, body, embedding)
-                    VALUES
-                      (${id},
-                       ${boundOrgId},
-                       ${data.engagementId},
-                       ${i},
-                       ${chunks[i]},
-                       ${formatted}::vector)`,
-              );
-            }
-          },
-        );
-      } catch (e) {
-        console.error("[soul-file] chunk embed failed (non-fatal):", e);
-      }
-    }
-
     revalidatePath("/portal/soul-file");
     revalidatePath(`/coach/soul-file/${data.engagementId}`);
     return { ok: true, data: { id } };
@@ -186,11 +133,50 @@ export async function upsertSoulFileBody(
   }
 }
 
-/**
- * Cross-engagement Soul File search by semantic similarity to a
- * natural-language query. Coach-only — uses system context to span
- * tenants. Returns top N results ranked by cosine distance.
- */
+/* ----------------------------- search ----------------------------- */
+
+const SEARCH_SYSTEM = `You are a search engine over a coach's "Soul Files" — long-form context documents written about each of their client engagements. Each Soul File belongs to one engagement and contains:
+
+- Why the engagement exists
+- Where the business is today
+- Where it wants to be in 12 months
+- Strategic backdrop, founders, hard-won learnings
+
+Your job: given a coach's natural-language query and a list of candidate Soul Files (each with its engagement id, name, and body), return the top results most relevant to the query.
+
+Output strict JSON, no prose, no code fences. The shape:
+
+{
+  "results": [
+    {
+      "engagementId": "<the candidate's id>",
+      "engagementName": "<the candidate's name or null>",
+      "snippet": "<a 1-2 sentence pulled-from-body excerpt that directly answers the query>",
+      "reasoning": "<one short clause explaining why this matched>"
+    }
+  ]
+}
+
+Rules:
+- Pick at most the limit specified in the user prompt; fewer is fine if nothing else is relevant.
+- Order by relevance, most relevant first.
+- Snippet MUST be a verbatim or near-verbatim phrase from the source body — do not paraphrase from your own knowledge.
+- If nothing in the candidates matches, return {"results": []}.
+- Never mention candidates that weren't in the input.`;
+
+const searchOutputSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        engagementId: z.string(),
+        engagementName: z.string().nullable(),
+        snippet: z.string(),
+        reasoning: z.string().optional(),
+      }),
+    )
+    .max(20),
+});
+
 export async function searchSoulFiles(
   query: string,
   limit = 5,
@@ -201,6 +187,9 @@ export async function searchSoulFiles(
         engagementId: string;
         engagementName: string | null;
         snippet: string;
+        // Kept as `distance` for backwards-compat with the existing
+        // SoulSearchPanel UI; lower is better, but the values now
+        // come from Claude's ranking (we synthesize 0, 1, 2, …).
         distance: number;
       }>;
     }
@@ -213,82 +202,101 @@ export async function searchSoulFiles(
     return { ok: false, error: "Coach-only." };
   if (!query.trim()) return { ok: true, data: [] };
 
-  let queryVector: number[];
-  try {
-    queryVector = await embedText(query);
-  } catch (e) {
-    return {
-      ok: false,
-      error: `Embedding failed: ${e instanceof Error ? e.message : String(e)}`,
-    };
-  }
-  const formatted = `[${queryVector.join(",")}]`;
-
-  // System context — coaches search across every engagement they own.
-  const { withSystemContext } = await import("@/lib/db/tenant");
-  type Row = {
+  // Load every Soul File for engagements this coach owns.
+  type Candidate = {
     engagementId: string;
     engagementName: string | null;
-    snippet: string;
-    distance: number;
+    body: string;
   };
+  const candidates: Candidate[] = await withSystemContext(async (tx) => {
+    const [coach] = await tx
+      .select({ id: coaches.id })
+      .from(coaches)
+      .where(eq(coaches.userProfileId, profile.userProfileId))
+      .limit(1);
+    if (!coach) return [];
+    const rows = await tx
+      .select({
+        engagementId: soulFiles.engagementId,
+        engagementName: engagements.name,
+        body: soulFiles.body,
+        coachId: engagements.coachId,
+      })
+      .from(soulFiles)
+      .innerJoin(engagements, eq(engagements.id, soulFiles.engagementId));
+    return rows
+      .filter((r) => r.coachId === coach.id && r.body.trim().length > 0)
+      .map((r) => ({
+        engagementId: r.engagementId,
+        engagementName: r.engagementName,
+        body: r.body,
+      }));
+  });
+
+  if (candidates.length === 0) return { ok: true, data: [] };
+
+  // Build the prompt. Cap each body to keep the call bounded for very
+  // long Soul Files; Claude Sonnet has plenty of headroom but no need
+  // to burn tokens unnecessarily.
+  const MAX_BODY_CHARS = 12_000;
+  const userPrompt = [
+    `Query: ${query.trim()}`,
+    "",
+    `Limit: ${Math.max(1, Math.min(limit, 20))}`,
+    "",
+    "Candidates:",
+    ...candidates.map((c, i) => {
+      const truncated =
+        c.body.length > MAX_BODY_CHARS
+          ? c.body.slice(0, MAX_BODY_CHARS) + "\n[…truncated…]"
+          : c.body;
+      return [
+        `--- Candidate ${i + 1} ---`,
+        `Engagement ID: ${c.engagementId}`,
+        `Engagement Name: ${c.engagementName ?? "(unnamed)"}`,
+        "Body:",
+        truncated,
+      ].join("\n");
+    }),
+  ].join("\n");
+
+  let parsed: z.infer<typeof searchOutputSchema>;
   try {
-    // Prefer chunk-level matches when available; fall back to
-    // document-level for engagements that haven't been re-indexed yet.
-    const queryResult = await withSystemContext(async (tx) =>
-      tx.execute(
-        sql`WITH ranked AS (
-              SELECT sfc.engagement_id,
-                     e.name AS engagement_name,
-                     substring(sfc.body for 320) AS snippet,
-                     sfc.embedding <=> ${formatted}::vector AS distance,
-                     ROW_NUMBER() OVER (
-                       PARTITION BY sfc.engagement_id
-                       ORDER BY sfc.embedding <=> ${formatted}::vector
-                     ) AS rn
-                FROM soul_file_chunks sfc
-                INNER JOIN engagements e ON e.id = sfc.engagement_id
-                INNER JOIN coaches c ON c.id = e.coach_id
-                INNER JOIN user_profiles up ON up.id = c.user_profile_id
-               WHERE sfc.embedding IS NOT NULL
-                 AND up.id = ${profile.userProfileId}
-            )
-            SELECT engagement_id AS "engagementId",
-                   engagement_name AS "engagementName",
-                   snippet,
-                   distance
-              FROM ranked
-             WHERE rn = 1
-             ORDER BY distance
-             LIMIT ${limit}`,
-      ),
-    );
-    let rows = (queryResult as unknown as { rows?: Row[] }).rows ?? [];
-    if (rows.length === 0) {
-      // Fallback to document-level when no chunks exist yet.
-      const fallback = await withSystemContext(async (tx) =>
-        tx.execute(
-          sql`SELECT s.engagement_id AS "engagementId",
-                     e.name AS "engagementName",
-                     substring(s.body for 240) AS snippet,
-                     s.embedding <=> ${formatted}::vector AS distance
-              FROM soul_files s
-              INNER JOIN engagements e ON e.id = s.engagement_id
-              INNER JOIN coaches c ON c.id = e.coach_id
-              INNER JOIN user_profiles up ON up.id = c.user_profile_id
-              WHERE s.embedding IS NOT NULL
-                AND up.id = ${profile.userProfileId}
-              ORDER BY s.embedding <=> ${formatted}::vector
-              LIMIT ${limit}`,
-        ),
-      );
-      rows = (fallback as unknown as { rows?: Row[] }).rows ?? [];
-    }
-    return { ok: true, data: rows };
+    const result = await complete({
+      system: SEARCH_SYSTEM,
+      user: userPrompt,
+      model: "claude-sonnet-4-6",
+      maxTokens: 2000,
+      temperature: 0.1,
+    });
+    const cleaned = result.text
+      .trim()
+      .replace(/^```json\s*/i, "")
+      .replace(/^```/, "")
+      .replace(/```$/, "")
+      .trim();
+    parsed = searchOutputSchema.parse(JSON.parse(cleaned));
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: `Search failed: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
+
+  // Filter to candidates we actually own (defensive — Claude shouldn't
+  // hallucinate ids but cheap to enforce).
+  const validIds = new Set(candidates.map((c) => c.engagementId));
+  const safeResults = parsed.results.filter((r) =>
+    validIds.has(r.engagementId),
+  );
+
+  return {
+    ok: true,
+    data: safeResults.slice(0, limit).map((r, i) => ({
+      engagementId: r.engagementId,
+      engagementName: r.engagementName,
+      snippet: r.snippet,
+      distance: i, // synthetic — UI sorts by this
+    })),
+  };
 }

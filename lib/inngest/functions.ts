@@ -2,24 +2,19 @@
  * Inngest functions registered against `inngest`. Each one is a
  * background job; the /api/inngest mount serves them to Inngest cloud.
  *
- * Phase 4. Functions:
+ * Phase 4 + 4.5. Functions:
  *   - dueSoonFlush      — Mon–Fri 09:00 MT email reminder for action
- *                         items due in the next 30h. Mirrors the
- *                         Netlify Scheduled Function from 1.4 (kept
- *                         both in place for now; the Inngest path is
- *                         the long-term home).
- *   - embeddingRefresh  — Nightly. Re-embeds any Soul File whose body
- *                         was updated more than `embedding_updated_at`
- *                         (or has missing chunks).
- *   - adobeOauthRefresh — Hourly. Refreshes Adobe Sign access tokens
- *                         that expire within the next 2 hours.
+ *                         items due in the next 30h.
  *   - firefliesExtract  — Triggered by `bbs.fireflies.attached` event.
- *                         Pulls the transcript + drafts action items
- *                         in the background instead of blocking the
- *                         coach's UI.
+ *                         Pulls the transcript + drafts action items.
+ *
+ * Removed Phase 4.5:
+ *   - embeddingRefresh  — Soul File search no longer uses embeddings;
+ *                         retrieval goes through Claude directly.
+ *   - adobeOauthRefresh — Native e-signing replaced Adobe Sign.
  */
 
-import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, lt } from "drizzle-orm";
 import { inngest } from "@/lib/inngest";
 import {
   actionItems,
@@ -114,43 +109,6 @@ export const dueSoonFlush = inngest.createFunction(
   },
 );
 
-/* -------------------------- embedding refresh -------------------------- */
-
-export const embeddingRefresh = inngest.createFunction(
-  { id: "embedding-refresh" },
-  // 04:00 UTC nightly = 21:00–22:00 MT, well outside Bruce's window.
-  { cron: "0 4 * * *" },
-  async ({ step }) => {
-    const enqueued = await step.run("enqueue", async () => {
-      return withSystemContext(async (tx) => {
-        // `embedding` and `embedding_updated_at` aren't in the Drizzle
-        // schema (pgvector not first-class); use raw SQL.
-        const result = await tx.execute(
-          sql`SELECT id FROM soul_files
-              WHERE embedding IS NULL
-                 OR embedding_updated_at IS NULL
-                 OR updated_at > embedding_updated_at`,
-        );
-        const rows = (result as unknown as { rows?: Array<{ id: string }> }).rows ?? [];
-        return rows.map((r) => r.id);
-      });
-    });
-
-    if (enqueued.length === 0) return { count: 0 };
-
-    // Fan out one event per Soul File so Inngest can re-embed them in
-    // parallel (and retry individually on failure).
-    await step.sendEvent(
-      "fan-out-soul-file-embed",
-      enqueued.map((id) => ({
-        name: "soul-file.embed.requested",
-        data: { soulFileId: id },
-      })),
-    );
-    return { count: enqueued.length };
-  },
-);
-
 /* ------------------------- Fireflies extract ------------------------- */
 
 export const firefliesExtract = inngest.createFunction(
@@ -191,8 +149,4 @@ export const firefliesExtract = inngest.createFunction(
   },
 );
 
-export const allFunctions = [
-  dueSoonFlush,
-  embeddingRefresh,
-  firefliesExtract,
-];
+export const allFunctions = [dueSoonFlush, firefliesExtract];
