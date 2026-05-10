@@ -662,8 +662,11 @@ async function emailSignerByRow(
   });
   if (!ctx) return;
 
-  await sendEmailQuietly(
-    signatureRequestEmail({
+  // Signature requests are transactional and explicitly user-triggered
+  // — they bypass the working-hours guard so the signer doesn't have
+  // to wait until Monday morning to receive their link.
+  await sendEmailQuietly({
+    ...signatureRequestEmail({
       to: ctx.signer.email,
       signerName: ctx.signer.name,
       senderName: ctx.senderName,
@@ -671,7 +674,8 @@ async function emailSignerByRow(
       message: ctx.env.message,
       signUrl: `/sign/${ctx.signer.publicToken}`,
     }),
-  );
+    bypassWorkingHours: true,
+  });
 
   await withSystemContext(async (tx) => {
     const audit = (ctx.env.auditLog as AuditEntry[]) ?? [];
@@ -846,6 +850,7 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
           contentType: "application/pdf",
         },
       ],
+      bypassWorkingHours: true,
     });
   }
 
