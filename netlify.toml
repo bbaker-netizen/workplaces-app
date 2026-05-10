@@ -1,5 +1,8 @@
 [build]
-  command = "pnpm build"
+  # Run pending Drizzle migrations before the Next.js build so the
+  # deployed code never sees a stale schema. The migrate script is a
+  # no-op when DATABASE_URL is unset (preview builds without a DB).
+  command = "node scripts/migrate-on-deploy.mjs && pnpm build"
   publish = ".next"
 
 [build.environment]

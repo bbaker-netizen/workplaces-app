@@ -113,11 +113,19 @@ export function nextValidWorkingMoment(at: Date = new Date()): Date {
 
 /* ------------------------------ send ------------------------------ */
 
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer | Uint8Array | string;
+  contentType?: string;
+};
+
 export type EmailEnvelope = {
   to: string;
   subject: string;
   html: string;
   text: string;
+  /** Optional binary attachments (e.g. signed PDF). Resend handles these. */
+  attachments?: EmailAttachment[];
   /**
    * If true, bypass the working-hours guard and send immediately. Used
    * by the queue flusher (which only runs INSIDE the window) so it
@@ -154,6 +162,18 @@ export async function sendEmail(
       subject: envelope.subject,
       html: envelope.html,
       text: envelope.text,
+      ...(envelope.attachments && envelope.attachments.length > 0
+        ? {
+            attachments: envelope.attachments.map((a) => ({
+              filename: a.filename,
+              content:
+                a.content instanceof Uint8Array
+                  ? Buffer.from(a.content)
+                  : a.content,
+              contentType: a.contentType,
+            })),
+          }
+        : {}),
     });
     if (resp.error) {
       return {

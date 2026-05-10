@@ -1,32 +1,24 @@
 /**
  * PortalNav — top navigation shell for /portal/*.
  *
- * Server component: receives display data via props, renders static nav
- * with the brand wordmark, primary module links, and the sign-out
- * button (Clerk's <SignOutButton> handles its own client logic).
- *
- * Phase 1.2 added: action items.
- * Phase 1.3 added: communication.
- * Phase 1.5 added: documents.
- * Phase 1.6 added: sessions.
- * Phase 1.7 added: soul file.
- * Phase 1.10/1.11/1.12 added: goals, team, methodology resources.
- * Phase 1.14 added: projects.
- * Phase 1.15 added: hiring pipeline.
- * Phase 1.16/1.17/1.18/1.19 added: forms, deliverables, invoices,
- *   subscriptions, embedded apps, courses.
+ * Phase 3.1: nav links are driven by `getEnabledModules` so each
+ * engagement's set of visible modules respects portal_module_
+ * assignments and the viewer's role.
  */
 
 import Link from "next/link";
 import { SignOutButton } from "@clerk/nextjs";
 import { NotificationBell } from "./NotificationBell";
+import type { PortalModule } from "@/lib/modules";
 
 export function PortalNav({
   fullName,
   unreadCount,
+  modules,
 }: {
   fullName: string;
   unreadCount: number;
+  modules: PortalModule[];
 }) {
   return (
     <nav className="border-b border-[#CCCCCC] bg-background">
@@ -37,55 +29,16 @@ export function PortalNav({
         >
           The Builder
         </Link>
-        <div className="hidden sm:flex items-center gap-6">
-          <Link
-            href="/portal/action-items"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Action items
-          </Link>
-          <Link
-            href="/portal/goals"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Goals
-          </Link>
-          <Link
-            href="/portal/projects"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Projects
-          </Link>
-          <Link
-            href="/portal/sessions"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Sessions
-          </Link>
-          <Link
-            href="/portal/communication"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Communication
-          </Link>
-          <Link
-            href="/portal/documents"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Documents
-          </Link>
-          <Link
-            href="/portal/soul-file"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Soul File
-          </Link>
-          <Link
-            href="/portal/team"
-            className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors"
-          >
-            Team
-          </Link>
+        <div className="hidden lg:flex items-center gap-5 flex-wrap max-w-3xl">
+          {modules.slice(0, 8).map((m) => (
+            <Link
+              key={m.key}
+              href={m.href}
+              className="font-sans text-sm text-foreground hover:text-[#2E4057] transition-colors whitespace-nowrap"
+            >
+              {m.label}
+            </Link>
+          ))}
         </div>
         <div className="flex items-center gap-3 sm:gap-4">
           <NotificationBell unreadCount={unreadCount} />
@@ -99,24 +52,17 @@ export function PortalNav({
           </SignOutButton>
         </div>
       </div>
-      <div className="sm:hidden border-t border-[#CCCCCC]">
+      <div className="border-t border-[#CCCCCC]">
         <div className="max-w-5xl mx-auto px-6 py-2 flex gap-5 overflow-x-auto whitespace-nowrap">
-          <Link href="/portal/action-items" className="font-sans text-sm text-foreground">Action items</Link>
-          <Link href="/portal/goals" className="font-sans text-sm text-foreground">Goals</Link>
-          <Link href="/portal/projects" className="font-sans text-sm text-foreground">Projects</Link>
-          <Link href="/portal/deliverables" className="font-sans text-sm text-foreground">Deliverables</Link>
-          <Link href="/portal/hiring" className="font-sans text-sm text-foreground">Hiring</Link>
-          <Link href="/portal/forms" className="font-sans text-sm text-foreground">Forms</Link>
-          <Link href="/portal/courses" className="font-sans text-sm text-foreground">Courses</Link>
-          <Link href="/portal/apps" className="font-sans text-sm text-foreground">Apps</Link>
-          <Link href="/portal/subscriptions" className="font-sans text-sm text-foreground">Subscriptions</Link>
-          <Link href="/portal/invoices" className="font-sans text-sm text-foreground">Invoices</Link>
-          <Link href="/portal/sessions" className="font-sans text-sm text-foreground">Sessions</Link>
-          <Link href="/portal/communication" className="font-sans text-sm text-foreground">Communication</Link>
-          <Link href="/portal/documents" className="font-sans text-sm text-foreground">Documents</Link>
-          <Link href="/portal/soul-file" className="font-sans text-sm text-foreground">Soul File</Link>
-          <Link href="/portal/team" className="font-sans text-sm text-foreground">Team</Link>
-          <Link href="/portal/methodology" className="font-sans text-sm text-foreground">Methodology</Link>
+          {modules.map((m) => (
+            <Link
+              key={m.key}
+              href={m.href}
+              className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground"
+            >
+              {m.label}
+            </Link>
+          ))}
         </div>
       </div>
     </nav>

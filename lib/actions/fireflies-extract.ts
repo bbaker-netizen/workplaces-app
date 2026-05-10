@@ -227,3 +227,103 @@ function matchAssignee(
   if (match) return match.id;
   return null;
 }
+
+/**
+ * System-context variant — invoked by the Inngest background worker
+ * (no Clerk session). Same logic as `extractActionItemsFromFireflies`
+ * minus the role gate, since the Inngest event was emitted by an
+ * already-authorized server action.
+ */
+export async function extractFromFirefliesAsSystem(
+  sessionId: string,
+): Promise<ActionResult<{ created: number }>> {
+  const { withSystemContext } = await import("@/lib/db/tenant");
+
+  const ctx = await withSystemContext(async (tx) => {
+    const [session] = await tx
+      .select()
+      .from(bbsSessions)
+      .where(eq(bbsSessions.id, sessionId))
+      .limit(1);
+    if (!session) throw new Error("Session not found.");
+    if (!session.firefliesRecordingId) {
+      throw new Error("This session has no Fireflies recording id.");
+    }
+    const members = await tx
+      .select({
+        id: userProfiles.id,
+        fullName: userProfiles.fullName,
+        email: userProfiles.email,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.orgId, session.orgId));
+    return { session, members };
+  });
+
+  const transcript = await fetchTranscript(
+    ctx.session.firefliesRecordingId!,
+  );
+  if (!transcript) {
+    return {
+      ok: false,
+      error: "Fireflies didn't return a transcript for that id.",
+    };
+  }
+  const transcriptText = transcriptToPlainText(transcript);
+
+  const result = await complete({
+    system: ACTION_ITEM_EXTRACT_SYSTEM,
+    user: actionItemExtractUserPrompt({
+      meetingTitle: transcript.title,
+      meetingDate: new Date(transcript.date).toISOString().slice(0, 10),
+      transcriptText,
+    }),
+    model: "claude-sonnet-4-6",
+    maxTokens: 4000,
+    temperature: 0.1,
+  });
+
+  let parsedOutput: z.infer<typeof llmOutputSchema>;
+  try {
+    const cleaned = result.text
+      .trim()
+      .replace(/^```json\s*/i, "")
+      .replace(/^```/, "")
+      .replace(/```$/, "")
+      .trim();
+    parsedOutput = llmOutputSchema.parse(JSON.parse(cleaned));
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Couldn't parse extractor output: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    };
+  }
+
+  let created = 0;
+  await withSystemContext(async (tx) => {
+    for (const item of parsedOutput.items) {
+      const assigneeId = item.assigneeName
+        ? matchAssignee(item.assigneeName, ctx.members)
+        : null;
+      await tx.insert(actionItems).values({
+        orgId: ctx.session.orgId,
+        engagementId: ctx.session.engagementId,
+        title: item.title,
+        description: item.description ?? null,
+        status: "draft",
+        assigneeUserProfileId: assigneeId,
+        dueDate: item.dueDate ? new Date(item.dueDate) : null,
+        revenueImpact: item.revenueImpact,
+        marginImpact: item.marginImpact,
+        confidenceFlag: item.confidence,
+        firefliesTranscriptId: ctx.session.firefliesRecordingId,
+        bbsSessionId: ctx.session.id,
+        createdBy: "claude",
+      });
+      created += 1;
+    }
+  });
+  return { ok: true, data: { created } };
+}

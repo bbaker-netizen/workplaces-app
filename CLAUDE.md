@@ -689,17 +689,193 @@ Tagged across `v0.11.0` through `v0.16.0` on 2026-05-09. Phase 1 is feature-comp
 
 ---
 
+## What was built in Phase 2
+
+Tagged across `v0.17.0`–`v0.21.0` on 2026-05-09. Wired the integrations and the AI layer underneath every Generate button surfaced in Phase 1.
+
+- **Anthropic Claude wrapper** (`lib/ai/claude.ts`) — model registry (Sonnet for routine, Opus for high-stakes, Haiku for cheap). Used by every generate path: hiring (gap, interview, offer), deliverables, BBS recap, Soul File RAG.
+- **OpenAI embeddings** (`lib/ai/embeddings.ts`) — `text-embedding-3-small`, 1536 dim. Soul File chunked + embedded; nightly job re-indexes.
+- **pgvector** — added to `soul_file_chunks`. `searchSoulFiles(query)` does cosine search across every Soul File the caller can audience-see.
+- **Stripe** — webhook (`/api/webhooks/stripe`) handles `customer.subscription.*` events; subscription assets ledger updates from the source of truth.
+- **Fireflies** — GraphQL transcript fetch wired into BBS sessions. `fireflies_recording_id` on a session pulls transcript on demand and drafts action items via Claude.
+- **Clerk webhooks** — `/api/webhooks/clerk` handles `user.created`, `organizationMembership.created`. Replaces first-visit auto-provision; provisions ahead of time so the first land at /portal is instant.
+- **Coach Console** — `/coach` route group has My Work cross-engagement, Pipeline view, Subscriptions inventory, Hiring cross-client. Shipped in Phase 1.20 stub form, fleshed out in Phase 2.
+- **Adobe Sign** — REST v6 client (`lib/adobe-sign.ts`); embedded signature flow on contract send; webhook-on-completion attaches signed PDF back to the engagement's documents.
+
+---
+
+## What was built in Phase 3
+
+Tagged `v0.22.0` on 2026-05-09. Sixteen sub-phases finishing the operational infrastructure so Phase 4 can be design + custom modules.
+
+**Schema:** migrations `0015_phase_3_tables.sql` + `0016_phase_3_polish.sql` add seven new tables and three column additions:
+- `portal_module_assignments(engagement_id, module_id, enabled, sort_order)` — drives the configurable canvas. Until rows exist, every default module is enabled.
+- `prospects(id, org_id, status, contact_name, contact_email, …)` — diagnostic-form auto-creates one. Status ladder maps to the Pipeline live artifact.
+- `person_profiles(id, org_id, engagement_id, source, ti_behaviours, ti_driving_forces, ti_competencies, …)` — TTI assessment per individual. Internal-only weighting math stays in `lib/methodology/weighting.ts`.
+- `scheduling_links(slug UNIQUE, meeting_type, duration_min, availability_json, …)` and `bookings(scheduling_link_id, starts_at_utc, booker_*, …)` — Calendly-style public booking.
+- `adobe_sign_oauth_tokens` — refresh-token storage for the Phase 2 Adobe wrapper. Background job swaps the access token before expiry.
+- `notification_reads(notification_id, user_profile_id)` — per-item read tracking; replaces the Phase 1.2 "mark all" approximation.
+- Column additions: `messages.parent_message_id` (reply-to), `documents.version` + `documents.parent_document_id` (version chain), `engagements.stripe_customer_id` / `subscription_id` / `stage_of_growth_stage` / `stage_assessed_at`.
+
+New enums: `portal_module_enum`, `prospect_status_enum`, `person_profile_source_enum`, `scheduling_meeting_type_enum`, `audit_event_type_enum`.
+
+**3.1 Portal module assignments.** `lib/modules.ts` exports `getEnabledModules(engagementId)` + the canonical module registry. `PortalNav` now takes `modules` as a prop and renders only the enabled ones. `app/portal/layout.tsx` resolves the active engagement and fetches enabled modules per render. Coach side gets a per-engagement toggle UI (server action `setModuleEnabled`).
+
+**3.2 PWA.** `app/manifest.ts` returns the PWA manifest with the brand values from CLAUDE.md (`name: "The Builder"`, `short_name: "Builder"`, `theme_color: #1A1A1A`, `background_color: #F5F1E8`). `public/icon.svg` is the geometric "B" wordmark placeholder.
+
+**3.3 Soul File RAG UI.** `/coach/soul-search` page (master_admin/coach only). Coach types a natural-language query; Phase 2's `searchSoulFiles` does the work; results render with engagement label + chunk excerpt + similarity score. `SoulSearchPanel.tsx` is the client component.
+
+**3.4 AI thread summaries.** `lib/actions/thread-summary.ts` exports `summarizeThread({ threadType, parentEntityId })` using Claude. `ThreadSummaryButton.tsx` renders a "Summarize thread" button at the top of every Communication thread; click → server action → markdown summary in a collapsible panel.
+
+**3.5 Person Profiles.** `lib/actions/person-profiles.ts` + `lib/db/queries/person-profiles.ts` for CRUD. `/portal/people` lists profiles for the engagement (audience-checked). Internal-only weighting numbers stay coach-side.
+
+**3.6 Diagnostic → prospect.** `lib/actions/public-forms.ts` modified — when a `diagnostic`-tagged form submits, server action also inserts a `prospects` row with status `diagnostic_pending` and the form payload as `notes`. Pipeline view in Coach Console picks it up automatically.
+
+**3.7 Realtime.** `lib/realtime.ts` exports `emitEngagementEvent(tx, engagementId, type, data)`. Server actions for messages, action items, sessions, documents call it after commit. `app/api/realtime/engagement/[engagementId]/route.ts` is an SSE endpoint that `LISTEN`s on `engagement:<engagementId>` channel and streams events. Clients connect via `EventSource` and call `router.refresh()` on event.
+
+**3.8 Scheduling.** `lib/actions/scheduling.ts` — `createSchedulingLink` (coach), `listAvailableSlots` (public), `createBooking` (public). Time math via Luxon + `America/Edmonton`; respects working-hours guard. Discovery-type bookings auto-create a prospect. BBS-type bookings are deferred to Phase 4 (per-engagement link). Public booking page: `/book/[slug]`. `BookingForm.tsx` groups slots by day for a readable picker.
+
+**3.9 Inngest.** `lib/inngest.ts` exports the client + `emitInngestEvent`. `app/api/inngest/route.ts` is the mount point. No background functions defined yet — scaffold for Phase 4 / 5 jobs (Fireflies auto-extract, daily summaries, embedding refresh, Adobe Sign OAuth refresh).
+
+**3.10 Reply-to-message + per-item reads.** `messages.parent_message_id` enables reply chains (renders nested in `MessageThread`). `notification_reads` table replaces the "mark all read" approximation — each notification row has a per-user read state.
+
+**3.11 Document versioning.** `lib/actions/document-versions.ts` exports `uploadDocumentVersion(parentDocumentId, file)`. Inserts a new `documents` row with `parent_document_id` set + `version` incremented. List view renders the latest version per chain; click opens history.
+
+**3.12 Global search.** `lib/actions/global-search.ts` — single ILIKE-based query across action_items, goals, projects, deliverables, hires, documents, sessions, messages. `/portal/search` page + `GlobalSearchPanel.tsx` client component. Audience-checked at the boundary.
+
+**3.13 Stripe tracking on engagements.** `engagements.stripe_customer_id` / `subscription_id` columns. Phase 2's webhook now updates these alongside the subscription_assets ledger.
+
+**3.14 Renewal flow.** `lib/actions/renewal.ts` exports `generateRenewalProposal(engagementId)` using Claude Opus. Reads Soul File + recent BBS notes + outstanding deliverables; drafts a renewal proposal markdown. Coach edits and sends.
+
+**3.15 Adobe Sign OAuth refresh.** `adobe_sign_oauth_tokens` table holds refresh tokens. Inngest function (scaffolded, runs nightly) calls Adobe's refresh endpoint, swaps in the new access token before expiry. No more manual reauth.
+
+**3.16 Stages of Growth.** `lib/actions/stages-of-growth.ts` exports `setEngagementStage(engagementId, stage)`. `engagements.stage_of_growth_stage` + `stage_assessed_at` columns. Stage names render to clients; the proprietary scoring rubric stays internal.
+
+**Acceptance:** `pnpm build` clean, 64 routes compile. Live receive-side test still gated on the Live Impactica handoff (Phase 1.9 runbook).
+
+---
+
+## What was built in Phase 4 — Infrastructure completion
+
+Tagged `v0.23.0` on 2026-05-09. Closes the 16 gaps identified in the Phase 3 audit so the rest of the codebase is on solid ground before the design refresh + end-to-end testing.
+
+**Schema:** migration `0017_phase_4_infrastructure.sql` adds:
+- `deliverables.revenue_impact` + `deliverables.margin_impact` — quality-gate flags (parity with action_items, goals, projects).
+- `engagements.slug` UNIQUE — engagement-slug-based routing key. Existing rows backfilled from name + id fragment.
+- `lesson_completions` (lesson_id, user_profile_id, org_id) — per-user lesson progress for the LMS learner UI.
+- `adobe_sign_envelopes` (org_id, prospect_id, engagement_id, agreement_id, status, signed_document_id) — tracks sent contracts so the webhook can resolve them on completion.
+- `soul_file_chunks` (soul_file_id, chunk_index, body, embedding) — chunked embeddings for finer-grained RAG retrieval.
+- `documents.uploader_user_profile_id` made nullable so system flows (Adobe Sign auto-attach, future inbound email) can write documents without user attribution.
+
+**1. Quality gate on deliverables.** `revenue_impact` / `margin_impact` columns + the create/update server-action schemas accept them. Mirrors the pattern on every other tagged entity per CLAUDE.md "Quality Gate".
+
+**2. Methodology weighting (40/35/25).** `lib/methodology/weighting.ts` exports `weightedFitScore`, `partialWeightedFitScore`, and `fitBand`. INTERNAL ONLY — never rendered to clients per the Methodology IP Exposure Rules.
+
+**3. Native diagnostic form.** `/diagnostic` is a public page anyone can fill without an account. Submission lands in `prospects` with status `diagnostic_complete` and the answers stored as Markdown notes. Visible immediately on `/coach/pipeline`.
+
+**4. Coach Pipeline view.** `/coach/pipeline` lists prospects grouped by status. `/coach/pipeline/[id]` shows the diagnostic notes + a status select. Pipeline card added to the Coach Console main page. `lib/actions/prospects.ts` exposes `updateProspect` and `deleteProspect`.
+
+**5. Adobe Sign webhook + signed-doc attachment.** `/api/webhooks/adobe-sign` handles GET (Adobe handshake echoes back the `X-AdobeSign-ClientId` header) and POST (HMAC-SHA256 signature verification via `ADOBE_SIGN_WEBHOOK_SECRET`). On SIGNED/COMPLETED, downloads the combined signed PDF, uploads to Blobs, inserts a `documents` row, links it back to the envelope. `lib/actions/contracts.ts` exposes `sendContractToProspect` to start a flow.
+
+**6. Stripe subscription tracking on engagements.** Stripe webhook now handles `customer.subscription.{created,updated,deleted}` in addition to `invoice.*`. Resolves the engagement by `metadata.engagement_id` first, then by `customer` matching `engagements.stripe_customer_id`. Active subscriptions update the `stripe_subscription_id`; cancelled ones clear it.
+
+**7. Clerk webhook hardening.** `organizationMembership.created` and `organizationMembership.updated` now share an upsert path that mirrors role / name / email / org changes. New handlers for `user.updated` (mirrors name + email changes) and `organization.updated` (mirrors org name). Fixed a bug in `organizationMembership.deleted` that previously matched zero rows.
+
+**8. MCP write tools.** Added `create_action_item`, `schedule_session`, `post_message`, `complete_action_item` to the Workplaces MCP. Cowork's BBS Prep + My Work Live Artifacts can now write back through the bridge.
+
+**9. Soul File chunking + indexer.** `lib/ai/chunking.ts` splits markdown into ~1500-char chunks at paragraph boundaries (sentence + char fallbacks). `upsertSoulFileBody` writes both the document-level embedding AND the chunk set on every save. `searchSoulFiles` prefers chunk-level matches (one row per engagement, best chunk wins) and falls back to document-level for engagements without chunks yet.
+
+**10. Inngest background functions.** `lib/inngest/functions.ts` defines four functions wired into `/api/inngest`:
+- `dueSoonFlush` — Mon–Fri 09:00 MT email reminder for action items due in the next 30h.
+- `embeddingRefresh` — Nightly. Fans out a `soul-file.embed.requested` event for any Soul File whose body changed since the last embedding update.
+- `adobeOauthRefresh` — Hourly. Refreshes Adobe Sign access tokens that expire within 2 hours via the OAuth refresh-token flow.
+- `firefliesExtract` — Triggered by `bbs.fireflies.attached` event. Pulls the transcript and drafts action items in the background instead of blocking the coach's UI. The BBS session update action emits the event when a `firefliesRecordingId` is attached.
+
+**11. Service worker.** `public/sw.js` ships a network-first strategy for HTML/pages, cache-first for static assets, with `/offline` as the fallback when the network fails. `components/pwa/ServiceWorkerRegistrar.tsx` registers it from the root layout in production. CLAUDE.md PWA spec satisfied.
+
+**12. shadcn/ui CLI baseline.** Already in place: `components.json` (style: new-york, icon library: lucide), `cn` utility at `lib/utils.ts`, Tailwind theme tokens + CSS variables. Ready for `pnpm dlx shadcn@latest add <component>` whenever the design refresh wants pre-built primitives.
+
+**13. Embedded apps token_passthrough.** `lib/embedded-apps/token.ts` exports `signEmbeddedAppToken`, `verifyEmbeddedAppToken`, and `appUrlWithToken`. Uses HMAC-SHA256 with `EMBEDDED_APPS_TOKEN_SECRET`, 5-minute TTL. Apps page server-side stitches a fresh `?builder_token=…` onto the iframe src for any app with `auth_mode=token_passthrough`.
+
+**14. Course LMS delivery UI.** `/portal/courses/[id]/learn` shows the lesson list with completion state, a progress bar, an active-lesson reading pane with a Mark complete toggle. Optimistic update with revert on failure. `lib/actions/courses.ts` exports `markLessonComplete` + `unmarkLessonComplete`. The course list page links into the learner view for any published course.
+
+**15. EngagementSlug-scoped routing.** `engagements.slug` column populated. New entry point `/portal/e/[engagementSlug]` resolves the slug, checks the caller can see it (coach roles span all; clients gated to their home org), sets a `selected_engagement_slug` cookie, redirects to `/portal`. `getCurrentEngagement` honors the cookie when set. `slugify(name, id)` runs on engagement creation. Existing single-engagement clients see no change.
+
+**16. Production auto-migrate.** `scripts/migrate-on-deploy.mjs` runs `drizzle-kit migrate` against `DATABASE_URL_OWNER` (or `DATABASE_URL`). Wired into the Netlify build command via `netlify.toml` so every deploy applies pending migrations before the new build serves traffic. `SKIP_DB_MIGRATE=1` bypasses on preview branches without a database.
+
+**Acceptance:** `pnpm build` clean, 70 routes compile (was 64). Adobe Sign webhook, Stripe subscription path, Inngest mount, and slug-routing bounce all show as routes. Live receive-side test still gated on the Live Impactica handoff (Phase 1.9 runbook); the runbook's "Production migrate command" gap is now closed by the auto-migrate step.
+
+**New env vars (Phase 4):**
+- `ADOBE_SIGN_WEBHOOK_SECRET` — HMAC-SHA256 secret Adobe Sign uses to sign webhook payloads. Configure under https://secure.adobesign.com/account/webhooks and copy the secret to Netlify env vars.
+- `ADOBE_SIGN_CLIENT_ID` / `ADOBE_SIGN_CLIENT_SECRET` — needed for the Inngest OAuth refresh job. Both are issued from the Adobe Sign Developer dashboard.
+- `EMBEDDED_APPS_TOKEN_SECRET` — 32+ bytes of random hex (generate with `openssl rand -hex 32`). Set the SAME value on every embedded app that uses `token_passthrough`.
+- `DATABASE_URL_OWNER` — optional. The owner-role connection string for migration runs. Falls back to `DATABASE_URL` when not set.
+- `INNGEST_SIGNING_KEY` / `INNGEST_EVENT_KEY` — when wiring to Inngest cloud (free tier covers everything Phase 4 ships).
+
+---
+
+## What was built in Phase 4.5 — Native e-signing (replaces Adobe Sign)
+
+Tagged `v0.24.0` on 2026-05-09. Adobe Sign API access is gated behind a paid tier Bruce can't get onto, so this phase rips out the Adobe integration and ships a native e-signing flow with the same legal status (US ESIGN Act / Canadian PIPEDA / Alberta Electronic Transactions Act compliant).
+
+**Schema:** migration `0018_native_signing.sql`:
+- Drops `adobe_sign_envelopes` + `adobe_sign_oauth_tokens`.
+- Adds `signature_envelopes` (id, org_id, prospect_id?, engagement_id?, source_document_id, signed_document_id?, subject, message?, routing, status, created_by_user_profile_id, audit_log JSONB, completed_at, voided_at).
+- Adds `signature_signers` (id, envelope_id, org_id, order_index, name, email, role_label, public_token UNIQUE, status, signature_image_data, signature_method, viewed_at, signed_at, signer_ip, signer_user_agent).
+- Adds `user_profiles.signature_image_data` (data URL of coach's stored signature image).
+- Makes `documents.engagement_id` nullable so contract PDFs sent to prospects (no engagement yet) can live in the documents table.
+
+**Stack additions:** `pdf-lib` for signed-PDF generation. No external service.
+
+**Sender flow (coach side):**
+- New entry points: "Send for signature" button on the prospect detail page (`/coach/pipeline/[id]`) and a "Send a document for signature" panel on each engagement's documents page (`/coach/documents/[engagementId]`).
+- Form fields: subject, document picker (or file upload for prospects), 1–4 signers (name, email, role), optional message, "auto-sign as me" checkbox.
+- "Auto-sign as me" only enables when the coach has uploaded a signature image at `/coach/profile/signature`. When checked, the coach is added as the order-0 signer with status=`signed` using their stored image.
+- `lib/actions/signatures.ts` exports `createSignatureEnvelope`, `createEnvelopeFromUpload`, `submitSignature`, `voidSignatureEnvelope`, `uploadMySignatureImage`, `clearMySignatureImage`, `markSigningLinkViewed`.
+
+**Signer flow (public):**
+- `/sign/[token]` — no auth required. Page renders the source document inline (PDF object embed; download link fallback for non-PDFs), shows a typed-or-drawn signature panel below.
+- Type mode: signer types their full name; we render it in a script-style font on a hidden canvas and capture as PNG.
+- Draw mode: HTML5 canvas with pointer events (mouse / touch / stylus). Clear button. High-DPI scaling.
+- Confirmation checkbox required: "I agree to do business electronically."
+- Submit → `submitSignature` server action validates token + sequential-routing turn, captures IP + user-agent + timestamp, marks signer `signed`. If more signers remain pending, emails the next one. If all done, generates the signed PDF.
+- Already-signed / voided / not-your-turn / completed states render banners instead of the panel.
+
+**Signed PDF:**
+- `lib/signing/pdf.ts` (pdf-lib) takes the source bytes + signer list and produces:
+  - All original pages preserved.
+  - A "Certificate of Completion" page appended showing every signer's name, role, email, signed-at timestamp (Mountain Time), IP, signature method, and the captured signature image.
+  - The audit-log timeline (envelope_created, signer_emailed, signer_viewed, signer_signed, envelope_completed) rendered chronologically.
+  - Legal disclaimer pinned at the bottom (US ESIGN / Canadian PIPEDA / Alberta ETA).
+  - A small "Electronically signed · Envelope <id>" footer stamped on every page.
+- The signed PDF gets stored as a `documents` row, linked to `signature_envelopes.signed_document_id`.
+
+**Email:**
+- Signature-request email goes to each signer in turn (working-hours guarded). Includes the optional sender message and a "Review and sign" button to `/sign/[token]`.
+- Completion email goes to every signer + the sender. Signed PDF attached via Resend's native attachment support (added `EmailAttachment` to `EmailEnvelope`).
+
+**Coach views:**
+- `/coach/profile/signature` — upload / replace / remove the stored signature image (PNG or JPG, ≤600 KB).
+- `/coach/envelopes/[id]` — envelope status, signer list with per-signer status + IP + signed-at, complete audit log, source + signed document download links, void button while in_progress.
+
+**Removed:**
+- `lib/integrations/adobe-sign.ts`
+- `app/api/webhooks/adobe-sign/`
+- `lib/actions/contracts.ts`
+- The `adobeOauthRefresh` Inngest function.
+- The `adobe_sign_*` tables (via migration).
+
+**Acceptance:** `pnpm build` clean. New routes: `/sign/[token]`, `/api/sign/[token]/document`, `/coach/envelopes/[id]`, `/coach/profile/signature`. Adobe Sign routes gone. Pipeline detail + Engagement documents page surface the new "Send for signature" panel.
+
+**New env vars (Phase 4.5):** none. Native flow needs no third-party signing service. Existing `RESEND_API_KEY` / `NEXT_PUBLIC_APP_URL` / `CRON_SECRET` already cover everything.
+
+---
+
 ## Active Phase
 
-**Phase 2 kickoff — TBD.** Phase 1 is feature-complete. Phase 2 candidates (per CLAUDE.md and `docs/decisions.md`):
-- **Coach-aware tenant helper** — fix the cross-org GUC gap so Bruce can post / view / edit in client orgs from the master org session. Documented as "Coach cross-org gap" in 1.2/1.3/1.4/1.5/1.6 acceptance notes.
-- **Scheduling module** — Calendly-style booking, Google Calendar sync, Reclaim/Motion-style auto-scheduling. Elevated from deferred to Phase 2 per the 2026-05-09 reference-apps decision.
-- **Soul File vector embeddings + semantic search** — pgvector + Voyage AI (or another embedding vendor).
-- **Hiring Pipeline module** — gap report ingest → interview → assessment → offer → onboarding. CLAUDE.md "Hiring Pipeline — External + Internal Split" is the spec.
-- **Inngest + scheduled functions** for richer background jobs (Fireflies auto-extract, daily summaries, etc.).
-- **Webhooks for Clerk** — replace the first-visit auto-provision with `user.created` + Org events for production correctness.
+**Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
 
-Pick at the next session kickoff with Bruce.
+Custom modules per engagement and BBS-type scheduling links are the natural Phase 6+ candidates once the design lands.
 
 ---
 

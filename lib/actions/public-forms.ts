@@ -20,7 +20,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { forms, formSubmissions } from "@/lib/db/schema";
+import { forms, formSubmissions, prospects } from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
@@ -108,13 +108,15 @@ export async function submitPublicForm(
         .select({
           id: forms.id,
           orgId: forms.orgId,
+          type: forms.type,
           isActive: forms.isActive,
         })
         .from(forms)
         .where(eq(forms.publicToken, data.token))
         .limit(1);
       if (!form) throw new Error("Form not found.");
-      if (!form.isActive) throw new Error("This form is no longer accepting responses.");
+      if (!form.isActive)
+        throw new Error("This form is no longer accepting responses.");
       const [row] = await tx
         .insert(formSubmissions)
         .values({
@@ -126,6 +128,27 @@ export async function submitPublicForm(
           answers: data.answers,
         })
         .returning({ id: formSubmissions.id });
+
+      // Diagnostic forms auto-create a Prospect row. Per CLAUDE.md
+      // workflow: "Native diagnostic form; submission auto-creates a
+      // Prospect record." Phase 3.6.
+      if (form.type === "diagnostic" && data.respondentEmail) {
+        const companyGuess =
+          (data.answers as Record<string, unknown>)["company"] ??
+          (data.answers as Record<string, unknown>)["company_name"] ??
+          (data.answers as Record<string, unknown>)["business_name"] ??
+          data.respondentName ??
+          data.respondentEmail;
+        await tx.insert(prospects).values({
+          orgId: form.orgId,
+          companyName: String(companyGuess).slice(0, 200),
+          contactName: data.respondentName ?? null,
+          contactEmail: data.respondentEmail,
+          status: "diagnostic_complete",
+          diagnosticSubmissionId: row.id,
+        });
+      }
+
       return row;
     });
     return { ok: true, data: { submissionId: result.id } };

@@ -262,3 +262,99 @@ export function actionItemDueSoonEmail(
 
   return { to: input.to, subject, html, text };
 }
+
+/* -------------------------------- signing -------------------------------- */
+
+export type SignatureRequestEmailInput = {
+  to: string;
+  signerName: string;
+  senderName: string;
+  envelopeSubject: string;
+  message: string | null;
+  signUrl: string; // /sign/<token>
+};
+
+export function signatureRequestEmail(
+  input: SignatureRequestEmailInput,
+): EmailEnvelope {
+  const url = input.signUrl.startsWith("http")
+    ? input.signUrl
+    : appUrl() + input.signUrl;
+  const subject = `${input.senderName} sent you a document to sign: ${input.envelopeSubject}`;
+  const firstName =
+    input.signerName.split(" ")[0] ?? input.signerName;
+  const messageBlock = input.message
+    ? `<p style="margin:0 0 12px 0;padding:12px;background:#F5F1E8;border-left:3px solid #2E4057;font-style:italic;">${escapeHtml(input.message)}</p>`
+    : "";
+
+  const html = shell({
+    preheader: `${input.senderName} sent you a document to sign.`,
+    heading: "You have a document to sign",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.senderName)}</strong> sent you the following document to review and sign:</p>
+      <p style="margin:0 0 12px 0;font-size:17px;font-weight:700;color:#1A1A1A;">${escapeHtml(input.envelopeSubject)}</p>
+      ${messageBlock}
+      <p style="margin:0 0 12px 0;">The link below opens the document and a signature panel — type or draw your signature, then click Sign. No account required.</p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Review and sign",
+  });
+
+  const text = [
+    `${input.senderName} sent you a document to sign: ${input.envelopeSubject}`,
+    "",
+    input.message ? `Message: ${input.message}` : null,
+    input.message ? "" : null,
+    `Sign here: ${url}`,
+    "",
+    "No account required. Type or draw your signature, then click Sign.",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
+export type SignatureCompletedEmailInput = {
+  to: string;
+  recipientName: string;
+  envelopeSubject: string;
+  envelopeUrl: string; // /coach/envelopes/<id> (for sender) or shared link
+  isSender: boolean;
+};
+
+export function signatureCompletedEmail(
+  input: SignatureCompletedEmailInput,
+): EmailEnvelope {
+  const url = input.envelopeUrl.startsWith("http")
+    ? input.envelopeUrl
+    : appUrl() + input.envelopeUrl;
+  const subject = `Signed: ${input.envelopeSubject}`;
+  const firstName =
+    input.recipientName.split(" ")[0] ?? input.recipientName;
+
+  const html = shell({
+    preheader: "Everyone has signed. The signed copy is attached.",
+    heading: "All signed.",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
+      <p style="margin:0 0 12px 0;">Every signer has completed <strong>${escapeHtml(input.envelopeSubject)}</strong>. The fully-signed copy is attached and stored in your portal for the record.</p>
+      ${
+        input.isSender
+          ? `<p style="margin:0 0 12px 0;">You can view the full audit trail in the envelope detail page below.</p>`
+          : `<p style="margin:0 0 12px 0;">Keep this email for your records — the attached PDF includes the certificate of completion with the audit trail.</p>`
+      }
+    `,
+    buttonHref: url,
+    buttonLabel: input.isSender ? "View envelope" : "Open document",
+  });
+
+  const text = [
+    `All signers have completed "${input.envelopeSubject}".`,
+    "",
+    `Open: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}

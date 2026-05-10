@@ -64,8 +64,13 @@ export async function POST(req: Request): Promise<Response> {
       case "invoice.voided":
         await upsertInvoiceFromStripe(event.data.object as Stripe.Invoice);
         break;
-      // Subscription events — noted; tracking in engagements lands in
-      // Phase 2.2b.
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted":
+        await upsertSubscriptionOnEngagement(
+          event.data.object as Stripe.Subscription,
+        );
+        break;
       default:
         break;
     }
@@ -138,5 +143,67 @@ async function upsertInvoiceFromStripe(inv: Stripe.Invoice): Promise<void> {
     } else {
       await tx.insert(invoices).values(values);
     }
+  });
+}
+
+/**
+ * Mirror subscription state onto the engagement row. The engagement
+ * is resolved by `metadata.engagement_id` (set when the subscription
+ * is created from the app) or — failing that — by `customer` matching
+ * a stored `stripe_customer_id`.
+ *
+ * Status is normalized via the subscription's status string so the
+ * UI can render canonical labels. Cancelled/incomplete trigger
+ * clearing the active subscription_id for clarity.
+ */
+async function upsertSubscriptionOnEngagement(
+  sub: Stripe.Subscription,
+): Promise<void> {
+  const metadataEngagementId =
+    (sub.metadata?.engagement_id ?? "").trim() || null;
+  const customerId =
+    typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
+  if (!metadataEngagementId && !customerId) {
+    console.warn(
+      `[stripe-webhook] subscription ${sub.id} has no engagement_id metadata or customer; skipping.`,
+    );
+    return;
+  }
+
+  await withSystemContext(async (tx) => {
+    let engagementId: string | null = null;
+    if (metadataEngagementId) {
+      const [eng] = await tx
+        .select({ id: engagements.id })
+        .from(engagements)
+        .where(eq(engagements.id, metadataEngagementId))
+        .limit(1);
+      if (eng) engagementId = eng.id;
+    }
+    if (!engagementId && customerId) {
+      const [eng] = await tx
+        .select({ id: engagements.id })
+        .from(engagements)
+        .where(eq(engagements.stripeCustomerId, customerId))
+        .limit(1);
+      if (eng) engagementId = eng.id;
+    }
+    if (!engagementId) {
+      console.warn(
+        `[stripe-webhook] subscription ${sub.id} could not be matched to any engagement; skipping.`,
+      );
+      return;
+    }
+    const isActive =
+      sub.status === "active" ||
+      sub.status === "trialing" ||
+      sub.status === "past_due";
+    await tx
+      .update(engagements)
+      .set({
+        stripeCustomerId: customerId ?? undefined,
+        stripeSubscriptionId: isActive ? sub.id : null,
+      })
+      .where(eq(engagements.id, engagementId));
   });
 }

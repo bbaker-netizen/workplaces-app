@@ -351,6 +351,172 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     },
   );
 
+  /* ----------------------------- WRITE TOOLS (Phase 4) ----------------------------- */
+
+  server.tool(
+    "create_action_item",
+    "Create a published action item on an engagement. Assignee defaults to the calling coach if omitted. Returns the new id.",
+    {
+      engagementId: z.string().uuid(),
+      title: z.string().min(1).max(500),
+      description: z.string().max(20000).optional(),
+      dueDate: z
+        .string()
+        .datetime()
+        .optional()
+        .describe("ISO 8601 timestamp"),
+      assigneeUserProfileId: z.string().uuid().optional(),
+      revenueImpact: z.boolean().default(false),
+      marginImpact: z.boolean().default(false),
+    },
+    async ({
+      engagementId,
+      title,
+      description,
+      dueDate,
+      assigneeUserProfileId,
+      revenueImpact,
+      marginImpact,
+    }) => {
+      const result = await withSystemContext(async (tx) => {
+        const [eng] = await tx
+          .select({ id: engagements.id, orgId: engagements.orgId })
+          .from(engagements)
+          .where(eq(engagements.id, engagementId))
+          .limit(1);
+        if (!eng) throw new Error("Engagement not found.");
+        const [row] = await tx
+          .insert(actionItems)
+          .values({
+            orgId: eng.orgId,
+            engagementId: eng.id,
+            title,
+            description: description ?? null,
+            status: "open",
+            dueDate: dueDate ? new Date(dueDate) : null,
+            assigneeUserProfileId:
+              assigneeUserProfileId ?? auth.coachUserProfileId,
+            createdBy: "coach",
+            revenueImpact,
+            marginImpact,
+          })
+          .returning({ id: actionItems.id });
+        return row;
+      });
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ id: result.id }, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "schedule_session",
+    "Schedule a BBS session on an engagement. Returns the new session id.",
+    {
+      engagementId: z.string().uuid(),
+      scheduledAt: z
+        .string()
+        .datetime()
+        .describe("ISO 8601 timestamp (UTC) for the session start"),
+      type: z.enum(["in_person", "virtual"]),
+      notes: z.string().max(40000).optional(),
+    },
+    async ({ engagementId, scheduledAt, type, notes }) => {
+      const result = await withSystemContext(async (tx) => {
+        const [eng] = await tx
+          .select({ id: engagements.id, orgId: engagements.orgId })
+          .from(engagements)
+          .where(eq(engagements.id, engagementId))
+          .limit(1);
+        if (!eng) throw new Error("Engagement not found.");
+        const [row] = await tx
+          .insert(bbsSessions)
+          .values({
+            orgId: eng.orgId,
+            engagementId: eng.id,
+            scheduledAt: new Date(scheduledAt),
+            type,
+            status: "scheduled",
+            notes: notes ?? null,
+            createdByUserProfileId: auth.coachUserProfileId,
+          })
+          .returning({ id: bbsSessions.id });
+        return row;
+      });
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ id: result.id }, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "post_message",
+    "Post a message to an engagement thread (engagement_leadership / engagement_team / action_item). Returns the new message id.",
+    {
+      engagementId: z.string().uuid(),
+      threadType: z.enum([
+        "engagement_leadership",
+        "engagement_team",
+        "action_item",
+      ]),
+      parentEntityId: z
+        .string()
+        .uuid()
+        .describe(
+          "For engagement_* threads, the engagement id. For action_item, the action_item id.",
+        ),
+      body: z.string().min(1).max(40000),
+    },
+    async ({ engagementId, threadType, parentEntityId, body }) => {
+      const result = await withSystemContext(async (tx) => {
+        const [eng] = await tx
+          .select({ id: engagements.id, orgId: engagements.orgId })
+          .from(engagements)
+          .where(eq(engagements.id, engagementId))
+          .limit(1);
+        if (!eng) throw new Error("Engagement not found.");
+        const [row] = await tx
+          .insert(messages)
+          .values({
+            orgId: eng.orgId,
+            engagementId: eng.id,
+            authorUserProfileId: auth.coachUserProfileId,
+            parentEntityType: threadType,
+            parentEntityId,
+            body,
+          })
+          .returning({ id: messages.id });
+        return row;
+      });
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ id: result.id }, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "complete_action_item",
+    "Mark an action item as done. Use when the coach reports completion via Cowork.",
+    { actionItemId: z.string().uuid() },
+    async ({ actionItemId }) => {
+      await withSystemContext(async (tx) => {
+        await tx
+          .update(actionItems)
+          .set({ status: "done" })
+          .where(eq(actionItems.id, actionItemId));
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      };
+    },
+  );
+
   /* ----------------------------- recent activity ----------------------------- */
   server.tool(
     "list_recent_activity",

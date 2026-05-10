@@ -8,6 +8,14 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { coaches, engagements, orgs } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 
+function slugify(name: string, id: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base.length > 0 ? `${base}-${id.slice(0, 6)}` : id.slice(0, 12);
+}
+
 /**
  * Server action: create a new engagement and invite its client lead.
  *
@@ -183,6 +191,7 @@ export async function createEngagementAction(
         coachId: callerCoach.id,
         type: engagementType,
         name: engagementName,
+        slug: slugify(engagementName, newEngagementId),
         startDate: new Date(startDate),
       });
     });

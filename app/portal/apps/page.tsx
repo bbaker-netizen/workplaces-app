@@ -3,6 +3,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementEmbeddedApps } from "@/lib/db/queries/embedded-apps";
 import { EmbeddedAppList } from "@/components/embedded-apps/EmbeddedAppList";
+import { appUrlWithToken } from "@/lib/embedded-apps/token";
 
 export default async function PortalAppsPage() {
   const profile = await ensureUserProfile();
@@ -35,7 +36,20 @@ export default async function PortalAppsPage() {
           netlifyProjectId: a.netlifyProjectId,
           displayName: a.displayName,
           description: a.description,
-          appUrl: a.appUrl,
+          // For token_passthrough auth mode, sign a fresh short-lived
+          // token and stitch it onto the URL the iframe loads. Tokens
+          // expire in 5 minutes; refresh strategy on the embedded app
+          // side is up to that app (it can request a new token via
+          // a postMessage round-trip if needed).
+          appUrl:
+            a.authMode === "token_passthrough"
+              ? appUrlWithToken(a.appUrl, {
+                  engagementId: engagement.id,
+                  userProfileId: profile.userProfileId,
+                  email: profile.email,
+                  role: profile.role,
+                })
+              : a.appUrl,
           authMode: a.authMode,
           isVisible: a.isVisible,
         }))}

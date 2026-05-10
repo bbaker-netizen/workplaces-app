@@ -26,6 +26,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -116,6 +117,48 @@ export const goalStatusEnum = pgEnum("goal_status", [
   "achieved",
   "missed",
   "abandoned",
+]);
+
+// ---------- Phase 3 enums ----------
+
+export const portalModuleEnum = pgEnum("portal_module", [
+  "action_items",
+  "goals",
+  "projects",
+  "sessions",
+  "soul_file",
+  "deliverables",
+  "communication",
+  "documents",
+  "courses",
+  "forms",
+  "team",
+  "invoices",
+  "methodology",
+  "embedded_apps",
+  "subscriptions",
+  "hiring",
+]);
+
+export const prospectStatusEnum = pgEnum("prospect_status", [
+  "diagnostic_pending",
+  "diagnostic_complete",
+  "proposal_sent",
+  "contract_sent",
+  "contract_signed",
+  "onboarded",
+  "lost",
+]);
+
+export const personProfileSourceEnum = pgEnum("person_profile_source", [
+  "tti_trimetrix_hd",
+  "manual",
+]);
+
+export const schedulingMeetingTypeEnum = pgEnum("scheduling_meeting_type", [
+  "discovery",
+  "bbs",
+  "ad_hoc",
 ]);
 
 // ---------- Phase 2 audit log ----------
@@ -279,6 +322,9 @@ export const userProfiles = pgTable(
     email: text("email").notNull(),
     fullName: text("full_name").notNull(),
     role: roleEnum("role").notNull(),
+    // Phase 4.5: stored signature image (data:image/png;base64,…) for
+    // coaches who pre-apply their signature when creating envelopes.
+    signatureImageData: text("signature_image_data"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -335,12 +381,18 @@ export const engagements = pgTable(
     startDate: timestamp("start_date", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     endDate: timestamp("end_date", { withTimezone: true }),
+    stripeCustomerId: text("stripe_customer_id"),
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    stageOfGrowthStage: bigint("stage_of_growth_stage", { mode: "number" }),
+    stageAssessedAt: timestamp("stage_assessed_at", { withTimezone: true }),
+    slug: text("slug"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     orgIdx: index("engagements_org_idx").on(t.orgId),
     coachIdx: index("engagements_coach_idx").on(t.coachId),
+    slugIdx: uniqueIndex("engagements_slug_idx").on(t.slug),
   })
 );
 
@@ -710,6 +762,10 @@ export const messages = pgTable(
       .notNull()
       .references(() => userProfiles.id),
     mentions: jsonb("mentions").notNull().default(sql`'[]'::jsonb`),
+    parentMessageId: uuid("parent_message_id").references(
+      (): AnyPgColumn => messages.id,
+      { onDelete: "set null" },
+    ),
     editedAt: timestamp("edited_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -784,16 +840,21 @@ export const documents = pgTable(
     orgId: uuid("org_id")
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
-    engagementId: uuid("engagement_id")
-      .notNull()
-      .references(() => engagements.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id").references(() => engagements.id, {
+      onDelete: "cascade",
+    }),
     blobKey: text("blob_key").notNull().unique(),
     originalFilename: text("original_filename").notNull(),
     fileType: text("file_type").notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
-    uploaderUserProfileId: uuid("uploader_user_profile_id")
-      .notNull()
-      .references(() => userProfiles.id),
+    uploaderUserProfileId: uuid("uploader_user_profile_id").references(
+      () => userProfiles.id,
+    ),
+    version: bigint("version", { mode: "number" }).notNull().default(1),
+    parentDocumentId: uuid("parent_document_id").references(
+      (): AnyPgColumn => documents.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1006,6 +1067,8 @@ export const deliverables = pgTable(
       onDelete: "set null",
     }),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    revenueImpact: boolean("revenue_impact").notNull().default(false),
+    marginImpact: boolean("margin_impact").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1237,6 +1300,423 @@ export const enrollments = pgTable(
   }),
 );
 
+/**
+ * `soul_file_chunks` — chunked embeddings for Soul Files. Phase 4.
+ *
+ * Each row is one ~1500-char chunk of a Soul File body, with its own
+ * embedding. Replaces the document-level embedding for retrieval
+ * accuracy without removing it (the top-level `soul_files.embedding`
+ * column is still used for "most relevant whole document" queries).
+ *
+ * Vector column intentionally omitted from the Drizzle definition —
+ * pgvector isn't a first-class Drizzle type. We read/write via raw
+ * SQL through tx.execute. Drizzle still helps with the structural
+ * columns.
+ */
+export const soulFileChunks = pgTable(
+  "soul_file_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    soulFileId: uuid("soul_file_id")
+      .notNull()
+      .references((): AnyPgColumn => soulFiles.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    chunkIndex: bigint("chunk_index", { mode: "number" }).notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("soul_file_chunks_org_idx").on(t.orgId),
+    soulFileIdx: index("soul_file_chunks_soul_file_idx").on(
+      t.soulFileId,
+      t.chunkIndex,
+    ),
+  }),
+);
+
+/**
+ * `lesson_completions` — per-user lesson progress for the LMS. Phase 4.
+ * One row per (lesson, user) once the user marks the lesson done.
+ * Course progress = COUNT(completions) / COUNT(lessons in course).
+ */
+export const lessonCompletions = pgTable(
+  "lesson_completions",
+  {
+    lessonId: uuid("lesson_id")
+      .notNull()
+      .references(() => lessons.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    completedAt: timestamp("completed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.lessonId, t.userProfileId] }),
+    orgIdx: index("lesson_completions_org_idx").on(t.orgId),
+    userIdx: index("lesson_completions_user_idx").on(t.userProfileId),
+  }),
+);
+
+// ---------- Phase 3 tables ----------
+
+/**
+ * `portal_module_assignments` — which modules a given engagement has
+ * enabled. Per CLAUDE.md the portal is a configurable canvas; this
+ * table makes that real.
+ *
+ * Default behaviour: if no row exists for a given (engagement, module)
+ * pair, that module is ENABLED (the all-on baseline). Adding a row
+ * with `is_enabled=false` hides it. Phase 3 keeps the row-or-no-row
+ * model so existing engagements keep working without migration.
+ */
+export const portalModuleAssignments = pgTable(
+  "portal_module_assignments",
+  {
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    module: portalModuleEnum("module").notNull(),
+    isEnabled: boolean("is_enabled").notNull().default(true),
+    sortOrder: bigint("sort_order", { mode: "number" })
+      .notNull()
+      .default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.engagementId, t.module] }),
+    orgIdx: index("portal_module_assignments_org_idx").on(t.orgId),
+    engagementIdx: index("portal_module_assignments_engagement_idx").on(
+      t.engagementId,
+    ),
+  }),
+);
+
+/**
+ * `prospects` — pre-engagement contacts. The diagnostic intake form
+ * (CLAUDE.md "Native diagnostic form; submission auto-creates a
+ * Prospect record") writes here when filled by an unauthenticated
+ * visitor. Coach reviews, generates proposal, signs contract; when
+ * the contract signs, the prospect gets converted into a real
+ * engagement and the row marked `onboarded`.
+ *
+ * Tenant: lives in the master org. The diagnostic_form_submission_id
+ * (when present) points back at the form_submission for traceability.
+ */
+export const prospects = pgTable(
+  "prospects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    companyName: text("company_name").notNull(),
+    contactName: text("contact_name"),
+    contactEmail: text("contact_email").notNull(),
+    industry: text("industry"),
+    status: prospectStatusEnum("status").notNull().default("diagnostic_pending"),
+    diagnosticSubmissionId: uuid(
+      "diagnostic_submission_id",
+    ).references(() => formSubmissions.id, { onDelete: "set null" }),
+    convertedEngagementId: uuid("converted_engagement_id").references(
+      () => engagements.id,
+      { onDelete: "set null" },
+    ),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("prospects_org_idx").on(t.orgId),
+    statusIdx: index("prospects_status_idx").on(t.status),
+    emailIdx: index("prospects_email_idx").on(t.contactEmail),
+  }),
+);
+
+/**
+ * `person_profiles` — TTI TriMetrix HD assessment per individual.
+ * Per CLAUDE.md domain model, this is a first-class entity. Each row
+ * captures the gap report PDF + extracted summary + raw scores
+ * (internal-only — not visible in client portal per IP exposure rules).
+ */
+export const personProfiles = pgTable(
+  "person_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id").references(() => userProfiles.id, {
+      onDelete: "set null",
+    }),
+    fullName: text("full_name").notNull(),
+    role: text("role"),
+    source: personProfileSourceEnum("source").notNull().default("tti_trimetrix_hd"),
+    assessmentDate: timestamp("assessment_date", { withTimezone: true }),
+    summary: text("summary"),
+    /** Raw DISC, driving forces, competency scores. JSONB so we can
+     * accept whatever shape TTI emits and shape it later. Internal
+     * only — never returned to the client portal. */
+    rawScores: jsonb("raw_scores").notNull().default(sql`'{}'::jsonb`),
+    documentId: uuid("document_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("person_profiles_org_idx").on(t.orgId),
+    engagementIdx: index("person_profiles_engagement_idx").on(t.engagementId),
+    userIdx: index("person_profiles_user_idx").on(t.userProfileId),
+  }),
+);
+
+/**
+ * `scheduling_links` — Calendly-style booking links. Each row defines
+ * a per-coach link with a slug, meeting duration, availability rules,
+ * and a target meeting type (discovery → creates a prospect; bbs →
+ * creates a bbs_session row).
+ *
+ * Phase 3.8: minimal viable booking. Google Calendar sync, conflict
+ * resolution, and AI auto-scheduling are Phase 4+.
+ */
+export const schedulingLinks = pgTable(
+  "scheduling_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    coachUserProfileId: uuid("coach_user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    meetingType: schedulingMeetingTypeEnum("meeting_type")
+      .notNull()
+      .default("discovery"),
+    durationMinutes: bigint("duration_minutes", { mode: "number" })
+      .notNull()
+      .default(30),
+    /** Availability rules: { weekdays: [1..5], startMinute: 510, endMinute: 1080 }
+     * (Mon–Fri, 8:30am–6:00pm Mountain Time by default). Stored as
+     * JSONB so we can iterate without a schema migration. */
+    availability: jsonb("availability").notNull().default(sql`'{}'::jsonb`),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("scheduling_links_org_idx").on(t.orgId),
+    coachIdx: index("scheduling_links_coach_idx").on(t.coachUserProfileId),
+  }),
+);
+
+/**
+ * `bookings` — actual booked time slots. Created when a public
+ * visitor (or authenticated user) books via a scheduling_link.
+ * Bookings against a `bbs` link auto-create a bbs_session row;
+ * `discovery` links auto-create a prospect.
+ */
+export const bookings = pgTable(
+  "bookings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    schedulingLinkId: uuid("scheduling_link_id")
+      .notNull()
+      .references(() => schedulingLinks.id, { onDelete: "cascade" }),
+    bookedAt: timestamp("booked_at", { withTimezone: true }).notNull(),
+    durationMinutes: bigint("duration_minutes", { mode: "number" }).notNull(),
+    bookerName: text("booker_name").notNull(),
+    bookerEmail: text("booker_email").notNull(),
+    bookerCompany: text("booker_company"),
+    notes: text("notes"),
+    bbsSessionId: uuid("bbs_session_id").references(() => bbsSessions.id, {
+      onDelete: "set null",
+    }),
+    prospectId: uuid("prospect_id").references((): AnyPgColumn => prospects.id, {
+      onDelete: "set null",
+    }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("bookings_org_idx").on(t.orgId),
+    linkIdx: index("bookings_link_idx").on(t.schedulingLinkId),
+    bookedAtIdx: index("bookings_booked_at_idx").on(t.bookedAt),
+  }),
+);
+
+/**
+ * `signature_envelopes` — Phase 4.5 native e-signing.
+ *
+ * Replaces the Adobe Sign integration. Each envelope contains one
+ * source document (the contract / NDA / SOW) and one or more signers.
+ * Sequential routing: signer at order_index=0 signs first, then 1, etc.
+ *
+ * `audit_log` is append-only JSON capturing every state transition
+ * with timestamp + actor for the certificate-of-completion page.
+ *
+ * On completion, `signed_document_id` points at a new `documents`
+ * row holding the original PDF + a certificate page.
+ */
+export const signatureEnvelopes = pgTable(
+  "signature_envelopes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    prospectId: uuid("prospect_id").references(
+      (): AnyPgColumn => prospects.id,
+      { onDelete: "set null" },
+    ),
+    engagementId: uuid("engagement_id").references(() => engagements.id, {
+      onDelete: "set null",
+    }),
+    sourceDocumentId: uuid("source_document_id")
+      .notNull()
+      .references((): AnyPgColumn => documents.id, { onDelete: "restrict" }),
+    signedDocumentId: uuid("signed_document_id").references(
+      (): AnyPgColumn => documents.id,
+      { onDelete: "set null" },
+    ),
+    subject: text("subject").notNull(),
+    message: text("message"),
+    routing: text("routing").notNull().default("sequential"),
+    status: text("status").notNull().default("in_progress"),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    auditLog: jsonb("audit_log").notNull().default([]),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("signature_envelopes_org_idx").on(t.orgId),
+    engagementIdx: index("signature_envelopes_engagement_idx").on(
+      t.engagementId,
+    ),
+    prospectIdx: index("signature_envelopes_prospect_idx").on(t.prospectId),
+    statusIdx: index("signature_envelopes_status_idx").on(t.status),
+  }),
+);
+
+/**
+ * `signature_signers` — one row per signer per envelope.
+ *
+ * `public_token` is the URL-safe id used in /sign/[token] links.
+ * `signature_image_data` holds the captured (or pre-applied) signature
+ * as a data: URL — base64 PNG. `signature_method` is one of
+ * "typed" / "drawn" / "uploaded" (the latter when a stored coach
+ * signature is auto-applied).
+ *
+ * Status ladder: pending → viewed → signed | declined.
+ */
+export const signatureSigners = pgTable(
+  "signature_signers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    envelopeId: uuid("envelope_id")
+      .notNull()
+      .references((): AnyPgColumn => signatureEnvelopes.id, {
+        onDelete: "cascade",
+      }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    orderIndex: bigint("order_index", { mode: "number" }).notNull(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    roleLabel: text("role_label"),
+    publicToken: text("public_token").notNull().unique(),
+    status: text("status").notNull().default("pending"),
+    signatureImageData: text("signature_image_data"),
+    signatureMethod: text("signature_method"),
+    viewedAt: timestamp("viewed_at", { withTimezone: true }),
+    signedAt: timestamp("signed_at", { withTimezone: true }),
+    declinedReason: text("declined_reason"),
+    signerIp: text("signer_ip"),
+    signerUserAgent: text("signer_user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    envelopeIdx: index("signature_signers_envelope_idx").on(
+      t.envelopeId,
+      t.orderIndex,
+    ),
+    orgIdx: index("signature_signers_org_idx").on(t.orgId),
+    emailIdx: index("signature_signers_email_idx").on(t.email),
+  }),
+);
+
+/**
+ * `notification_reads` — per-item read tracking on notifications.
+ *
+ * Phase 3.10. The `notifications.read_at` column already covers
+ * "marked all read on visit" (Phase 1.2 helper). This table allows
+ * per-notification read state tracking without modifying the
+ * notifications row in-place — useful when a single notification
+ * is shown across multiple surfaces.
+ *
+ * Composite PK (notification_id, user_profile_id). Phase 3.10b may
+ * fold this into notifications via a JSONB column if multi-surface
+ * isn't needed.
+ */
+export const notificationReads = pgTable(
+  "notification_reads",
+  {
+    notificationId: uuid("notification_id")
+      .notNull()
+      .references(() => notifications.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    readAt: timestamp("read_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.notificationId, t.userProfileId] }),
+    orgIdx: index("notification_reads_org_idx").on(t.orgId),
+  }),
+);
+
 // ---------- Phase 2: audit_log ----------
 
 /**
@@ -1337,3 +1817,21 @@ export type Enrollment = typeof enrollments.$inferSelect;
 export type NewEnrollment = typeof enrollments.$inferInsert;
 export type AuditLog = typeof auditLog.$inferSelect;
 export type NewAuditLog = typeof auditLog.$inferInsert;
+export type PortalModuleAssignment = typeof portalModuleAssignments.$inferSelect;
+export type NewPortalModuleAssignment = typeof portalModuleAssignments.$inferInsert;
+export type Prospect = typeof prospects.$inferSelect;
+export type NewProspect = typeof prospects.$inferInsert;
+export type PersonProfile = typeof personProfiles.$inferSelect;
+export type NewPersonProfile = typeof personProfiles.$inferInsert;
+export type SchedulingLink = typeof schedulingLinks.$inferSelect;
+export type NewSchedulingLink = typeof schedulingLinks.$inferInsert;
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;
+export type SignatureEnvelope = typeof signatureEnvelopes.$inferSelect;
+export type NewSignatureEnvelope = typeof signatureEnvelopes.$inferInsert;
+export type SignatureSigner = typeof signatureSigners.$inferSelect;
+export type NewSignatureSigner = typeof signatureSigners.$inferInsert;
+export type NotificationRead = typeof notificationReads.$inferSelect;
+export type NewNotificationRead = typeof notificationReads.$inferInsert;
+export type LessonCompletion = typeof lessonCompletions.$inferSelect;
+export type NewLessonCompletion = typeof lessonCompletions.$inferInsert;

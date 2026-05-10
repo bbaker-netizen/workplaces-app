@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -32,7 +33,10 @@ export default function RootLayout({
   return (
     <ClerkProvider appearance={builderAppearance}>
       <html lang="en">
-        <body className="font-sans antialiased">{children}</body>
+        <body className="font-sans antialiased">
+          <ServiceWorkerRegistrar />
+          {children}
+        </body>
       </html>
     </ClerkProvider>
   );

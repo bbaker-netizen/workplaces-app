@@ -15,6 +15,7 @@ import {
   CheckSquare,
   CreditCard,
   FileText,
+  Filter,
   Plus,
   Target,
   UserCheck,
@@ -31,6 +32,7 @@ import {
   listCoachSubscriptions,
   listCoachUpcomingSessions,
 } from "@/lib/db/queries/coach-cross-engagement";
+import { listProspects } from "@/lib/db/queries/prospects";
 import { formatSessionTime } from "@/components/sessions/utils";
 
 export default async function CoachConsole() {
@@ -49,6 +51,7 @@ export default async function CoachConsole() {
     deliverables,
     goals,
     subscriptions,
+    prospects,
   ] = await Promise.all([
     listCoachEngagements(),
     listCoachActionItems(),
@@ -58,7 +61,12 @@ export default async function CoachConsole() {
     listCoachDeliverables(),
     listCoachGoals(),
     listCoachSubscriptions(),
+    listProspects(),
   ]);
+
+  const activeProspects = prospects.filter(
+    (p) => p.status !== "onboarded" && p.status !== "lost",
+  );
 
   const now = new Date();
   const myWork = actionItems
@@ -247,6 +255,41 @@ export default async function CoachConsole() {
                     </span>
                     <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
                       {p.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card
+            icon={<Filter className="w-4 h-4" aria-hidden />}
+            title={`Pipeline · ${activeProspects.length}`}
+            href="/coach/pipeline"
+            cta="All prospects"
+          >
+            {activeProspects.length === 0 ? (
+              <p className="font-sans text-sm text-muted-foreground italic">
+                No prospects in flight.
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {activeProspects.slice(0, 5).map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap"
+                  >
+                    <Link
+                      href={`/coach/pipeline/${p.id}`}
+                      className="font-sans text-sm font-bold text-foreground hover:underline underline-offset-4"
+                    >
+                      {p.companyName}
+                    </Link>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                      {p.contactName ?? p.contactEmail}
+                    </span>
+                    <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                      {p.status.replace(/_/g, " ")}
                     </span>
                   </li>
                 ))}

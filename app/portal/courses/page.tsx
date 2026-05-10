@@ -55,7 +55,7 @@ export default async function CoursesPage() {
           {items.map((c) => (
             <li
               key={c.id}
-              className="border border-[#CCCCCC] rounded-md bg-white p-4"
+              className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3"
             >
               <Link
                 href={`/portal/courses/${c.id}`}
@@ -75,6 +75,14 @@ export default async function CoursesPage() {
                   </p>
                 )}
               </Link>
+              {c.isPublished && (
+                <Link
+                  href={`/portal/courses/${c.id}/learn`}
+                  className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md border border-[#2E4057] text-[#2E4057] bg-white hover:bg-[#F5F1E8]"
+                >
+                  Start learning →
+                </Link>
+              )}
             </li>
           ))}
         </ul>

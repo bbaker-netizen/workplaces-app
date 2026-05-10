@@ -24,6 +24,7 @@ import { THREAD_TYPE, type ThreadType } from "@/lib/communication/audience";
 import type { UserProfile } from "@/lib/db/schema";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
+import { ThreadSummaryButton } from "./ThreadSummaryButton";
 
 type Role = UserProfile["role"];
 
@@ -77,6 +78,12 @@ export async function MessageThread({
 
   return (
     <section className="space-y-6">
+      {messages.length >= 3 && (
+        <ThreadSummaryButton
+          threadType={threadType}
+          parentEntityId={parentEntityId}
+        />
+      )}
       <MessageList
         messages={messages}
         reactionsByMessageId={reactionsByMessageId}

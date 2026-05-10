@@ -10,14 +10,19 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listCoachEngagements } from "@/lib/db/queries/engagements";
 import { listEngagementDocuments } from "@/lib/db/queries/documents";
+import { listEnvelopesForEngagement } from "@/lib/db/queries/signatures";
+import { userProfiles } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
 import { DocumentUploadForm } from "@/components/documents/DocumentUploadForm";
 import {
   DocumentList,
   type DocumentRow,
 } from "@/components/documents/DocumentList";
+import { DocumentSigningPanel } from "@/components/signing/DocumentSigningPanel";
 
 export default async function CoachDocumentsPage({
   params,
@@ -34,7 +39,18 @@ export default async function CoachDocumentsPage({
   const engagement = engagements.find((e) => e.id === params.engagementId);
   if (!engagement) notFound();
 
-  const docs = await listEngagementDocuments(engagement.id);
+  const [docs, envelopes, hasStoredSig] = await Promise.all([
+    listEngagementDocuments(engagement.id),
+    listEnvelopesForEngagement(engagement.id),
+    withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({ signatureImageData: userProfiles.signatureImageData })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, profile.userProfileId))
+        .limit(1);
+      return Boolean(row?.signatureImageData);
+    }),
+  ]);
   const rows: DocumentRow[] = docs.map((d) => ({
     id: d.id,
     filename: d.originalFilename,
@@ -84,6 +100,20 @@ export default async function CoachDocumentsPage({
       </header>
 
       <DocumentUploadForm engagementId={engagement.id} />
+
+      <DocumentSigningPanel
+        engagementId={engagement.id}
+        documents={rows.map((r) => ({ id: r.id, filename: r.filename }))}
+        envelopes={envelopes.map((e) => ({
+          id: e.id,
+          subject: e.subject,
+          status: e.status,
+          createdAt: e.createdAt,
+          completedAt: e.completedAt,
+        }))}
+        hasStoredSignature={hasStoredSig}
+      />
+
       <section className="space-y-3">
         <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           All documents

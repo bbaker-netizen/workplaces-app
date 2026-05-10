@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, max } from "drizzle-orm";
+import { and, eq, max } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -8,6 +8,7 @@ import {
   cohorts,
   courses,
   enrollments,
+  lessonCompletions,
   lessons,
   type UserProfile,
 } from "@/lib/db/schema";
@@ -382,6 +383,81 @@ export async function enrollUser(
     );
     revalidatePath(`/portal/courses/${data.courseId}`);
     return { ok: true, data: created };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/* ----------------------------- learner: lesson progress ----------------------------- */
+
+export async function markLessonComplete(
+  lessonId: string,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  const engagementId = await resolveEngagementIdFromRecord(
+    "lessons",
+    lessonId,
+  );
+  if (!engagementId) return { ok: false, error: "Lesson not found." };
+  try {
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx, boundOrgId) => {
+        // Idempotent — composite PK means a re-mark is a no-op.
+        await tx
+          .insert(lessonCompletions)
+          .values({
+            lessonId,
+            userProfileId: profile.userProfileId,
+            orgId: boundOrgId,
+          })
+          .onConflictDoNothing();
+      },
+    );
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+export async function unmarkLessonComplete(
+  lessonId: string,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  const engagementId = await resolveEngagementIdFromRecord(
+    "lessons",
+    lessonId,
+  );
+  if (!engagementId) return { ok: false, error: "Lesson not found." };
+  try {
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        await tx
+          .delete(lessonCompletions)
+          .where(
+            and(
+              eq(lessonCompletions.lessonId, lessonId),
+              eq(lessonCompletions.userProfileId, profile.userProfileId),
+            ),
+          );
+      },
+    );
+    return { ok: true, data: undefined };
   } catch (e) {
     return {
       ok: false,

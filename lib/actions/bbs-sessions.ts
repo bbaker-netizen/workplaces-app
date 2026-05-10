@@ -212,6 +212,15 @@ export async function updateSession(
       },
     );
     revalidateSessionPaths(engagementId, id);
+    // If a fireflies id was just attached, queue the background extract.
+    if (
+      data.firefliesRecordingId !== undefined &&
+      data.firefliesRecordingId !== null &&
+      data.firefliesRecordingId.trim().length > 0
+    ) {
+      const { emitInngestEvent } = await import("@/lib/inngest");
+      await emitInngestEvent("bbs.fireflies.attached", { sessionId: id });
+    }
     return { ok: true, data: undefined };
   } catch (e) {
     return {

@@ -47,6 +47,7 @@ import {
 import { TOMBSTONE_BODY } from "@/lib/communication/tombstone";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { mentionEmail } from "@/lib/email/templates";
+import { emitEngagementEvent } from "@/lib/realtime";
 
 type Role = UserProfile["role"];
 
@@ -257,6 +258,13 @@ export async function createMessage(
             })),
           );
         }
+
+        // Realtime: notify any SSE subscribers on this engagement.
+        await emitEngagementEvent(tx, data.engagementId, "message_created", {
+          messageId: row.id,
+          threadType: data.parentEntityType,
+          parentEntityId: data.parentEntityId,
+        });
 
         return { messageId: row.id, parentTitle, validMentionRecipients };
       },

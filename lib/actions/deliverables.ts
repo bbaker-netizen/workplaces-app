@@ -50,6 +50,8 @@ const createSchema = z.object({
   description: z.string().max(20000).nullable().optional(),
   status: statusEnum.default("not_started"),
   documentId: z.string().uuid().nullable().optional(),
+  revenueImpact: z.boolean().default(false),
+  marginImpact: z.boolean().default(false),
 });
 
 const updateSchema = createSchema.partial().omit({ engagementId: true });

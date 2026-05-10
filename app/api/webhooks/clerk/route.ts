@@ -30,7 +30,7 @@
 
 import { Webhook } from "svix";
 import { NextResponse } from "next/server";
-import { eq, and, isNull, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import {
   actionItems,
   orgs,
@@ -71,16 +71,30 @@ type ClerkOrganizationDeletedPayload = {
   id: string;
 };
 
+type ClerkUserUpdatedPayload = ClerkUserCreatedPayload;
+
+type ClerkOrganizationUpdatedPayload = {
+  id: string;
+  name?: string | null;
+  slug?: string | null;
+};
+
 type WebhookEvent =
   | { type: "user.created"; data: ClerkUserCreatedPayload }
+  | { type: "user.updated"; data: ClerkUserUpdatedPayload }
   | {
       type: "organizationMembership.created";
+      data: ClerkOrgMembershipCreatedPayload;
+    }
+  | {
+      type: "organizationMembership.updated";
       data: ClerkOrgMembershipCreatedPayload;
     }
   | {
       type: "organizationMembership.deleted";
       data: ClerkOrgMembershipDeletedPayload;
     }
+  | { type: "organization.updated"; data: ClerkOrganizationUpdatedPayload }
   | { type: "organization.deleted"; data: ClerkOrganizationDeletedPayload }
   | { type: string; data: unknown };
 
@@ -137,16 +151,17 @@ export async function POST(req: Request): Promise<Response> {
   try {
     switch (event.type) {
       case "user.created":
-        // No-op for now; first-visit provisioning still handles the
-        // user_profiles row creation when an org membership lands.
-        console.log(
-          "[clerk-webhook] user.created:",
-          (event.data as ClerkUserCreatedPayload).id,
-        );
+        // No row created here; we wait for the membership.created
+        // event which carries the org context.
+        break;
+
+      case "user.updated":
+        await handleUserUpdated(event.data as ClerkUserUpdatedPayload);
         break;
 
       case "organizationMembership.created":
-        await handleMembershipCreated(
+      case "organizationMembership.updated":
+        await handleMembershipUpserted(
           event.data as ClerkOrgMembershipCreatedPayload,
         );
         break;
@@ -154,6 +169,12 @@ export async function POST(req: Request): Promise<Response> {
       case "organizationMembership.deleted":
         await handleMembershipDeleted(
           event.data as ClerkOrgMembershipDeletedPayload,
+        );
+        break;
+
+      case "organization.updated":
+        await handleOrganizationUpdated(
+          event.data as ClerkOrganizationUpdatedPayload,
         );
         break;
 
@@ -177,7 +198,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 }
 
-async function handleMembershipCreated(
+async function handleMembershipUpserted(
   data: ClerkOrgMembershipCreatedPayload,
 ): Promise<void> {
   const clerkOrgId = data.organization.id;
@@ -203,19 +224,26 @@ async function handleMembershipCreated(
       .limit(1);
     if (!org) {
       console.warn(
-        `[clerk-webhook] no orgs row for clerk_org_id=${clerkOrgId}; skipping membership.created.`,
+        `[clerk-webhook] no orgs row for clerk_org_id=${clerkOrgId}; skipping membership upsert.`,
       );
       return;
     }
     const [existing] = await tx
-      .select({ id: userProfiles.id })
+      .select({ id: userProfiles.id, orgId: userProfiles.orgId })
       .from(userProfiles)
       .where(eq(userProfiles.clerkUserId, clerkUserId))
       .limit(1);
     if (existing) {
-      console.log(
-        `[clerk-webhook] user_profiles row already exists for ${clerkUserId}; no-op.`,
-      );
+      // Mirror profile changes (role, name, email, org reassignment).
+      await tx
+        .update(userProfiles)
+        .set({
+          orgId: org.id,
+          email: email || undefined,
+          fullName: fullName || undefined,
+          role: role as AppRole,
+        })
+        .where(eq(userProfiles.id, existing.id));
       return;
     }
     await tx.insert(userProfiles).values({
@@ -239,9 +267,9 @@ async function handleMembershipDeleted(
       .where(eq(userProfiles.clerkUserId, clerkUserId))
       .limit(1);
     if (!profile) return;
-    // Null out assignee on any non-done action items in the user's
-    // home org. Acceptable shortcut for Phase 2.4 — single-org users
-    // are still the norm.
+    // Null out the assignee on every non-done action item the user owned
+    // so work doesn't disappear behind a removed account. The user_profiles
+    // row stays for audit history.
     await tx
       .update(actionItems)
       .set({ assigneeUserProfileId: null })
@@ -249,9 +277,42 @@ async function handleMembershipDeleted(
         and(
           eq(actionItems.assigneeUserProfileId, profile.id),
           ne(actionItems.status, "done"),
-          isNull(actionItems.assigneeUserProfileId), // no-op double check
         ),
       );
+  });
+}
+
+async function handleUserUpdated(
+  data: ClerkUserUpdatedPayload,
+): Promise<void> {
+  const primaryEmail =
+    data.email_addresses.find((e) => e.id === data.primary_email_address_id)
+      ?.email_address ??
+    data.email_addresses[0]?.email_address ??
+    null;
+  const fullName =
+    [data.first_name, data.last_name].filter(Boolean).join(" ").trim() || null;
+  if (!primaryEmail && !fullName) return;
+  await withSystemContext(async (tx) => {
+    const updates: Partial<typeof userProfiles.$inferInsert> = {};
+    if (primaryEmail) updates.email = primaryEmail;
+    if (fullName) updates.fullName = fullName;
+    await tx
+      .update(userProfiles)
+      .set(updates)
+      .where(eq(userProfiles.clerkUserId, data.id));
+  });
+}
+
+async function handleOrganizationUpdated(
+  data: ClerkOrganizationUpdatedPayload,
+): Promise<void> {
+  if (!data.name) return;
+  await withSystemContext(async (tx) => {
+    await tx
+      .update(orgs)
+      .set({ name: data.name! })
+      .where(eq(orgs.clerkOrgId, data.id));
   });
 }
 

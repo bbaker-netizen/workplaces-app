@@ -17,11 +17,13 @@ import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   engagements,
+  soulFileChunks,
   soulFiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import { withEngagementContext } from "@/lib/db/tenant";
 import { embedText } from "@/lib/ai/embeddings";
+import { chunkMarkdown } from "@/lib/ai/chunking";
 
 type Role = UserProfile["role"];
 
@@ -108,14 +110,17 @@ export async function upsertSoulFileBody(
       },
     );
 
-    // Embed the new body for semantic search. Best-effort — failures
-    // log but don't propagate (the Soul File still saved). The
-    // OPENAI_API_KEY env var being unset is the most common reason
-    // this skips; that's acceptable.
+    // Embed the new body for semantic search. Two layers:
+    //   1. Document-level embedding on `soul_files.embedding` — used
+    //      for "most relevant whole document" queries.
+    //   2. Chunk-level embeddings on `soul_file_chunks` — used for
+    //      finer-grained retrieval (most relevant paragraph).
+    // Best-effort — failures log but don't propagate. OPENAI_API_KEY
+    // being unset is the most common skip reason; acceptable.
     if (data.body.trim().length > 0) {
       try {
-        const vector = await embedText(data.body);
-        const formatted = `[${vector.join(",")}]`;
+        const documentVector = await embedText(data.body);
+        const formatted = `[${documentVector.join(",")}]`;
         await withEngagementContext(
           profile.orgId,
           profile.role,
@@ -130,7 +135,43 @@ export async function upsertSoulFileBody(
           },
         );
       } catch (e) {
-        console.error("[soul-file] embed failed (non-fatal):", e);
+        console.error("[soul-file] document embed failed (non-fatal):", e);
+      }
+
+      // Chunk-level. Replace the entire chunk set on each save —
+      // simpler than diffing and Soul Files don't update often enough
+      // to matter cost-wise.
+      try {
+        const chunks = chunkMarkdown(data.body);
+        const chunkVectors = await Promise.all(
+          chunks.map((chunk) => embedText(chunk)),
+        );
+        await withEngagementContext(
+          profile.orgId,
+          profile.role,
+          data.engagementId,
+          async (tx, boundOrgId) => {
+            await tx
+              .delete(soulFileChunks)
+              .where(eq(soulFileChunks.soulFileId, id));
+            for (let i = 0; i < chunks.length; i++) {
+              const formatted = `[${chunkVectors[i].join(",")}]`;
+              await tx.execute(
+                sql`INSERT INTO soul_file_chunks
+                      (soul_file_id, org_id, engagement_id, chunk_index, body, embedding)
+                    VALUES
+                      (${id},
+                       ${boundOrgId},
+                       ${data.engagementId},
+                       ${i},
+                       ${chunks[i]},
+                       ${formatted}::vector)`,
+              );
+            }
+          },
+        );
+      } catch (e) {
+        console.error("[soul-file] chunk embed failed (non-fatal):", e);
       }
     }
 
@@ -192,23 +233,57 @@ export async function searchSoulFiles(
     distance: number;
   };
   try {
+    // Prefer chunk-level matches when available; fall back to
+    // document-level for engagements that haven't been re-indexed yet.
     const queryResult = await withSystemContext(async (tx) =>
       tx.execute(
-        sql`SELECT s.engagement_id AS "engagementId",
-                   e.name AS "engagementName",
-                   substring(s.body for 240) AS snippet,
-                   s.embedding <=> ${formatted}::vector AS distance
-            FROM soul_files s
-            INNER JOIN engagements e ON e.id = s.engagement_id
-            INNER JOIN coaches c ON c.id = e.coach_id
-            INNER JOIN user_profiles up ON up.id = c.user_profile_id
-            WHERE s.embedding IS NOT NULL
-              AND up.id = ${profile.userProfileId}
-            ORDER BY s.embedding <=> ${formatted}::vector
-            LIMIT ${limit}`,
+        sql`WITH ranked AS (
+              SELECT sfc.engagement_id,
+                     e.name AS engagement_name,
+                     substring(sfc.body for 320) AS snippet,
+                     sfc.embedding <=> ${formatted}::vector AS distance,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY sfc.engagement_id
+                       ORDER BY sfc.embedding <=> ${formatted}::vector
+                     ) AS rn
+                FROM soul_file_chunks sfc
+                INNER JOIN engagements e ON e.id = sfc.engagement_id
+                INNER JOIN coaches c ON c.id = e.coach_id
+                INNER JOIN user_profiles up ON up.id = c.user_profile_id
+               WHERE sfc.embedding IS NOT NULL
+                 AND up.id = ${profile.userProfileId}
+            )
+            SELECT engagement_id AS "engagementId",
+                   engagement_name AS "engagementName",
+                   snippet,
+                   distance
+              FROM ranked
+             WHERE rn = 1
+             ORDER BY distance
+             LIMIT ${limit}`,
       ),
     );
-    const rows = (queryResult as unknown as { rows?: Row[] }).rows ?? [];
+    let rows = (queryResult as unknown as { rows?: Row[] }).rows ?? [];
+    if (rows.length === 0) {
+      // Fallback to document-level when no chunks exist yet.
+      const fallback = await withSystemContext(async (tx) =>
+        tx.execute(
+          sql`SELECT s.engagement_id AS "engagementId",
+                     e.name AS "engagementName",
+                     substring(s.body for 240) AS snippet,
+                     s.embedding <=> ${formatted}::vector AS distance
+              FROM soul_files s
+              INNER JOIN engagements e ON e.id = s.engagement_id
+              INNER JOIN coaches c ON c.id = e.coach_id
+              INNER JOIN user_profiles up ON up.id = c.user_profile_id
+              WHERE s.embedding IS NOT NULL
+                AND up.id = ${profile.userProfileId}
+              ORDER BY s.embedding <=> ${formatted}::vector
+              LIMIT ${limit}`,
+        ),
+      );
+      rows = (fallback as unknown as { rows?: Row[] }).rows ?? [];
+    }
     return { ok: true, data: rows };
   } catch (e) {
     return {
