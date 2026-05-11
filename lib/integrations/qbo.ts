@@ -51,7 +51,13 @@ export function qboAuthorizeUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
-    scope: "com.intuit.quickbooks.accounting com.intuit.quickbooks.payment",
+    // Accounting-only. The Builder reads invoice payment status from
+    // the Accounting API's Invoice.Balance field; it doesn't call any
+    // Payments API endpoints, so requesting com.intuit.quickbooks.payment
+    // would be an unused scope and Intuit production review will flag
+    // it. Add the payment scope back here if/when we wire programmatic
+    // Payments API features.
+    scope: "com.intuit.quickbooks.accounting",
     redirect_uri: redirect,
     state,
   });
