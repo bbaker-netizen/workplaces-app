@@ -29,6 +29,7 @@ export function PortalFooter() {
             Guide
           </Link>
           <a
+            data-tour="contact-support"
             href="mailto:bruce@4workplaces.com"
             className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-cream/75 hover:text-tbb-cream transition-colors duration-tbb-base"
           >

@@ -1,16 +1,19 @@
 "use client";
 
 /**
- * Re-opens the WelcomeModal from anywhere. Clears the localStorage
- * "seen" flag so the modal renders again, then dispatches a custom
- * event the layout-level modal listens for to force-open.
+ * Re-trigger the interactive PortalTour from anywhere. Clears the
+ * tour-seen flag so the spotlight overlay starts again from step 1.
+ *
+ * Used in the portal footer ("Take the tour") and on the
+ * /portal/welcome guide page ("Replay the quick tour").
  */
 
 import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { HelpCircle } from "lucide-react";
-import { WelcomeModal } from "./WelcomeModal";
+import { PortalTour } from "./PortalTour";
 
-const STORAGE_KEY = "bbp-welcome-seen";
+const STORAGE_KEY = "bbp-tour-seen";
 
 export function TakeTheTourButton({
   label = "Take the tour",
@@ -19,6 +22,8 @@ export function TakeTheTourButton({
   label?: string;
   variant?: "primary" | "ghost";
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   function start() {
@@ -26,6 +31,13 @@ export function TakeTheTourButton({
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {
       // ignore
+    }
+    // The tour anchors are on /portal. If user is elsewhere, take
+    // them there first; the layout-level PortalTour will pick the
+    // flag up automatically.
+    if (pathname !== "/portal") {
+      router.push("/portal");
+      return;
     }
     setOpen(true);
   }
@@ -44,7 +56,7 @@ export function TakeTheTourButton({
         {label}
       </button>
       {open && (
-        <WelcomeModal forceOpen onClose={() => setOpen(false)} />
+        <PortalTour forceOpen onClose={() => setOpen(false)} />
       )}
     </>
   );

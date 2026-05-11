@@ -91,6 +91,7 @@ export default async function PortalDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Next session card */}
         <Card
+          tourId="next-session"
           icon={<Calendar className="w-4 h-4" aria-hidden />}
           title="Next session"
           href="/portal/sessions"
@@ -119,6 +120,7 @@ export default async function PortalDashboard() {
 
         {/* Action items */}
         <Card
+          tourId="action-items"
           icon={<CheckCircle2 className="w-4 h-4" aria-hidden />}
           title="Your open items"
           href="/portal/action-items"
@@ -175,6 +177,7 @@ export default async function PortalDashboard() {
 
         {/* Recent communication */}
         <Card
+          tourId="communication"
           icon={<MessageSquare className="w-4 h-4" aria-hidden />}
           title="Latest activity"
           href="/portal/communication"
@@ -212,6 +215,7 @@ export default async function PortalDashboard() {
 
         {/* Soul file */}
         <Card
+          tourId="soul-file"
           icon={<Sparkles className="w-4 h-4" aria-hidden />}
           title="Soul File"
           href="/portal/soul-file"
@@ -238,6 +242,7 @@ export default async function PortalDashboard() {
 
         {/* Recent documents */}
         <Card
+          tourId="documents"
           icon={<FileText className="w-4 h-4" aria-hidden />}
           title="Recent documents"
           href="/portal/documents"
@@ -281,6 +286,7 @@ export default async function PortalDashboard() {
 }
 
 function Card({
+  tourId,
   icon,
   title,
   href,
@@ -288,6 +294,7 @@ function Card({
   children,
   className,
 }: {
+  tourId?: string;
   icon: React.ReactNode;
   title: string;
   href: string;
@@ -297,6 +304,7 @@ function Card({
 }) {
   return (
     <section
+      data-tour={tourId}
       className={
         "border border-tbb-line rounded-md bg-white p-5 space-y-3 " +
         (className ?? "")
