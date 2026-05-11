@@ -31,7 +31,7 @@ export default async function MethodologyPage() {
           The frameworks behind your engagement
         </h1>
         <p className="font-sans text-base text-muted-foreground max-w-prose">
-          The Builder is the surface. The methodology is what makes it work. Here&apos;s the language and the frameworks Bruce uses with every client.
+          Business Builder Portal is the surface. The methodology is what makes it work. Here&apos;s the language and the frameworks Bruce uses with every client.
         </p>
       </header>
 

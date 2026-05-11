@@ -92,7 +92,7 @@ function shell({
           <tr>
             <td style="padding:24px 24px 16px 24px;border-bottom:1px solid #E8ECF1;">
               <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#5A6470;font-weight:700;">
-                The Business Builders · By Workplaces
+                Business Builder Portal · By Workplaces
               </div>
               <div style="margin-top:8px;font-size:22px;font-weight:700;color:#14385B;line-height:1.3;border-left:3px solid ${ruleColor};padding-left:10px;">
                 ${safeHeading}
@@ -111,7 +111,7 @@ function shell({
           </tr>
           <tr>
             <td style="padding:16px 24px;border-top:1px solid #E8ECF1;font-size:11px;color:#5A6470;line-height:1.5;">
-              You're receiving this because you're a member of an engagement on The Business Builders.<br>
+              You're receiving this because you're a member of an engagement on the Business Builder Portal.<br>
               Build what compounds.
             </td>
           </tr>

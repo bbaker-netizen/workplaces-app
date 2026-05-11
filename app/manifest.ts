@@ -6,10 +6,10 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "The Business Builders by Workplaces",
-    short_name: "Builders",
+    name: "Business Builder Portal · By Workplaces",
+    short_name: "Portal",
     description:
-      "The Business Builders by Workplaces. Build what compounds.",
+      "Business Builder Portal by Workplaces. Build what compounds.",
     start_url: "/portal",
     display: "standalone",
     background_color: "#EFE6D7",

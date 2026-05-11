@@ -26,7 +26,7 @@ export default async function PublicBookingPage({
       <div className="max-w-xl mx-auto space-y-8">
         <header className="space-y-2">
           <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-            The Builder · By Workplaces
+            Business Builder Portal · By Workplaces
           </p>
           <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
             Book {link.name}

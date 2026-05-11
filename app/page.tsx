@@ -24,6 +24,9 @@ export default function Home() {
         <p className="font-bold uppercase tracking-tbb-caps text-xs sm:text-sm text-tbb-cream/70">
           Build what compounds
         </p>
+        <p className="font-bold uppercase tracking-tbb-caps text-sm sm:text-base text-tbb-cream pt-2">
+          Business Builder Portal
+        </p>
         <p className="text-tbb-cream/85 text-base sm:text-lg max-w-md leading-relaxed">
           Coaching, deliverables, and invoicing — one operating platform
           for the Workplaces practice.

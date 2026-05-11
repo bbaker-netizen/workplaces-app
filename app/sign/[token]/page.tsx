@@ -40,7 +40,7 @@ export default async function SigningPage({
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <header className="space-y-1">
           <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-            The Builder · By Workplaces
+            Business Builder Portal · By Workplaces
           </p>
           <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
             {data.envelopeSubject}

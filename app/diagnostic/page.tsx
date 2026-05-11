@@ -19,7 +19,7 @@ export default function DiagnosticPage() {
       <div className="max-w-2xl mx-auto space-y-8">
         <header className="space-y-3">
           <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-            The Builder · By Workplaces
+            Business Builder Portal · By Workplaces
           </p>
           <h1 className="font-bold text-foreground text-4xl sm:text-5xl tracking-tight leading-none">
             Business diagnostic.

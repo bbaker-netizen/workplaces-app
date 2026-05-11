@@ -4,7 +4,7 @@ import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar"
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "The Business Builders · By Workplaces",
+  title: "Business Builder Portal · By Workplaces",
   description:
     "Coaching, deliverables, and invoicing — one operating platform for the Workplaces practice.",
 };

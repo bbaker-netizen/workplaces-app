@@ -8,7 +8,7 @@ export default function NoInvitationPage() {
           Invitation required
         </h1>
         <p className="font-sans text-muted-foreground max-w-md leading-relaxed">
-          The Builder is invitation-only. If you&apos;re expecting access,
+          Business Builder Portal is invitation-only. If you&apos;re expecting access,
           your coach should have sent you an invitation email — check your
           inbox (and spam) for a message from Clerk.
         </p>
