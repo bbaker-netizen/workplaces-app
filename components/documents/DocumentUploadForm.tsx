@@ -73,14 +73,14 @@ export function DocumentUploadForm({
         e.preventDefault();
         submit();
       }}
-      className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3"
+      className="border border-tbb-line rounded-md bg-white p-4 space-y-3"
       aria-busy={isPending}
     >
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h2 className="font-display font-bold text-foreground text-lg tracking-tight">
+        <h2 className="font-bold text-foreground text-lg tracking-tight">
           Upload a document
         </h2>
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
           Up to {MAX_BYTES_HINT}
         </span>
       </div>
@@ -94,20 +94,20 @@ export function DocumentUploadForm({
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="block w-full font-sans text-sm text-foreground
             file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0
-            file:font-sans file:text-xs file:font-bold file:uppercase file:tracking-[0.15em]
-            file:bg-[#1A1A1A] file:text-[#F5F1E8] hover:file:bg-[#2E4057] file:cursor-pointer
+            file:font-sans file:text-xs file:font-bold file:uppercase file:tracking-tbb-caps
+            file:bg-tbb-blue file:text-white hover:file:bg-tbb-blue-700 file:cursor-pointer
             file:disabled:opacity-50"
         />
       </label>
       {file && (
-        <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <div className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           {file.name} · {formatBytes(file.size)} ·{" "}
           {file.type || "unknown type"}
         </div>
       )}
 
       <label className="block space-y-1">
-        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Tags (comma-separated, optional)
         </span>
         <input
@@ -116,20 +116,20 @@ export function DocumentUploadForm({
           onChange={(e) => setTags(e.target.value)}
           disabled={isPending}
           placeholder="e.g. budget, FY26, contract"
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-[#2E4057] disabled:bg-[#F5F1E8] disabled:cursor-wait"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue focus:border-tbb-blue disabled:bg-tbb-cream-50 disabled:cursor-wait"
         />
       </label>
 
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
       )}
       {success && !isPending && (
-        <p className="font-sans text-sm text-[#2E4057] border border-[#CCCCCC] rounded-md px-3 py-2 bg-[#F5F1E8]">
+        <p className="font-sans text-sm text-tbb-navy border border-tbb-line rounded-md px-3 py-2 bg-tbb-cream-50">
           {success}
         </p>
       )}
@@ -138,7 +138,7 @@ export function DocumentUploadForm({
         <button
           type="submit"
           disabled={isPending || !file}
-          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-wait transition-colors"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 disabled:cursor-wait transition-colors"
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />

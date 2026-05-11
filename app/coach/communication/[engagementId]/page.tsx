@@ -45,13 +45,13 @@ export default async function CoachCommunicationPage({
   return (
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-10">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {engagement.name ?? "Engagement"}
         </h1>
-        <nav className="flex gap-3 text-xs font-mono uppercase tracking-[0.2em]">
+        <nav className="flex gap-3 text-xs font-mono uppercase tracking-tbb-caps">
           <Link
             href="/coach"
             className="text-muted-foreground hover:text-foreground"
@@ -63,12 +63,12 @@ export default async function CoachCommunicationPage({
               <summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none">
                 Switch engagement
               </summary>
-              <div className="absolute left-0 mt-2 z-10 bg-white border border-[#CCCCCC] rounded-md shadow-md py-1 min-w-[14rem]">
+              <div className="absolute left-0 mt-2 z-10 bg-white border border-tbb-line rounded-md shadow-md py-1 min-w-[14rem]">
                 {engagements.map((e) => (
                   <Link
                     key={e.id}
                     href={`/coach/communication/${e.id}`}
-                    className="block px-3 py-1.5 text-foreground hover:bg-[#F5F1E8] normal-case tracking-normal font-sans text-sm"
+                    className="block px-3 py-1.5 text-foreground hover:bg-tbb-cream-50 normal-case tracking-normal font-sans text-sm"
                   >
                     {e.name ?? e.id.slice(0, 8)}
                   </Link>
@@ -80,23 +80,23 @@ export default async function CoachCommunicationPage({
       </header>
 
       <section className="space-y-3">
-        <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
           Recent activity
         </h2>
         <RecentActivity engagementId={engagement.id} scope="coach" />
       </section>
 
       <section className="space-y-4">
-        <div role="tablist" className="flex gap-1 border-b border-[#CCCCCC]">
+        <div role="tablist" className="flex gap-1 border-b border-tbb-line">
           {showLeadership && (
             <a
               role="tab"
               aria-selected={tab === "leadership"}
               href="?tab=leadership"
               className={
-                "font-sans text-sm uppercase tracking-[0.15em] px-4 py-2 -mb-px border-b-2 transition-colors " +
+                "font-sans text-sm uppercase tracking-tbb-caps px-4 py-2 -mb-px border-b-2 transition-colors " +
                 (tab === "leadership"
-                  ? "border-[#1A1A1A] text-foreground font-bold"
+                  ? "border-tbb-navy text-foreground font-bold"
                   : "border-transparent text-muted-foreground hover:text-foreground")
               }
             >
@@ -108,9 +108,9 @@ export default async function CoachCommunicationPage({
             aria-selected={tab === "team"}
             href="?tab=team"
             className={
-              "font-sans text-sm uppercase tracking-[0.15em] px-4 py-2 -mb-px border-b-2 transition-colors " +
+              "font-sans text-sm uppercase tracking-tbb-caps px-4 py-2 -mb-px border-b-2 transition-colors " +
               (tab === "team"
-                ? "border-[#1A1A1A] text-foreground font-bold"
+                ? "border-tbb-navy text-foreground font-bold"
                 : "border-transparent text-muted-foreground hover:text-foreground")
             }
           >

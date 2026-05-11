@@ -46,10 +46,10 @@ export default async function PublicFormRespondPage({
     <main className="min-h-screen bg-background py-12 px-6">
       <div className="max-w-2xl mx-auto space-y-8">
         <header className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             The Builder · By Workplaces
           </p>
-          <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+          <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
             {form.name}
           </h1>
           {form.description && (
@@ -59,14 +59,14 @@ export default async function PublicFormRespondPage({
           )}
         </header>
 
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6">
+        <div className="border border-tbb-line rounded-md bg-white p-6">
           <PublicFormResponder
             token={form.publicToken!}
             questions={questions}
           />
         </div>
 
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground text-center">
+        <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground text-center">
           Workplaces · Build what compounds.
         </p>
       </div>

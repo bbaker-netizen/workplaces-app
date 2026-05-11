@@ -24,12 +24,12 @@ export function BookingForm({
 
   if (slots.length === 0) {
     return (
-      <div className="border border-[#CCCCCC] rounded-md bg-white p-6">
+      <div className="border border-tbb-line rounded-md bg-white p-6">
         <p className="font-sans text-sm text-muted-foreground italic">
           No times available in the next three weeks. Try again later or reach out to{" "}
           <a
             href="mailto:notifications@4workplaces.com"
-            className="text-[#2E4057] underline underline-offset-4"
+            className="text-tbb-navy underline underline-offset-4"
           >
             notifications@4workplaces.com
           </a>
@@ -41,9 +41,9 @@ export function BookingForm({
 
   if (success) {
     return (
-      <div className="border border-[#2E4057] rounded-md bg-[#F5F1E8] p-6 text-center space-y-3">
-        <CheckCircle2 className="w-10 h-10 mx-auto text-[#2E4057]" aria-hidden />
-        <p className="font-display font-bold text-foreground text-2xl tracking-tight">
+      <div className="border border-tbb-blue rounded-md bg-tbb-cream-50 p-6 text-center space-y-3">
+        <CheckCircle2 className="w-10 h-10 mx-auto text-tbb-navy" aria-hidden />
+        <p className="font-bold text-foreground text-2xl tracking-tight">
           Booked.
         </p>
         <p className="font-sans text-sm text-foreground">
@@ -102,13 +102,13 @@ export function BookingForm({
       aria-busy={isPending}
     >
       <fieldset className="space-y-3">
-        <legend className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <legend className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Pick a time
         </legend>
-        <div className="space-y-3 max-h-[24rem] overflow-y-auto border border-[#CCCCCC] rounded-md bg-white p-3">
+        <div className="space-y-3 max-h-[24rem] overflow-y-auto border border-tbb-line rounded-md bg-white p-3">
           {Array.from(byDay.entries()).map(([day, daySlots]) => (
             <div key={day} className="space-y-1.5">
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                 {day}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -119,10 +119,10 @@ export function BookingForm({
                     onClick={() => setPicked(s.startsAt)}
                     disabled={isPending}
                     className={
-                      "font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md border transition-colors " +
+                      "font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-md border transition-colors " +
                       (picked === s.startsAt
-                        ? "bg-[#1A1A1A] text-[#F5F1E8] border-[#1A1A1A]"
-                        : "bg-white text-foreground border-[#CCCCCC] hover:bg-[#F5F1E8] hover:border-[#666666]")
+                        ? "bg-tbb-blue text-white border-tbb-navy"
+                        : "bg-white text-foreground border-tbb-line hover:bg-tbb-cream-50 hover:border-tbb-ink-3")
                     }
                   >
                     {s.startsAtLocal.split(",")[1]?.trim() ?? s.startsAtLocal}
@@ -136,7 +136,7 @@ export function BookingForm({
 
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Your name
           </span>
           <input
@@ -144,11 +144,11 @@ export function BookingForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Email
           </span>
           <input
@@ -157,22 +157,22 @@ export function BookingForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1 sm:col-span-2">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Company
           </span>
           <input
             value={company}
             onChange={(e) => setCompany(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1 sm:col-span-2">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Anything we should know? (optional)
           </span>
           <textarea
@@ -180,7 +180,7 @@ export function BookingForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
           />
         </label>
       </div>
@@ -188,7 +188,7 @@ export function BookingForm({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -197,7 +197,7 @@ export function BookingForm({
       <button
         type="submit"
         disabled={isPending || !picked}
-        className="w-full inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-3 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+        className="w-full inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
       >
         {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
         {isPending ? "Booking…" : "Confirm booking"}

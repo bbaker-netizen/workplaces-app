@@ -9,7 +9,7 @@ import {
 const initial: CreateEngagementState = { kind: "idle" };
 
 const inputClass =
-  "w-full px-3 py-2 border border-[#CCCCCC] rounded-md bg-white text-foreground " +
+  "w-full px-3 py-2 border border-tbb-line rounded-md bg-white text-foreground " +
   "focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent " +
   "font-sans";
 
@@ -39,7 +39,7 @@ export function EngagementForm() {
   if (state.kind === "success") {
     return (
       <div className="space-y-6 max-w-xl">
-        <h2 className="font-display font-bold text-foreground text-3xl tracking-tight leading-none">
+        <h2 className="font-bold text-foreground text-3xl tracking-tight leading-none">
           Engagement created
         </h2>
         <p className="font-sans text-muted-foreground">
@@ -48,7 +48,7 @@ export function EngagementForm() {
           . They&apos;ll receive an email from Clerk with a link to sign up
           and land in their portal.
         </p>
-        <dl className="font-mono text-xs space-y-2 text-muted-foreground border-t border-[#CCCCCC] pt-6">
+        <dl className="font-mono text-xs space-y-2 text-muted-foreground border-t border-tbb-line pt-6">
           <div className="grid grid-cols-[140px_1fr] gap-3">
             <dt>App engagement</dt>
             <dd className="text-foreground">{state.engagementId}</dd>
@@ -65,13 +65,13 @@ export function EngagementForm() {
         <div className="flex gap-4 pt-4">
           <a
             href="/coach/engagements/new"
-            className="font-sans bg-foreground text-background px-6 py-3 rounded-md hover:bg-secondary transition-colors uppercase tracking-wider text-sm"
+            className="font-sans bg-foreground text-background px-6 py-3 rounded-pill hover:bg-secondary transition-colors uppercase tracking-wider text-sm"
           >
             Create another
           </a>
           <a
             href="/coach"
-            className="font-sans text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline self-center"
+            className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline self-center"
           >
             Back to coach console
           </a>
@@ -159,7 +159,7 @@ export function EngagementForm() {
       </div>
 
       {state.kind === "error" && (
-        <p className="font-sans text-[#E87722] text-sm border-l-2 border-[#E87722] pl-3 py-1">
+        <p className="font-sans text-tbb-danger text-sm border-l-2 border-tbb-danger pl-3 py-1">
           {state.message}
         </p>
       )}
@@ -168,7 +168,7 @@ export function EngagementForm() {
         <SubmitButton />
         <a
           href="/coach"
-          className="font-sans text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
+          className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
         >
           Cancel
         </a>

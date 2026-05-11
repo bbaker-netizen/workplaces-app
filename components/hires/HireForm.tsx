@@ -106,7 +106,7 @@ export function HireForm({
     >
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Candidate name
           </span>
           <input
@@ -115,11 +115,11 @@ export function HireForm({
             onChange={(e) => setCandidateName(e.target.value)}
             required
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Email
           </span>
           <input
@@ -127,13 +127,13 @@ export function HireForm({
             value={candidateEmail}
             onChange={(e) => setCandidateEmail(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Role
           </span>
           <input
@@ -143,18 +143,18 @@ export function HireForm({
             required
             disabled={isPending}
             placeholder="e.g. VP Sales, Office Manager"
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Status
           </span>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as HireStatus)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -165,7 +165,7 @@ export function HireForm({
         </label>
       </div>
       <label className="block space-y-1">
-        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Notes (markdown)
         </span>
         <textarea
@@ -174,14 +174,14 @@ export function HireForm({
           rows={6}
           disabled={isPending}
           placeholder="Strengths, gaps, decision rationale…"
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
       </label>
 
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -193,7 +193,7 @@ export function HireForm({
             type="button"
             onClick={onDelete}
             disabled={isPending}
-            className="font-sans text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-[#E87722] underline-offset-4 hover:underline"
+            className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-tbb-danger underline-offset-4 hover:underline"
           >
             Delete candidate
           </button>
@@ -203,14 +203,14 @@ export function HireForm({
             type="button"
             onClick={() => router.push(redirectTo)}
             disabled={isPending}
-            className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+            className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
           >
             {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             {isPending ? "Saving…" : editing ? "Save" : "Create"}

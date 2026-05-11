@@ -75,7 +75,7 @@ function shell({
   const safeHeading = escapeHtml(heading);
   const safeButtonLabel = escapeHtml(buttonLabel);
   const safeButtonHref = escapeHtml(buttonHref);
-  const ruleColor = accent ?? "#1A1A1A";
+  const ruleColor = accent ?? "#2C6CB0";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -83,35 +83,35 @@ function shell({
   <meta name="viewport" content="width=device-width" />
   <title>${safeHeading}</title>
 </head>
-<body style="margin:0;padding:0;background:#F5F1E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1A1A1A;">
+<body style="margin:0;padding:0;background:#F4F6F9;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#14181D;">
   <span style="display:none;font-size:0;line-height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;">${safePreheader}</span>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5F1E8;padding:32px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F6F9;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#FFFFFF;border:1px solid #CCCCCC;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#FFFFFF;border:1px solid #D6DDE5;border-radius:16px;">
           <tr>
-            <td style="padding:24px 24px 16px 24px;border-bottom:1px solid #CCCCCC;">
-              <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#666666;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">
-                The Builder · By Workplaces
+            <td style="padding:24px 24px 16px 24px;border-bottom:1px solid #E8ECF1;">
+              <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#5A6470;font-weight:700;">
+                The Business Builders · By Workplaces
               </div>
-              <div style="margin-top:8px;font-size:22px;font-weight:700;color:#1A1A1A;line-height:1.3;border-left:3px solid ${ruleColor};padding-left:10px;">
+              <div style="margin-top:8px;font-size:22px;font-weight:700;color:#14385B;line-height:1.3;border-left:3px solid ${ruleColor};padding-left:10px;">
                 ${safeHeading}
               </div>
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 24px;font-size:15px;line-height:1.55;color:#1A1A1A;">
+            <td style="padding:20px 24px;font-size:15px;line-height:1.55;color:#14181D;">
               ${bodyHtml}
               <div style="margin-top:24px;">
-                <a href="${safeButtonHref}" style="display:inline-block;background:#1A1A1A;color:#F5F1E8;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.15em;text-transform:uppercase;padding:12px 18px;border-radius:4px;">
+                <a href="${safeButtonHref}" style="display:inline-block;background:#2C6CB0;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:14px;padding:12px 24px;border-radius:9999px;">
                   ${safeButtonLabel}
                 </a>
               </div>
             </td>
           </tr>
           <tr>
-            <td style="padding:16px 24px;border-top:1px solid #CCCCCC;font-size:11px;color:#666666;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0.05em;">
-              You're receiving this because you're a member of an engagement on The Builder.<br>
+            <td style="padding:16px 24px;border-top:1px solid #E8ECF1;font-size:11px;color:#5A6470;line-height:1.5;">
+              You're receiving this because you're a member of an engagement on The Business Builders.<br>
               Build what compounds.
             </td>
           </tr>

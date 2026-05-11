@@ -160,8 +160,8 @@ export function MessageReactionBar({
             className={
               "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors disabled:cursor-wait disabled:opacity-60 " +
               (g.viewerReacted
-                ? "bg-[#F5F1E8] border-[#2E4057] text-[#2E4057] hover:bg-[#E9E2CD]"
-                : "bg-white border-[#CCCCCC] text-foreground hover:bg-[#F5F1E8] hover:border-[#666666]")
+                ? "bg-tbb-cream-50 border-tbb-blue text-tbb-navy hover:bg-[#E9E2CD]"
+                : "bg-white border-tbb-line text-foreground hover:bg-tbb-cream-50 hover:border-tbb-ink-3")
             }
           >
             <span aria-hidden className="text-sm leading-none">
@@ -179,7 +179,7 @@ export function MessageReactionBar({
       {error && (
         <span
           role="alert"
-          className="font-sans text-xs text-[#E87722] ml-1"
+          className="font-sans text-xs text-tbb-danger ml-1"
         >
           {error}
         </span>
@@ -211,19 +211,19 @@ function ReactionAdder({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={
-          "inline-flex items-center gap-1 rounded-full border border-dashed border-[#CCCCCC] px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-[#F5F1E8] hover:border-[#666666] transition-colors disabled:opacity-60 disabled:cursor-wait " +
-          (open ? "bg-[#F5F1E8] text-foreground border-[#666666]" : "")
+          "inline-flex items-center gap-1 rounded-full border border-dashed border-tbb-line px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50 hover:border-tbb-ink-3 transition-colors disabled:opacity-60 disabled:cursor-wait " +
+          (open ? "bg-tbb-cream-50 text-foreground border-tbb-ink-3" : "")
         }
       >
         <SmilePlus className="w-3.5 h-3.5" aria-hidden />
-        <span className="font-mono uppercase tracking-[0.15em] text-[10px]">
+        <span className="font-mono uppercase tracking-tbb-caps text-[10px]">
           react
         </span>
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute bottom-full left-0 mb-1 z-40 flex items-center gap-1 rounded-md border border-[#CCCCCC] bg-white px-2 py-1.5 shadow-md"
+          className="absolute bottom-full left-0 mb-1 z-40 flex items-center gap-1 rounded-md border border-tbb-line bg-white px-2 py-1.5 shadow-md"
           onMouseLeave={() => setOpen(false)}
         >
           {QUICK_REACTIONS.map((q) => (
@@ -239,17 +239,17 @@ function ReactionAdder({
                 setOpen(false);
               }}
               className={
-                "text-base leading-none w-7 h-7 grid place-items-center rounded hover:bg-[#F5F1E8] disabled:opacity-60 disabled:cursor-wait " +
-                (viewerReactedEmojis.has(q) ? "bg-[#F5F1E8]" : "")
+                "text-base leading-none w-7 h-7 grid place-items-center rounded hover:bg-tbb-cream-50 disabled:opacity-60 disabled:cursor-wait " +
+                (viewerReactedEmojis.has(q) ? "bg-tbb-cream-50" : "")
               }
             >
               <span aria-hidden>{q}</span>
             </button>
           ))}
-          <span className="w-px h-5 bg-[#CCCCCC] mx-0.5" aria-hidden />
+          <span className="w-px h-5 bg-tbb-line mx-0.5" aria-hidden />
           <EmojiPickerButton
             ariaLabel="More emojis"
-            triggerClassName="text-xs font-mono uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground hover:bg-[#F5F1E8] rounded px-1.5 py-1"
+            triggerClassName="text-xs font-mono uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50 rounded px-1.5 py-1"
             triggerContent="more"
             anchor="top"
             align="right"

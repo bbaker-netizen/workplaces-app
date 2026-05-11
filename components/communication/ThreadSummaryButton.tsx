@@ -35,7 +35,7 @@ export function ThreadSummaryButton({
         type="button"
         onClick={run}
         disabled={isPending}
-        className="inline-flex items-center gap-1 font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md border border-[#2E4057] text-[#2E4057] bg-white hover:bg-[#F5F1E8] disabled:opacity-50"
+        className="inline-flex items-center gap-1 font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-navy bg-white hover:bg-tbb-cream-50 disabled:opacity-50"
       >
         {isPending ? (
           <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
@@ -48,16 +48,16 @@ export function ThreadSummaryButton({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
       )}
 
       {open && summary && (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3">
+        <div className="border border-tbb-line rounded-md bg-white p-4 space-y-3">
           <header className="flex items-baseline justify-between gap-3">
-            <h3 className="font-display font-bold text-foreground text-base tracking-tight">
+            <h3 className="font-bold text-foreground text-base tracking-tight">
               AI summary
             </h3>
             <button

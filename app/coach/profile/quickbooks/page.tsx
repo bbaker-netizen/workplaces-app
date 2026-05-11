@@ -56,10 +56,10 @@ export default async function QboProfilePage({
   return (
     <main className="max-w-2xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           QuickBooks Online
         </h1>
         <p className="font-sans text-sm text-foreground">
@@ -69,15 +69,15 @@ export default async function QboProfilePage({
         </p>
         <Link
           href="/coach"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Console
         </Link>
       </header>
 
       {justConnected && (
-        <div className="border border-[#2E4057] bg-[#F5F1E8] rounded-md px-4 py-3">
-          <p className="font-display font-bold text-foreground text-lg">
+        <div className="border border-tbb-blue bg-tbb-cream-50 rounded-md px-4 py-3">
+          <p className="font-bold text-foreground text-lg">
             Connected.
           </p>
           <p className="font-sans text-sm text-foreground">
@@ -88,16 +88,16 @@ export default async function QboProfilePage({
       )}
 
       {errorLabel && (
-        <div className="border border-[#E87722] bg-white rounded-md px-4 py-3">
-          <p className="font-display font-bold text-[#E87722] text-base">
+        <div className="border border-tbb-danger bg-white rounded-md px-4 py-3">
+          <p className="font-bold text-tbb-danger text-base">
             Couldn&apos;t connect.
           </p>
           <p className="font-sans text-sm text-foreground">{errorLabel}</p>
         </div>
       )}
 
-      <section className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-4">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <section className="border border-tbb-line rounded-md bg-white p-5 space-y-4">
+        <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Connection status
         </h2>
 
@@ -107,10 +107,10 @@ export default async function QboProfilePage({
               <p className="font-sans text-sm text-foreground">
                 <strong>Connected.</strong>
               </p>
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                 Realm ID: {stored.realmId}
               </p>
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                 Refresh token expires{" "}
                 {stored.refreshExpiresAt.toLocaleDateString(undefined, {
                   year: "numeric",
@@ -131,8 +131,8 @@ export default async function QboProfilePage({
         )}
       </section>
 
-      <section className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-2">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <section className="border border-tbb-line rounded-md bg-white p-4 space-y-2">
+        <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Heads up
         </h2>
         <ul className="font-sans text-sm text-foreground space-y-1 list-disc pl-5">

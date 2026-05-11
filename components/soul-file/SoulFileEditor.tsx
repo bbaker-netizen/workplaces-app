@@ -91,14 +91,14 @@ export function SoulFileEditor({
   return (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
           Soul File
         </h2>
         {!editing && canEdit && (
           <button
             type="button"
             onClick={startEdit}
-            className="inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057]"
+            className="inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
           >
             <Pencil className="w-3.5 h-3.5" aria-hidden />
             {body.trim().length > 0 ? "Edit" : "Start writing"}
@@ -114,19 +114,19 @@ export function SoulFileEditor({
             disabled={isPending}
             rows={28}
             autoFocus
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y leading-relaxed"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y leading-relaxed"
             placeholder={STARTER_TEMPLATE}
           />
           {error && (
             <p
               role="alert"
-              className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+              className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
             >
               {error}
             </p>
           )}
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
               Markdown supported · headings, lists, links
             </span>
             <div className="flex gap-2">
@@ -134,7 +134,7 @@ export function SoulFileEditor({
                 type="button"
                 onClick={cancelEdit}
                 disabled={isPending}
-                className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+                className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </button>
@@ -142,7 +142,7 @@ export function SoulFileEditor({
                 type="button"
                 onClick={save}
                 disabled={isPending}
-                className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+                className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
               >
                 {isPending && (
                   <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
@@ -153,8 +153,8 @@ export function SoulFileEditor({
           </div>
         </div>
       ) : body.trim().length === 0 ? (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6 space-y-2">
-          <p className="font-display font-bold text-foreground text-base tracking-tight">
+        <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+          <p className="font-bold text-foreground text-base tracking-tight">
             Nothing here yet
           </p>
           <p className="font-sans text-sm text-muted-foreground">
@@ -164,10 +164,10 @@ export function SoulFileEditor({
           </p>
         </div>
       ) : (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6">
+        <div className="border border-tbb-line rounded-md bg-white p-6">
           <MarkdownBody body={body} />
           {(updatedAt || lastEditor) && (
-            <p className="mt-6 pt-3 border-t border-[#CCCCCC] font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="mt-6 pt-3 border-t border-tbb-line font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
               Last edited
               {updatedAt && (
                 <> {updatedAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</>

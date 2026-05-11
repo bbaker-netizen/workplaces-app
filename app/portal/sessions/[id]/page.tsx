@@ -36,10 +36,10 @@ export default async function PortalSessionDetailPage({
 
       {actionItems.length > 0 && (
         <section className="space-y-3">
-          <h2 className="font-display font-bold text-foreground text-lg tracking-tight">
+          <h2 className="font-bold text-foreground text-lg tracking-tight">
             Action items from this session
           </h2>
-          <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+          <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
             {actionItems.map((it) => (
               <li key={it.id} className="py-3">
                 <Link
@@ -50,11 +50,11 @@ export default async function PortalSessionDetailPage({
                     <span className="font-sans text-sm font-bold text-foreground group-hover:underline underline-offset-4">
                       {it.title}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {it.status}
                     </span>
                     {it.dueDate && (
-                      <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                      <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                         Due {it.dueDate.toLocaleDateString()}
                       </span>
                     )}

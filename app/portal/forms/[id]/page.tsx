@@ -37,11 +37,11 @@ export default async function FormDetailPage({
       <header className="space-y-2">
         <Link
           href="/portal/forms"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← All forms
         </Link>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {form.name}
         </h1>
         {form.description && (
@@ -58,7 +58,7 @@ export default async function FormDetailPage({
       {canEdit && (
         <>
           <section className="space-y-3">
-            <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+            <h2 className="font-bold text-foreground text-xl tracking-tight">
               Edit
             </h2>
             <FormBuilder
@@ -77,7 +77,7 @@ export default async function FormDetailPage({
           </section>
 
           <section className="space-y-3">
-            <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+            <h2 className="font-bold text-foreground text-xl tracking-tight">
               Responses ({submissions.length})
             </h2>
             {submissions.length === 0 ? (
@@ -85,15 +85,15 @@ export default async function FormDetailPage({
                 Nothing yet.
               </p>
             ) : (
-              <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+              <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
                 {submissions.map((s) => (
                   <li key={s.id} className="py-3 space-y-2">
-                    <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <div className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                       {s.submittedAt.toLocaleString()}
                       {s.respondentName && <> · {s.respondentName}</>}
                       {s.respondentEmail && <> · {s.respondentEmail}</>}
                     </div>
-                    <pre className="font-mono text-xs whitespace-pre-wrap bg-[#F5F1E8] border border-[#CCCCCC] rounded-md px-3 py-2 overflow-x-auto">
+                    <pre className="font-mono text-xs whitespace-pre-wrap bg-tbb-cream-50 border border-tbb-line rounded-md px-3 py-2 overflow-x-auto">
                       {JSON.stringify(s.answers, null, 2)}
                     </pre>
                   </li>

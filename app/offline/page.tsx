@@ -8,10 +8,10 @@ export default function OfflinePage() {
   return (
     <main className="min-h-screen bg-background flex items-center justify-center px-6 py-20">
       <div className="max-w-md text-center space-y-4">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           The Builder · By Workplaces
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Offline.
         </h1>
         <p className="font-sans text-sm text-foreground">

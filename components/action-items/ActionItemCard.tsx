@@ -45,8 +45,8 @@ export function ActionItemCard({
       className={
         "group relative bg-white border rounded-md transition-colors " +
         (overdue
-          ? "border-[#E87722] shadow-[inset_4px_0_0_0_#E87722]"
-          : "border-[#CCCCCC] hover:border-[#666666]")
+          ? "border-tbb-danger shadow-[inset_4px_0_0_0_#E87722]"
+          : "border-tbb-line hover:border-tbb-ink-3")
       }
     >
       <div className="p-4 sm:p-5">
@@ -60,12 +60,12 @@ export function ActionItemCard({
           />
           <div className="flex gap-1.5 flex-wrap justify-end">
             {item.revenueImpact && (
-              <span className="font-mono text-[9px] uppercase tracking-[0.15em] px-2 py-0.5 rounded-sm border border-[#1A1A1A] text-[#1A1A1A]">
+              <span className="font-mono text-[9px] uppercase tracking-tbb-caps px-2 py-0.5 rounded-sm border border-tbb-navy text-tbb-navy">
                 Revenue
               </span>
             )}
             {item.marginImpact && (
-              <span className="font-mono text-[9px] uppercase tracking-[0.15em] px-2 py-0.5 rounded-sm border border-[#1A1A1A] text-[#1A1A1A]">
+              <span className="font-mono text-[9px] uppercase tracking-tbb-caps px-2 py-0.5 rounded-sm border border-tbb-navy text-tbb-navy">
                 Margin
               </span>
             )}
@@ -75,7 +75,7 @@ export function ActionItemCard({
         {/* Title — clickable to detail */}
         <Link
           href={detailHref}
-          className="block font-display font-bold text-foreground tracking-tight text-xl sm:text-2xl leading-tight hover:underline underline-offset-4 decoration-2"
+          className="block font-bold text-foreground tracking-tight text-xl sm:text-2xl leading-tight hover:underline underline-offset-4 decoration-2"
         >
           {item.title}
         </Link>
@@ -93,16 +93,16 @@ export function ActionItemCard({
         {/* Bottom row: assignee + due + (optional) engagement label */}
         <div className="mt-4 flex items-center flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-muted-foreground">
           <span>
-            <span className="uppercase tracking-[0.15em] mr-1.5">Owner</span>
+            <span className="uppercase tracking-tbb-caps mr-1.5">Owner</span>
             <span className={item.assigneeName ? "text-foreground" : ""}>
               {item.assigneeName ?? "Unassigned"}
             </span>
           </span>
           <span>
-            <span className="uppercase tracking-[0.15em] mr-1.5">Due</span>
+            <span className="uppercase tracking-tbb-caps mr-1.5">Due</span>
             <span
               className={
-                overdue ? "text-[#E87722] font-bold" : "text-foreground"
+                overdue ? "text-tbb-danger font-bold" : "text-foreground"
               }
             >
               {formatDueDate(item.dueDate)}
@@ -110,7 +110,7 @@ export function ActionItemCard({
           </span>
           {item.engagementName && (
             <span>
-              <span className="uppercase tracking-[0.15em] mr-1.5">Client</span>
+              <span className="uppercase tracking-tbb-caps mr-1.5">Client</span>
               <span className="text-foreground">{item.engagementName}</span>
             </span>
           )}

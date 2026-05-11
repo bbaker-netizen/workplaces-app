@@ -14,9 +14,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_TONE: Record<string, string> = {
   open: "text-muted-foreground",
-  in_progress: "text-[#2E4057] font-bold",
-  achieved: "text-[#2E4057] font-bold",
-  missed: "text-[#E87722] font-bold",
+  in_progress: "text-tbb-navy font-bold",
+  achieved: "text-tbb-navy font-bold",
+  missed: "text-tbb-danger font-bold",
   abandoned: "text-muted-foreground line-through",
 };
 
@@ -47,17 +47,17 @@ export function GoalCard({
       <Link
         href={href}
         className={
-          "block py-4 pl-4 border-l-2 group hover:bg-[#F5F1E8] transition-colors " +
-          (isPast ? "border-[#E87722]" : "border-transparent")
+          "block py-4 pl-4 border-l-2 group hover:bg-tbb-cream-50 transition-colors " +
+          (isPast ? "border-tbb-danger" : "border-transparent")
         }
       >
         <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-          <span className="font-display font-bold text-foreground text-base sm:text-lg tracking-tight group-hover:underline underline-offset-4">
+          <span className="font-bold text-foreground text-base sm:text-lg tracking-tight group-hover:underline underline-offset-4">
             {goal.title}
           </span>
           <span
             className={
-              "ml-auto font-mono text-[10px] uppercase tracking-[0.2em] " +
+              "ml-auto font-mono text-[10px] uppercase tracking-tbb-caps " +
               (STATUS_TONE[goal.status] ?? "text-muted-foreground")
             }
           >
@@ -66,7 +66,7 @@ export function GoalCard({
               : STATUS_LABEL[goal.status] ?? goal.status}
           </span>
         </div>
-        <div className="mt-1 flex items-baseline gap-x-3 gap-y-0.5 flex-wrap font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <div className="mt-1 flex items-baseline gap-x-3 gap-y-0.5 flex-wrap font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           {goal.targetMetric && (
             <span>
               Target: <span className="text-foreground">{goal.targetMetric}</span>
@@ -88,12 +88,12 @@ export function GoalCard({
           {goal.ownerName && <span>· {goal.ownerName}</span>}
           <span className="ml-auto flex gap-1">
             {goal.revenueImpact && (
-              <span className="rounded-full border border-[#2E4057] text-[#2E4057] bg-[#F5F1E8] px-2 py-px">
+              <span className="rounded-full border border-tbb-blue text-tbb-navy bg-tbb-cream-50 px-2 py-px">
                 Revenue
               </span>
             )}
             {goal.marginImpact && (
-              <span className="rounded-full border border-[#2E4057] text-[#2E4057] bg-[#F5F1E8] px-2 py-px">
+              <span className="rounded-full border border-tbb-blue text-tbb-navy bg-tbb-cream-50 px-2 py-px">
                 Margin
               </span>
             )}

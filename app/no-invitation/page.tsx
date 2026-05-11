@@ -4,7 +4,7 @@ export default function NoInvitationPage() {
   return (
     <main className="min-h-screen bg-background flex items-center justify-center px-6 py-20">
       <div className="flex flex-col items-center gap-6 text-center max-w-2xl">
-        <h1 className="font-display font-bold text-foreground tracking-tight text-4xl sm:text-5xl leading-none">
+        <h1 className="font-bold text-foreground tracking-tight text-4xl sm:text-5xl leading-none">
           Invitation required
         </h1>
         <p className="font-sans text-muted-foreground max-w-md leading-relaxed">
@@ -23,7 +23,7 @@ export default function NoInvitationPage() {
           .
         </p>
         <SignOutButton redirectUrl="/">
-          <button className="mt-8 font-sans text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline">
+          <button className="mt-8 font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline">
             Sign out
           </button>
         </SignOutButton>

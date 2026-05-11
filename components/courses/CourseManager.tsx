@@ -185,7 +185,7 @@ export function CourseManager({
       {/* Lessons section */}
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+          <h2 className="font-bold text-foreground text-xl tracking-tight">
             Lessons
           </h2>
         </div>
@@ -195,13 +195,13 @@ export function CourseManager({
           </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <ul className="sm:col-span-1 divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+            <ul className="sm:col-span-1 divide-y divide-tbb-line border-t border-b border-tbb-line">
               {lessons.map((l) => (
                 <li
                   key={l.id}
                   className={
                     "py-2 pl-2 flex items-center gap-2 cursor-pointer transition-colors " +
-                    (l.id === activeLessonId ? "bg-[#F5F1E8]" : "")
+                    (l.id === activeLessonId ? "bg-tbb-cream-50" : "")
                   }
                   onClick={() => {
                     setActiveLessonId(l.id);
@@ -221,7 +221,7 @@ export function CourseManager({
                       }}
                       disabled={isPending}
                       aria-label={`Delete ${l.title}`}
-                      className="p-1 rounded text-muted-foreground hover:text-[#E87722]"
+                      className="p-1 rounded text-muted-foreground hover:text-tbb-danger"
                     >
                       <Trash2 className="w-3 h-3" aria-hidden />
                     </button>
@@ -237,7 +237,7 @@ export function CourseManager({
                       value={lessonTitle}
                       onChange={(e) => setLessonTitle(e.target.value)}
                       disabled={isPending}
-                      className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                      className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm font-bold focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                     />
                     <textarea
                       rows={12}
@@ -245,14 +245,14 @@ export function CourseManager({
                       onChange={(e) => setLessonBody(e.target.value)}
                       disabled={isPending}
                       placeholder="Lesson body (markdown)…"
-                      className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+                      className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
                     />
                     <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={saveLesson}
                         disabled={isPending}
-                        className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+                        className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
                       >
                         {isPending && (
                           <Loader2 className="w-3 h-3 animate-spin" />
@@ -262,8 +262,8 @@ export function CourseManager({
                     </div>
                   </div>
                 ) : (
-                  <div className="border border-[#CCCCCC] rounded-md bg-white p-4">
-                    <h3 className="font-display font-bold text-foreground text-lg tracking-tight">
+                  <div className="border border-tbb-line rounded-md bg-white p-4">
+                    <h3 className="font-bold text-foreground text-lg tracking-tight">
                       {activeLesson.title}
                     </h3>
                     {activeLesson.body && (
@@ -294,12 +294,12 @@ export function CourseManager({
               onChange={(e) => setNewLessonTitle(e.target.value)}
               placeholder="New lesson title…"
               disabled={isPending}
-              className="flex-1 bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="flex-1 bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
             <button
               type="submit"
               disabled={isPending || !newLessonTitle.trim()}
-              className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+              className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
             >
               <Plus className="w-3 h-3" aria-hidden /> Add lesson
             </button>
@@ -310,7 +310,7 @@ export function CourseManager({
       {/* Cohorts section */}
       {course.deliveryMode === "cohort" && (
         <section className="space-y-3">
-          <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+          <h2 className="font-bold text-foreground text-xl tracking-tight">
             Cohorts
           </h2>
           {cohorts.length === 0 ? (
@@ -318,20 +318,20 @@ export function CourseManager({
               No cohorts yet.
             </p>
           ) : (
-            <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+            <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
               {cohorts.map((c) => (
                 <li
                   key={c.id}
                   className="py-2 flex items-baseline gap-3 flex-wrap"
                 >
-                  <span className="font-display font-bold text-foreground text-base tracking-tight">
+                  <span className="font-bold text-foreground text-base tracking-tight">
                     {c.name}
                   </span>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     {c.status}
                   </span>
                   {c.startsAt && (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {new Date(c.startsAt).toLocaleDateString()}
                     </span>
                   )}
@@ -352,12 +352,12 @@ export function CourseManager({
                 onChange={(e) => setNewCohortName(e.target.value)}
                 placeholder="New cohort name (e.g. Spring 2026)…"
                 disabled={isPending}
-                className="flex-1 bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                className="flex-1 bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
               />
               <button
                 type="submit"
                 disabled={isPending || !newCohortName.trim()}
-                className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+                className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
               >
                 <Plus className="w-3 h-3" aria-hidden /> Add cohort
               </button>
@@ -368,7 +368,7 @@ export function CourseManager({
 
       {/* Enrollments section */}
       <section className="space-y-3">
-        <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
           Enrollments
         </h2>
         {enrollments.length === 0 ? (
@@ -376,7 +376,7 @@ export function CourseManager({
             Nobody enrolled yet.
           </p>
         ) : (
-          <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+          <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
             {enrollments.map((e) => (
               <li key={e.id} className="py-2 flex items-baseline gap-3 flex-wrap">
                 <span className="font-sans text-sm font-bold text-foreground">
@@ -389,7 +389,7 @@ export function CourseManager({
                       flipStatus(e.id, ev.target.value as EnrollmentItem["status"])
                     }
                     disabled={isPending}
-                    className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] bg-white border border-[#CCCCCC] rounded-full px-2 py-1 cursor-pointer"
+                    className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps bg-white border border-tbb-line rounded-full px-2 py-1 cursor-pointer"
                   >
                     <option value="enrolled">Enrolled</option>
                     <option value="in_progress">In progress</option>
@@ -397,7 +397,7 @@ export function CourseManager({
                     <option value="dropped">Dropped</option>
                   </select>
                 ) : (
-                  <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     {e.status}
                   </span>
                 )}
@@ -417,7 +417,7 @@ export function CourseManager({
               value={enrollMember}
               onChange={(e) => setEnrollMember(e.target.value)}
               disabled={isPending}
-              className="flex-1 bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="flex-1 bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             >
               <option value="">Pick a member to enrol…</option>
               {members
@@ -431,7 +431,7 @@ export function CourseManager({
             <button
               type="submit"
               disabled={isPending || !enrollMember}
-              className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+              className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
             >
               <Plus className="w-3 h-3" aria-hidden /> Enroll
             </button>
@@ -447,10 +447,10 @@ export function CourseManager({
               onClick={togglePublished}
               disabled={isPending}
               className={
-                "font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md " +
+                "font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 rounded-md " +
                 (course.isPublished
-                  ? "border border-[#CCCCCC] text-foreground hover:bg-[#F5F1E8]"
-                  : "bg-[#2E4057] text-[#F5F1E8] hover:bg-[#1A1A1A]") +
+                  ? "border border-tbb-line text-foreground hover:bg-tbb-cream-50"
+                  : "bg-tbb-blue-700 text-white hover:bg-tbb-blue") +
                 " disabled:opacity-50"
               }
             >
@@ -460,7 +460,7 @@ export function CourseManager({
               type="button"
               onClick={onDeleteCourse}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-[#E87722] underline-offset-4 hover:underline"
+              className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-tbb-danger underline-offset-4 hover:underline"
             >
               Delete course
             </button>
@@ -469,7 +469,7 @@ export function CourseManager({
       )}
 
       {error && (
-        <p role="alert" className="font-sans text-sm text-[#E87722]">
+        <p role="alert" className="font-sans text-sm text-tbb-danger">
           {error}
         </p>
       )}

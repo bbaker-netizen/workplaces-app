@@ -51,10 +51,10 @@ export default async function PipelinePage() {
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Pipeline
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
@@ -63,14 +63,14 @@ export default async function PipelinePage() {
         </p>
         <Link
           href="/coach"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Console
         </Link>
       </header>
 
       {prospects.length === 0 ? (
-        <p className="font-sans text-sm text-muted-foreground italic border border-[#CCCCCC] rounded-md bg-white p-6">
+        <p className="font-sans text-sm text-muted-foreground italic border border-tbb-line rounded-md bg-white p-6">
           No prospects yet. Direct people to{" "}
           <code className="font-mono text-xs">/diagnostic</code> to capture
           their first contact.
@@ -82,10 +82,10 @@ export default async function PipelinePage() {
             if (list.length === 0) return null;
             return (
               <section key={status} className="space-y-2">
-                <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                   {STATUS_LABEL[status]} · {list.length}
                 </h2>
-                <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+                <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
                   {list.map((p) => (
                     <li
                       key={p.id}
@@ -102,7 +102,7 @@ export default async function PipelinePage() {
                           {p.contactName}
                         </span>
                       )}
-                      <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                      <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                         {p.contactEmail}
                       </span>
                       <span className="ml-auto">

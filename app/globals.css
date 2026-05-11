@@ -1,40 +1,70 @@
-/* Fontsource imports — bundled with the build, no external CDN */
-@import "@fontsource/big-shoulders-display/700.css";
-@import "@fontsource/work-sans/400.css";
-@import "@fontsource/work-sans/500.css";
-@import "@fontsource/work-sans/700.css";
-@import "@fontsource/ibm-plex-mono/400.css";
+/*
+ * The Business Builders by Workplaces — design tokens.
+ * Sourced from the canonical skill at colors_and_type.css.
+ *
+ * Arial is the brand typeface (one face, three weights) and is
+ * system-installed on every target platform, so no @fontsource
+ * imports are needed for it. Pacifico (script accent) is loaded
+ * lazily on the rare surfaces that use it.
+ */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/*
- * The Builder palette mapped onto shadcn semantic tokens.
- * See CLAUDE.md "Brand & UI" for the canonical spec.
- */
 @layer base {
   :root {
-    --background: 36 30% 93%;        /* Drafting Cream  #F5F1E8 */
-    --foreground: 0 0% 10%;          /* Foreman Black   #1A1A1A */
-    --card: 36 30% 93%;
-    --card-foreground: 0 0% 10%;
-    --popover: 36 30% 93%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 0 0% 10%;             /* Foreman Black for primary buttons */
-    --primary-foreground: 36 30% 93%;
-    --secondary: 212 31% 26%;        /* Steel Blue      #2E4057 */
-    --secondary-foreground: 36 30% 93%;
-    --muted: 0 0% 80%;               /* Neutral Grey 2  #CCCCCC */
-    --muted-foreground: 0 0% 40%;    /* Neutral Grey 1  #666666 */
-    --accent: 23 81% 53%;            /* Safety Vest     #E87722 */
-    --accent-foreground: 0 0% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 36 30% 93%;
-    --border: 0 0% 80%;              /* Neutral Grey 2 */
-    --input: 0 0% 80%;
-    --ring: 212 31% 26%;             /* Steel Blue focus ring */
-    --radius: 0.25rem;               /* Drafted, not soft */
+    /* ---------- TBB brand tokens (direct hex) ---------- */
+    --tbb-navy:        #14385B;
+    --tbb-navy-700:    #1B4A77;
+    --tbb-navy-900:    #0C2740;
+
+    --tbb-cream:       #EFE6D7;
+    --tbb-cream-200:   #F7F1E6;
+    --tbb-cream-50:    #FBF8F2;
+
+    --tbb-blue:        #2C6CB0;
+    --tbb-blue-600:    #2560A0;
+    --tbb-blue-700:    #1E5189;
+    --tbb-blue-100:    #E2ECF7;
+
+    --tbb-blue-light:  #6FA8DC;
+    --tbb-blue-light-200: #C9DEF1;
+
+    --tbb-ink:         #14181D;
+    --tbb-ink-2:       #2A323B;
+    --tbb-ink-3:       #5A6470;
+    --tbb-ink-4:       #8B95A1;
+    --tbb-line:        #D6DDE5;
+    --tbb-line-soft:   #E8ECF1;
+    --tbb-bg:          #FFFFFF;
+    --tbb-bg-soft:     #F4F6F9;
+
+    --tbb-success:     #2E8B57;
+    --tbb-warning:     #D89F2F;
+    --tbb-danger:      #C0392B;
+
+    /* ---------- shadcn semantic tokens (HSL for Tailwind) ---------- */
+    --background: 220 29% 97%;      /* tbb-bg-soft */
+    --foreground: 215 18% 10%;      /* tbb-ink */
+    --card: 0 0% 100%;              /* pure white */
+    --card-foreground: 215 18% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 18% 10%;
+    --primary: 209 60% 43%;         /* tbb-blue — CTAs */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 209 64% 22%;       /* tbb-navy — secondary surfaces */
+    --secondary-foreground: 36 39% 89%;
+    --muted: 213 18% 87%;           /* tbb-line — soft surfaces */
+    --muted-foreground: 212 11% 40%; /* tbb-ink-3 */
+    --accent: 36 39% 89%;           /* tbb-cream — warm callouts */
+    --accent-foreground: 209 64% 22%;
+    --destructive: 6 64% 46%;       /* tbb-danger */
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 18% 87%;          /* tbb-line */
+    --input: 213 18% 87%;
+    --ring: 209 60% 43%;            /* tbb-blue focus ring */
+    --radius: 0.625rem;             /* 10px — input default */
   }
 }
 
@@ -42,7 +72,42 @@
   * {
     @apply border-border;
   }
+  html {
+    font-family: Arial, "Helvetica Neue", Helvetica, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground;
+    font-size: 1rem;
+    line-height: 1.45;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--tbb-navy);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  h1 { font-weight: 900; }
+  p {
+    color: var(--tbb-ink-2);
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
+}
+
+@layer utilities {
+  .tbb-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tbb-blue);
+  }
+  .tbb-script {
+    font-family: "Pacifico", "Brush Script MT", cursive;
+    color: var(--tbb-blue);
   }
 }

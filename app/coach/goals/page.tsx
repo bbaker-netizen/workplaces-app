@@ -15,15 +15,15 @@ export default async function CoachGoalsCrossPage() {
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Goals · cross-client
         </h1>
         <Link
           href="/coach"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Console
         </Link>
@@ -34,7 +34,7 @@ export default async function CoachGoalsCrossPage() {
           No goals yet.
         </p>
       ) : (
-        <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((g) => {
             const overdue =
               g.targetDate &&
@@ -46,22 +46,22 @@ export default async function CoachGoalsCrossPage() {
                 <Link
                   href={`/portal/goals/${g.id}`}
                   className={
-                    "block py-3 pl-4 border-l-2 hover:bg-[#F5F1E8] transition-colors group " +
-                    (overdue ? "border-[#E87722]" : "border-transparent")
+                    "block py-3 pl-4 border-l-2 hover:bg-tbb-cream-50 transition-colors group " +
+                    (overdue ? "border-tbb-danger" : "border-transparent")
                   }
                 >
                   <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                    <span className="font-display font-bold text-foreground text-base tracking-tight group-hover:underline underline-offset-4">
+                    <span className="font-bold text-foreground text-base tracking-tight group-hover:underline underline-offset-4">
                       {g.title}
                     </span>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                       {g.engagementName ?? "Engagement"}
                     </span>
                     <span
                       className={
-                        "ml-auto font-mono text-[10px] uppercase tracking-[0.2em] " +
+                        "ml-auto font-mono text-[10px] uppercase tracking-tbb-caps " +
                         (overdue
-                          ? "text-[#E87722] font-bold"
+                          ? "text-tbb-danger font-bold"
                           : "text-muted-foreground")
                       }
                     >
@@ -71,7 +71,7 @@ export default async function CoachGoalsCrossPage() {
                     </span>
                   </div>
                   {g.targetDate && (
-                    <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <p className="mt-1 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                       By {new Date(g.targetDate).toLocaleDateString()}
                     </p>
                   )}

@@ -69,7 +69,7 @@ export const MentionList = forwardRef<
 
   if (items.length === 0) {
     return (
-      <div className="rounded-md border border-[#CCCCCC] bg-white shadow-md px-3 py-2 font-sans text-sm text-muted-foreground">
+      <div className="rounded-md border border-tbb-line bg-white shadow-md px-3 py-2 font-sans text-sm text-muted-foreground">
         No members match.
       </div>
     );
@@ -78,7 +78,7 @@ export const MentionList = forwardRef<
   return (
     <ul
       role="listbox"
-      className="max-h-64 overflow-y-auto rounded-md border border-[#CCCCCC] bg-white shadow-md py-1 min-w-[220px]"
+      className="max-h-64 overflow-y-auto rounded-md border border-tbb-line bg-white shadow-md py-1 min-w-[220px]"
     >
       {items.map((item, idx) => (
         <li key={item.id} role="presentation">
@@ -91,8 +91,8 @@ export const MentionList = forwardRef<
             className={
               "w-full text-left px-3 py-1.5 font-sans text-sm transition-colors " +
               (idx === selectedIndex
-                ? "bg-[#F5F1E8] text-foreground"
-                : "text-foreground hover:bg-[#F5F1E8]")
+                ? "bg-tbb-cream-50 text-foreground"
+                : "text-foreground hover:bg-tbb-cream-50")
             }
           >
             <span className="font-bold">@{item.label}</span>

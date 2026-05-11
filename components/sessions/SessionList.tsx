@@ -27,8 +27,8 @@ export function SessionList({
   const hasAny = upcoming.length > 0 || past.length > 0;
   if (!hasAny) {
     return (
-      <div className="border border-[#CCCCCC] rounded-md bg-white p-6 space-y-2">
-        <p className="font-display font-bold text-foreground text-base tracking-tight">
+      <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+        <p className="font-bold text-foreground text-base tracking-tight">
           {emptyHeadline}
         </p>
         <p className="font-sans text-sm text-muted-foreground">
@@ -41,10 +41,10 @@ export function SessionList({
     <div className="space-y-8">
       {upcoming.length > 0 && (
         <section className="space-y-3">
-          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             Upcoming
           </h2>
-          <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+          <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
             {upcoming.map((s) => (
               <SessionRow key={s.id} session={s} hrefBase={hrefBase} />
             ))}
@@ -53,10 +53,10 @@ export function SessionList({
       )}
       {past.length > 0 && (
         <section className="space-y-3">
-          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             Past
           </h2>
-          <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+          <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
             {past.map((s) => (
               <SessionRow key={s.id} session={s} hrefBase={hrefBase} />
             ))}
@@ -82,16 +82,16 @@ function SessionRow({
     : SESSION_STATUS_LABEL[session.status];
   const accent =
     session.status === "completed"
-      ? "border-[#2E4057]"
+      ? "border-tbb-blue"
       : isOverdue
-        ? "border-[#E87722]"
+        ? "border-tbb-danger"
         : "border-transparent";
   return (
     <li>
       <Link
         href={`${hrefBase}/${session.id}`}
         className={
-          "block py-3 pl-3 border-l-2 group hover:bg-[#F5F1E8] transition-colors " +
+          "block py-3 pl-3 border-l-2 group hover:bg-tbb-cream-50 transition-colors " +
           accent
         }
       >
@@ -99,16 +99,16 @@ function SessionRow({
           <span className="font-sans text-sm font-bold text-foreground group-hover:underline underline-offset-4">
             {formatSessionTime(session.scheduledAt)}
           </span>
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             {SESSION_TYPE_LABEL[session.type]}
           </span>
           <span
             className={
-              "ml-auto font-mono text-[10px] uppercase tracking-[0.2em] " +
+              "ml-auto font-mono text-[10px] uppercase tracking-tbb-caps " +
               (isOverdue
-                ? "text-[#E87722] font-bold"
+                ? "text-tbb-danger font-bold"
                 : session.status === "completed"
-                  ? "text-[#2E4057] font-bold"
+                  ? "text-tbb-navy font-bold"
                   : session.status === "cancelled"
                     ? "text-muted-foreground line-through"
                     : "text-muted-foreground")

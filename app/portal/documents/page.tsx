@@ -16,7 +16,7 @@ export default async function PortalDocumentsPage() {
   if (!engagement) {
     return (
       <main className="max-w-3xl mx-auto px-6 py-16">
-        <h1 className="font-display font-bold text-foreground text-3xl tracking-tight">
+        <h1 className="font-bold text-foreground text-3xl tracking-tight">
           No engagement yet
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
@@ -49,10 +49,10 @@ export default async function PortalDocumentsPage() {
   return (
     <main className="max-w-4xl mx-auto px-6 py-12">
       <header className="mb-8 space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           {engagement.name ?? "Engagement"}
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Documents
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
@@ -63,7 +63,7 @@ export default async function PortalDocumentsPage() {
       <div className="space-y-8">
         <DocumentUploadForm engagementId={engagement.id} />
         <section className="space-y-3">
-          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             All documents
           </h2>
           <DocumentList rows={rows} />

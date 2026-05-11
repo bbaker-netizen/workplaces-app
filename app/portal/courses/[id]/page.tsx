@@ -30,14 +30,14 @@ export default async function CourseDetailPage({
       <header className="space-y-2">
         <Link
           href="/portal/courses"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← All courses
         </Link>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {course.name}
         </h1>
-        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           {course.deliveryMode === "cohort" ? "Cohort" : "Self-paced"}
           {" · "}
           {course.isPublished ? "Published" : "Draft"}

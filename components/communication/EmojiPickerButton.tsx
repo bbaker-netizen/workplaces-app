@@ -36,7 +36,7 @@ const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
   ssr: false,
   loading: () => (
     <div
-      className="w-[320px] h-[400px] grid place-items-center bg-white border border-[#CCCCCC] rounded-md font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground"
+      className="w-[320px] h-[400px] grid place-items-center bg-white border border-tbb-line rounded-pill font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground"
       role="status"
     >
       Loading emoji…
@@ -102,7 +102,7 @@ export function EmojiPickerButton({
         onClick={() => setOpen((v) => !v)}
         className={
           triggerClassName ??
-          "p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-[#F5F1E8] transition-colors"
+          "p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50 transition-colors"
         }
         {...triggerProps}
       >

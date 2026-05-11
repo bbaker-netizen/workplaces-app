@@ -34,10 +34,10 @@ export default async function CoachActionItemsPage() {
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="mb-8 space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Action items — all engagements
         </h1>
         <p className="font-sans text-muted-foreground max-w-md leading-relaxed">

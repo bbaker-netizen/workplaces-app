@@ -33,14 +33,14 @@ export default async function PortalProjectDetailPage({
       <header className="space-y-2">
         <Link
           href="/portal/projects"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← All projects
         </Link>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {project.name}
         </h1>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           <span>Status: <span className="text-foreground">{project.status}</span></span>
           {project.leadName && <span>Lead: {project.leadName}</span>}
           {project.targetDate && (
@@ -69,7 +69,7 @@ export default async function PortalProjectDetailPage({
 
       {canEdit ? (
         <section className="space-y-3">
-          <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+          <h2 className="font-bold text-foreground text-xl tracking-tight">
             Project details
           </h2>
           <ProjectForm
@@ -100,10 +100,10 @@ export default async function PortalProjectDetailPage({
       ) : (
         project.description && (
           <section className="space-y-3">
-            <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+            <h2 className="font-bold text-foreground text-xl tracking-tight">
               About this project
             </h2>
-            <div className="border border-[#CCCCCC] rounded-md bg-white p-4">
+            <div className="border border-tbb-line rounded-md bg-white p-4">
               <MarkdownBody body={project.description} />
             </div>
           </section>

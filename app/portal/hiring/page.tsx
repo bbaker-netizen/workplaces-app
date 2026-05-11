@@ -25,10 +25,10 @@ const STATUS_ORDER: Record<string, number> = {
 
 const STATUS_TONE: Record<string, string> = {
   assessing: "text-muted-foreground",
-  interview_scheduled: "text-[#2E4057] font-bold",
-  decision_pending: "text-[#E87722] font-bold",
-  offer_sent: "text-[#2E4057] font-bold",
-  hired: "text-[#2E4057] font-bold",
+  interview_scheduled: "text-tbb-navy font-bold",
+  decision_pending: "text-tbb-danger font-bold",
+  offer_sent: "text-tbb-navy font-bold",
+  hired: "text-tbb-navy font-bold",
   declined: "text-muted-foreground line-through",
 };
 
@@ -64,10 +64,10 @@ export default async function HiringPipelinePage() {
     <main className="max-w-4xl mx-auto px-6 py-12">
       <header className="mb-8 flex items-end justify-between gap-3 flex-wrap">
         <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             {engagement.name ?? "Engagement"}
           </p>
-          <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+          <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
             Hiring pipeline
           </h1>
           <p className="font-sans text-sm text-muted-foreground">
@@ -77,7 +77,7 @@ export default async function HiringPipelinePage() {
         {canCreate && (
           <Link
             href="/portal/hiring/new"
-            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057]"
+            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
           >
             <Plus className="w-4 h-4" aria-hidden /> New candidate
           </Link>
@@ -85,8 +85,8 @@ export default async function HiringPipelinePage() {
       </header>
 
       {hires.length === 0 ? (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6 space-y-2">
-          <p className="font-display font-bold text-foreground text-base tracking-tight">
+        <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+          <p className="font-bold text-foreground text-base tracking-tight">
             No candidates yet
           </p>
           <p className="font-sans text-sm text-muted-foreground">
@@ -101,24 +101,24 @@ export default async function HiringPipelinePage() {
             <section key={status} className="space-y-2">
               <h2
                 className={
-                  "font-mono text-[11px] uppercase tracking-[0.2em] " +
+                  "font-mono text-[11px] uppercase tracking-tbb-caps " +
                   (STATUS_TONE[status] ?? "text-muted-foreground")
                 }
               >
                 {STATUS_LABEL[status] ?? status} · {byStatus.get(status)!.length}
               </h2>
-              <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+              <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
                 {byStatus.get(status)!.map((h) => (
                   <li key={h.id}>
                     <Link
                       href={`/portal/hiring/${h.id}`}
-                      className="block py-3 pl-3 hover:bg-[#F5F1E8] transition-colors group"
+                      className="block py-3 pl-3 hover:bg-tbb-cream-50 transition-colors group"
                     >
                       <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                        <span className="font-display font-bold text-foreground text-base tracking-tight group-hover:underline underline-offset-4">
+                        <span className="font-bold text-foreground text-base tracking-tight group-hover:underline underline-offset-4">
                           {h.candidateName}
                         </span>
-                        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                           {h.roleName}
                         </span>
                       </div>

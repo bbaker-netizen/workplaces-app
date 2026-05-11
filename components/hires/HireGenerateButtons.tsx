@@ -73,8 +73,8 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
       </div>
 
       {activePanel === "interview" && (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3">
-          <h4 className="font-display font-bold text-foreground text-base tracking-tight">
+        <div className="border border-tbb-line rounded-md bg-white p-4 space-y-3">
+          <h4 className="font-bold text-foreground text-base tracking-tight">
             Interview transcript
           </h4>
           <p className="font-sans text-sm text-muted-foreground">
@@ -87,14 +87,14 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
             rows={8}
             disabled={isPending}
             placeholder="Paste transcript here…"
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
           />
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setActivePanel(null)}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+              className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
             >
               Cancel
             </button>
@@ -108,7 +108,7 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
                   generateHiringAssessment(hireId, interviewTranscript),
                 )
               }
-              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
             >
               {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
               {isPending ? "Running…" : "Run assessment"}
@@ -118,13 +118,13 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
       )}
 
       {activePanel === "onboarding" && (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3">
-          <h4 className="font-display font-bold text-foreground text-base tracking-tight">
+        <div className="border border-tbb-line rounded-md bg-white p-4 space-y-3">
+          <h4 className="font-bold text-foreground text-base tracking-tight">
             Onboarding details
           </h4>
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                 Start date
               </span>
               <input
@@ -132,11 +132,11 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 disabled={isPending}
-                className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
               />
             </label>
             <label className="block space-y-1">
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                 Compensation
               </span>
               <input
@@ -145,7 +145,7 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
                 onChange={(e) => setCompensation(e.target.value)}
                 disabled={isPending}
                 placeholder="e.g. $90K base + 10% bonus"
-                className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
               />
             </label>
           </div>
@@ -154,7 +154,7 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
               type="button"
               onClick={() => setActivePanel(null)}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+              className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
             >
               Cancel
             </button>
@@ -170,7 +170,7 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
                   ),
                 )
               }
-              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
             >
               {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
               {isPending ? "Running…" : "Generate pack"}
@@ -182,13 +182,13 @@ export function HireGenerateButtons({ hireId }: { hireId: string }) {
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
       )}
       {success && !isPending && (
-        <p className="font-sans text-sm text-[#2E4057] border border-[#CCCCCC] rounded-md px-3 py-2 bg-[#F5F1E8]">
+        <p className="font-sans text-sm text-tbb-navy border border-tbb-line rounded-md px-3 py-2 bg-tbb-cream-50">
           {success}
         </p>
       )}
@@ -210,7 +210,7 @@ function GenerateButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md border border-[#2E4057] text-[#2E4057] bg-white hover:bg-[#F5F1E8] disabled:opacity-50 disabled:cursor-wait"
+      className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-navy bg-white hover:bg-tbb-cream-50 disabled:opacity-50 disabled:cursor-wait"
     >
       <Sparkles className="w-3.5 h-3.5" aria-hidden />
       {label}

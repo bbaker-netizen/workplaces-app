@@ -48,7 +48,7 @@ export function PublicFormResponder({
   if (success) {
     return (
       <div className="font-sans text-base">
-        <p className="font-display font-bold text-foreground text-2xl tracking-tight">
+        <p className="font-bold text-foreground text-2xl tracking-tight">
           Thanks for the response.
         </p>
         <p className="mt-2 text-muted-foreground">
@@ -77,7 +77,7 @@ export function PublicFormResponder({
     >
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Your name
           </span>
           <input
@@ -86,11 +86,11 @@ export function PublicFormResponder({
             onChange={(e) => setRespondentName(e.target.value)}
             disabled={isPending}
             required
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Email
           </span>
           <input
@@ -99,7 +99,7 @@ export function PublicFormResponder({
             onChange={(e) => setRespondentEmail(e.target.value)}
             disabled={isPending}
             required
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
       </div>
@@ -108,7 +108,7 @@ export function PublicFormResponder({
         <fieldset key={q.id} className="space-y-2">
           <legend className="font-sans text-sm font-bold text-foreground">
             {q.label}
-            {q.required && <span className="text-[#E87722]"> *</span>}
+            {q.required && <span className="text-tbb-danger"> *</span>}
           </legend>
           {q.type === "text" && (
             <input
@@ -116,7 +116,7 @@ export function PublicFormResponder({
               value={(answers[q.id] as string) ?? ""}
               onChange={(e) => setAnswer(q.id, e.target.value)}
               disabled={isPending}
-              className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
           )}
           {q.type === "textarea" && (
@@ -125,7 +125,7 @@ export function PublicFormResponder({
               value={(answers[q.id] as string) ?? ""}
               onChange={(e) => setAnswer(q.id, e.target.value)}
               disabled={isPending}
-              className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+              className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
             />
           )}
           {q.type === "scale" && (
@@ -196,7 +196,7 @@ export function PublicFormResponder({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -204,7 +204,7 @@ export function PublicFormResponder({
       <button
         type="submit"
         disabled={isPending}
-        className="w-full inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-3 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+        className="w-full inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
       >
         {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
         {isPending ? "Submitting…" : "Submit"}

@@ -18,15 +18,15 @@ export default async function CoachSubscriptionsCrossPage() {
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Subscriptions inventory · cross-client
         </h1>
         <Link
           href="/coach"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Console
         </Link>
@@ -35,7 +35,7 @@ export default async function CoachSubscriptionsCrossPage() {
           {pendingTransfer.length > 0 && (
             <>
               {" · "}
-              <span className="text-[#E87722] font-bold">
+              <span className="text-tbb-danger font-bold">
                 {pendingTransfer.length} transfer pending
               </span>
             </>
@@ -48,34 +48,34 @@ export default async function CoachSubscriptionsCrossPage() {
           No subscriptions tracked yet.
         </p>
       ) : (
-        <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((s) => (
             <li
               key={s.id}
               className="py-3 flex items-baseline gap-3 flex-wrap"
             >
-              <span className="font-display font-bold text-foreground text-base tracking-tight">
+              <span className="font-bold text-foreground text-base tracking-tight">
                 {s.name}
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                 {s.vendor}
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                 {s.engagementName}
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                 ${(s.monthlyCostCents / 100).toFixed(2)} {s.currency}/mo
               </span>
               {s.renewalDate && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                   Renews {new Date(s.renewalDate).toLocaleDateString()}
                 </span>
               )}
               <span
                 className={
-                  "ml-auto font-mono text-[10px] uppercase tracking-[0.2em] " +
+                  "ml-auto font-mono text-[10px] uppercase tracking-tbb-caps " +
                   (s.transferStatus === "pending_transfer"
-                    ? "text-[#E87722] font-bold"
+                    ? "text-tbb-danger font-bold"
                     : s.transferStatus === "transferred"
                       ? "text-muted-foreground line-through"
                       : "text-muted-foreground")

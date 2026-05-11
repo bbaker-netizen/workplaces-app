@@ -93,7 +93,7 @@ export async function MessageThread({
         members={mentionMembers}
         emptyState={emptyState}
       />
-      <div className="border-t border-[#CCCCCC] pt-4">
+      <div className="border-t border-tbb-line pt-4">
         <MessageComposer
           engagementId={engagementId}
           parentEntityType={threadType}

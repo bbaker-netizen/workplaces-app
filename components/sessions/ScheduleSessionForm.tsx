@@ -61,16 +61,16 @@ export function ScheduleSessionForm({
         e.preventDefault();
         submit();
       }}
-      className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3"
+      className="border border-tbb-line rounded-md bg-white p-4 space-y-3"
       aria-busy={isPending}
     >
-      <h2 className="font-display font-bold text-foreground text-lg tracking-tight">
+      <h2 className="font-bold text-foreground text-lg tracking-tight">
         Schedule a session
       </h2>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Date and time (Mountain Time)
           </span>
           <input
@@ -78,11 +78,11 @@ export function ScheduleSessionForm({
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Format
           </span>
           <select
@@ -91,7 +91,7 @@ export function ScheduleSessionForm({
               setType(e.target.value as "in_person" | "virtual")
             }
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           >
             <option value="virtual">Virtual</option>
             <option value="in_person">In-person</option>
@@ -100,7 +100,7 @@ export function ScheduleSessionForm({
       </div>
 
       <label className="block space-y-1">
-        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Notes (optional, markdown OK)
         </span>
         <textarea
@@ -109,14 +109,14 @@ export function ScheduleSessionForm({
           rows={3}
           disabled={isPending}
           placeholder="Agenda items, things to bring, links…"
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
       </label>
 
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -126,7 +126,7 @@ export function ScheduleSessionForm({
         <button
           type="submit"
           disabled={isPending}
-          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-wait transition-colors"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 disabled:cursor-wait transition-colors"
         >
           {isPending && (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />

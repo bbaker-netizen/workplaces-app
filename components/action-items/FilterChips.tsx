@@ -38,10 +38,10 @@ export function FilterChips({
             type="button"
             onClick={() => onChange(chip.value)}
             className={
-              "font-mono text-[11px] uppercase tracking-[0.15em] px-3 py-1.5 rounded-full transition-colors " +
+              "font-mono text-[11px] uppercase tracking-tbb-caps px-3 py-1.5 rounded-full transition-colors " +
               (isActive
-                ? "bg-[#2E4057] text-[#F5F1E8]"
-                : "bg-white text-[#666666] border border-[#CCCCCC] hover:text-[#1A1A1A] hover:border-[#666666]")
+                ? "bg-tbb-blue-700 text-white"
+                : "bg-white text-tbb-ink-3 border border-tbb-line hover:text-tbb-navy hover:border-tbb-ink-3")
             }
           >
             {chip.label}

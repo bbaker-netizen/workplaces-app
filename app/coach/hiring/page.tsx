@@ -14,15 +14,15 @@ export default async function CoachHiringCrossPage() {
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Hiring pipeline · cross-client
         </h1>
         <Link
           href="/coach"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Console
         </Link>
@@ -33,21 +33,21 @@ export default async function CoachHiringCrossPage() {
           No candidates across any engagement.
         </p>
       ) : (
-        <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((h) => (
             <li key={h.id}>
               <Link
                 href={`/portal/hiring/${h.id}`}
-                className="block py-3 pl-3 hover:bg-[#F5F1E8] transition-colors group"
+                className="block py-3 pl-3 hover:bg-tbb-cream-50 transition-colors group"
               >
                 <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                  <span className="font-display font-bold text-foreground text-base tracking-tight group-hover:underline underline-offset-4">
+                  <span className="font-bold text-foreground text-base tracking-tight group-hover:underline underline-offset-4">
                     {h.candidateName}
                   </span>
-                  <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                     {h.roleName} · {h.engagementName ?? "Engagement"}
                   </span>
-                  <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     {h.status.replace("_", " ")}
                   </span>
                 </div>

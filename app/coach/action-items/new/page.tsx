@@ -16,14 +16,14 @@ export default async function NewCoachActionItemPage() {
   if (engagements.length === 0) {
     return (
       <main className="max-w-3xl mx-auto px-6 py-16">
-        <h1 className="font-display font-bold text-foreground text-3xl tracking-tight">
+        <h1 className="font-bold text-foreground text-3xl tracking-tight">
           No engagements yet
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
           Create an engagement first at{" "}
           <a
             href="/coach/engagements/new"
-            className="underline underline-offset-4 text-[#2E4057] hover:text-foreground"
+            className="underline underline-offset-4 text-tbb-navy hover:text-foreground"
           >
             /coach/engagements/new
           </a>
@@ -50,10 +50,10 @@ export default async function NewCoachActionItemPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-12">
       <header className="mb-8 space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           New action item
         </h1>
       </header>

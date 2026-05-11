@@ -36,10 +36,10 @@ export default async function CoachSignaturePage() {
   return (
     <main className="max-w-2xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Your signature
         </h1>
         <p className="font-sans text-sm text-foreground">
@@ -49,7 +49,7 @@ export default async function CoachSignaturePage() {
         </p>
         <Link
           href="/coach"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Console
         </Link>
@@ -57,8 +57,8 @@ export default async function CoachSignaturePage() {
 
       <CoachSignatureManager initial={current} />
 
-      <section className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-2">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <section className="border border-tbb-line rounded-md bg-white p-4 space-y-2">
+        <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Tips
         </h2>
         <ul className="font-sans text-sm text-foreground space-y-1 list-disc pl-5">

@@ -1,15 +1,30 @@
+import Image from "next/image";
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center px-6 py-20">
-      <div className="flex flex-col items-center gap-6 text-center">
-        <h1 className="font-display font-bold text-foreground tracking-tight text-5xl sm:text-7xl md:text-8xl leading-none">
-          THE BUILDER
-        </h1>
-        <p className="font-sans text-muted-foreground uppercase tracking-[0.25em] text-xs sm:text-sm">
-          Coming soon
+    <main className="min-h-screen bg-tbb-navy text-tbb-cream flex items-center justify-center px-6 py-20 relative overflow-hidden">
+      <Image
+        src="/brand/puzzle-piece.svg"
+        alt=""
+        width={520}
+        height={520}
+        className="absolute -right-32 -top-24 opacity-[0.06] pointer-events-none"
+        aria-hidden
+      />
+      <div className="flex flex-col items-center gap-8 text-center relative z-10">
+        <Image
+          src="/brand/logo-cream.png"
+          alt="The Business Builders by Workplaces"
+          width={560}
+          height={120}
+          priority
+          className="w-full max-w-md h-auto"
+        />
+        <p className="font-bold uppercase tracking-tbb-caps text-xs sm:text-sm text-tbb-cream/70">
+          Build what compounds
         </p>
-        <p className="font-mono text-muted-foreground text-[11px] sm:text-xs pt-16">
-          The Builder · By Workplaces
+        <p className="font-mono text-tbb-cream/50 text-[11px] sm:text-xs pt-12">
+          Coaching, deliverables, and invoicing — one operating platform.
         </p>
       </div>
     </main>

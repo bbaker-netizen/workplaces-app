@@ -25,13 +25,13 @@ export default async function CoachSoulFilePage({
   return (
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-8">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {engagement.name ?? "Engagement"} · Soul File
         </h1>
-        <nav className="flex gap-3 text-xs font-mono uppercase tracking-[0.2em]">
+        <nav className="flex gap-3 text-xs font-mono uppercase tracking-tbb-caps">
           <Link
             href="/coach"
             className="text-muted-foreground hover:text-foreground"
@@ -43,12 +43,12 @@ export default async function CoachSoulFilePage({
               <summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none">
                 Switch engagement
               </summary>
-              <div className="absolute left-0 mt-2 z-10 bg-white border border-[#CCCCCC] rounded-md shadow-md py-1 min-w-[14rem]">
+              <div className="absolute left-0 mt-2 z-10 bg-white border border-tbb-line rounded-md shadow-md py-1 min-w-[14rem]">
                 {engagements.map((e) => (
                   <Link
                     key={e.id}
                     href={`/coach/soul-file/${e.id}`}
-                    className="block px-3 py-1.5 text-foreground hover:bg-[#F5F1E8] normal-case tracking-normal font-sans text-sm"
+                    className="block px-3 py-1.5 text-foreground hover:bg-tbb-cream-50 normal-case tracking-normal font-sans text-sm"
                   >
                     {e.name ?? e.id.slice(0, 8)}
                   </Link>

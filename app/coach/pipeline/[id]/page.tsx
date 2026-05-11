@@ -51,11 +51,11 @@ export default async function ProspectDetailPage({
       <header className="space-y-2">
         <Link
           href="/coach/pipeline"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Pipeline
         </Link>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {prospect.companyName}
         </h1>
         <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
@@ -66,13 +66,13 @@ export default async function ProspectDetailPage({
           )}
           <a
             href={`mailto:${prospect.contactEmail}`}
-            className="font-mono text-xs text-[#2E4057] underline underline-offset-4"
+            className="font-mono text-xs text-tbb-navy underline underline-offset-4"
           >
             {prospect.contactEmail}
           </a>
         </div>
         <div className="flex items-center gap-2 pt-2">
-          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Status
           </span>
           <ProspectStatusSelect
@@ -83,8 +83,8 @@ export default async function ProspectDetailPage({
       </header>
 
       {prospect.notes && (
-        <section className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-2">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+        <section className="border border-tbb-line rounded-md bg-white p-5 space-y-2">
+          <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Diagnostic notes
           </h2>
           <MarkdownBody body={prospect.notes} />
@@ -105,7 +105,7 @@ export default async function ProspectDetailPage({
         hasStoredSignature={hasStoredSig}
       />
 
-      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+      <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
         Created{" "}
         {prospect.createdAt.toLocaleDateString(undefined, {
           year: "numeric",

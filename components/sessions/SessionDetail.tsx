@@ -164,22 +164,22 @@ export function SessionDetail({
 
   return (
     <div className="space-y-8">
-      <header className="space-y-3 border border-[#CCCCCC] rounded-md bg-white p-4">
+      <header className="space-y-3 border border-tbb-line rounded-md bg-white p-4">
         {!editingTime ? (
           <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
-            <h1 className="font-display font-bold text-foreground text-2xl sm:text-3xl tracking-tight">
+            <h1 className="font-bold text-foreground text-2xl sm:text-3xl tracking-tight">
               {formatSessionTime(session.scheduledAt)}
             </h1>
-            <span className="font-mono text-xs uppercase tracking-[0.15em] text-muted-foreground">
+            <span className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
               {SESSION_TYPE_LABEL[session.type]}
             </span>
             <span
               className={
-                "font-mono text-[10px] uppercase tracking-[0.2em] " +
+                "font-mono text-[10px] uppercase tracking-tbb-caps " +
                 (isOverdue
-                  ? "text-[#E87722] font-bold"
+                  ? "text-tbb-danger font-bold"
                   : session.status === "completed"
-                    ? "text-[#2E4057] font-bold"
+                    ? "text-tbb-navy font-bold"
                     : session.status === "cancelled"
                       ? "text-muted-foreground line-through"
                       : "text-muted-foreground")
@@ -194,7 +194,7 @@ export function SessionDetail({
                 setTypeDraft(session.type);
                 setEditingTime(true);
               }}
-              className="ml-auto p-1 rounded text-muted-foreground hover:text-foreground hover:bg-[#F5F1E8]"
+              className="ml-auto p-1 rounded text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50"
               aria-label="Edit time and format"
             >
               <Pencil className="w-3.5 h-3.5" aria-hidden />
@@ -208,7 +208,7 @@ export function SessionDetail({
                 value={timeDraft}
                 onChange={(e) => setTimeDraft(e.target.value)}
                 disabled={isPending}
-                className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
               />
               <select
                 value={typeDraft}
@@ -216,7 +216,7 @@ export function SessionDetail({
                   setTypeDraft(e.target.value as "in_person" | "virtual")
                 }
                 disabled={isPending}
-                className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
               >
                 <option value="virtual">Virtual</option>
                 <option value="in_person">In-person</option>
@@ -227,7 +227,7 @@ export function SessionDetail({
                 type="button"
                 onClick={() => setEditingTime(false)}
                 disabled={isPending}
-                className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+                className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </button>
@@ -235,7 +235,7 @@ export function SessionDetail({
                 type="button"
                 onClick={saveTime}
                 disabled={isPending}
-                className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+                className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
               >
                 {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                 {isPending ? "Saving…" : "Save"}
@@ -250,7 +250,7 @@ export function SessionDetail({
               type="button"
               onClick={onComplete}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md bg-[#2E4057] text-[#F5F1E8] hover:bg-[#1A1A1A] disabled:opacity-50"
+              className="font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 rounded-pill bg-tbb-blue-700 text-white hover:bg-tbb-blue disabled:opacity-50"
             >
               Mark complete
             </button>
@@ -259,7 +259,7 @@ export function SessionDetail({
               type="button"
               onClick={onReopen}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md border border-[#CCCCCC] text-foreground hover:bg-[#F5F1E8] disabled:opacity-50"
+              className="font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 rounded-pill border border-tbb-line text-foreground hover:bg-tbb-cream-50 disabled:opacity-50"
             >
               Re-open
             </button>
@@ -269,7 +269,7 @@ export function SessionDetail({
               type="button"
               onClick={onCancel}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-[#F5F1E8] disabled:opacity-50"
+              className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50 disabled:opacity-50"
             >
               Cancel session
             </button>
@@ -283,7 +283,7 @@ export function SessionDetail({
                 ? "Pull the Fireflies transcript and extract action item drafts"
                 : "Add a Fireflies recording id to this session first"
             }
-            className="font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md border border-[#2E4057] text-[#2E4057] hover:bg-[#F5F1E8] disabled:opacity-50 inline-flex items-center gap-1"
+            className="font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-navy hover:bg-tbb-cream-50 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Sparkles className="w-3.5 h-3.5" aria-hidden />
             Extract action items
@@ -292,7 +292,7 @@ export function SessionDetail({
             type="button"
             onClick={onDelete}
             disabled={isPending}
-            className="ml-auto inline-flex items-center gap-1 font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-[#E87722] hover:bg-[#F5F1E8] disabled:opacity-50"
+            className="ml-auto inline-flex items-center gap-1 font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50 disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" aria-hidden />
             Delete
@@ -301,13 +301,13 @@ export function SessionDetail({
         {error && (
           <p
             role="alert"
-            className="font-sans text-sm text-[#E87722]"
+            className="font-sans text-sm text-tbb-danger"
           >
             {error}
           </p>
         )}
         {extractMessage && !isPending && (
-          <p className="font-sans text-sm text-[#2E4057] border border-[#CCCCCC] rounded-md px-3 py-2 bg-[#F5F1E8]">
+          <p className="font-sans text-sm text-tbb-navy border border-tbb-line rounded-md px-3 py-2 bg-tbb-cream-50">
             {extractMessage}
           </p>
         )}
@@ -315,7 +315,7 @@ export function SessionDetail({
 
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <h2 className="font-display font-bold text-foreground text-lg tracking-tight">
+          <h2 className="font-bold text-foreground text-lg tracking-tight">
             Notes
           </h2>
           {!editingNotes && (
@@ -325,7 +325,7 @@ export function SessionDetail({
                 setNotesDraft(session.notes ?? "");
                 setEditingNotes(true);
               }}
-              className="font-sans text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+              className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
             >
               {session.notes ? "Edit" : "Add notes"}
             </button>
@@ -340,14 +340,14 @@ export function SessionDetail({
               autoFocus
               disabled={isPending}
               placeholder="Agenda, decisions, follow-ups… (markdown OK)"
-              className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+              className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
             />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setEditingNotes(false)}
                 disabled={isPending}
-                className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+                className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </button>
@@ -355,7 +355,7 @@ export function SessionDetail({
                 type="button"
                 onClick={saveNotes}
                 disabled={isPending}
-                className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+                className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
               >
                 {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                 {isPending ? "Saving…" : "Save notes"}
@@ -363,7 +363,7 @@ export function SessionDetail({
             </div>
           </div>
         ) : session.notes ? (
-          <div className="border border-[#CCCCCC] rounded-md bg-white p-4">
+          <div className="border border-tbb-line rounded-md bg-white p-4">
             <MarkdownBody body={session.notes} />
           </div>
         ) : (
@@ -375,7 +375,7 @@ export function SessionDetail({
 
       <a
         href={backHref}
-        className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+        className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
       >
         ← All sessions
       </a>

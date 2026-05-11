@@ -25,11 +25,11 @@ export default async function CourseLearnPage({
       <header className="space-y-2">
         <Link
           href={`/portal/courses/${params.id}`}
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Course details
         </Link>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {view.course.name}
         </h1>
         {view.course.description && (

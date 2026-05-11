@@ -30,7 +30,7 @@ export default async function PortalDashboard() {
   if (!engagement) {
     return (
       <main className="max-w-3xl mx-auto px-6 py-16">
-        <h1 className="font-display font-bold text-foreground text-3xl tracking-tight">
+        <h1 className="font-bold text-foreground text-3xl tracking-tight">
           No engagement yet
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
@@ -80,10 +80,10 @@ export default async function PortalDashboard() {
   return (
     <main className="max-w-4xl mx-auto px-6 py-10 sm:py-12 space-y-10">
       <header className="space-y-1">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           {engagement.name ?? "Engagement"}
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {greeting}, {profile.fullName.split(" ")[0] ?? profile.fullName}.
         </h1>
       </header>
@@ -98,10 +98,10 @@ export default async function PortalDashboard() {
         >
           {nextSession ? (
             <div className="space-y-1">
-              <p className="font-display font-bold text-foreground text-xl tracking-tight">
+              <p className="font-bold text-foreground text-xl tracking-tight">
                 {formatSessionTime(nextSession.scheduledAt)}
               </p>
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                 {SESSION_TYPE_LABEL[nextSession.type]}
               </p>
               {nextSession.notes && (
@@ -140,8 +140,8 @@ export default async function PortalDashboard() {
                     <Link
                       href={`/portal/action-items/${it.id}`}
                       className={
-                        "block py-1.5 pl-3 border-l-2 group hover:bg-[#F5F1E8] transition-colors " +
-                        (isOverdue ? "border-[#E87722]" : "border-transparent")
+                        "block py-1.5 pl-3 border-l-2 group hover:bg-tbb-cream-50 transition-colors " +
+                        (isOverdue ? "border-tbb-danger" : "border-transparent")
                       }
                     >
                       <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
@@ -151,9 +151,9 @@ export default async function PortalDashboard() {
                         {it.dueDate && (
                           <span
                             className={
-                              "font-mono text-[10px] uppercase tracking-[0.15em] " +
+                              "font-mono text-[10px] uppercase tracking-tbb-caps " +
                               (isOverdue
-                                ? "text-[#E87722] font-bold"
+                                ? "text-tbb-danger font-bold"
                                 : "text-muted-foreground")
                             }
                           >
@@ -223,7 +223,7 @@ export default async function PortalDashboard() {
                 {flatten(soulFile.body)}
               </p>
               {soulFile.lastEditorName && (
-                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                   Last edited by {soulFile.lastEditorName}
                 </p>
               )}
@@ -261,10 +261,10 @@ export default async function PortalDashboard() {
                   >
                     {d.originalFilename}
                   </Link>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     {d.uploaderName}
                   </span>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     {d.createdAt.toLocaleDateString(undefined, {
                       month: "short",
                       day: "numeric",
@@ -298,20 +298,20 @@ function Card({
   return (
     <section
       className={
-        "border border-[#CCCCCC] rounded-md bg-white p-5 space-y-3 " +
+        "border border-tbb-line rounded-md bg-white p-5 space-y-3 " +
         (className ?? "")
       }
     >
       <header className="flex items-baseline justify-between gap-3">
         <div className="flex items-center gap-2 text-muted-foreground">
           {icon}
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.2em]">
+          <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps">
             {title}
           </h2>
         </div>
         <Link
           href={href}
-          className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+          className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
         >
           {ctaLabel} →
         </Link>

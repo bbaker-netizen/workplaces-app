@@ -133,7 +133,7 @@ export function RichTextEditor({
         HTMLAttributes: {
           // Visual treatment for mentions in the editor surface.
           class:
-            "mention text-[#2E4057] font-bold rounded px-1 py-px bg-[#F5F1E8]",
+            "mention text-tbb-navy font-bold rounded px-1 py-px bg-tbb-cream-50",
         },
         renderText({ options, node }) {
           // tiptap-markdown serializes inline nodes by reading this
@@ -160,10 +160,10 @@ export function RichTextEditor({
       attributes: {
         class:
           "prose-none w-full min-h-[72px] max-h-[40vh] overflow-y-auto " +
-          "bg-white border border-[#CCCCCC] rounded-md px-3 py-2 " +
+          "bg-white border border-tbb-line rounded-md px-3 py-2 " +
           "font-sans text-sm text-foreground " +
-          "focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-[#2E4057] " +
-          "disabled:bg-[#F5F1E8] disabled:cursor-wait",
+          "focus:outline-none focus:ring-2 focus:ring-tbb-blue focus:border-tbb-blue " +
+          "disabled:bg-tbb-cream-50 disabled:cursor-wait",
         ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
       },
       handleKeyDown(_view, event) {
@@ -333,8 +333,8 @@ function Toolbar({
     return <div className="h-9 mb-1" aria-hidden />;
   }
   const btnClass =
-    "p-1.5 rounded hover:bg-[#F5F1E8] disabled:opacity-40 disabled:cursor-not-allowed text-muted-foreground hover:text-foreground transition-colors";
-  const activeClass = "bg-[#F5F1E8] text-foreground";
+    "p-1.5 rounded hover:bg-tbb-cream-50 disabled:opacity-40 disabled:cursor-not-allowed text-muted-foreground hover:text-foreground transition-colors";
+  const activeClass = "bg-tbb-cream-50 text-foreground";
 
   const isActive = (name: string, attrs?: Record<string, unknown>) =>
     editor.isActive(name, attrs);
@@ -343,7 +343,7 @@ function Toolbar({
     <div
       role="toolbar"
       aria-label="Formatting"
-      className="flex flex-wrap items-center gap-0.5 mb-1 pb-1 border-b border-[#CCCCCC]"
+      className="flex flex-wrap items-center gap-0.5 mb-1 pb-1 border-b border-tbb-line"
     >
       <ToolbarButton
         label="Bold"
@@ -381,7 +381,7 @@ function Toolbar({
       >
         <Code className="w-4 h-4" aria-hidden />
       </ToolbarButton>
-      <span className="w-px h-5 bg-[#CCCCCC] mx-1" aria-hidden />
+      <span className="w-px h-5 bg-tbb-line mx-1" aria-hidden />
       <ToolbarButton
         label="Bulleted list"
         ariaPressed={isActive("bulletList")}
@@ -409,7 +409,7 @@ function Toolbar({
       >
         <Quote className="w-4 h-4" aria-hidden />
       </ToolbarButton>
-      <span className="w-px h-5 bg-[#CCCCCC] mx-1" aria-hidden />
+      <span className="w-px h-5 bg-tbb-line mx-1" aria-hidden />
       <ToolbarButton
         label={isActive("link") ? "Edit link" : "Insert link"}
         ariaPressed={isActive("link")}

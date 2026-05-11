@@ -43,8 +43,8 @@ export type ActionItemFormInitial = {
 };
 
 const inputClass =
-  "w-full px-3 py-2 border border-[#CCCCCC] rounded-md bg-white text-foreground " +
-  "focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-transparent " +
+  "w-full px-3 py-2 border border-tbb-line rounded-md bg-white text-foreground " +
+  "focus:outline-none focus:ring-2 focus:ring-tbb-blue focus:border-transparent " +
   "font-sans";
 
 const labelClass =
@@ -239,7 +239,7 @@ export function ActionItemForm({
       </fieldset>
 
       {error && (
-        <p className="font-sans text-sm border-l-2 border-[#E87722] pl-3 py-1 text-[#E87722]">
+        <p className="font-sans text-sm border-l-2 border-tbb-danger pl-3 py-1 text-tbb-danger">
           {error}
         </p>
       )}
@@ -248,13 +248,13 @@ export function ActionItemForm({
         <button
           type="submit"
           disabled={pending}
-          className="font-sans bg-foreground text-background px-6 py-3 rounded-md hover:bg-[#2E4057] transition-colors uppercase tracking-wider text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+          className="font-sans bg-foreground text-background px-6 py-3 rounded-pill hover:bg-tbb-blue-700 transition-colors uppercase tracking-wider text-sm disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {pending ? "Saving…" : mode === "create" ? "Create" : "Save"}
         </button>
         <a
           href={cancelHref}
-          className="font-sans text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
+          className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
         >
           Cancel
         </a>
@@ -263,7 +263,7 @@ export function ActionItemForm({
             type="button"
             disabled={pending}
             onClick={onDelete}
-            className="ml-auto font-sans text-xs uppercase tracking-[0.2em] text-[#E87722] hover:underline underline-offset-4 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="ml-auto font-sans text-xs uppercase tracking-tbb-caps text-tbb-danger hover:underline underline-offset-4 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Delete
           </button>

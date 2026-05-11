@@ -38,7 +38,7 @@ export default async function PortalTeamPage() {
   if (!engagement) {
     return (
       <main className="max-w-3xl mx-auto px-6 py-16">
-        <h1 className="font-display font-bold text-foreground text-3xl tracking-tight">
+        <h1 className="font-bold text-foreground text-3xl tracking-tight">
           No engagement yet
         </h1>
       </main>
@@ -55,10 +55,10 @@ export default async function PortalTeamPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           {engagement.name ?? "Engagement"}
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Team
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
@@ -66,12 +66,12 @@ export default async function PortalTeamPage() {
         </p>
       </header>
 
-      <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+      <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
         {members.map((m) => (
           <li key={m.id} className="py-4 flex items-center gap-4">
             <span
               aria-hidden
-              className="shrink-0 w-10 h-10 rounded-full border border-[#CCCCCC] bg-[#F5F1E8] grid place-items-center font-mono text-xs uppercase tracking-wider text-[#666666]"
+              className="shrink-0 w-10 h-10 rounded-full border border-tbb-line bg-tbb-cream-50 grid place-items-center font-mono text-xs uppercase tracking-wider text-tbb-ink-3"
             >
               {initials(m.fullName) || "?"}
             </span>
@@ -79,7 +79,7 @@ export default async function PortalTeamPage() {
               <p className="font-sans text-base font-bold text-foreground">
                 {m.fullName}
                 {m.id === profile.userProfileId && (
-                  <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <span className="ml-2 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     (you)
                   </span>
                 )}
@@ -88,7 +88,7 @@ export default async function PortalTeamPage() {
                 {m.email}
               </p>
             </div>
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
               {ROLE_LABEL[m.role] ?? m.role}
             </span>
           </li>

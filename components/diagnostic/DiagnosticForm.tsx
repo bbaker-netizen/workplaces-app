@@ -20,9 +20,9 @@ export function DiagnosticForm() {
 
   if (success) {
     return (
-      <div className="border border-[#2E4057] rounded-md bg-[#F5F1E8] p-8 text-center space-y-4">
-        <CheckCircle2 className="w-12 h-12 mx-auto text-[#2E4057]" aria-hidden />
-        <p className="font-display font-bold text-foreground text-3xl tracking-tight">
+      <div className="border border-tbb-blue rounded-md bg-tbb-cream-50 p-8 text-center space-y-4">
+        <CheckCircle2 className="w-12 h-12 mx-auto text-tbb-navy" aria-hidden />
+        <p className="font-bold text-foreground text-3xl tracking-tight">
           Got it.
         </p>
         <p className="font-sans text-base text-foreground">
@@ -175,7 +175,7 @@ export function DiagnosticForm() {
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -184,7 +184,7 @@ export function DiagnosticForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-6 py-3 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-6 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
       >
         {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
         {isPending ? "Sending…" : "Send diagnostic"}
@@ -194,7 +194,7 @@ export function DiagnosticForm() {
 }
 
 const inputCls =
-  "w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]";
+  "w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue";
 
 function Field({
   label,
@@ -207,9 +207,9 @@ function Field({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+      <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
         {label}
-        {required && <span className="text-[#E87722] ml-0.5">*</span>}
+        {required && <span className="text-tbb-danger ml-0.5">*</span>}
       </span>
       {children}
     </label>

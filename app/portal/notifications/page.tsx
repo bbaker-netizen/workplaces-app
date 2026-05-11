@@ -32,17 +32,17 @@ export default async function NotificationsPage() {
     <main className="max-w-3xl mx-auto px-6 py-12">
       <MarkAllReadOnMount />
       <header className="mb-8 space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Portal
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Notifications
         </h1>
       </header>
 
       {notifs.length === 0 ? (
-        <div className="rounded-md border border-dashed border-[#CCCCCC] bg-white px-6 py-12 text-center">
-          <p className="font-display font-bold text-foreground text-2xl tracking-tight">
+        <div className="rounded-md border border-dashed border-tbb-line bg-white px-6 py-12 text-center">
+          <p className="font-bold text-foreground text-2xl tracking-tight">
             All clear
           </p>
           <p className="mt-2 font-sans text-sm text-muted-foreground">
@@ -63,8 +63,8 @@ export default async function NotificationsPage() {
                 className={
                   "flex items-start gap-3 px-4 py-3 rounded-md border transition-colors " +
                   (n.readAt
-                    ? "bg-white border-[#CCCCCC] text-muted-foreground"
-                    : "bg-white border-[#2E4057] shadow-[inset_3px_0_0_0_#2E4057]")
+                    ? "bg-white border-tbb-line text-muted-foreground"
+                    : "bg-white border-tbb-blue shadow-[inset_3px_0_0_0_#2E4057]")
                 }
               >
                 <div className="flex-1 min-w-0">
@@ -76,7 +76,7 @@ export default async function NotificationsPage() {
                   </p>
                 </div>
                 {!n.readAt && (
-                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#2E4057]">
+                  <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-navy">
                     new
                   </span>
                 )}

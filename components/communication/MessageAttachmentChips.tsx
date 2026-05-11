@@ -22,7 +22,7 @@ export function MessageAttachmentChips({
         <li key={a.id}>
           <Link
             href={`/api/documents/${a.id}/download`}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[#CCCCCC] bg-white px-2 py-1 text-xs hover:bg-[#F5F1E8] hover:border-[#666666] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-tbb-line bg-white px-2 py-1 text-xs hover:bg-tbb-cream-50 hover:border-tbb-ink-3 transition-colors"
             title={`${a.filename} · ${formatBytes(a.sizeBytes)}`}
           >
             <span aria-hidden className="text-sm leading-none">

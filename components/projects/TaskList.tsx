@@ -53,7 +53,7 @@ export function TaskList({
 
   return (
     <section className="space-y-3">
-      <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+      <h2 className="font-bold text-foreground text-xl tracking-tight">
         Tasks
       </h2>
       {tasks.length === 0 ? (
@@ -61,7 +61,7 @@ export function TaskList({
           No tasks yet.
         </p>
       ) : (
-        <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {tasks.map((t) => (
             <TaskRowView
               key={t.id}
@@ -75,7 +75,7 @@ export function TaskList({
       )}
       {canEdit && <NewTaskForm projectId={projectId} onError={setError} />}
       {error && (
-        <p role="alert" className="font-sans text-sm text-[#E87722]">
+        <p role="alert" className="font-sans text-sm text-tbb-danger">
           {error}
         </p>
       )}
@@ -161,14 +161,14 @@ function TaskRowView({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
           <div className="grid sm:grid-cols-2 gap-2">
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TaskStatus)}
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             >
               {(Object.keys(STATUS_LABEL) as TaskStatus[]).map((s) => (
                 <option key={s} value={s}>
@@ -180,7 +180,7 @@ function TaskRowView({
               value={assigneeId}
               onChange={(e) => setAssigneeId(e.target.value)}
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             >
               <option value="">Unassigned</option>
               {members.map((m) => (
@@ -194,10 +194,10 @@ function TaskRowView({
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                 Progress
               </span>
               <input
@@ -220,7 +220,7 @@ function TaskRowView({
               type="button"
               onClick={() => setEditing(false)}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+              className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
             >
               Cancel
             </button>
@@ -228,7 +228,7 @@ function TaskRowView({
               type="button"
               onClick={save}
               disabled={isPending}
-              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
             >
               {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
               {isPending ? "Saving…" : "Save"}
@@ -245,12 +245,12 @@ function TaskRowView({
             }
             disabled={!canEdit || isPending}
             className={
-              "shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] font-bold border rounded-full px-2 py-1 cursor-pointer disabled:cursor-default " +
+              "shrink-0 font-mono text-[10px] uppercase tracking-tbb-caps font-bold border rounded-full px-2 py-1 cursor-pointer disabled:cursor-default " +
               (status === "done"
-                ? "border-[#2E4057] text-[#2E4057] bg-[#F5F1E8]"
+                ? "border-tbb-blue text-tbb-navy bg-tbb-cream-50"
                 : status === "blocked"
-                  ? "border-[#E87722] text-[#E87722] bg-[#F5F1E8]"
-                  : "border-[#CCCCCC] text-foreground bg-white")
+                  ? "border-tbb-danger text-tbb-danger bg-tbb-cream-50"
+                  : "border-tbb-line text-foreground bg-white")
             }
           >
             {(Object.keys(STATUS_LABEL) as TaskStatus[]).map((s) => (
@@ -269,11 +269,11 @@ function TaskRowView({
               <p className="font-sans text-sm font-bold text-foreground">
                 {task.title}
               </p>
-              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                 {task.assigneeName && <>{task.assigneeName} · </>}
                 {task.dueDate && (
                   <span
-                    className={isOverdue ? "text-[#E87722] font-bold" : ""}
+                    className={isOverdue ? "text-tbb-danger font-bold" : ""}
                   >
                     Due {task.dueDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                     {" · "}
@@ -289,7 +289,7 @@ function TaskRowView({
               onClick={onDeleteRow}
               disabled={isPending}
               aria-label={`Delete task ${task.title}`}
-              className="p-1.5 rounded text-muted-foreground hover:text-[#E87722] hover:bg-[#F5F1E8]"
+              className="p-1.5 rounded text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50"
             >
               <Trash2 className="w-3.5 h-3.5" aria-hidden />
             </button>
@@ -337,12 +337,12 @@ function NewTaskForm({
         onChange={(e) => setTitle(e.target.value)}
         disabled={isPending}
         placeholder="Add a task…"
-        className="flex-1 bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+        className="flex-1 bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
       />
       <button
         type="submit"
         disabled={isPending || !title.trim()}
-        className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+        className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
       >
         {isPending ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />

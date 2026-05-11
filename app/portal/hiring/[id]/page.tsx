@@ -39,14 +39,14 @@ export default async function HireDetailPage({
       <header className="space-y-2">
         <Link
           href="/portal/hiring"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Hiring pipeline
         </Link>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {hire.candidateName}
         </h1>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           <span>{hire.roleName}</span>
           <span>· {STATUS_LABEL[hire.status] ?? hire.status}</span>
           {hire.candidateEmail && <span>· {hire.candidateEmail}</span>}
@@ -69,7 +69,7 @@ export default async function HireDetailPage({
         />
       ) : (
         hire.notes && (
-          <section className="border border-[#CCCCCC] rounded-md bg-white p-4">
+          <section className="border border-tbb-line rounded-md bg-white p-4">
             <MarkdownBody body={hire.notes} />
           </section>
         )
@@ -77,7 +77,7 @@ export default async function HireDetailPage({
 
       {canEdit && (
         <section className="space-y-3">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             AI assist
           </h2>
           <p className="font-sans text-sm text-muted-foreground">

@@ -38,14 +38,14 @@ export default async function PortalGoalDetailPage({
         <header className="space-y-2">
           <Link
             href="/portal/goals"
-            className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+            className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
           >
             ← All goals
           </Link>
-          <h1 className="font-display font-bold text-foreground text-3xl tracking-tight leading-none">
+          <h1 className="font-bold text-foreground text-3xl tracking-tight leading-none">
             {goal.title}
           </h1>
-          <div className="flex flex-wrap gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <div className="flex flex-wrap gap-2 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             {goal.targetMetric && (
               <span>
                 Target: <span className="text-foreground">{goal.targetMetric}</span>
@@ -63,7 +63,7 @@ export default async function PortalGoalDetailPage({
           </div>
         </header>
         {goal.description && (
-          <div className="border border-[#CCCCCC] rounded-md bg-white p-4">
+          <div className="border border-tbb-line rounded-md bg-white p-4">
             <MarkdownBody body={goal.description} />
           </div>
         )}
@@ -76,11 +76,11 @@ export default async function PortalGoalDetailPage({
       <header className="space-y-2">
         <Link
           href="/portal/goals"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← All goals
         </Link>
-        <h1 className="font-display font-bold text-foreground text-3xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl tracking-tight leading-none">
           Edit goal
         </h1>
       </header>

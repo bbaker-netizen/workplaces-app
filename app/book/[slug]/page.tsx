@@ -25,13 +25,13 @@ export default async function PublicBookingPage({
     <main className="min-h-screen bg-background py-12 px-6">
       <div className="max-w-xl mx-auto space-y-8">
         <header className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             The Builder · By Workplaces
           </p>
-          <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+          <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
             Book {link.name}
           </h1>
-          <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             {link.durationMinutes} minutes · Mountain Time
           </p>
           {link.description && (
@@ -41,7 +41,7 @@ export default async function PublicBookingPage({
           )}
         </header>
         <BookingForm slug={params.slug} slots={slots} />
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground text-center">
+        <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground text-center">
           Workplaces · Build what compounds.
         </p>
       </div>

@@ -15,9 +15,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_TONE: Record<string, string> = {
   planning: "text-muted-foreground",
-  active: "text-[#2E4057] font-bold",
-  blocked: "text-[#E87722] font-bold",
-  completed: "text-[#2E4057] font-bold",
+  active: "text-tbb-navy font-bold",
+  blocked: "text-tbb-danger font-bold",
+  completed: "text-tbb-navy font-bold",
   cancelled: "text-muted-foreground line-through",
 };
 
@@ -53,10 +53,10 @@ export default async function PortalProjectsPage() {
     <main className="max-w-4xl mx-auto px-6 py-12">
       <header className="mb-8 flex items-end justify-between gap-3 flex-wrap">
         <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             {engagement.name ?? "Engagement"}
           </p>
-          <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+          <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
             Projects
           </h1>
           <p className="font-sans text-sm text-muted-foreground">
@@ -66,7 +66,7 @@ export default async function PortalProjectsPage() {
         {canCreate && (
           <Link
             href="/portal/projects/new"
-            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057]"
+            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
           >
             <Plus className="w-4 h-4" aria-hidden /> New project
           </Link>
@@ -74,8 +74,8 @@ export default async function PortalProjectsPage() {
       </header>
 
       {items.length === 0 ? (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6 space-y-2">
-          <p className="font-display font-bold text-foreground text-base tracking-tight">
+        <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+          <p className="font-bold text-foreground text-base tracking-tight">
             No projects yet
           </p>
           <p className="font-sans text-sm text-muted-foreground">
@@ -85,7 +85,7 @@ export default async function PortalProjectsPage() {
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((p) => {
             const pct =
               p.taskCount === 0
@@ -95,22 +95,22 @@ export default async function PortalProjectsPage() {
               <li key={p.id}>
                 <Link
                   href={`/portal/projects/${p.id}`}
-                  className="block py-4 pl-3 hover:bg-[#F5F1E8] transition-colors group"
+                  className="block py-4 pl-3 hover:bg-tbb-cream-50 transition-colors group"
                 >
                   <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                    <span className="font-display font-bold text-foreground text-lg tracking-tight group-hover:underline underline-offset-4">
+                    <span className="font-bold text-foreground text-lg tracking-tight group-hover:underline underline-offset-4">
                       {p.name}
                     </span>
                     <span
                       className={
-                        "ml-auto font-mono text-[10px] uppercase tracking-[0.2em] " +
+                        "ml-auto font-mono text-[10px] uppercase tracking-tbb-caps " +
                         (STATUS_TONE[p.status] ?? "text-muted-foreground")
                       }
                     >
                       {STATUS_LABEL[p.status] ?? p.status}
                     </span>
                   </div>
-                  <div className="mt-1 flex items-baseline gap-x-3 gap-y-0.5 flex-wrap font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <div className="mt-1 flex items-baseline gap-x-3 gap-y-0.5 flex-wrap font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                     {p.leadName && <span>Lead: {p.leadName}</span>}
                     {p.targetDate && (
                       <span>
@@ -122,21 +122,21 @@ export default async function PortalProjectsPage() {
                     </span>
                     <span className="ml-auto flex gap-1">
                       {p.revenueImpact && (
-                        <span className="rounded-full border border-[#2E4057] text-[#2E4057] bg-[#F5F1E8] px-2 py-px">
+                        <span className="rounded-full border border-tbb-blue text-tbb-navy bg-tbb-cream-50 px-2 py-px">
                           Revenue
                         </span>
                       )}
                       {p.marginImpact && (
-                        <span className="rounded-full border border-[#2E4057] text-[#2E4057] bg-[#F5F1E8] px-2 py-px">
+                        <span className="rounded-full border border-tbb-blue text-tbb-navy bg-tbb-cream-50 px-2 py-px">
                           Margin
                         </span>
                       )}
                     </span>
                   </div>
                   {p.taskCount > 0 && (
-                    <div className="mt-2 h-1 bg-[#CCCCCC] rounded-full overflow-hidden">
+                    <div className="mt-2 h-1 bg-tbb-line rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#2E4057]"
+                        className="h-full bg-tbb-blue-700"
                         style={{ width: `${pct}%` }}
                       />
                     </div>

@@ -100,9 +100,9 @@ export function CreateInvoiceForm({
 
   if (success) {
     return (
-      <div className="border border-[#2E4057] rounded-md bg-[#F5F1E8] p-6 text-center space-y-3">
-        <CheckCircle2 className="w-10 h-10 mx-auto text-[#2E4057]" aria-hidden />
-        <p className="font-display font-bold text-foreground text-2xl tracking-tight">
+      <div className="border border-tbb-blue rounded-md bg-tbb-cream-50 p-6 text-center space-y-3">
+        <CheckCircle2 className="w-10 h-10 mx-auto text-tbb-navy" aria-hidden />
+        <p className="font-bold text-foreground text-2xl tracking-tight">
           Invoice created.
         </p>
         {success.hostedUrl ? (
@@ -112,7 +112,7 @@ export function CreateInvoiceForm({
               href={success.hostedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#2E4057] underline underline-offset-4 break-all"
+              className="text-tbb-navy underline underline-offset-4 break-all"
             >
               {success.hostedUrl}
             </a>
@@ -136,15 +136,15 @@ export function CreateInvoiceForm({
       aria-busy={isPending}
     >
       <div className="space-y-1">
-        <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-          Engagement <span className="text-[#E87722]">*</span>
+        <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+          Engagement <span className="text-tbb-danger">*</span>
         </label>
         <select
           required
           value={engagementId}
           onChange={(e) => setEngagementId(e.target.value)}
           disabled={isPending}
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         >
           {engagements.map((e) => (
             <option key={e.id} value={e.id}>
@@ -155,7 +155,7 @@ export function CreateInvoiceForm({
       </div>
 
       <fieldset className="space-y-2">
-        <legend className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
+        <legend className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground mb-1">
           Provider
         </legend>
         <div className="flex flex-wrap gap-2">
@@ -177,7 +177,7 @@ export function CreateInvoiceForm({
       </fieldset>
 
       <fieldset className="space-y-2">
-        <legend className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
+        <legend className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground mb-1">
           Line items
         </legend>
         <div className="space-y-2">
@@ -194,7 +194,7 @@ export function CreateInvoiceForm({
                 }
                 placeholder="Coaching retainer — May 2026"
                 disabled={isPending}
-                className="bg-white border border-[#CCCCCC] rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                className="bg-white border border-tbb-line rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
               />
               <div className="flex items-center gap-1">
                 <span className="font-mono text-[11px] text-muted-foreground">
@@ -211,7 +211,7 @@ export function CreateInvoiceForm({
                   }
                   placeholder="0.00"
                   disabled={isPending}
-                  className="w-28 bg-white border border-[#CCCCCC] rounded-md px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] tabular-nums text-right"
+                  className="w-28 bg-white border border-tbb-line rounded-md px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue tabular-nums text-right"
                 />
               </div>
               {lines.length > 1 ? (
@@ -220,7 +220,7 @@ export function CreateInvoiceForm({
                   onClick={() => removeLine(i)}
                   disabled={isPending}
                   aria-label={`Remove line ${i + 1}`}
-                  className="p-1.5 text-[#E87722] hover:bg-[#F5F1E8] rounded-md disabled:opacity-50"
+                  className="p-1.5 text-tbb-danger hover:bg-tbb-cream-50 rounded-md disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden />
                 </button>
@@ -235,7 +235,7 @@ export function CreateInvoiceForm({
             type="button"
             onClick={addLine}
             disabled={isPending}
-            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.15em] text-[#2E4057] hover:underline"
+            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-navy hover:underline"
           >
             <Plus className="w-3 h-3" aria-hidden /> Add line
           </button>
@@ -247,7 +247,7 @@ export function CreateInvoiceForm({
 
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Due date (optional)
           </label>
           <input
@@ -255,11 +255,11 @@ export function CreateInvoiceForm({
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </div>
         <div className="space-y-1">
-          <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Internal description (optional)
           </label>
           <input
@@ -267,13 +267,13 @@ export function CreateInvoiceForm({
             onChange={(e) => setDescription(e.target.value)}
             disabled={isPending}
             placeholder="May retainer"
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </div>
       </div>
 
       <div className="space-y-1">
-        <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Memo on the invoice (optional)
         </label>
         <textarea
@@ -282,14 +282,14 @@ export function CreateInvoiceForm({
           onChange={(e) => setCustomerMemo(e.target.value)}
           disabled={isPending}
           placeholder="Thanks for your business."
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
       </div>
 
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -298,7 +298,7 @@ export function CreateInvoiceForm({
       <button
         type="submit"
         disabled={isPending}
-        className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+        className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
       >
         {isPending && <Loader2 className="w-4 h-4 animate-spin" aria-hidden />}
         {isPending ? "Creating…" : "Create invoice"}
@@ -327,16 +327,16 @@ function ProviderPill({
         onClick={onClick}
         disabled={disabled}
         className={
-          "font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md border transition-colors " +
+          "font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-md border transition-colors " +
           (active
-            ? "bg-[#1A1A1A] text-[#F5F1E8] border-[#1A1A1A]"
-            : "bg-white text-foreground border-[#CCCCCC] hover:bg-[#F5F1E8] disabled:opacity-50 disabled:cursor-not-allowed")
+            ? "bg-tbb-blue text-white border-tbb-navy"
+            : "bg-white text-foreground border-tbb-line hover:bg-tbb-cream-50 disabled:opacity-50 disabled:cursor-not-allowed")
         }
       >
         {label}
       </button>
       {disabled && disabledHint && (
-        <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+        <span className="font-mono text-[9px] uppercase tracking-tbb-caps text-muted-foreground">
           {disabledHint}
         </span>
       )}

@@ -24,10 +24,10 @@ export default async function MethodologyPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-12">
       <header className="space-y-3">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Workplaces methodology
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl sm:text-5xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl sm:text-5xl tracking-tight leading-none">
           The frameworks behind your engagement
         </h1>
         <p className="font-sans text-base text-muted-foreground max-w-prose">
@@ -140,11 +140,11 @@ function Section({
 }) {
   return (
     <section className="space-y-3">
-      <h2 className="font-display font-bold text-foreground text-xl sm:text-2xl tracking-tight flex items-center gap-3">
-        <span className="text-[#2E4057]">{icon}</span>
+      <h2 className="font-bold text-foreground text-xl sm:text-2xl tracking-tight flex items-center gap-3">
+        <span className="text-tbb-navy">{icon}</span>
         {title}
       </h2>
-      <div className="font-sans text-base text-foreground leading-relaxed [&_p]:my-0 [&>*+*]:mt-3 [&_a]:text-[#2E4057] [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-bold [&_em]:italic">
+      <div className="font-sans text-base text-foreground leading-relaxed [&_p]:my-0 [&>*+*]:mt-3 [&_a]:text-tbb-navy [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-bold [&_em]:italic">
         {children}
       </div>
     </section>

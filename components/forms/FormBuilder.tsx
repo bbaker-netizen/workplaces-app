@@ -146,7 +146,7 @@ export function FormBuilder({
     >
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Name
           </span>
           <input
@@ -154,18 +154,18 @@ export function FormBuilder({
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Type
           </span>
           <select
             value={type}
             onChange={(e) => setType(e.target.value as FType)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           >
             {(Object.keys(TYPE_LABEL) as FType[]).map((t) => (
               <option key={t} value={t}>
@@ -177,7 +177,7 @@ export function FormBuilder({
       </div>
 
       <label className="block space-y-1">
-        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Description
         </span>
         <textarea
@@ -185,20 +185,20 @@ export function FormBuilder({
           onChange={(e) => setDescription(e.target.value)}
           disabled={isPending}
           rows={2}
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
       </label>
 
       <fieldset className="space-y-2">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <legend className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <legend className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Questions
           </legend>
           <button
             type="button"
             onClick={addQuestion}
             disabled={isPending}
-            className="inline-flex items-center gap-1 font-sans text-xs uppercase tracking-[0.15em] font-bold px-2 py-1 rounded bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+            className="inline-flex items-center gap-1 font-sans text-xs uppercase tracking-tbb-caps font-bold px-2 py-1 rounded bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
           >
             <Plus className="w-3 h-3" aria-hidden /> Add question
           </button>
@@ -207,7 +207,7 @@ export function FormBuilder({
           {questions.map((q, idx) => (
             <li
               key={q.id}
-              className="border border-[#CCCCCC] rounded-md bg-white p-3 space-y-2"
+              className="border border-tbb-line rounded-md bg-white p-3 space-y-2"
             >
               <div className="grid sm:grid-cols-3 gap-2">
                 <select
@@ -216,7 +216,7 @@ export function FormBuilder({
                     updateQuestion(idx, { type: e.target.value as QType })
                   }
                   disabled={isPending}
-                  className="bg-white border border-[#CCCCCC] rounded-md px-2 py-1 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                  className="bg-white border border-tbb-line rounded-md px-2 py-1 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                 >
                   <option value="text">Short text</option>
                   <option value="textarea">Long text</option>
@@ -231,7 +231,7 @@ export function FormBuilder({
                     updateQuestion(idx, { label: e.target.value })
                   }
                   disabled={isPending}
-                  className="sm:col-span-2 bg-white border border-[#CCCCCC] rounded-md px-2 py-1 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                  className="sm:col-span-2 bg-white border border-tbb-line rounded-md px-2 py-1 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                 />
               </div>
               {(q.type === "radio" || q.type === "checkbox") && (
@@ -247,7 +247,7 @@ export function FormBuilder({
                     })
                   }
                   disabled={isPending}
-                  className="w-full bg-white border border-[#CCCCCC] rounded-md px-2 py-1 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                  className="w-full bg-white border border-tbb-line rounded-md px-2 py-1 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                 />
               )}
               <div className="flex items-center justify-between gap-2">
@@ -267,7 +267,7 @@ export function FormBuilder({
                   type="button"
                   onClick={() => removeQuestion(idx)}
                   disabled={isPending}
-                  className="font-sans text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-[#E87722] inline-flex items-center gap-1"
+                  className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-tbb-danger inline-flex items-center gap-1"
                 >
                   <Trash2 className="w-3 h-3" aria-hidden />
                   Remove
@@ -297,7 +297,7 @@ export function FormBuilder({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -309,7 +309,7 @@ export function FormBuilder({
             type="button"
             onClick={onDelete}
             disabled={isPending}
-            className="font-sans text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-[#E87722] underline-offset-4 hover:underline"
+            className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-tbb-danger underline-offset-4 hover:underline"
           >
             Delete form
           </button>
@@ -319,14 +319,14 @@ export function FormBuilder({
             type="button"
             onClick={() => router.push(redirectTo)}
             disabled={isPending}
-            className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+            className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
           >
             {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             {isPending ? "Saving…" : editing ? "Save" : "Create form"}

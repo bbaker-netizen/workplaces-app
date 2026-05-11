@@ -25,8 +25,8 @@ export type CoachFormEngagement = {
 };
 
 const inputClass =
-  "w-full px-3 py-2 border border-[#CCCCCC] rounded-md bg-white text-foreground " +
-  "focus:outline-none focus:ring-2 focus:ring-[#2E4057] focus:border-transparent " +
+  "w-full px-3 py-2 border border-tbb-line rounded-md bg-white text-foreground " +
+  "focus:outline-none focus:ring-2 focus:ring-tbb-blue focus:border-transparent " +
   "font-sans";
 
 const labelClass =

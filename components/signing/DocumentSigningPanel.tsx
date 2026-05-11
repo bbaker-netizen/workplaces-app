@@ -50,9 +50,9 @@ export function DocumentSigningPanel({
   );
 
   return (
-    <section className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-4">
+    <section className="border border-tbb-line rounded-md bg-white p-5 space-y-4">
       <header className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+        <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Send a document for signature
         </h2>
         {!showForm && (
@@ -60,7 +60,7 @@ export function DocumentSigningPanel({
             type="button"
             onClick={() => setShowForm(true)}
             disabled={documents.length === 0}
-            className="inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
           >
             <Send className="w-3 h-3" aria-hidden /> Send
           </button>
@@ -72,15 +72,15 @@ export function DocumentSigningPanel({
           Upload a document above first, then come back here to send it.
         </p>
       ) : showForm ? (
-        <div className="border-t border-[#CCCCCC] pt-4 space-y-4">
+        <div className="border-t border-tbb-line pt-4 space-y-4">
           <div className="space-y-1">
-            <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
               Pick the document
             </label>
             <select
               value={pickedDocId}
               onChange={(e) => setPickedDocId(e.target.value)}
-              className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             >
               {documents.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -105,10 +105,10 @@ export function DocumentSigningPanel({
 
       {envelopes.length > 0 && (
         <div className="space-y-1">
-          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+          <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
             Envelopes for this engagement
           </p>
-          <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+          <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
             {envelopes.map((e) => (
               <li
                 key={e.id}
@@ -121,7 +121,7 @@ export function DocumentSigningPanel({
                   {e.subject}
                 </Link>
                 <span
-                  className="font-mono text-[10px] uppercase tracking-[0.15em] font-bold"
+                  className="font-mono text-[10px] uppercase tracking-tbb-caps font-bold"
                   style={{ color: STATUS_TONE[e.status] ?? "#666666" }}
                 >
                   {e.status.replace(/_/g, " ")}

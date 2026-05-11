@@ -74,7 +74,7 @@ export async function RecentActivity({
   }
 
   return (
-    <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+    <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
       {rows.map(({ message, parentEntityType, parentEntityId, parentTitle }) => (
         <li key={message.id} className="py-3">
           <Link
@@ -87,13 +87,13 @@ export async function RecentActivity({
             className="block group"
           >
             <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                 {threadTypeLabel(parentEntityType)}
               </span>
               <span className="font-sans text-sm font-bold text-foreground group-hover:underline underline-offset-4">
                 {parentTitle}
               </span>
-              <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="ml-auto font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                 {formatMessageTimestamp(message.createdAt)}
               </span>
             </div>

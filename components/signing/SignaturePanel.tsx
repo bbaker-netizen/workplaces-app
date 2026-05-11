@@ -175,12 +175,12 @@ export function SignaturePanel({
   }
 
   return (
-    <section className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-4">
+    <section className="border border-tbb-line rounded-md bg-white p-5 space-y-4">
       <header className="space-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Sign here
         </p>
-        <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
           Type or draw your signature.
         </h2>
       </header>
@@ -207,9 +207,9 @@ export function SignaturePanel({
             onChange={(e) => setTypedName(e.target.value)}
             disabled={isPending}
             placeholder="Type your full name"
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
-          <div className="border border-dashed border-[#CCCCCC] rounded-md p-4 bg-[#F5F1E8] min-h-[110px] flex items-center">
+          <div className="border border-dashed border-tbb-line rounded-md p-4 bg-tbb-cream-50 min-h-[110px] flex items-center">
             <span
               style={{
                 font: TYPE_FONT,
@@ -226,7 +226,7 @@ export function SignaturePanel({
 
       {mode === "drawn" && (
         <div className="space-y-2">
-          <div className="border border-dashed border-[#CCCCCC] rounded-md bg-white relative">
+          <div className="border border-dashed border-tbb-line rounded-md bg-white relative">
             <canvas
               ref={drawCanvasRef}
               className="block w-full touch-none cursor-crosshair"
@@ -246,7 +246,7 @@ export function SignaturePanel({
             type="button"
             onClick={clearDraw}
             disabled={isPending || !hasDrawn}
-            className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground disabled:opacity-50"
+            className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <Eraser className="w-3 h-3" aria-hidden /> Clear
           </button>
@@ -271,7 +271,7 @@ export function SignaturePanel({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -281,7 +281,7 @@ export function SignaturePanel({
         type="button"
         onClick={submit}
         disabled={isPending}
-        className="w-full inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-3 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+        className="w-full inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
       >
         {isPending ? (
           <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
@@ -310,10 +310,10 @@ function ModeButton({
       type="button"
       onClick={onClick}
       className={
-        "inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md border transition-colors " +
+        "inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-md border transition-colors " +
         (active
-          ? "bg-[#1A1A1A] text-[#F5F1E8] border-[#1A1A1A]"
-          : "bg-white text-foreground border-[#CCCCCC] hover:bg-[#F5F1E8]")
+          ? "bg-tbb-blue text-white border-tbb-navy"
+          : "bg-white text-foreground border-tbb-line hover:bg-tbb-cream-50")
       }
     >
       {icon}

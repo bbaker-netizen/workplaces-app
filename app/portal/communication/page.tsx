@@ -35,7 +35,7 @@ export default async function PortalCommunicationPage({
   if (!engagement) {
     return (
       <main className="max-w-3xl mx-auto px-6 py-12 space-y-4">
-        <h1 className="font-display font-bold text-foreground text-3xl tracking-tight">
+        <h1 className="font-bold text-foreground text-3xl tracking-tight">
           Communication
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
@@ -58,32 +58,32 @@ export default async function PortalCommunicationPage({
   return (
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-10">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           {engagement.name ?? "Engagement"}
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Communication
         </h1>
       </header>
 
       <section className="space-y-3">
-        <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
           Recent activity
         </h2>
         <RecentActivity engagementId={engagement.id} scope="portal" />
       </section>
 
       <section className="space-y-4">
-        <div role="tablist" className="flex gap-1 border-b border-[#CCCCCC]">
+        <div role="tablist" className="flex gap-1 border-b border-tbb-line">
           {showLeadership && (
             <a
               role="tab"
               aria-selected={tab === "leadership"}
               href="?tab=leadership"
               className={
-                "font-sans text-sm uppercase tracking-[0.15em] px-4 py-2 -mb-px border-b-2 transition-colors " +
+                "font-sans text-sm uppercase tracking-tbb-caps px-4 py-2 -mb-px border-b-2 transition-colors " +
                 (tab === "leadership"
-                  ? "border-[#1A1A1A] text-foreground font-bold"
+                  ? "border-tbb-navy text-foreground font-bold"
                   : "border-transparent text-muted-foreground hover:text-foreground")
               }
             >
@@ -95,9 +95,9 @@ export default async function PortalCommunicationPage({
             aria-selected={tab === "team"}
             href="?tab=team"
             className={
-              "font-sans text-sm uppercase tracking-[0.15em] px-4 py-2 -mb-px border-b-2 transition-colors " +
+              "font-sans text-sm uppercase tracking-tbb-caps px-4 py-2 -mb-px border-b-2 transition-colors " +
               (tab === "team"
-                ? "border-[#1A1A1A] text-foreground font-bold"
+                ? "border-tbb-navy text-foreground font-bold"
                 : "border-transparent text-muted-foreground hover:text-foreground")
             }
           >

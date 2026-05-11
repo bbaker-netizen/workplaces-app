@@ -35,10 +35,10 @@ export default async function EditPortalActionItemPage({
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-12">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Edit action item
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl tracking-tight leading-tight break-words">
+        <h1 className="font-bold text-foreground text-3xl tracking-tight leading-tight break-words">
           {item.title}
         </h1>
       </header>
@@ -63,7 +63,7 @@ export default async function EditPortalActionItemPage({
       />
 
       <section className="space-y-4">
-        <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
           Discussion
         </h2>
         <MessageThread

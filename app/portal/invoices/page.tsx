@@ -15,8 +15,8 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_TONE: Record<string, string> = {
   draft: "text-muted-foreground",
   sent: "text-foreground",
-  paid: "text-[#2E4057] font-bold",
-  overdue: "text-[#E87722] font-bold",
+  paid: "text-tbb-navy font-bold",
+  overdue: "text-tbb-danger font-bold",
   void: "text-muted-foreground line-through",
 };
 
@@ -31,10 +31,10 @@ export default async function PortalInvoicesPage() {
   return (
     <main className="max-w-4xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           {engagement.name ?? "Engagement"}
         </p>
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Invoices
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
@@ -43,8 +43,8 @@ export default async function PortalInvoicesPage() {
       </header>
 
       {items.length === 0 ? (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6 space-y-2">
-          <p className="font-display font-bold text-foreground text-base tracking-tight">
+        <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+          <p className="font-bold text-foreground text-base tracking-tight">
             No invoices yet
           </p>
           <p className="font-sans text-sm text-muted-foreground">
@@ -52,12 +52,12 @@ export default async function PortalInvoicesPage() {
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((inv) => (
             <li key={inv.id} className="py-3 flex items-center gap-3 flex-wrap">
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                  <span className="font-display font-bold text-foreground text-base tracking-tight">
+                  <span className="font-bold text-foreground text-base tracking-tight">
                     {inv.number ?? inv.stripeInvoiceId ?? "Invoice"}
                   </span>
                   {inv.description && (
@@ -66,7 +66,7 @@ export default async function PortalInvoicesPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                <p className="mt-0.5 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                   {inv.issuedAt && (
                     <>
                       Issued {new Date(inv.issuedAt).toLocaleDateString()} ·{" "}
@@ -82,7 +82,7 @@ export default async function PortalInvoicesPage() {
               </div>
               <span
                 className={
-                  "font-mono text-[10px] uppercase tracking-[0.2em] " +
+                  "font-mono text-[10px] uppercase tracking-tbb-caps " +
                   (STATUS_TONE[inv.status] ?? "text-muted-foreground")
                 }
               >
@@ -93,7 +93,7 @@ export default async function PortalInvoicesPage() {
                   href={inv.hostedInvoiceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#2E4057] hover:underline inline-flex items-center gap-1"
+                  className="font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-navy hover:underline inline-flex items-center gap-1"
                 >
                   Stripe <ExternalLink className="w-3 h-3" aria-hidden />
                 </a>

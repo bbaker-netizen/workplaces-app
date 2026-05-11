@@ -49,26 +49,26 @@ export default async function EnvelopeDetailPage({
       <header className="space-y-2">
         <Link
           href="/coach/pipeline"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Pipeline
         </Link>
-        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Signature envelope
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {env.subject}
         </h1>
         <p
-          className="font-mono text-xs uppercase tracking-[0.2em]"
+          className="font-mono text-xs uppercase tracking-tbb-caps"
           style={{ color: status.tone }}
         >
           {status.label}
         </p>
       </header>
 
-      <section className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-3">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <section className="border border-tbb-line rounded-md bg-white p-5 space-y-3">
+        <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Documents
         </h2>
         {env.sourceDocument && (
@@ -76,7 +76,7 @@ export default async function EnvelopeDetailPage({
             <strong>Source:</strong>{" "}
             <a
               href={`/api/documents/${env.sourceDocument.id}/download`}
-              className="text-[#2E4057] underline underline-offset-4"
+              className="text-tbb-navy underline underline-offset-4"
             >
               {env.sourceDocument.originalFilename}
             </a>
@@ -87,7 +87,7 @@ export default async function EnvelopeDetailPage({
             <strong>Signed:</strong>{" "}
             <a
               href={`/api/documents/${env.signedDocument.id}/download`}
-              className="text-[#2E4057] underline underline-offset-4"
+              className="text-tbb-navy underline underline-offset-4"
             >
               {env.signedDocument.originalFilename}
             </a>
@@ -99,24 +99,24 @@ export default async function EnvelopeDetailPage({
         )}
       </section>
 
-      <section className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-3">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <section className="border border-tbb-line rounded-md bg-white p-5 space-y-3">
+        <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Signers
         </h2>
-        <ul className="divide-y divide-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line">
           {env.signers.map((s) => (
             <li
               key={s.id}
               className="py-3 flex items-baseline gap-x-3 gap-y-1 flex-wrap"
             >
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground w-6">
+              <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground w-6">
                 {s.orderIndex + 1}
               </span>
               <span className="font-sans text-sm font-bold text-foreground">
                 {s.name}
               </span>
               {s.roleLabel && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                   {s.roleLabel}
                 </span>
               )}
@@ -124,7 +124,7 @@ export default async function EnvelopeDetailPage({
                 {s.email}
               </span>
               <span
-                className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] font-bold"
+                className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps font-bold"
                 style={{
                   color:
                     s.status === "signed"
@@ -155,8 +155,8 @@ export default async function EnvelopeDetailPage({
         </ul>
       </section>
 
-      <section className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-3">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <section className="border border-tbb-line rounded-md bg-white p-5 space-y-3">
+        <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Audit log
         </h2>
         {audit.length === 0 ? (

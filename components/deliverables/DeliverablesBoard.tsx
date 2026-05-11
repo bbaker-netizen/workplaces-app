@@ -50,8 +50,8 @@ const STATUS_LABEL: Record<DStatus, string> = {
 const STATUS_TONE: Record<DStatus, string> = {
   not_started: "text-muted-foreground",
   in_progress: "text-foreground",
-  review: "text-[#2E4057] font-bold",
-  delivered: "text-[#2E4057] font-bold",
+  review: "text-tbb-navy font-bold",
+  delivered: "text-tbb-navy font-bold",
   archived: "text-muted-foreground line-through",
 };
 
@@ -122,8 +122,8 @@ export function DeliverablesBoard({
   return (
     <div className="space-y-6">
       {items.length === 0 && !adding ? (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6 space-y-2">
-          <p className="font-display font-bold text-foreground text-base tracking-tight">
+        <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+          <p className="font-bold text-foreground text-base tracking-tight">
             No deliverables tracked yet
           </p>
           <p className="font-sans text-sm text-muted-foreground">
@@ -133,15 +133,15 @@ export function DeliverablesBoard({
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((d) => (
             <li key={d.id} className="py-3 flex items-start gap-3 flex-wrap">
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                  <span className="font-display font-bold text-foreground text-base tracking-tight">
+                  <span className="font-bold text-foreground text-base tracking-tight">
                     {d.title}
                   </span>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     {TYPE_LABEL[d.type]}
                   </span>
                 </div>
@@ -151,7 +151,7 @@ export function DeliverablesBoard({
                   </p>
                 )}
                 {d.deliveredAt && (
-                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     Delivered {new Date(d.deliveredAt).toLocaleDateString()}
                   </p>
                 )}
@@ -159,7 +159,7 @@ export function DeliverablesBoard({
               {d.documentId && (
                 <Link
                   href={`/api/documents/${d.documentId}/download`}
-                  className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.15em] text-[#2E4057] hover:underline"
+                  className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-navy hover:underline"
                 >
                   <Download className="w-3 h-3" aria-hidden /> File
                 </Link>
@@ -170,7 +170,7 @@ export function DeliverablesBoard({
                   onChange={(e) => onChangeStatus(d.id, e.target.value as DStatus)}
                   disabled={isPending}
                   className={
-                    "font-mono text-[10px] uppercase tracking-[0.15em] bg-white border rounded-full px-2 py-1 cursor-pointer " +
+                    "font-mono text-[10px] uppercase tracking-tbb-caps bg-white border rounded-full px-2 py-1 cursor-pointer " +
                     (STATUS_TONE[d.status] ?? "")
                   }
                 >
@@ -183,7 +183,7 @@ export function DeliverablesBoard({
               ) : (
                 <span
                   className={
-                    "font-mono text-[10px] uppercase tracking-[0.2em] " +
+                    "font-mono text-[10px] uppercase tracking-tbb-caps " +
                     (STATUS_TONE[d.status] ?? "text-muted-foreground")
                   }
                 >
@@ -196,7 +196,7 @@ export function DeliverablesBoard({
                   onClick={() => remove(d.id, d.title)}
                   disabled={isPending}
                   aria-label={`Delete ${d.title}`}
-                  className="p-1.5 rounded text-muted-foreground hover:text-[#E87722] hover:bg-[#F5F1E8]"
+                  className="p-1.5 rounded text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden />
                 </button>
@@ -210,7 +210,7 @@ export function DeliverablesBoard({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057]"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
         >
           <Plus className="w-4 h-4" aria-hidden /> Add deliverable
         </button>
@@ -222,9 +222,9 @@ export function DeliverablesBoard({
             e.preventDefault();
             submit();
           }}
-          className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3"
+          className="border border-tbb-line rounded-md bg-white p-4 space-y-3"
         >
-          <h3 className="font-display font-bold text-foreground text-lg tracking-tight">
+          <h3 className="font-bold text-foreground text-lg tracking-tight">
             Track a deliverable
           </h3>
           <div className="grid sm:grid-cols-2 gap-3">
@@ -234,7 +234,7 @@ export function DeliverablesBoard({
                 setDraft({ ...draft, type: e.target.value as DType })
               }
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             >
               {(Object.keys(TYPE_LABEL) as DType[]).map((t) => (
                 <option key={t} value={t}>
@@ -248,13 +248,13 @@ export function DeliverablesBoard({
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
           </div>
           {error && (
             <p
               role="alert"
-              className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+              className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
             >
               {error}
             </p>
@@ -264,14 +264,14 @@ export function DeliverablesBoard({
               type="button"
               onClick={() => setAdding(false)}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+              className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
             >
               {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
               {isPending ? "Saving…" : "Save"}
@@ -281,7 +281,7 @@ export function DeliverablesBoard({
       )}
 
       {error && !adding && (
-        <p role="alert" className="font-sans text-sm text-[#E87722]">
+        <p role="alert" className="font-sans text-sm text-tbb-danger">
           {error}
         </p>
       )}

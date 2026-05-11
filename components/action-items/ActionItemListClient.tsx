@@ -65,7 +65,7 @@ export function ActionItemListClient({
         {newItemHref && (
           <Link
             href={newItemHref}
-            className="inline-flex items-center justify-center font-sans text-sm font-bold tracking-wider uppercase bg-[#2E4057] text-[#F5F1E8] hover:bg-[#1A1A1A] transition-colors px-5 py-2.5 rounded-md"
+            className="inline-flex items-center justify-center font-sans text-sm font-bold tracking-wider uppercase bg-tbb-blue-700 text-white hover:bg-tbb-blue transition-colors px-5 py-2.5 rounded-pill"
           >
             + New action item
           </Link>
@@ -73,8 +73,8 @@ export function ActionItemListClient({
       </div>
 
       {visible.length === 0 ? (
-        <div className="rounded-md border border-dashed border-[#CCCCCC] bg-white px-6 py-12 text-center">
-          <p className="font-display font-bold text-foreground text-2xl tracking-tight">
+        <div className="rounded-md border border-dashed border-tbb-line bg-white px-6 py-12 text-center">
+          <p className="font-bold text-foreground text-2xl tracking-tight">
             {emptyHeadline}
           </p>
           <p className="mt-2 font-sans text-sm text-muted-foreground max-w-md mx-auto">

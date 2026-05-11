@@ -38,30 +38,30 @@ export default async function NewInvoicePage() {
   return (
     <main className="max-w-2xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Coach Console
         </p>
-        <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Create invoice
         </h1>
         <Link
           href="/coach"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
           ← Console
         </Link>
       </header>
 
       {!qboConnected && (
-        <div className="border border-[#E87722] bg-white rounded-md px-4 py-3">
-          <p className="font-display font-bold text-[#E87722] text-base">
+        <div className="border border-tbb-danger bg-white rounded-md px-4 py-3">
+          <p className="font-bold text-tbb-danger text-base">
             QuickBooks not connected.
           </p>
           <p className="font-sans text-sm text-foreground">
             Connect at{" "}
             <Link
               href="/coach/profile/quickbooks"
-              className="text-[#2E4057] underline underline-offset-4"
+              className="text-tbb-navy underline underline-offset-4"
             >
               /coach/profile/quickbooks
             </Link>{" "}

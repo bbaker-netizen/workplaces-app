@@ -1,34 +1,39 @@
 /**
- * Portal footer — minimal, brand-consistent, with a visible support
- * contact. Required by Intuit's app review (a customer must be able
- * to reach support from inside the app).
+ * Portal footer — navy bar with cream-tinted text, visible support link.
  */
 
 import Link from "next/link";
+import Image from "next/image";
 
 export function PortalFooter() {
   return (
-    <footer className="border-t border-[#CCCCCC] bg-background mt-12">
-      <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between gap-3 flex-wrap">
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          The Builder · By Workplaces
-        </p>
-        <div className="flex items-baseline gap-4 flex-wrap">
+    <footer className="bg-tbb-navy-900 text-tbb-cream mt-16">
+      <div className="max-w-tbb-container mx-auto px-6 py-8 flex items-center justify-between gap-6 flex-wrap">
+        <div className="flex items-center gap-4">
+          <Image
+            src="/brand/logo-cream.png"
+            alt="The Business Builders by Workplaces"
+            width={180}
+            height={40}
+            className="h-8 w-auto opacity-90"
+          />
+        </div>
+        <div className="flex items-baseline gap-6 flex-wrap">
           <a
             href="mailto:bruce@4workplaces.com"
-            className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+            className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-cream/75 hover:text-tbb-cream transition-colors duration-tbb-base"
           >
             Contact support
           </a>
           <Link
             href="https://4workplaces.com/privacy-policy/"
-            className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+            className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-cream/75 hover:text-tbb-cream transition-colors duration-tbb-base"
           >
             Privacy
           </Link>
           <Link
             href="https://4workplaces.com/terms/"
-            className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+            className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-cream/75 hover:text-tbb-cream transition-colors duration-tbb-base"
           >
             Terms
           </Link>

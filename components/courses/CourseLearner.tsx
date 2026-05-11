@@ -29,7 +29,7 @@ export function CourseLearner({ lessons }: { lessons: Lesson[] }) {
 
   if (lessons.length === 0) {
     return (
-      <p className="font-sans text-sm text-muted-foreground italic border border-[#CCCCCC] rounded-md bg-white p-6">
+      <p className="font-sans text-sm text-muted-foreground italic border border-tbb-line rounded-md bg-white p-6">
         No lessons published yet.
       </p>
     );
@@ -65,29 +65,29 @@ export function CourseLearner({ lessons }: { lessons: Lesson[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-2">
+      <div className="border border-tbb-line rounded-md bg-white p-4 space-y-2">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Progress
           </h2>
-          <span className="font-display font-bold text-foreground text-lg tracking-tight">
+          <span className="font-bold text-foreground text-lg tracking-tight">
             {done}/{total}{" "}
             <span className="font-mono text-xs text-muted-foreground">
               ({pct}%)
             </span>
           </span>
         </div>
-        <div className="h-1.5 bg-[#F5F1E8] rounded-full overflow-hidden">
+        <div className="h-1.5 bg-tbb-cream-50 rounded-full overflow-hidden">
           <div
-            className="h-full bg-[#2E4057] transition-all"
+            className="h-full bg-tbb-blue-700 transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
       </div>
 
       <div className="grid md:grid-cols-[1fr_2fr] gap-6">
-        <nav className="border border-[#CCCCCC] rounded-md bg-white">
-          <ul className="divide-y divide-[#CCCCCC]">
+        <nav className="border border-tbb-line rounded-md bg-white">
+          <ul className="divide-y divide-tbb-line">
             {lessons.map((lesson, i) => {
               const isDone = doneIds.has(lesson.id);
               const isActive = lesson.id === activeId;
@@ -97,13 +97,13 @@ export function CourseLearner({ lessons }: { lessons: Lesson[] }) {
                     type="button"
                     onClick={() => setActiveId(lesson.id)}
                     className={
-                      "w-full text-left px-3 py-2 flex items-center gap-2 group hover:bg-[#F5F1E8] " +
-                      (isActive ? "bg-[#F5F1E8]" : "")
+                      "w-full text-left px-3 py-2 flex items-center gap-2 group hover:bg-tbb-cream-50 " +
+                      (isActive ? "bg-tbb-cream-50" : "")
                     }
                   >
                     {isDone ? (
                       <CheckCircle2
-                        className="w-4 h-4 text-[#2E4057] flex-shrink-0"
+                        className="w-4 h-4 text-tbb-navy flex-shrink-0"
                         aria-hidden
                       />
                     ) : (
@@ -112,7 +112,7 @@ export function CourseLearner({ lessons }: { lessons: Lesson[] }) {
                         aria-hidden
                       />
                     )}
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {String(i + 1).padStart(2, "0")}
                     </span>
                     <span
@@ -133,9 +133,9 @@ export function CourseLearner({ lessons }: { lessons: Lesson[] }) {
         </nav>
 
         {active && (
-          <article className="border border-[#CCCCCC] rounded-md bg-white p-5 space-y-4">
+          <article className="border border-tbb-line rounded-md bg-white p-5 space-y-4">
             <header className="flex items-baseline justify-between gap-3 flex-wrap">
-              <h2 className="font-display font-bold text-foreground text-xl tracking-tight">
+              <h2 className="font-bold text-foreground text-xl tracking-tight">
                 {active.title}
               </h2>
               <button
@@ -143,10 +143,10 @@ export function CourseLearner({ lessons }: { lessons: Lesson[] }) {
                 onClick={() => toggle(active.id)}
                 disabled={pendingId === active.id}
                 className={
-                  "inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-[0.15em] font-bold px-3 py-1.5 rounded-md border transition-colors " +
+                  "inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 rounded-md border transition-colors " +
                   (doneIds.has(active.id)
-                    ? "bg-[#2E4057] text-[#F5F1E8] border-[#2E4057] hover:bg-[#1A1A1A]"
-                    : "bg-white text-foreground border-[#CCCCCC] hover:bg-[#F5F1E8]")
+                    ? "bg-tbb-blue-700 text-white border-tbb-blue hover:bg-tbb-blue"
+                    : "bg-white text-foreground border-tbb-line hover:bg-tbb-cream-50")
                 }
               >
                 {pendingId === active.id ? (

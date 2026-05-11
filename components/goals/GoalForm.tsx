@@ -139,7 +139,7 @@ export function GoalForm({
       aria-busy={isPending}
     >
       <label className="block space-y-1">
-        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Title
         </span>
         <input
@@ -150,12 +150,12 @@ export function GoalForm({
           required
           maxLength={500}
           placeholder="Reach $1.2M ARR by Q4"
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         />
       </label>
 
       <label className="block space-y-1">
-        <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Description (markdown supported)
         </span>
         <textarea
@@ -164,13 +164,13 @@ export function GoalForm({
           disabled={isPending}
           rows={5}
           placeholder="Why this goal, the SMART breakdown, who owns each part…"
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
       </label>
 
       <div className="grid sm:grid-cols-3 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Target metric
           </span>
           <input
@@ -179,11 +179,11 @@ export function GoalForm({
             onChange={(e) => setTargetMetric(e.target.value)}
             disabled={isPending}
             placeholder="e.g. Q4 ARR, Gross margin %"
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Target value
           </span>
           <input
@@ -192,11 +192,11 @@ export function GoalForm({
             onChange={(e) => setTargetValue(e.target.value)}
             disabled={isPending}
             placeholder="e.g. $1.2M, 22%"
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Target date
           </span>
           <input
@@ -204,21 +204,21 @@ export function GoalForm({
             value={targetDate}
             onChange={(e) => setTargetDate(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Status
           </span>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as GoalStatus)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -228,14 +228,14 @@ export function GoalForm({
           </select>
         </label>
         <label className="block space-y-1">
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Owner
           </span>
           <select
             value={ownerId}
             onChange={(e) => setOwnerId(e.target.value)}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           >
             <option value="">Unassigned</option>
             {members.map((m) => (
@@ -247,8 +247,8 @@ export function GoalForm({
         </label>
       </div>
 
-      <fieldset className="border border-[#CCCCCC] rounded-md p-3 space-y-2">
-        <legend className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground px-1">
+      <fieldset className="border border-tbb-line rounded-md p-3 space-y-2">
+        <legend className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground px-1">
           Quality gate (pick at least one)
         </legend>
         <label className="flex items-center gap-2 font-sans text-sm">
@@ -272,7 +272,7 @@ export function GoalForm({
           <span>Protects <strong>margin</strong></span>
         </label>
         {!qualityGateOk && (
-          <p className="font-sans text-xs text-[#E87722]">
+          <p className="font-sans text-xs text-tbb-danger">
             Goals that don&apos;t move revenue or margin shouldn&apos;t exist.
           </p>
         )}
@@ -281,7 +281,7 @@ export function GoalForm({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -293,7 +293,7 @@ export function GoalForm({
             type="button"
             onClick={onDelete}
             disabled={isPending}
-            className="font-sans text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-[#E87722] underline-offset-4 hover:underline"
+            className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-tbb-danger underline-offset-4 hover:underline"
           >
             Delete goal
           </button>
@@ -303,14 +303,14 @@ export function GoalForm({
             type="button"
             onClick={() => router.push(redirectTo)}
             disabled={isPending}
-            className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+            className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-wait"
+            className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 disabled:cursor-wait"
           >
             {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             {isPending ? "Saving…" : editing ? "Save" : "Create goal"}

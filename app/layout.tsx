@@ -4,24 +4,23 @@ import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar"
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "The Builder · By Workplaces",
+  title: "The Business Builders · By Workplaces",
   description:
-    "The complete operational layer for Workplaces coaching engagements.",
+    "Coaching, deliverables, and invoicing — one operating platform for the Workplaces practice.",
 };
 
-// Clerk components themed to The Builder palette.
-// See CLAUDE.md "Brand & UI" for the canonical spec.
+// Clerk components themed to the Business Builders palette.
 const builderAppearance = {
   variables: {
-    colorPrimary: "#1A1A1A",            // Foreman Black
-    colorBackground: "#F5F1E8",          // Drafting Cream
-    colorText: "#1A1A1A",
-    colorTextSecondary: "#666666",
-    colorTextOnPrimaryBackground: "#F5F1E8",
+    colorPrimary: "#2C6CB0",            // TBB blue (CTAs)
+    colorBackground: "#F4F6F9",         // TBB bg-soft
+    colorText: "#14181D",               // TBB ink
+    colorTextSecondary: "#5A6470",      // TBB ink-3
+    colorTextOnPrimaryBackground: "#FFFFFF",
     colorInputBackground: "#FFFFFF",
-    colorInputText: "#1A1A1A",
-    fontFamily: '"Work Sans", system-ui, sans-serif',
-    borderRadius: "0.375rem",
+    colorInputText: "#14181D",
+    fontFamily: "Arial, 'Helvetica Neue', Helvetica, system-ui, sans-serif",
+    borderRadius: "0.625rem",           // 10px — TBB input radius
   },
 };
 

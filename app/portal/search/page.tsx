@@ -9,7 +9,7 @@ export default async function PortalSearchPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
-        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+        <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Search
         </h1>
         <p className="font-sans text-sm text-muted-foreground">

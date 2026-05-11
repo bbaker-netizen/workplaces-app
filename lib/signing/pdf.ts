@@ -77,9 +77,10 @@ async function appendCertificatePage(
   const margin = 56;
   let y = height - margin;
 
-  const black = rgb(0.1, 0.1, 0.1);
-  const grey = rgb(0.4, 0.4, 0.4);
-  const orange = rgb(0.91, 0.467, 0.133); // #E87722
+  // The Business Builders by Workplaces — navy primary ink, blue accent.
+  const black = rgb(0.078, 0.220, 0.357); // #14385B (TBB navy)
+  const grey = rgb(0.353, 0.392, 0.439);  // #5A6470 (TBB ink-3)
+  const orange = rgb(0.173, 0.424, 0.690); // #2C6CB0 (TBB blue — accent slot)
 
   // Header.
   page.drawText("CERTIFICATE OF COMPLETION", {

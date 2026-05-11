@@ -39,14 +39,14 @@ export function DocumentList({ rows }: { rows: DocumentRow[] }) {
 
   if (rows.length === 0) {
     return (
-      <div className="border border-[#CCCCCC] rounded-md bg-white p-6 font-sans text-sm text-muted-foreground italic">
+      <div className="border border-tbb-line rounded-md bg-white p-6 font-sans text-sm text-muted-foreground italic">
         No documents yet. Upload one above to get started.
       </div>
     );
   }
 
   return (
-    <ul className="divide-y divide-[#CCCCCC] border-t border-b border-[#CCCCCC]">
+    <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
       {rows
         .filter((r) => !optimisticDeleted.has(r.id))
         .map((row) => (
@@ -116,15 +116,15 @@ function DocumentRowView({
         <div className="flex items-baseline gap-3 flex-wrap">
           <Link
             href={`/api/documents/${row.id}/download`}
-            className="font-sans text-sm font-bold text-foreground hover:text-[#2E4057] underline-offset-4 hover:underline truncate"
+            className="font-sans text-sm font-bold text-foreground hover:text-tbb-blue underline-offset-4 hover:underline truncate"
           >
             {row.filename}
           </Link>
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             {formatBytes(row.sizeBytes)}
           </span>
         </div>
-        <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <div className="mt-1 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Uploaded by {row.uploaderName} ·{" "}
           {row.createdAt.toLocaleDateString(undefined, {
             month: "short",
@@ -141,13 +141,13 @@ function DocumentRowView({
                 onChange={(e) => setTagsDraft(e.target.value)}
                 disabled={isPending}
                 placeholder="comma-separated, e.g. budget, FY26"
-                className="flex-1 min-w-[200px] bg-white border border-[#CCCCCC] rounded px-2 py-1 font-sans text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                className="flex-1 min-w-[200px] bg-white border border-tbb-line rounded px-2 py-1 font-sans text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-tbb-blue"
               />
               <button
                 type="button"
                 onClick={onSaveTags}
                 disabled={isPending}
-                className="font-sans text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-1 rounded bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+                className="font-sans text-[10px] uppercase tracking-tbb-caps font-bold px-2 py-1 rounded bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
               >
                 {isPending ? "Saving…" : "Save"}
               </button>
@@ -158,7 +158,7 @@ function DocumentRowView({
                   setTagsDraft(row.tags.join(", "));
                 }}
                 disabled={isPending}
-                className="font-sans text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground"
+                className="font-sans text-[10px] uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </button>
@@ -173,7 +173,7 @@ function DocumentRowView({
                 row.tags.map((t) => (
                   <span
                     key={t}
-                    className="inline-flex items-center rounded-full border border-[#CCCCCC] bg-[#F5F1E8] text-foreground px-2 py-0.5 text-xs"
+                    className="inline-flex items-center rounded-full border border-tbb-line bg-tbb-cream-50 text-foreground px-2 py-0.5 text-xs"
                   >
                     {t}
                   </span>
@@ -182,7 +182,7 @@ function DocumentRowView({
               <button
                 type="button"
                 onClick={() => setEditingTags(true)}
-                className="font-sans text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                className="font-sans text-[10px] uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
               >
                 {row.tags.length === 0 ? "Add tags" : "Edit tags"}
               </button>
@@ -190,7 +190,7 @@ function DocumentRowView({
           )}
         </div>
         {error && (
-          <p role="alert" className="mt-1 font-sans text-xs text-[#E87722]">
+          <p role="alert" className="mt-1 font-sans text-xs text-tbb-danger">
             {error}
           </p>
         )}
@@ -201,7 +201,7 @@ function DocumentRowView({
           onClick={onDelete}
           disabled={isPending}
           aria-label={`Delete ${row.filename}`}
-          className="p-1.5 rounded text-muted-foreground hover:text-[#E87722] hover:bg-[#F5F1E8] disabled:opacity-50"
+          className="p-1.5 rounded text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50 disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />

@@ -115,10 +115,10 @@ export default async function CoachConsole() {
       <div className="max-w-6xl mx-auto px-6 py-10 sm:py-12 space-y-10">
         <header className="flex items-end justify-between gap-4 flex-wrap">
           <div className="space-y-1">
-            <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+            <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
               Coach Console
             </p>
-            <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+            <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
               Hey {profile.fullName.split(" ")[0] ?? profile.fullName}.
             </h1>
             <p className="font-sans text-sm text-muted-foreground">
@@ -128,13 +128,13 @@ export default async function CoachConsole() {
           <div className="flex items-center gap-2">
             <Link
               href="/coach/engagements/new"
-              className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057]"
+              className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
             >
               <Plus className="w-4 h-4" aria-hidden /> New engagement
             </Link>
             <Link
               href="/portal"
-              className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+              className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
             >
               Portal view
             </Link>
@@ -165,23 +165,23 @@ export default async function CoachConsole() {
                       <Link
                         href={`/coach/action-items/${it.id}`}
                         className={
-                          "block py-1.5 pl-3 border-l-2 group hover:bg-[#F5F1E8] transition-colors " +
-                          (overdue ? "border-[#E87722]" : "border-transparent")
+                          "block py-1.5 pl-3 border-l-2 group hover:bg-tbb-cream-50 transition-colors " +
+                          (overdue ? "border-tbb-danger" : "border-transparent")
                         }
                       >
                         <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
                           <span className="font-sans text-sm font-bold text-foreground group-hover:underline underline-offset-4">
                             {it.title}
                           </span>
-                          <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                          <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                             {it.engagementName ?? "Engagement"}
                           </span>
                           {it.dueDate && (
                             <span
                               className={
-                                "ml-auto font-mono text-[10px] uppercase tracking-[0.15em] " +
+                                "ml-auto font-mono text-[10px] uppercase tracking-tbb-caps " +
                                 (overdue
-                                  ? "text-[#E87722] font-bold"
+                                  ? "text-tbb-danger font-bold"
                                   : "text-muted-foreground")
                               }
                             >
@@ -221,7 +221,7 @@ export default async function CoachConsole() {
                     >
                       {formatSessionTime(s.scheduledAt)}
                     </Link>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {s.engagementName ?? s.type}
                     </span>
                   </li>
@@ -250,10 +250,10 @@ export default async function CoachConsole() {
                     <span className="font-sans text-sm font-bold text-foreground">
                       {p.name}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {p.engagementName}
                     </span>
-                    <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {p.status}
                     </span>
                   </li>
@@ -285,10 +285,10 @@ export default async function CoachConsole() {
                     >
                       {p.companyName}
                     </Link>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {p.contactName ?? p.contactEmail}
                     </span>
-                    <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {p.status.replace(/_/g, " ")}
                     </span>
                   </li>
@@ -317,10 +317,10 @@ export default async function CoachConsole() {
                     <span className="font-sans text-sm font-bold text-foreground">
                       {h.candidateName}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {h.engagementName} · {h.roleName}
                     </span>
-                    <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {h.status.replace("_", " ")}
                     </span>
                   </li>
@@ -349,10 +349,10 @@ export default async function CoachConsole() {
                     <span className="font-sans text-sm font-bold text-foreground">
                       {d.title}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {d.engagementName}
                     </span>
-                    <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {d.status.replace("_", " ")}
                     </span>
                   </li>
@@ -381,7 +381,7 @@ export default async function CoachConsole() {
                     <span className="font-sans text-sm font-bold text-foreground">
                       {g.title}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {g.engagementName}
                     </span>
                   </li>
@@ -396,10 +396,10 @@ export default async function CoachConsole() {
             href="/coach/subscriptions"
             cta="All assets"
           >
-            <p className="font-display font-bold text-foreground text-2xl tracking-tight">
+            <p className="font-bold text-foreground text-2xl tracking-tight">
               ${(subsRunRate / 100).toFixed(2)}<span className="font-mono text-xs text-muted-foreground"> / mo</span>
             </p>
-            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
               {subscriptions.length} services across {engagements.length} engagement
               {engagements.length === 1 ? "" : "s"}
             </p>
@@ -425,7 +425,7 @@ export default async function CoachConsole() {
                     <span className="font-sans text-sm font-bold text-foreground">
                       {e.name ?? "Engagement"}
                     </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                       {e.type} · {e.status}
                     </span>
                   </li>
@@ -457,20 +457,20 @@ function Card({
   return (
     <section
       className={
-        "border border-[#CCCCCC] rounded-md bg-white p-5 space-y-3 " +
+        "border border-tbb-line rounded-md bg-white p-5 space-y-3 " +
         (className ?? "")
       }
     >
       <header className="flex items-baseline justify-between gap-3">
         <div className="flex items-center gap-2 text-muted-foreground">
           {icon}
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.2em]">
+          <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps">
             {title}
           </h2>
         </div>
         <Link
           href={href}
-          className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+          className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
         >
           {cta} →
         </Link>

@@ -39,10 +39,10 @@ export default async function SigningPage({
     <main className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <header className="space-y-1">
-          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             The Builder · By Workplaces
           </p>
-          <h1 className="font-display font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+          <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
             {data.envelopeSubject}
           </h1>
           <p className="font-sans text-sm text-foreground">
@@ -57,7 +57,7 @@ export default async function SigningPage({
         </header>
 
         {data.envelopeMessage && (
-          <div className="border-l-4 border-[#2E4057] bg-[#F5F1E8] px-4 py-3">
+          <div className="border-l-4 border-tbb-blue bg-tbb-cream-50 px-4 py-3">
             <p className="font-sans text-sm text-foreground italic whitespace-pre-line">
               {data.envelopeMessage}
             </p>
@@ -97,16 +97,16 @@ export default async function SigningPage({
         {/* Document preview. Use an <object> with a PDF type — works
             for browser-rendered PDFs. For non-PDFs, fall through to
             a download link. */}
-        <section className="border border-[#CCCCCC] rounded-md overflow-hidden bg-white">
-          <header className="px-4 py-2 border-b border-[#CCCCCC] flex items-center justify-between gap-3 flex-wrap">
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+        <section className="border border-tbb-line rounded-md overflow-hidden bg-white">
+          <header className="px-4 py-2 border-b border-tbb-line flex items-center justify-between gap-3 flex-wrap">
+            <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
               Document
             </p>
             <a
               href={`/api/sign/${params.token}/document`}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-[11px] uppercase tracking-[0.15em] text-[#2E4057] hover:underline underline-offset-4"
+              className="font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-navy hover:underline underline-offset-4"
             >
               Open in new tab ↗
             </a>
@@ -122,7 +122,7 @@ export default async function SigningPage({
                 Your browser can&apos;t embed this PDF.{" "}
                 <a
                   href={`/api/sign/${params.token}/document`}
-                  className="text-[#2E4057] underline"
+                  className="text-tbb-navy underline"
                 >
                   Download to review
                 </a>
@@ -136,7 +136,7 @@ export default async function SigningPage({
               </p>
               <a
                 href={`/api/sign/${params.token}/document`}
-                className="mt-3 inline-block font-sans text-sm text-[#2E4057] underline underline-offset-4"
+                className="mt-3 inline-block font-sans text-sm text-tbb-navy underline underline-offset-4"
               >
                 Download to review →
               </a>
@@ -151,8 +151,8 @@ export default async function SigningPage({
           />
         )}
 
-        <footer className="pt-4 border-t border-[#CCCCCC]">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        <footer className="pt-4 border-t border-tbb-line">
+          <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
             Signed electronically. By submitting your signature, you agree to
             do business electronically per the US ESIGN Act, Canadian PIPEDA,
             and Alberta Electronic Transactions Act. Your IP, browser, and
@@ -180,7 +180,7 @@ function Banner({
       style={{ borderColor: color }}
     >
       <p
-        className="font-display font-bold tracking-tight text-lg"
+        className="font-bold tracking-tight text-lg"
         style={{ color }}
       >
         {title}

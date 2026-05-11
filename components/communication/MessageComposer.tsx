@@ -105,7 +105,7 @@ export function MessageComposer({
         {isPending && (
           <span
             aria-hidden
-            className="absolute right-3 top-12 text-[#2E4057]"
+            className="absolute right-3 top-12 text-tbb-navy"
           >
             <Loader2 className="w-4 h-4 animate-spin" />
           </span>
@@ -127,9 +127,9 @@ export function MessageComposer({
           />
           <span
             className={
-              "font-mono text-[11px] uppercase tracking-[0.15em] " +
+              "font-mono text-[11px] uppercase tracking-tbb-caps " +
               (isPending
-                ? "text-[#2E4057] font-bold"
+                ? "text-tbb-navy font-bold"
                 : "text-muted-foreground")
             }
           >
@@ -141,7 +141,7 @@ export function MessageComposer({
         <button
           type="submit"
           disabled={isPending || isEmpty}
-          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-wait transition-colors"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 disabled:cursor-wait transition-colors"
         >
           {isPending && (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
@@ -152,7 +152,7 @@ export function MessageComposer({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>

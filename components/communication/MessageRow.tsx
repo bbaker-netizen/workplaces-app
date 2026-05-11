@@ -150,7 +150,7 @@ export function MessageRow({
     <li className="flex gap-3 sm:gap-4 group">
       <div
         aria-hidden
-        className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-[#CCCCCC] bg-[#F5F1E8] grid place-items-center font-mono text-xs uppercase tracking-wider text-[#666666]"
+        className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-tbb-line bg-tbb-cream-50 grid place-items-center font-mono text-xs uppercase tracking-wider text-tbb-ink-3"
       >
         {initialsOf(message.authorName) || "?"}
       </div>
@@ -159,11 +159,11 @@ export function MessageRow({
           <span className="font-sans text-sm font-bold text-foreground">
             {message.authorName}
           </span>
-          <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             {formatMessageTimestamp(message.createdAt)}
           </span>
           {message.editedAt && !isTombstone && (
-            <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground italic">
+            <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground italic">
               · edited
             </span>
           )}
@@ -175,7 +175,7 @@ export function MessageRow({
                   aria-label="Edit message"
                   onClick={startEdit}
                   disabled={isPending}
-                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-[#F5F1E8]"
+                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50"
                 >
                   <Pencil className="w-3.5 h-3.5" aria-hidden />
                 </button>
@@ -186,7 +186,7 @@ export function MessageRow({
                   aria-label="Delete message"
                   onClick={onDelete}
                   disabled={isPending}
-                  className="p-1 rounded text-muted-foreground hover:text-[#E87722] hover:bg-[#F5F1E8]"
+                  className="p-1 rounded text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden />
                 </button>
@@ -226,7 +226,7 @@ export function MessageRow({
                 members={members}
               />
               {error && (
-                <p role="alert" className="font-sans text-sm text-[#E87722]">
+                <p role="alert" className="font-sans text-sm text-tbb-danger">
                   {error}
                 </p>
               )}
@@ -240,7 +240,7 @@ export function MessageRow({
                     anchor="top"
                     align="left"
                   />
-                  <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                     Esc to cancel · ⌘/Ctrl + Enter to save
                   </span>
                 </div>
@@ -249,7 +249,7 @@ export function MessageRow({
                     type="button"
                     disabled={isPending}
                     onClick={cancelEdit}
-                    className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -261,7 +261,7 @@ export function MessageRow({
                       draft.trim() === message.body.trim()
                     }
                     onClick={saveEdit}
-                    className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50 disabled:cursor-wait"
+                    className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 disabled:cursor-wait"
                   >
                     {isPending && (
                       <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
@@ -283,7 +283,7 @@ export function MessageRow({
             >
               <MarkdownBody body={displayBody} />
               {optimisticEditedBody !== null && isPending && (
-                <span className="mt-1 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.15em] text-[#2E4057]">
+                <span className="mt-1 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-navy">
                   <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
                   Saving edit…
                 </span>
@@ -304,7 +304,7 @@ export function MessageRow({
         {!editing && error && (
           <p
             role="alert"
-            className="mt-1 font-sans text-xs text-[#E87722]"
+            className="mt-1 font-sans text-xs text-tbb-danger"
           >
             {error}
           </p>

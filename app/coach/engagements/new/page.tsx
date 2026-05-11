@@ -5,10 +5,10 @@ export default function NewEngagementPage() {
     <main className="min-h-screen bg-background px-6 py-16">
       <div className="max-w-2xl mx-auto space-y-10">
         <header className="space-y-3">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             Coach Console
           </p>
-          <h1 className="font-display font-bold text-foreground text-4xl sm:text-5xl tracking-tight leading-none">
+          <h1 className="font-bold text-foreground text-4xl sm:text-5xl tracking-tight leading-none">
             New engagement
           </h1>
           <p className="font-sans text-muted-foreground max-w-md leading-relaxed">

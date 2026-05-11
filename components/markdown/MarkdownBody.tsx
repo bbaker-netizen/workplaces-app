@@ -40,21 +40,21 @@ export function MarkdownBody({
         "[&_p]:my-0 " +
         "[&_strong]:font-bold " +
         "[&_em]:italic " +
-        "[&_a]:text-[#2E4057] [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:opacity-80 " +
-        "[&_h1]:font-display [&_h1]:font-bold [&_h1]:text-base [&_h1]:tracking-tight " +
-        "[&_h2]:font-display [&_h2]:font-bold [&_h2]:text-base [&_h2]:tracking-tight " +
-        "[&_h3]:font-display [&_h3]:font-bold [&_h3]:text-sm [&_h3]:tracking-tight " +
+        "[&_a]:text-tbb-navy [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:opacity-80 " +
+        "[&_h1]:font-bold [&_h1]:font-bold [&_h1]:text-base [&_h1]:tracking-tight " +
+        "[&_h2]:font-bold [&_h2]:font-bold [&_h2]:text-base [&_h2]:tracking-tight " +
+        "[&_h3]:font-bold [&_h3]:font-bold [&_h3]:text-sm [&_h3]:tracking-tight " +
         "[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 " +
         "[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 " +
         "[&_li]:pl-1 " +
-        "[&_blockquote]:border-l-2 [&_blockquote]:border-[#CCCCCC] [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground " +
-        "[&_code]:font-mono [&_code]:text-[12px] [&_code]:bg-[#F5F1E8] [&_code]:border [&_code]:border-[#CCCCCC] [&_code]:rounded-sm [&_code]:px-1 " +
-        "[&_pre]:font-mono [&_pre]:text-[12px] [&_pre]:bg-[#F5F1E8] [&_pre]:border [&_pre]:border-[#CCCCCC] [&_pre]:rounded-sm [&_pre]:p-3 [&_pre]:overflow-x-auto " +
+        "[&_blockquote]:border-l-2 [&_blockquote]:border-tbb-line [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground " +
+        "[&_code]:font-mono [&_code]:text-[12px] [&_code]:bg-tbb-cream-50 [&_code]:border [&_code]:border-tbb-line [&_code]:rounded-sm [&_code]:px-1 " +
+        "[&_pre]:font-mono [&_pre]:text-[12px] [&_pre]:bg-tbb-cream-50 [&_pre]:border [&_pre]:border-tbb-line [&_pre]:rounded-sm [&_pre]:p-3 [&_pre]:overflow-x-auto " +
         "[&_pre>code]:bg-transparent [&_pre>code]:border-0 [&_pre>code]:p-0 " +
         "[&_table]:border-collapse [&_table]:text-sm " +
-        "[&_th]:border [&_th]:border-[#CCCCCC] [&_th]:px-2 [&_th]:py-1 [&_th]:bg-[#F5F1E8] [&_th]:text-left " +
-        "[&_td]:border [&_td]:border-[#CCCCCC] [&_td]:px-2 [&_td]:py-1 " +
-        "[&_hr]:border-[#CCCCCC] [&_hr]:my-3 " +
+        "[&_th]:border [&_th]:border-tbb-line [&_th]:px-2 [&_th]:py-1 [&_th]:bg-tbb-cream-50 [&_th]:text-left " +
+        "[&_td]:border [&_td]:border-tbb-line [&_td]:px-2 [&_td]:py-1 " +
+        "[&_hr]:border-tbb-line [&_hr]:my-3 " +
         (className ?? "")
       }
     >

@@ -36,7 +36,7 @@ export function ProspectStatusSelect({
             await updateProspect({ id: prospectId, status: next });
           });
         }}
-        className="font-mono text-[10px] uppercase tracking-[0.15em] bg-white border border-[#CCCCCC] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#2E4057]"
+        className="font-mono text-[10px] uppercase tracking-tbb-caps bg-white border border-tbb-line rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-tbb-blue"
       >
         {STATUS_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>

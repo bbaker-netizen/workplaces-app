@@ -1,23 +1,24 @@
 import type { MetadataRoute } from "next";
 
 /**
- * PWA manifest. Phase 3.2. Values per CLAUDE.md "Brand & UI" section.
+ * PWA manifest. Values per the Business Builders by Workplaces brand:
+ * navy primary + cream background, full lockup name.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "The Builder",
-    short_name: "Builder",
+    name: "The Business Builders by Workplaces",
+    short_name: "Builders",
     description:
-      "The Builder · By Workplaces. Build what compounds.",
+      "The Business Builders by Workplaces. Build what compounds.",
     start_url: "/portal",
     display: "standalone",
-    background_color: "#F5F1E8",
-    theme_color: "#1A1A1A",
+    background_color: "#EFE6D7",
+    theme_color: "#14385B",
     icons: [
       {
-        src: "/icon.svg",
+        src: "/brand/logo-blue.png",
         sizes: "any",
-        type: "image/svg+xml",
+        type: "image/png",
         purpose: "any",
       },
     ],

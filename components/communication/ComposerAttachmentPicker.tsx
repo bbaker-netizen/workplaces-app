@@ -127,7 +127,7 @@ export function ComposerAttachmentPicker({
         title="Attach files"
         disabled={disabled}
         onClick={() => fileInputRef.current?.click()}
-        className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-[#F5F1E8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         <Paperclip className="w-4 h-4" aria-hidden />
       </button>
@@ -136,7 +136,7 @@ export function ComposerAttachmentPicker({
           {attachments.map((a) => (
             <li
               key={a.id}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[#CCCCCC] bg-[#F5F1E8] px-2 py-1 text-xs"
+              className="inline-flex items-center gap-1.5 rounded-md border border-tbb-line bg-tbb-cream-50 px-2 py-1 text-xs"
             >
               <span aria-hidden className="text-sm leading-none">
                 {fileIconFor(a.fileType)}
@@ -149,7 +149,7 @@ export function ComposerAttachmentPicker({
               </span>
               {a.uploading ? (
                 <Loader2
-                  className="w-3 h-3 animate-spin text-[#2E4057]"
+                  className="w-3 h-3 animate-spin text-tbb-navy"
                   aria-hidden
                 />
               ) : (
@@ -158,7 +158,7 @@ export function ComposerAttachmentPicker({
                   aria-label={`Remove ${a.filename}`}
                   onClick={() => onRemove(a)}
                   disabled={disabled}
-                  className="p-0.5 rounded text-muted-foreground hover:text-[#E87722]"
+                  className="p-0.5 rounded text-muted-foreground hover:text-tbb-danger"
                 >
                   <X className="w-3 h-3" aria-hidden />
                 </button>
@@ -168,7 +168,7 @@ export function ComposerAttachmentPicker({
         </ul>
       )}
       {error && (
-        <p role="alert" className="font-sans text-xs text-[#E87722]">
+        <p role="alert" className="font-sans text-xs text-tbb-danger">
           {error}
         </p>
       )}

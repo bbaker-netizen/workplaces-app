@@ -153,8 +153,8 @@ export function SendForSignatureForm(props: Props) {
       aria-busy={isPending}
     >
       <div className="space-y-1">
-        <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-          Subject <span className="text-[#E87722]">*</span>
+        <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+          Subject <span className="text-tbb-danger">*</span>
         </label>
         <input
           required
@@ -162,14 +162,14 @@ export function SendForSignatureForm(props: Props) {
           onChange={(e) => setSubject(e.target.value)}
           disabled={isPending}
           placeholder="Coaching engagement agreement"
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         />
       </div>
 
       {props.mode === "upload" && (
         <div className="space-y-1">
-          <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-            Document <span className="text-[#E87722]">*</span>
+          <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+            Document <span className="text-tbb-danger">*</span>
           </label>
           <input
             ref={fileInputRef}
@@ -191,23 +191,23 @@ export function SendForSignatureForm(props: Props) {
       )}
 
       {props.mode === "existing-doc" && (
-        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Sending the document already stored for this engagement.
         </p>
       )}
 
       <fieldset className="space-y-2">
-        <legend className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
+        <legend className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground mb-1">
           Signers (sequential — first signer goes first)
         </legend>
         <div className="space-y-3">
           {signers.map((s, i) => (
             <div
               key={i}
-              className="border border-[#CCCCCC] rounded-md bg-white p-3 space-y-2"
+              className="border border-tbb-line rounded-md bg-white p-3 space-y-2"
             >
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                   Signer {i + 1}
                 </span>
                 {signers.length > 1 && (
@@ -215,7 +215,7 @@ export function SendForSignatureForm(props: Props) {
                     type="button"
                     onClick={() => removeSigner(i)}
                     disabled={isPending}
-                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#E87722] hover:underline inline-flex items-center gap-1"
+                    className="font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-danger hover:underline inline-flex items-center gap-1"
                   >
                     <Trash2 className="w-3 h-3" aria-hidden /> Remove
                   </button>
@@ -228,7 +228,7 @@ export function SendForSignatureForm(props: Props) {
                   onChange={(e) => updateSigner(i, "name", e.target.value)}
                   disabled={isPending}
                   placeholder="Full name"
-                  className="bg-white border border-[#CCCCCC] rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                  className="bg-white border border-tbb-line rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                 />
                 <input
                   required
@@ -237,7 +237,7 @@ export function SendForSignatureForm(props: Props) {
                   onChange={(e) => updateSigner(i, "email", e.target.value)}
                   disabled={isPending}
                   placeholder="email@company.com"
-                  className="bg-white border border-[#CCCCCC] rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+                  className="bg-white border border-tbb-line rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                 />
                 <input
                   value={s.roleLabel}
@@ -246,7 +246,7 @@ export function SendForSignatureForm(props: Props) {
                   }
                   disabled={isPending}
                   placeholder="Role (e.g. CEO, Founder)"
-                  className="bg-white border border-[#CCCCCC] rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] sm:col-span-2"
+                  className="bg-white border border-tbb-line rounded-md px-3 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue sm:col-span-2"
                 />
               </div>
             </div>
@@ -257,7 +257,7 @@ export function SendForSignatureForm(props: Props) {
             type="button"
             onClick={addSigner}
             disabled={isPending}
-            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.15em] text-[#2E4057] hover:underline"
+            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-navy hover:underline"
           >
             <Plus className="w-3 h-3" aria-hidden /> Add signer
           </button>
@@ -265,7 +265,7 @@ export function SendForSignatureForm(props: Props) {
       </fieldset>
 
       <div className="space-y-1">
-        <label className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Message (optional)
         </label>
         <textarea
@@ -274,7 +274,7 @@ export function SendForSignatureForm(props: Props) {
           onChange={(e) => setMessage(e.target.value)}
           disabled={isPending}
           placeholder="A short note that appears in the signing email."
-          className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
       </div>
 
@@ -289,7 +289,7 @@ export function SendForSignatureForm(props: Props) {
         <span className="font-sans text-sm text-foreground">
           Auto-sign as me first
           {!props.hasStoredSignature && (
-            <span className="block font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mt-0.5">
+            <span className="block font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground mt-0.5">
               Upload a signature image at /coach/profile/signature to enable.
             </span>
           )}
@@ -299,7 +299,7 @@ export function SendForSignatureForm(props: Props) {
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -309,7 +309,7 @@ export function SendForSignatureForm(props: Props) {
         <button
           type="submit"
           disabled={isPending}
-          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
@@ -323,7 +323,7 @@ export function SendForSignatureForm(props: Props) {
             type="button"
             onClick={props.onCancel}
             disabled={isPending}
-            className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground"
+            className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
           >
             Cancel
           </button>

@@ -48,7 +48,7 @@ export function FormResponder({
 
   if (success) {
     return (
-      <div className="border border-[#2E4057] rounded-md bg-[#F5F1E8] p-4 font-sans text-sm">
+      <div className="border border-tbb-blue rounded-md bg-tbb-cream-50 p-4 font-sans text-sm">
         Thanks — your response was recorded.
       </div>
     );
@@ -67,7 +67,7 @@ export function FormResponder({
         <fieldset key={q.id} className="space-y-2">
           <legend className="font-sans text-sm font-bold text-foreground">
             {q.label}
-            {q.required && <span className="text-[#E87722]"> *</span>}
+            {q.required && <span className="text-tbb-danger"> *</span>}
           </legend>
           {q.type === "text" && (
             <input
@@ -75,7 +75,7 @@ export function FormResponder({
               value={(answers[q.id] as string) ?? ""}
               onChange={(e) => setAnswer(q.id, e.target.value)}
               disabled={isPending}
-              className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
           )}
           {q.type === "textarea" && (
@@ -84,7 +84,7 @@ export function FormResponder({
               value={(answers[q.id] as string) ?? ""}
               onChange={(e) => setAnswer(q.id, e.target.value)}
               disabled={isPending}
-              className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+              className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
             />
           )}
           {q.type === "scale" && (
@@ -153,7 +153,7 @@ export function FormResponder({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
@@ -162,7 +162,7 @@ export function FormResponder({
         <button
           type="submit"
           disabled={isPending}
-          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
         >
           {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
           {isPending ? "Submitting…" : "Submit"}

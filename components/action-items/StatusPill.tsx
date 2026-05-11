@@ -19,15 +19,15 @@ import {
 
 const STATUS_CLASSES: Record<ActionItemStatus, string> = {
   draft:
-    "bg-[#CCCCCC] text-[#1A1A1A]",
+    "bg-tbb-line text-tbb-navy",
   open:
-    "bg-[#2E4057] text-[#F5F1E8]",
+    "bg-tbb-blue-700 text-white",
   in_progress:
-    "bg-[#1A1A1A] text-[#F5F1E8]",
+    "bg-tbb-blue text-white",
   done:
-    "bg-[#666666] text-[#F5F1E8]",
+    "bg-tbb-ink-3 text-white",
   blocked:
-    "bg-[#E87722] text-[#1A1A1A]",
+    "bg-tbb-danger text-tbb-navy",
 };
 
 export function StatusPill({
@@ -56,7 +56,7 @@ export function StatusPill({
           });
         }}
         className={
-          "appearance-none cursor-pointer font-mono text-[10px] uppercase tracking-[0.15em] " +
+          "appearance-none cursor-pointer font-mono text-[10px] uppercase tracking-tbb-caps " +
           "px-3 py-1 rounded-full border-0 outline-none focus-visible:ring-2 focus-visible:ring-[#2E4057] " +
           "disabled:opacity-60 disabled:cursor-not-allowed " +
           STATUS_CLASSES[status]

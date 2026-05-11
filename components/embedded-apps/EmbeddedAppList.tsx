@@ -79,7 +79,7 @@ export function EmbeddedAppList({
   return (
     <div className="space-y-4">
       {apps.length === 0 && !adding ? (
-        <div className="border border-[#CCCCCC] rounded-md bg-white p-6">
+        <div className="border border-tbb-line rounded-md bg-white p-6">
           <p className="font-sans text-sm text-muted-foreground italic">
             {isCoach
               ? "No apps registered yet. Add one to surface a Netlify-hosted tool right inside the portal."
@@ -91,14 +91,14 @@ export function EmbeddedAppList({
           {apps.map((a) => (
             <li
               key={a.id}
-              className="border border-[#CCCCCC] rounded-md bg-white p-4 flex flex-col gap-2"
+              className="border border-tbb-line rounded-md bg-white p-4 flex flex-col gap-2"
             >
               <div className="flex items-start justify-between gap-2">
                 <Link
                   href={a.appUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-display font-bold text-foreground text-lg tracking-tight hover:underline underline-offset-4 group inline-flex items-center gap-1"
+                  className="font-bold text-foreground text-lg tracking-tight hover:underline underline-offset-4 group inline-flex items-center gap-1"
                 >
                   {a.displayName}
                   <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" aria-hidden />
@@ -109,7 +109,7 @@ export function EmbeddedAppList({
                     onClick={() => remove(a.id, a.displayName)}
                     disabled={isPending}
                     aria-label={`Remove ${a.displayName}`}
-                    className="p-1 rounded text-muted-foreground hover:text-[#E87722] hover:bg-[#F5F1E8]"
+                    className="p-1 rounded text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50"
                   >
                     <Trash2 className="w-3.5 h-3.5" aria-hidden />
                   </button>
@@ -120,7 +120,7 @@ export function EmbeddedAppList({
                   {a.description}
                 </p>
               )}
-              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                 {a.authMode.replace("_", " ")} · {a.isVisible ? "visible" : "hidden"}
               </p>
             </li>
@@ -132,7 +132,7 @@ export function EmbeddedAppList({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057]"
+          className="inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
         >
           <Plus className="w-4 h-4" aria-hidden /> Register app
         </button>
@@ -144,9 +144,9 @@ export function EmbeddedAppList({
             e.preventDefault();
             submit();
           }}
-          className="border border-[#CCCCCC] rounded-md bg-white p-4 space-y-3"
+          className="border border-tbb-line rounded-md bg-white p-4 space-y-3"
         >
-          <h3 className="font-display font-bold text-foreground text-lg tracking-tight">
+          <h3 className="font-bold text-foreground text-lg tracking-tight">
             Register app
           </h3>
           <div className="grid sm:grid-cols-2 gap-3">
@@ -158,7 +158,7 @@ export function EmbeddedAppList({
                 setDraft({ ...draft, displayName: e.target.value })
               }
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
             <input
               placeholder="Netlify project ID (optional)"
@@ -167,7 +167,7 @@ export function EmbeddedAppList({
                 setDraft({ ...draft, netlifyProjectId: e.target.value })
               }
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
             <input
               type="url"
@@ -176,7 +176,7 @@ export function EmbeddedAppList({
               value={draft.appUrl}
               onChange={(e) => setDraft({ ...draft, appUrl: e.target.value })}
               disabled={isPending}
-              className="sm:col-span-2 bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="sm:col-span-2 bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
             <select
               value={draft.authMode}
@@ -184,7 +184,7 @@ export function EmbeddedAppList({
                 setDraft({ ...draft, authMode: e.target.value as App["authMode"] })
               }
               disabled={isPending}
-              className="bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057]"
+              className="bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             >
               <option value="public">Public (no auth)</option>
               <option value="token_passthrough">Token passthrough</option>
@@ -197,12 +197,12 @@ export function EmbeddedAppList({
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             disabled={isPending}
-            className="w-full bg-white border border-[#CCCCCC] rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4057] resize-y"
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
           />
           {error && (
             <p
               role="alert"
-              className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+              className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
             >
               {error}
             </p>
@@ -212,14 +212,14 @@ export function EmbeddedAppList({
               type="button"
               onClick={() => setAdding(false)}
               disabled={isPending}
-              className="font-sans text-xs uppercase tracking-[0.15em] px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground"
+              className="font-sans text-xs uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill text-muted-foreground hover:text-foreground"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+              className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
             >
               {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
               {isPending ? "Saving…" : "Register"}
@@ -229,7 +229,7 @@ export function EmbeddedAppList({
       )}
 
       {error && !adding && (
-        <p role="alert" className="font-sans text-sm text-[#E87722]">
+        <p role="alert" className="font-sans text-sm text-tbb-danger">
           {error}
         </p>
       )}

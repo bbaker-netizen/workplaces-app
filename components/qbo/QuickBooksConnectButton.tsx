@@ -50,7 +50,7 @@ export function QuickBooksConnectButton({
           type="button"
           onClick={connect}
           disabled={isPending}
-          className="inline-flex items-center gap-1.5 font-sans text-sm font-bold uppercase tracking-[0.15em] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#F5F1E8] hover:bg-[#2E4057] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
@@ -64,7 +64,7 @@ export function QuickBooksConnectButton({
             type="button"
             onClick={disconnect}
             disabled={isPending}
-            className="inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-[0.15em] px-3 py-2 rounded-md border border-[#E87722] text-[#E87722] bg-white hover:bg-[#F5F1E8] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill border border-tbb-danger text-tbb-danger bg-white hover:bg-tbb-cream-50 disabled:opacity-50"
           >
             <Unlink className="w-3 h-3" aria-hidden />
             Disconnect
@@ -74,7 +74,7 @@ export function QuickBooksConnectButton({
       {error && (
         <p
           role="alert"
-          className="font-sans text-sm text-[#E87722] border border-[#E87722] rounded-md px-3 py-2 bg-[#F5F1E8]"
+          className="font-sans text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50"
         >
           {error}
         </p>
