@@ -33,6 +33,19 @@ export type PortalModuleKey =
   | "subscriptions"
   | "hiring";
 
+/**
+ * Engagement-lifecycle phase a module sits inside. The sidebar nav
+ * groups modules visually under these phase headers so the navigation
+ * itself reads as a flow from beginning (Today) to end (Billing).
+ */
+export type PortalPhase =
+  | "today"        // What you do this week
+  | "conversations" // How we talk
+  | "files"        // Where things live
+  | "plan"         // The plan being built
+  | "people"       // Who's on the team
+  | "billing";     // Money in and out
+
 export type PortalModule = {
   key: PortalModuleKey;
   label: string;
@@ -41,7 +54,27 @@ export type PortalModule = {
   visibleTo: ReadonlyArray<UserProfile["role"]>;
   /** Default sort order. */
   sortOrder: number;
+  /** Engagement-lifecycle phase the sidebar groups this module under. */
+  phase: PortalPhase;
 };
+
+/**
+ * Phase headers + a one-line caption — shown in the sidebar as the
+ * section dividers. Order here is the visual top-to-bottom flow of
+ * an engagement week.
+ */
+export const PORTAL_PHASES: ReadonlyArray<{
+  key: PortalPhase;
+  label: string;
+  caption: string;
+}> = [
+  { key: "today",         label: "Today",         caption: "What's on the plate" },
+  { key: "conversations", label: "Conversations", caption: "Stay in touch between sessions" },
+  { key: "files",         label: "Files",         caption: "Every document for this engagement" },
+  { key: "plan",          label: "The plan",      caption: "Goals, projects, deliverables, methodology" },
+  { key: "people",        label: "People",        caption: "Team and assessments" },
+  { key: "billing",       label: "Billing",       caption: "Invoices and subscription assets" },
+];
 
 const ALL_ROLES: ReadonlyArray<UserProfile["role"]> = [
   "master_admin",
@@ -60,22 +93,35 @@ const LEADERSHIP: ReadonlyArray<UserProfile["role"]> = [
 ];
 
 export const ALL_MODULES: ReadonlyArray<PortalModule> = [
-  { key: "action_items", label: "Action items", href: "/portal/action-items", visibleTo: ALL_ROLES, sortOrder: 0 },
-  { key: "goals", label: "Goals", href: "/portal/goals", visibleTo: ALL_ROLES, sortOrder: 10 },
-  { key: "projects", label: "Projects", href: "/portal/projects", visibleTo: ALL_ROLES, sortOrder: 20 },
-  { key: "sessions", label: "Sessions", href: "/portal/sessions", visibleTo: ALL_ROLES, sortOrder: 30 },
-  { key: "deliverables", label: "Deliverables", href: "/portal/deliverables", visibleTo: ALL_ROLES, sortOrder: 40 },
-  { key: "hiring", label: "Hiring", href: "/portal/hiring", visibleTo: LEADERSHIP, sortOrder: 50 },
-  { key: "communication", label: "Communication", href: "/portal/communication", visibleTo: ALL_ROLES, sortOrder: 60 },
-  { key: "documents", label: "Documents", href: "/portal/documents", visibleTo: ALL_ROLES, sortOrder: 70 },
-  { key: "soul_file", label: "Soul File", href: "/portal/soul-file", visibleTo: ALL_ROLES, sortOrder: 80 },
-  { key: "team", label: "Team", href: "/portal/team", visibleTo: ALL_ROLES, sortOrder: 90 },
-  { key: "courses", label: "Courses", href: "/portal/courses", visibleTo: ALL_ROLES, sortOrder: 100 },
-  { key: "forms", label: "Forms", href: "/portal/forms", visibleTo: ALL_ROLES, sortOrder: 110 },
-  { key: "embedded_apps", label: "Apps", href: "/portal/apps", visibleTo: ALL_ROLES, sortOrder: 120 },
-  { key: "subscriptions", label: "Subscriptions", href: "/portal/subscriptions", visibleTo: LEADERSHIP, sortOrder: 130 },
-  { key: "invoices", label: "Invoices", href: "/portal/invoices", visibleTo: LEADERSHIP, sortOrder: 140 },
-  { key: "methodology", label: "Methodology", href: "/portal/methodology", visibleTo: ALL_ROLES, sortOrder: 150 },
+  // Today — the week-by-week rhythm.
+  { key: "action_items", label: "Action items", href: "/portal/action-items", visibleTo: ALL_ROLES, sortOrder: 0,  phase: "today" },
+  { key: "sessions",     label: "Sessions",     href: "/portal/sessions",     visibleTo: ALL_ROLES, sortOrder: 10, phase: "today" },
+
+  // Conversations.
+  { key: "communication", label: "Communication", href: "/portal/communication", visibleTo: ALL_ROLES, sortOrder: 20, phase: "conversations" },
+
+  // Files.
+  { key: "documents", label: "Documents", href: "/portal/documents", visibleTo: ALL_ROLES, sortOrder: 30, phase: "files" },
+
+  // The plan — methodology, deep work, soul file, growth track.
+  { key: "soul_file",    label: "Soul File",    href: "/portal/soul-file",    visibleTo: ALL_ROLES, sortOrder: 40, phase: "plan" },
+  { key: "goals",        label: "Goals",        href: "/portal/goals",        visibleTo: ALL_ROLES, sortOrder: 50, phase: "plan" },
+  { key: "projects",     label: "Projects",     href: "/portal/projects",     visibleTo: ALL_ROLES, sortOrder: 60, phase: "plan" },
+  { key: "deliverables", label: "Deliverables", href: "/portal/deliverables", visibleTo: ALL_ROLES, sortOrder: 70, phase: "plan" },
+  { key: "methodology",  label: "Methodology",  href: "/portal/methodology",  visibleTo: ALL_ROLES, sortOrder: 80, phase: "plan" },
+  { key: "courses",      label: "Courses",      href: "/portal/courses",      visibleTo: ALL_ROLES, sortOrder: 90, phase: "plan" },
+  { key: "forms",        label: "Forms",        href: "/portal/forms",        visibleTo: ALL_ROLES, sortOrder: 100, phase: "plan" },
+
+  // People.
+  { key: "team",   label: "Team",   href: "/portal/team",   visibleTo: ALL_ROLES, sortOrder: 110, phase: "people" },
+  { key: "hiring", label: "Hiring", href: "/portal/hiring", visibleTo: LEADERSHIP, sortOrder: 120, phase: "people" },
+
+  // Billing.
+  { key: "invoices",      label: "Invoices",      href: "/portal/invoices",      visibleTo: LEADERSHIP, sortOrder: 130, phase: "billing" },
+  { key: "subscriptions", label: "Subscriptions", href: "/portal/subscriptions", visibleTo: LEADERSHIP, sortOrder: 140, phase: "billing" },
+
+  // Plan (continued — embedded apps).
+  { key: "embedded_apps", label: "Apps", href: "/portal/apps", visibleTo: ALL_ROLES, sortOrder: 150, phase: "plan" },
 ];
 
 /**

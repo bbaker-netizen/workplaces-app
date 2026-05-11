@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { CoachSidebar } from "@/components/coach/CoachSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
+import { CoachTour } from "@/components/coach/CoachTour";
 
 /**
- * Coach Console layout — role gate for /coach/*.
+ * Coach Console layout — role gate + lifecycle sidebar.
  *
- * Phase 1.1: only master_admin reaches the coach side. Future roles
- * (a generic 'coach' role for Jen and future hires) will be added here
- * when introduced. Anyone else gets bounced to /portal.
+ * Only master_admin and coach roles reach the coach side. Anyone else
+ * gets bounced to /portal.
  */
 export default async function CoachLayout({
   children,
@@ -16,12 +17,19 @@ export default async function CoachLayout({
 }) {
   const result = await ensureUserProfile();
   if (result.status !== "ok") redirect("/no-invitation");
-  if (result.role !== "master_admin") redirect("/portal");
+  if (result.role !== "master_admin" && result.role !== "coach") {
+    redirect("/portal");
+  }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="flex-1">{children}</div>
-      <PortalFooter />
+    <div className="min-h-screen bg-background flex">
+      <CoachSidebar fullName={result.fullName} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1">{children}</main>
+        <PortalFooter />
+      </div>
+      {/* First-visit workflow walkthrough for new coaches. */}
+      <CoachTour />
     </div>
   );
 }
