@@ -1,9 +1,11 @@
 /**
- * Portal footer — navy bar with cream-tinted text, visible support link.
+ * Portal footer — navy bar with cream-tinted text, visible support link,
+ * and the entry points back into the welcome tour and guide.
  */
 
 import Link from "next/link";
 import Image from "next/image";
+import { TakeTheTourButton } from "./TakeTheTourButton";
 
 export function PortalFooter() {
   return (
@@ -19,6 +21,13 @@ export function PortalFooter() {
           />
         </div>
         <div className="flex items-baseline gap-6 flex-wrap">
+          <TakeTheTourButton label="Take the tour" variant="ghost" />
+          <Link
+            href="/portal/welcome"
+            className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-cream/75 hover:text-tbb-cream transition-colors duration-tbb-base"
+          >
+            Guide
+          </Link>
           <a
             href="mailto:bruce@4workplaces.com"
             className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-cream/75 hover:text-tbb-cream transition-colors duration-tbb-base"

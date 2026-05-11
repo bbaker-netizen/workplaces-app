@@ -5,6 +5,7 @@ import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { ALL_MODULES, getEnabledModules } from "@/lib/modules";
 import { PortalNav } from "@/components/portal/PortalNav";
 import { PortalFooter } from "@/components/portal/PortalFooter";
+import { WelcomeModal } from "@/components/portal/WelcomeModal";
 
 /**
  * /portal/* layout shell. Auth + role gate plus the shared nav.
@@ -31,6 +32,9 @@ export default async function PortalLayout({
     ? await getEnabledModules(profile.orgId, profile.role, engagement.id)
     : ALL_MODULES.filter((m) => m.visibleTo.includes(profile.role));
 
+  const firstName =
+    profile.fullName.split(" ")[0] ?? profile.fullName;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <PortalNav
@@ -40,6 +44,9 @@ export default async function PortalLayout({
       />
       <div className="flex-1">{children}</div>
       <PortalFooter />
+      {/* First-visit interactive guide. The modal self-checks
+          localStorage and only shows when the user hasn't seen it. */}
+      <WelcomeModal firstName={firstName} />
     </div>
   );
 }
