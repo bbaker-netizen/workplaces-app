@@ -124,7 +124,7 @@ export async function createEngagementAction(
     startDate,
   } = parsed.data;
 
-  // 3. Ensure Bruce has a coaches row (lazy create)
+  // 3. Ensure Bruce has a Business Builderes row (lazy create)
   const callerCoach = await withTenantContext(callerProfile.orgId, async (tx) => {
     const existing = await tx
       .select()

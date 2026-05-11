@@ -73,7 +73,7 @@ export function EngagementForm() {
             href="/coach"
             className="font-sans text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline self-center"
           >
-            Back to coach console
+            Back to Business Builder Console
           </a>
         </div>
       </div>

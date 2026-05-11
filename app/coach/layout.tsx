@@ -5,9 +5,9 @@ import { PortalFooter } from "@/components/portal/PortalFooter";
 import { CoachTour } from "@/components/coach/CoachTour";
 
 /**
- * Coach Console layout — role gate + lifecycle sidebar.
+ * Business Builder Console layout — role gate + lifecycle sidebar.
  *
- * Only master_admin and coach roles reach the coach side. Anyone else
+ * Only master_admin and Business Builder roles reach the Business Builder side. Anyone else
  * gets bounced to /portal.
  */
 export default async function CoachLayout({
@@ -28,7 +28,7 @@ export default async function CoachLayout({
         <main className="flex-1">{children}</main>
         <PortalFooter />
       </div>
-      {/* First-visit workflow walkthrough for new coaches. */}
+      {/* First-visit workflow walkthrough for new Business Builderes. */}
       <CoachTour />
     </div>
   );

@@ -71,7 +71,7 @@ export async function createSchedulingLink(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (!canManage(profile.role))
-    return { ok: false, error: "Coach-only." };
+    return { ok: false, error: "Business Builders only." };
   const parsed = createLinkSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -117,7 +117,7 @@ export async function deleteSchedulingLink(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (!canManage(profile.role))
-    return { ok: false, error: "Coach-only." };
+    return { ok: false, error: "Business Builders only." };
   try {
     await withSystemContext(async (tx) => {
       await tx.delete(schedulingLinks).where(eq(schedulingLinks.id, id));
@@ -275,7 +275,7 @@ export async function createBooking(
 
       if (link.meetingType === "bbs") {
         // BBS bookings don't auto-create until we know which engagement.
-        // The coach manually creates the engagement ahead of time and
+        // The Business Builder manually creates the engagement ahead of time and
         // shares the link in context. Phase 4 will allow per-engagement
         // booking links.
       } else if (link.meetingType === "discovery") {

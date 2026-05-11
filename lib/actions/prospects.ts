@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * Prospect actions — coach lifecycle moves through the pipeline.
+ * Prospect actions — Business Building lifecycle moves through the pipeline.
  * Phase 4.
  */
 
@@ -39,7 +39,7 @@ export async function updateProspect(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
 
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success)
@@ -77,7 +77,7 @@ export async function deleteProspect(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
   try {
     await withSystemContext(async (tx) => {
       await tx.delete(prospects).where(eq(prospects.id, id));

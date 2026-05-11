@@ -81,7 +81,7 @@ export default async function PortalProjectsPage() {
           <p className="font-sans text-sm text-muted-foreground">
             {canCreate
               ? "Kick off the first project for this engagement above."
-              : "Your coach will create projects here."}
+              : "Your Business Builder will create projects here."}
           </p>
         </div>
       ) : (

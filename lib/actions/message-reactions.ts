@@ -70,7 +70,7 @@ async function loadParentMessage(
   messageId: string,
 ) {
   // Resolve engagement first so we can bind to the correct org —
-  // important for coach roles posting in client engagements.
+  // important for Business Builder roles posting in client engagements.
   const engagementId = await resolveEngagementIdFromRecord(
     "messages",
     messageId,

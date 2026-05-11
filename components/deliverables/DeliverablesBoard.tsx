@@ -129,7 +129,7 @@ export function DeliverablesBoard({
           <p className="font-sans text-sm text-muted-foreground">
             {canEdit
               ? "Add the first deliverable. They&apos;re grouped by status as they move through the pipeline."
-              : "Your coach will track deliverables here."}
+              : "Your Business Builder will track deliverables here."}
           </p>
         </div>
       ) : (

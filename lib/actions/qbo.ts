@@ -5,7 +5,7 @@
  *
  * Phase 4.6. Surface:
  *   - `startQboAuthorize()` — generates a CSRF state, sets a cookie,
- *     and returns the Intuit authorize URL the coach should be sent to.
+ *     and returns the Intuit authorize URL the Business Builder should be sent to.
  *   - `disconnectQbo()` — revoke + drop stored tokens.
  *   - `createQboInvoiceForEngagement(...)` — provider-aware wrapper
  *     in lib/actions/invoices.ts uses this.
@@ -32,7 +32,7 @@ export async function startQboAuthorize(): Promise<
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
 
   if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REDIRECT_URI) {
     return {
@@ -62,7 +62,7 @@ export async function disconnectQbo(): Promise<ActionResult> {
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
 
   const stored = await withSystemContext(async (tx) => {
     const [row] = await tx

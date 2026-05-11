@@ -42,7 +42,7 @@ export default async function PortalWelcomePage() {
           Welcome to your Business Builder Portal, {firstName}.
         </h1>
         <p className="text-tbb-lead text-tbb-ink-2 max-w-prose">
-          This is your private workspace for our coaching engagement —
+          This is your private workspace for our Business Building engagement —
           a single place for the work we do together. Below is the
           short tour of where everything lives and how to use it.
         </p>

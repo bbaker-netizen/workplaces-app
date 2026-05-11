@@ -3,11 +3,11 @@
  *
  * Phase 2.3. Used by the BBS-prep flow: feed in a Fireflies
  * transcript, get back proposed action items as JSON. Each item
- * carries a confidence flag so the coach can quickly review +
+ * carries a confidence flag so the Business Builder can quickly review +
  * publish vs edit + publish.
  */
 
-export const ACTION_ITEM_EXTRACT_SYSTEM = `You are an expert business coach for Workplaces. Your job: read a Business Building Session transcript and extract every action item — owned, dated commitments — that came up.
+export const ACTION_ITEM_EXTRACT_SYSTEM = `You are an expert Business Builder for Workplaces. Your job: read a Business Building Session transcript and extract every action item — owned, dated commitments — that came up.
 
 Output STRICT JSON only. No prose, no markdown fences. The shape:
 
@@ -29,7 +29,7 @@ Rules:
 - Only include items that are clearly someone's commitment, not generic ideas or "we should think about" statements.
 - "high" confidence: explicit "I'll do X by Friday" or equivalent.
 - "medium": clear ownership but vague timing.
-- "low": ambiguous — coach should review carefully.
+- "low": ambiguous — Business Builder should review carefully.
 - revenueImpact / marginImpact: tag based on the Workplaces Quality Gate. If neither, flag confidence low — items that don't move revenue or margin shouldn't exist.
 - assigneeName must be a real attendee from the transcript; null if unclear.
 - dueDate: only include if explicitly stated or strongly implied. null otherwise.

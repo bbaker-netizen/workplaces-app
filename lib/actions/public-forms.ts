@@ -7,7 +7,7 @@
  * Workflow table in CLAUDE.md) needs to be fillable without a Clerk
  * account. This module exposes a token-based path:
  *
- *   1. The coach activates a form's `public_token` (auto-generated).
+ *   1. The Business Builder activates a form's `public_token` (auto-generated).
  *   2. They share `https://workplaces-the-builder.netlify.app/forms/respond/<token>`.
  *   3. The recipient fills + submits without authenticating.
  *

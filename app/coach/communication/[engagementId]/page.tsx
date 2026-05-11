@@ -3,7 +3,7 @@
  * scoped to one engagement chosen via the URL parameter so coaches can
  * flip between clients.
  *
- * The coach layout role-gates this to master_admin (and a future 'coach'
+ * The Business Builder layout role-gates this to master_admin (and a future 'coach'
  * role); that gate is shared at /coach/layout.tsx.
  */
 
@@ -46,7 +46,7 @@ export default async function CoachCommunicationPage({
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-10">
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Coach Console
+          Business Builder Console
         </p>
         <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {engagement.name ?? "Engagement"}
@@ -121,7 +121,7 @@ export default async function CoachCommunicationPage({
         {tab === "leadership" && showLeadership ? (
           <div className="pt-2">
             <p className="font-sans text-xs text-muted-foreground italic mb-4">
-              Private — only the coach, owner, and managers see this.
+              Private — only the Business Builder, owner, and managers see this.
             </p>
             <MessageThread
               engagementId={engagement.id}

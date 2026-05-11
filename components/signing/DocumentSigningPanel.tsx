@@ -5,7 +5,7 @@
  *
  * Shows a select for an existing engagement document, plus the shared
  * SendForSignatureForm in existing-doc mode. Used on coach + portal
- * documents pages so a coach can send any uploaded file without
+ * documents pages so a Business Builder can send any uploaded file without
  * re-uploading it.
  */
 

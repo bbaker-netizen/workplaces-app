@@ -66,8 +66,8 @@ const createSchema = z.object({
   subject: z.string().min(1).max(300),
   message: z.string().max(8000).nullable().optional(),
   signers: z.array(signerInputSchema).min(1).max(4),
-  /** Whether to insert the coach's stored signature as the first
-   *  pre-signed signer. When true, the coach is added at order 0
+  /** Whether to insert the Business Builder's stored signature as the first
+   *  pre-signed signer. When true, the Business Builder is added at order 0
    *  with status=signed using their `signature_image_data`. */
   autoSignAsMe: z.boolean().default(false),
 });
@@ -81,7 +81,7 @@ export async function createSignatureEnvelope(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
 
   const parsed = createSchema.safeParse(input);
   if (!parsed.success)
@@ -127,7 +127,7 @@ export async function createSignatureEnvelope(
 
   const orgId = data.engagementId ? docCtx.orgId : prospectOrgId ?? docCtx.orgId;
 
-  // Look up the coach's stored signature if auto-sign-as-me was requested.
+  // Look up the Business Builder's stored signature if auto-sign-as-me was requested.
   let coachSignatureImage: string | null = null;
   if (data.autoSignAsMe) {
     const [me] = await withSystemContext(async (tx) =>
@@ -250,7 +250,7 @@ export async function createEnvelopeFromUpload(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -521,7 +521,7 @@ export async function voidSignatureEnvelope(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
 
   await withSystemContext(async (tx) => {
     const [env] = await tx
@@ -565,7 +565,7 @@ export async function uploadMySignatureImage(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coaches only." };
+    return { ok: false, error: "Business Builders only." };
 
   const parsed = uploadSignatureSchema.safeParse(input);
   if (!parsed.success)

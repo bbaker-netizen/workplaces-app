@@ -83,7 +83,7 @@ export function EmbeddedAppList({
           <p className="font-sans text-sm text-muted-foreground italic">
             {isCoach
               ? "No apps registered yet. Add one to surface a Netlify-hosted tool right inside the portal."
-              : "Your coach hasn't surfaced any apps here yet."}
+              : "Your Business Builder hasn't surfaced any apps here yet."}
           </p>
         </div>
       ) : (

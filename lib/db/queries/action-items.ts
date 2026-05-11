@@ -8,10 +8,10 @@
  *   - Tenant-scoped reads (`listEngagementActionItems`) for the client
  *     portal: the user's active Clerk Org → app org_id → RLS scopes to
  *     just their engagement's items.
- *   - Cross-tenant read (`listCoachActionItems`) for the coach view:
- *     items live in client orgs, the coach's session is in the master
+ *   - Cross-tenant read (`listCoachActionItems`) for the Business Builder view:
+ *     items live in client orgs, the Business Builder's session is in the master
  *     org, so RLS would filter to nothing. Application layer scopes by
- *     the coach's owned engagements via withSystemContext.
+ *     the Business Builder's owned engagements via withSystemContext.
  */
 
 import { eq } from "drizzle-orm";
@@ -76,7 +76,7 @@ export async function getActionItem(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
 
-  // For coach roles, items can live in any client org — use system context.
+  // For Business Builder roles, items can live in any client org — use system context.
   if (profile.role === "master_admin" || profile.role === "coach") {
     return withSystemContext(async (tx) => {
       const rows = await tx

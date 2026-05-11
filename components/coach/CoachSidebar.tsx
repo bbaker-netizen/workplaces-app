@@ -1,10 +1,10 @@
 /**
- * CoachSidebar — left-side vertical navigation for the Coach Console.
+ * CoachSidebar — left-side vertical navigation for the Business Builder Console.
  *
- * Visually represents the coaching practice lifecycle top-to-bottom:
+ * Visually represents the Business Building practice lifecycle top-to-bottom:
  *   PIPELINE → ENGAGE → DELIVER → BILL → PRACTICE
  *
- * A new coach reading this sidebar from top to bottom should see the
+ * A new Business Builder reading this sidebar from top to bottom should see the
  * whole journey of an engagement — from "a prospect just landed" to
  * "we just renewed them for another year." Each section header has a
  * short caption explaining what the phase covers.
@@ -95,7 +95,7 @@ const COACH_PHASES: CoachPhase[] = [
       { href: "/coach/engagements/new", label: "New engagement", icon: Sparkles, tourId: "coach-new-engagement" },
       { href: "/coach/profile/signature", label: "My signature", icon: PenSquare },
       { href: "/coach/profile/quickbooks", label: "QuickBooks", icon: LineChart },
-      { href: "/coach/welcome", label: "Coach guide", icon: HelpCircle, tourId: "coach-guide" },
+      { href: "/coach/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "coach-guide" },
     ],
   },
 ];
@@ -111,7 +111,7 @@ export function CoachSidebar({
     <aside className="bg-tbb-navy text-tbb-cream w-64 lg:w-72 sticky top-0 h-screen flex flex-col">
       {/* Header */}
       <div className="px-5 pt-6 pb-4 border-b border-tbb-cream/15">
-        <Link href="/coach" className="block" aria-label="Coach Console home">
+        <Link href="/coach" className="block" aria-label="Business Builder Console home">
           <Image
             src="/brand/logo-cream.png"
             alt="The Business Builders by Workplaces"
@@ -122,7 +122,7 @@ export function CoachSidebar({
           />
         </Link>
         <p className="mt-3 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue-light">
-          Coach Console
+          Business Builder Console
         </p>
       </div>
 

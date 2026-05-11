@@ -23,7 +23,7 @@ export default async function PortalActionItemsPage() {
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
           Your portal isn&apos;t bound to an engagement. If you expect access,
-          contact your coach.
+          contact your Business Builder.
         </p>
       </main>
     );
@@ -34,7 +34,7 @@ export default async function PortalActionItemsPage() {
   const allItems = await listEngagementActionItems(engagement.id);
   const sorted = sortActionItems(allItems);
 
-  // Hide drafts from non-coach roles.
+  // Hide drafts from non-Business Builder roles.
   const visibleItems = isCoachLike
     ? sorted
     : sorted.filter((i) => i.status !== "draft");
@@ -90,7 +90,7 @@ export default async function PortalActionItemsPage() {
         emptyDescription={
           canCreate
             ? "Create your first action item to get rolling."
-            : "Your coach will publish action items here after your next session."
+            : "Your Business Builder will publish action items here after your next session."
         }
         pillDisabledForRoles={!fullEditor}
       />

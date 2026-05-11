@@ -1,7 +1,7 @@
 /**
  * QBO OAuth callback.
  *
- * Phase 4.6. Intuit redirects here after the coach approves the
+ * Phase 4.6. Intuit redirects here after the Business Builder approves the
  * connection. Query string contains `code`, `state`, and `realmId`.
  *
  * We:

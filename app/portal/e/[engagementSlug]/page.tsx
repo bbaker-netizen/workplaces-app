@@ -6,7 +6,7 @@
  * resolver (getCurrentEngagement) honors the cookie.
  *
  * Auth: only callers who can see the engagement get the cookie set —
- * either it's their home engagement, or they're a coach role.
+ * either it's their home engagement, or they're a Business Builder role.
  */
 
 import { cookies } from "next/headers";

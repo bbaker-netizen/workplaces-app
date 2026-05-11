@@ -3,7 +3,7 @@
 /**
  * Coach-side wrapper around ActionItemForm — adds an engagement picker.
  *
- * When the coach changes the engagement, the underlying ActionItemForm
+ * When the Business Builder changes the engagement, the underlying ActionItemForm
  * remounts (key prop bound to engagementId) so initial defaults
  * recompute against the new engagement's members. In-progress edits
  * reset; that's acceptable here because changing engagement implies

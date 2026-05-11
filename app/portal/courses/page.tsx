@@ -47,7 +47,7 @@ export default async function CoursesPage() {
           <p className="font-sans text-sm text-muted-foreground italic">
             {canCreate
               ? "No courses yet. Build the first one above."
-              : "Your coach hasn't published any courses yet."}
+              : "Your Business Builder hasn't published any courses yet."}
           </p>
         </div>
       ) : (

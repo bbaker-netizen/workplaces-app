@@ -56,7 +56,7 @@ export async function setEngagementStage(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (!canEdit(profile.role))
-    return { ok: false, error: "Coach-only." };
+    return { ok: false, error: "Business Builders only." };
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success)
     return {

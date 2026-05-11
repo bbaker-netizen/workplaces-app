@@ -96,7 +96,7 @@ export default async function PortalTeamPage() {
       </ul>
 
       <p className="font-sans text-xs text-muted-foreground italic">
-        To invite someone new, your coach creates a fresh engagement or sends an invitation through Clerk. Per-engagement invite UI lands in a later phase.
+        To invite someone new, your Business Builder creates a fresh engagement or sends an invitation through Clerk. Per-engagement invite UI lands in a later phase.
       </p>
     </main>
   );

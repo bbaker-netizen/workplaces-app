@@ -12,7 +12,7 @@
  *
  * The colon split is the auth contract. The shared secret confirms
  * the caller is Cowork (or another authorized client); the
- * clerk_user_id identifies which coach is making the call. Phase 2
+ * clerk_user_id identifies which Business Builder is making the call. Phase 2
  * upgrades this to a signed JWT.
  */
 

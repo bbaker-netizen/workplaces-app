@@ -5,7 +5,7 @@
  *   - `getEnvelopeByToken` — public, used by /sign/[token] to render
  *     the document + signing panel.
  *   - `getEnvelopeForCoach` + `listEnvelopesForProspect` /
- *     `listEnvelopesForEngagement` — coach-side detail and pipeline.
+ *     `listEnvelopesForEngagement` — Business-Builder-side detail and pipeline.
  */
 
 import { asc, desc, eq } from "drizzle-orm";

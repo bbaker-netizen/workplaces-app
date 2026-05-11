@@ -37,7 +37,7 @@ export default async function CoachSignaturePage() {
     <main className="max-w-2xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Coach Console
+          Business Builder Console
         </p>
         <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Your signature

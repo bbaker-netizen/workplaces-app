@@ -18,7 +18,7 @@ export default async function PortalSessionsPage() {
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
           Your portal isn&apos;t bound to an engagement. If you expect access,
-          contact your coach.
+          contact your Business Builder.
         </p>
       </main>
     );
@@ -59,7 +59,7 @@ export default async function PortalSessionsPage() {
           emptyDescription={
             canSchedule
               ? "Schedule your first session above."
-              : "Your coach will schedule sessions here."
+              : "Your Business Builder will schedule sessions here."
           }
         />
       </div>

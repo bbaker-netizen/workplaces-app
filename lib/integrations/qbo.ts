@@ -7,7 +7,7 @@
  * OAuth: Authorization Code grant with refresh tokens.
  *   - access_token expires in 1 hour
  *   - refresh_token expires in 100 days
- *   - tokens stored in qbo_oauth_tokens (per coach)
+ *   - tokens stored in qbo_oauth_tokens (per Business Builder)
  *
  * Production vs sandbox:
  *   - Production base: https://quickbooks.api.intuit.com
@@ -133,7 +133,7 @@ async function tokenRequest(
 }
 
 /**
- * Look up the coach's stored token set, refresh it if expired (or
+ * Look up the Business Builder's stored token set, refresh it if expired (or
  * expiring within 5 minutes), persist the new pair, and return the
  * fresh access token + realm id ready for an API call.
  */

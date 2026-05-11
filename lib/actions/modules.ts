@@ -3,7 +3,7 @@
 /**
  * Portal module assignment actions.
  *
- * Phase 3.1. Coach-only writes — set / unset / reorder modules per
+ * Phase 3.1. Business Builders only writes — set / unset / reorder modules per
  * engagement. Default is "everything enabled" so an absent row means
  * the module is visible.
  */
@@ -60,7 +60,7 @@ export async function setModuleEnabled(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (!canEdit(profile.role))
-    return { ok: false, error: "Coach-only." };
+    return { ok: false, error: "Business Builders only." };
   const parsed = setSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -102,7 +102,7 @@ export async function clearModuleAssignment(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (!canEdit(profile.role))
-    return { ok: false, error: "Coach-only." };
+    return { ok: false, error: "Business Builders only." };
   try {
     await withEngagementContext(
       profile.orgId,

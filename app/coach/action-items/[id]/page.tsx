@@ -35,7 +35,7 @@ export default async function EditCoachActionItemPage({
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-12">
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Coach Console — edit action item
+          Business Builder Console — edit action item
         </p>
         <h1 className="font-bold text-foreground text-3xl tracking-tight leading-tight break-words">
           {item.title}

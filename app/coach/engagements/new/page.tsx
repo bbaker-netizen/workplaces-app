@@ -6,7 +6,7 @@ export default function NewEngagementPage() {
       <div className="max-w-2xl mx-auto space-y-10">
         <header className="space-y-3">
           <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-            Coach Console
+            Business Builder Console
           </p>
           <h1 className="font-bold text-foreground text-4xl sm:text-5xl tracking-tight leading-none">
             New engagement

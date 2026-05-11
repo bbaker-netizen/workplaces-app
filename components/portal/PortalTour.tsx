@@ -33,7 +33,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Welcome to your Business Builder Portal.",
     content:
-      "This is your private workspace for our coaching engagement. I'll walk you through what's on screen — about a minute. You can click on anything to explore as we go.",
+      "This is your private workspace for our Business Building engagement. I'll walk you through what's on screen — about a minute. You can click on anything to explore as we go.",
   },
   {
     target: '[data-tour="action-items"]',
@@ -41,7 +41,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Your open action items.",
     content:
-      "Everything you've committed to is here, sorted overdue-first then by due date. Click any item to open it, add a comment, or mark it done. Coming out of a coaching session, this is the list that grows.",
+      "Everything you've committed to is here, sorted overdue-first then by due date. Click any item to open it, add a comment, or mark it done. Coming out of a Business Building session, this is the list that grows.",
   },
   {
     target: '[data-tour="next-session"]',

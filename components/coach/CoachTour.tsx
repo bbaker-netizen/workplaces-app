@@ -4,7 +4,7 @@
  * Coach workflow walkthrough — first-visit interactive tour.
  *
  * Spotlights each phase of the lifecycle sidebar in order, narrating
- * the end-to-end coach experience: bringing in a prospect, signing
+ * the end-to-end Business Builder experience: bringing in a prospect, signing
  * them, opening their engagement, running the rhythm, shipping
  * deliverables, invoicing, renewing.
  *
@@ -29,7 +29,7 @@ const STEPS: Step[] = [
     target: "body",
     placement: "center",
     skipBeacon: true,
-    title: "The Business Builder Portal — your operating system as a coach.",
+    title: "The Business Builder Portal — your operating system as a Business Builder.",
     content:
       "I'll walk you through the entire arc of running a client engagement here — from the moment a new prospect lands, all the way through to renewal. Each step in the sidebar represents a phase. We'll go through them in order. About two minutes total.",
   },
@@ -55,7 +55,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Phase 02 — Engage.",
     content:
-      "Once a prospect is signed, you create the engagement and the rhythm starts. Two Business Building Sessions a month. Action items between each. Communication threads keep you in touch with the client's leadership and operating team. This is where most of your coaching time lives.",
+      "Once a prospect is signed, you create the engagement and the rhythm starts. Two Business Building Sessions a month. Action items between each. Communication threads keep you in touch with the client's leadership and operating team. This is where most of your Business Building time lives.",
   },
   {
     target: '[data-tour="coach-phase-deliver"]',
@@ -79,7 +79,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Phase 05 — Practice operations.",
     content:
-      "Your own tools: create a new engagement, upload your stored signature (so contracts auto-sign with your name), connect QuickBooks, open this guide. These don't change client-by-client — they're your standing setup as a coach.",
+      "Your own tools: create a new engagement, upload your stored signature (so contracts auto-sign with your name), connect QuickBooks, open this guide. These don't change client-by-client — they're your standing setup as a Business Builder.",
   },
   {
     target: '[data-tour="coach-guide"]',
@@ -87,7 +87,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "The full guide is always one click away.",
     content:
-      "Coach guide opens the comprehensive operating manual — every phase, every step, every URL, written out in depth. Use the interactive walkthrough (this one) for orientation; use the guide for reference. Both can be replayed any time.",
+      "Business Builder guide opens the comprehensive operating manual — every phase, every step, every URL, written out in depth. Use the interactive walkthrough (this one) for orientation; use the guide for reference. Both can be replayed any time.",
   },
   {
     target: "body",

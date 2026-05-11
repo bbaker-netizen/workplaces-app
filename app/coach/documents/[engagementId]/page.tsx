@@ -2,10 +2,10 @@
  * Coach Documents page — same shape as the portal page, but scoped to
  * a chosen engagement so coaches can flip between clients.
  *
- * Coach cross-org gap (same as 1.2/1.3/1.4): when the coach views a
+ * Coach cross-org gap (same as 1.2/1.3/1.4): when the Business Builder views a
  * client engagement, the GUC binds to the master org. Today's testing
  * scope is the master org's "Bruce Test" engagement, so the gap
- * doesn't bite. Phase 1.7 introduces the coach-aware tenant helper.
+ * doesn't bite. Phase 1.7 introduces the Business Builder-aware tenant helper.
  */
 
 import Link from "next/link";
@@ -59,14 +59,14 @@ export default async function CoachDocumentsPage({
     uploaderName: d.uploaderName,
     createdAt: d.createdAt,
     tags: d.tags,
-    canDelete: true, // master_admin / coach can delete any
+    canDelete: true, // master_admin / Business Builder can delete any
   }));
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-8 sm:py-12 space-y-10">
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Coach Console
+          Business Builder Console
         </p>
         <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {engagement.name ?? "Engagement"} · Documents

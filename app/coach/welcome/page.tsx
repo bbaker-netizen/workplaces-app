@@ -1,7 +1,7 @@
 /**
  * Coach welcome / operating guide.
  *
- * The end-to-end manual for a new coach (Bruce, Jen, future hires)
+ * The end-to-end manual for a new Business Builder (Bruce, Jen, future hires)
  * running a client engagement through the Business Builder Portal.
  * Top-to-bottom flow: prospect lands → contract → engagement opens →
  * first session → ongoing rhythm → deliverables → billing → renewal.
@@ -45,9 +45,9 @@ export default async function CoachWelcomePage() {
   return (
     <main className="max-w-tbb-narrow mx-auto px-6 py-12 sm:py-16 space-y-12">
       <header className="space-y-3">
-        <p className="tbb-eyebrow">Coach operating guide</p>
+        <p className="tbb-eyebrow">Business Builder operating guide</p>
         <h1 className="text-tbb-h1 font-black text-tbb-navy tracking-tbb-tight">
-          The end-to-end coach guide, {firstName}.
+          The end-to-end Business Builder guide, {firstName}.
         </h1>
         <p className="text-tbb-lead text-tbb-ink-2 max-w-prose">
           This is the full playbook for running a client engagement
@@ -62,7 +62,7 @@ export default async function CoachWelcomePage() {
             href="/coach"
             className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-5 py-2.5 rounded-pill border border-tbb-navy text-tbb-navy hover:bg-tbb-bg-soft transition-colors duration-tbb-base"
           >
-            Open Coach Console
+            Open Business Builder Console
           </Link>
         </div>
       </header>
@@ -207,7 +207,7 @@ export default async function CoachWelcomePage() {
         >
           <p>
             Every committed task lives here. Drafts (created by Claude
-            from a transcript or by you) are coach-side only. Published
+            from a transcript or by you) are Business-Builder-side only. Published
             items appear on the assignee&apos;s portal with an email
             notification. The dashboard sorts overdue-first.
           </p>
@@ -343,7 +343,7 @@ export default async function CoachWelcomePage() {
             The Workplaces default billing model is Model C — Productized
             Retention. You maintain client-facing infrastructure
             (Netlify apps, Make.com, Resend, Clerk, custom domains)
-            under your accounts indefinitely, even after the coaching
+            under your accounts indefinitely, even after the Business Buildering
             engagement ends.
           </p>
           <p className="mt-2">
@@ -383,7 +383,7 @@ export default async function CoachWelcomePage() {
         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CheatSheetItem
             href="/coach"
-            label="Coach Console — your home base"
+            label="Business Builder Console — your home base"
             icon={<CheckSquare className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem

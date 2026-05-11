@@ -3,16 +3,16 @@
  *
  * Phase 1.20. The bridge from Cowork (the Workplaces Plugin) to this
  * app's database. Cowork's Live Artifacts (My Work, Coach Dashboard,
- * BBS Prep, Pipeline, Projects) call these tools to read coach-side
+ * BBS Prep, Pipeline, Projects) call these tools to read Business-Builder-side
  * data without going through the Next.js UI.
  *
  * Auth: bearer token. The plugin holds the secret in its config; the
  * Netlify Function (`/api/mcp`) verifies it before opening the
  * transport.
  *
- * Tenant binding: every tool resolves the coach's profile via
+ * Tenant binding: every tool resolves the Business Builder's profile via
  * `mcp_user_profile_id` (a column on `user_profiles` would be cleaner
- * — for now we identify the coach by their `clerk_user_id` baked into
+ * — for now we identify the Business Builder by their `clerk_user_id` baked into
  * the bearer token's payload). System-context reads only — Cowork is
  * authoritatively the master org, so we read across all client orgs.
  *
@@ -89,7 +89,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   /* ----------------------------- list my action items ----------------------------- */
   server.tool(
     "list_my_work",
-    "List every action item assigned to the coach across all engagements (the My Work Live Artifact). Sorted overdue first.",
+    "List every action item assigned to the Business Builder across all engagements (the My Work Live Artifact). Sorted overdue first.",
     {},
     async () => {
       const rows = await withSystemContext(async (tx) => {
@@ -502,7 +502,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
 
   server.tool(
     "complete_action_item",
-    "Mark an action item as done. Use when the coach reports completion via Cowork.",
+    "Mark an action item as done. Use when the Business Builder reports completion via Cowork.",
     { actionItemId: z.string().uuid() },
     async ({ actionItemId }) => {
       await withSystemContext(async (tx) => {

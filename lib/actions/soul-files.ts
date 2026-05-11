@@ -199,7 +199,7 @@ export async function searchSoulFiles(
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Coach-only." };
+    return { ok: false, error: "Business Builders only." };
   if (!query.trim()) return { ok: true, data: [] };
 
   // Load every Soul File for engagements this coach owns.

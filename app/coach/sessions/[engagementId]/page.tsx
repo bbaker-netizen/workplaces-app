@@ -27,7 +27,7 @@ export default async function CoachSessionsPage({
     <main className="max-w-4xl mx-auto px-6 py-8 sm:py-12 space-y-10">
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Coach Console
+          Business Builder Console
         </p>
         <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {engagement.name ?? "Engagement"} · Sessions

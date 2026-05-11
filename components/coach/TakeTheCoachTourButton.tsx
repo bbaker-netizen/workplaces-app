@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Replay the coach workflow walkthrough on demand. Clears the
+ * Replay the Business Builder workflow walkthrough on demand. Clears the
  * tour-seen flag, navigates to /coach if needed (the sidebar
  * anchors live there), and re-launches step 1.
  */

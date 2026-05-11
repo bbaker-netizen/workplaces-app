@@ -35,7 +35,7 @@ export default async function PortalDashboard() {
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
           Your portal isn&apos;t bound to an engagement. If you expect access,
-          contact your coach.
+          contact your Business Builder.
         </p>
       </main>
     );
@@ -55,7 +55,7 @@ export default async function PortalDashboard() {
     profile.role === "master_admin" || profile.role === "coach";
 
   // What "my open items" means: assigned to me, not done, not draft
-  // (drafts are coach-side WIP). Sort overdue first, then by due date.
+  // (drafts are Business-Builder-side WIP). Sort overdue first, then by due date.
   const now = new Date();
   const myOpen = allItems
     .filter(

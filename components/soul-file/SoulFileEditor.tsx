@@ -160,7 +160,7 @@ export function SoulFileEditor({
           <p className="font-sans text-sm text-muted-foreground">
             {canEdit
               ? "Capture the deep context for this engagement: why it exists, where it's going, and what shapes the work. The Start writing button gives you a template to fill in."
-              : "Your coach will populate this with the engagement context when they're ready."}
+              : "Your Business Builder will populate this with the engagement context when they're ready."}
           </p>
         </div>
       ) : (

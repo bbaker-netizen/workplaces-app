@@ -120,8 +120,8 @@ export default async function MethodologyPage() {
         <p>
           Every commitment lives as an action item — owned, dated,
           flagged for revenue or margin impact. Drafts come from BBS
-          recordings (auto-extracted; coach reviews and publishes).
-          Manual ones come straight from the coach or you. The status
+          recordings (auto-extracted; Business Builder reviews and publishes).
+          Manual ones come straight from the Business Builder or you. The status
           pill on the card is the fast path: tap and update.
         </p>
       </Section>

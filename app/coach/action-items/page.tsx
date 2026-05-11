@@ -35,13 +35,13 @@ export default async function CoachActionItemsPage() {
     <main className="max-w-5xl mx-auto px-6 py-12">
       <header className="mb-8 space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Coach Console
+          Business Builder Console
         </p>
         <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
           Action items — all engagements
         </h1>
         <p className="font-sans text-muted-foreground max-w-md leading-relaxed">
-          Cross-engagement view. Drafts are visible to coach roles only — the
+          Cross-engagement view. Drafts are visible to Business Builder roles only — the
           chip is empty in 1.2 and fills in 1.6 with Fireflies AI extraction.
         </p>
       </header>

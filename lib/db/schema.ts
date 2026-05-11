@@ -334,7 +334,7 @@ export const userProfiles = pgTable(
 );
 
 /**
- * `coaches` — Workplaces coaches (Bruce, Jen, future hires).
+ * `coaches` — Workplaces Business Builders (Bruce, Jen, future hires).
  */
 export const coaches = pgTable(
   "coaches",

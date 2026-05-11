@@ -51,7 +51,7 @@ export async function listMessagesForEntity(
   if (profile.status !== "ok") return [];
   if (!canViewThread(threadType, profile.role)) return [];
 
-  // Resolve the engagement id so coach roles bind to the right org.
+  // Resolve the engagement id so Business Builder roles bind to the right org.
   // For action-item threads, parentEntityId is the action item's id.
   // For engagement-level threads, parentEntityId IS the engagement id.
   let engagementId: string | null;

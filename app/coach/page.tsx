@@ -1,5 +1,5 @@
 /**
- * Coach Console — cross-engagement dashboard.
+ * Business Builder Console — cross-engagement dashboard.
  *
  * Phase 2.5. Aggregates everything Bruce needs to see across all his
  * engagements at once: upcoming sessions, projects in flight,
@@ -116,7 +116,7 @@ export default async function CoachConsole() {
         <header className="flex items-end justify-between gap-4 flex-wrap">
           <div className="space-y-1">
             <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-              Coach Console
+              Business Builder Console
             </p>
             <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
               Hey {profile.fullName.split(" ")[0] ?? profile.fullName}.
