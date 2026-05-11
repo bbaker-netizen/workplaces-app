@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import NextTopLoader from "nextjs-toploader";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 import "./globals.css";
 
@@ -33,6 +34,14 @@ export default function RootLayout({
     <ClerkProvider appearance={builderAppearance}>
       <html lang="en">
         <body className="font-sans antialiased">
+          {/* Global top progress bar — animates on every page
+              navigation so the user sees the system is working. */}
+          <NextTopLoader
+            color="#2C6CB0"
+            height={3}
+            showSpinner={false}
+            shadow="0 0 8px rgba(44, 108, 176, 0.4)"
+          />
           <ServiceWorkerRegistrar />
           {children}
         </body>

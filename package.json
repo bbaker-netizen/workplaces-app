@@ -39,6 +39,7 @@
     "lucide-react": "^1.14.0",
     "luxon": "^3",
     "next": "14.2.35",
+    "nextjs-toploader": "^3.9.17",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1",
     "react": "^18",

@@ -96,6 +96,7 @@ const COACH_PHASES: CoachPhase[] = [
       { href: "/coach/profile/signature", label: "My signature", icon: PenSquare },
       { href: "/coach/profile/quickbooks", label: "QuickBooks", icon: LineChart },
       { href: "/coach/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "coach-guide" },
+      { href: "/coach/welcome/modules", label: "Module reference", icon: HelpCircle },
     ],
   },
 ];

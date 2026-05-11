@@ -59,6 +59,12 @@ export default async function CoachWelcomePage() {
         <div className="pt-2 flex flex-wrap gap-3">
           <TakeTheTourButton label="Run the interactive walkthrough" />
           <Link
+            href="/coach/welcome/modules"
+            className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-5 py-2.5 rounded-pill bg-tbb-navy text-white hover:bg-tbb-navy-700 transition-colors duration-tbb-base"
+          >
+            Module reference
+          </Link>
+          <Link
             href="/coach"
             className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-5 py-2.5 rounded-pill border border-tbb-navy text-tbb-navy hover:bg-tbb-bg-soft transition-colors duration-tbb-base"
           >
