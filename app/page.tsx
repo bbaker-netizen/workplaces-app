@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -11,7 +12,7 @@ export default function Home() {
         className="absolute -right-32 -top-24 opacity-[0.06] pointer-events-none"
         aria-hidden
       />
-      <div className="flex flex-col items-center gap-8 text-center relative z-10">
+      <div className="flex flex-col items-center gap-8 text-center relative z-10 max-w-2xl">
         <Image
           src="/brand/logo-cream.png"
           alt="The Business Builders by Workplaces"
@@ -23,8 +24,26 @@ export default function Home() {
         <p className="font-bold uppercase tracking-tbb-caps text-xs sm:text-sm text-tbb-cream/70">
           Build what compounds
         </p>
-        <p className="font-mono text-tbb-cream/50 text-[11px] sm:text-xs pt-12">
-          Coaching, deliverables, and invoicing — one operating platform.
+        <p className="text-tbb-cream/85 text-base sm:text-lg max-w-md leading-relaxed">
+          Coaching, deliverables, and invoicing — one operating platform
+          for the Workplaces practice.
+        </p>
+        <div className="flex flex-wrap items-center gap-3 pt-4">
+          <Link
+            href="/portal"
+            className="inline-flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-tbb-caps px-6 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base shadow-tbb-cta"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/diagnostic"
+            className="inline-flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-tbb-caps px-6 py-3 rounded-pill border border-tbb-cream/40 text-tbb-cream hover:border-tbb-cream hover:bg-tbb-cream/5 transition-colors duration-tbb-base"
+          >
+            Start the diagnostic
+          </Link>
+        </div>
+        <p className="font-mono text-tbb-cream/40 text-[11px] sm:text-xs pt-12">
+          © Workplaces — HR All-In Inc., Edmonton, Alberta
         </p>
       </div>
     </main>
