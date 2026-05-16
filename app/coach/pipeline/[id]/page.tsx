@@ -19,6 +19,7 @@ import {
   listProspectActivities,
 } from "@/lib/db/queries/prospects";
 import { listEnvelopesForProspect } from "@/lib/db/queries/signatures";
+import { listForProspect } from "@/lib/db/queries/client-communications";
 import { userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
@@ -27,6 +28,11 @@ import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
+import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
+import {
+  isSmsConfigured,
+  isWhatsAppConfigured,
+} from "@/lib/integrations/twilio";
 import {
   STAGE_STYLES,
   type ProspectStatus,
@@ -46,7 +52,7 @@ export default async function ProspectDetailPage({
   const prospect = await getProspect(params.id);
   if (!prospect) notFound();
 
-  const [activities, envelopes, hasStoredSig] = await Promise.all([
+  const [activities, envelopes, hasStoredSig, communications] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
     withSystemContext(async (tx) => {
@@ -57,6 +63,7 @@ export default async function ProspectDetailPage({
         .limit(1);
       return Boolean(row?.signatureImageData);
     }),
+    listForProspect(prospect.id),
   ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
@@ -190,6 +197,18 @@ export default async function ProspectDetailPage({
           />
         </aside>
       </div>
+
+      {/* Full-width communications timeline — every email / SMS / WhatsApp /
+          call note attached to this prospect. */}
+      <ClientCommunicationsPanel
+        prospectId={prospect.id}
+        contactName={prospect.contactName}
+        contactEmail={prospect.contactEmail}
+        contactPhone={prospect.phone}
+        rows={communications}
+        smsEnabled={isSmsConfigured()}
+        whatsappEnabled={isWhatsAppConfigured()}
+      />
     </main>
   );
 }

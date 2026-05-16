@@ -21,17 +21,20 @@ import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 /**
  * Scope set for the unified Google connection.
  *
- *   - calendar.events — read/write calendar events for BBS-session sync
+ *   - calendar.events — read/write calendar events for BBS-session sync.
  *   - gmail.readonly — read sent + received messages, to auto-capture
  *     client emails into client_communications. Personal email is
  *     ignored — only messages where a participant matches a prospect
  *     contact or engagement member get written through.
- *   - gmail.metadata — listed for completeness; gmail.readonly already
- *     includes header + label access. Kept here for documentation.
+ *   - gmail.send — send emails on behalf of the connected user, so
+ *     replies composed inside the app land in the recipient's inbox
+ *     as if Bruce had sent them from Gmail directly. We don't request
+ *     gmail.modify (which would let us mark messages read/archive); the
+ *     CRM never touches the user's mailbox state.
  *   - openid email — identifies the connected Google account.
  */
 export const GOOGLE_CALENDAR_SCOPE =
-  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly openid email";
+  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send openid email";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

@@ -9,10 +9,19 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { eq, and } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listCoachEngagements } from "@/lib/db/queries/engagements";
+import { listForEngagement } from "@/lib/db/queries/client-communications";
+import { engagements as engagementsTable, userProfiles } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
 import { MessageThread } from "@/components/communication/MessageThread";
 import { RecentActivity } from "@/components/communication/RecentActivity";
+import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
+import {
+  isSmsConfigured,
+  isWhatsAppConfigured,
+} from "@/lib/integrations/twilio";
 import {
   THREAD_TYPE,
   canViewThread,
@@ -34,6 +43,34 @@ export default async function CoachCommunicationPage({
   const engagements = await listCoachEngagements();
   const engagement = engagements.find((e) => e.id === params.engagementId);
   if (!engagement) notFound();
+
+  // Look up the client lead for default-to-fields in the external composer.
+  // Falls back to no defaults if the engagement has no client_lead row yet.
+  const [communications, clientLead] = await Promise.all([
+    listForEngagement(engagement.id),
+    withSystemContext(async (tx) => {
+      const [eng] = await tx
+        .select({ orgId: engagementsTable.orgId })
+        .from(engagementsTable)
+        .where(eq(engagementsTable.id, engagement.id))
+        .limit(1);
+      if (!eng) return null;
+      const [lead] = await tx
+        .select({
+          name: userProfiles.fullName,
+          email: userProfiles.email,
+        })
+        .from(userProfiles)
+        .where(
+          and(
+            eq(userProfiles.orgId, eng.orgId),
+            eq(userProfiles.role, "client_lead"),
+          ),
+        )
+        .limit(1);
+      return lead ?? null;
+    }),
+  ]);
 
   const showLeadership = canViewThread(
     THREAD_TYPE.engagementLeadership,
@@ -84,6 +121,26 @@ export default async function CoachCommunicationPage({
           Recent activity
         </h2>
         <RecentActivity engagementId={engagement.id} scope="coach" />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
+          External communications
+        </h2>
+        <p className="text-xs text-tbb-ink-3">
+          Every email, text, WhatsApp message, and call note captured for{" "}
+          {engagement.name ?? "this engagement"} — across all members on the
+          client&apos;s side.
+        </p>
+        <ClientCommunicationsPanel
+          engagementId={engagement.id}
+          contactName={clientLead?.name ?? null}
+          contactEmail={clientLead?.email ?? null}
+          contactPhone={null}
+          rows={communications}
+          smsEnabled={isSmsConfigured()}
+          whatsappEnabled={isWhatsAppConfigured()}
+        />
       </section>
 
       <section className="space-y-4">

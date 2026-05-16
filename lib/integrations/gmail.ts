@@ -67,6 +67,77 @@ async function gmail<T>(
   return (await res.json()) as T;
 }
 
+/* --------------------------- send --------------------------- */
+
+function encodeBase64Url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Escape header values that may contain non-ASCII via RFC 2047 encoded-word. */
+function encodeHeader(value: string): string {
+  // ASCII-safe → as-is. Non-ASCII → encoded-word (UTF-8 base64).
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(value)) return value;
+  const b64 = Buffer.from(value, "utf8").toString("base64");
+  return `=?UTF-8?B?${b64}?=`;
+}
+
+export type SendEmailInput = {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body: string; // plain text
+  /** Optional in-reply-to message id for threading. */
+  inReplyTo?: string | null;
+  references?: string | null;
+};
+
+/**
+ * Send an email through the connected user's Gmail account. Returns
+ * the gmail message id + thread id on success.
+ */
+export async function sendGmailMessage(
+  userProfileId: string,
+  fromAddress: string,
+  input: SendEmailInput,
+): Promise<{ messageId: string; threadId: string }> {
+  const { getValidAccessToken } = await import("./google-calendar");
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) {
+    throw new Error("Google not connected. Visit /coach/profile/google-calendar.");
+  }
+
+  const headers: string[] = [];
+  headers.push(`From: ${encodeHeader(fromAddress)}`);
+  headers.push(`To: ${input.to.map(encodeHeader).join(", ")}`);
+  if (input.cc && input.cc.length > 0) {
+    headers.push(`Cc: ${input.cc.map(encodeHeader).join(", ")}`);
+  }
+  if (input.bcc && input.bcc.length > 0) {
+    headers.push(`Bcc: ${input.bcc.map(encodeHeader).join(", ")}`);
+  }
+  headers.push(`Subject: ${encodeHeader(input.subject)}`);
+  headers.push("MIME-Version: 1.0");
+  headers.push("Content-Type: text/plain; charset=UTF-8");
+  headers.push("Content-Transfer-Encoding: 8bit");
+  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
+  if (input.references) headers.push(`References: ${input.references}`);
+
+  const raw = headers.join("\r\n") + "\r\n\r\n" + input.body;
+  const rawEncoded = encodeBase64Url(Buffer.from(raw, "utf8"));
+
+  const result = await gmail<{ id: string; threadId: string }>(
+    token.token,
+    `/users/me/messages/send`,
+    {
+      method: "POST",
+      body: JSON.stringify({ raw: rawEncoded }),
+    },
+  );
+  return { messageId: result.id, threadId: result.threadId };
+}
+
 /* --------------------------- list + get --------------------------- */
 
 /**
