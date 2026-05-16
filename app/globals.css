@@ -123,3 +123,28 @@
   80% { transform: rotate(6deg); }
   100% { transform: rotate(0deg); }
 }
+
+/* Builder Buddy idle bobbing — gentle up-down so the mascot feels
+   alive without being distracting. */
+@keyframes buddyBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* Buddy waves hello when you arrive on a new page. Tips the hat then
+   settles back down. */
+@keyframes buddyWave {
+  0%   { transform: rotate(0deg) translateY(0); }
+  15%  { transform: rotate(-12deg) translateY(-4px); }
+  30%  { transform: rotate(10deg) translateY(-4px); }
+  45%  { transform: rotate(-8deg) translateY(-4px); }
+  60%  { transform: rotate(6deg) translateY(-2px); }
+  75%  { transform: rotate(-3deg) translateY(0); }
+  100% { transform: rotate(0deg) translateY(0); }
+}
+
+/* Speech bubble pop-in. */
+@keyframes buddyPop {
+  0%   { transform: scale(0.85) translateY(6px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}

@@ -4,6 +4,7 @@ import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { CoachSidebar } from "@/components/coach/CoachSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { CoachTour } from "@/components/coach/CoachTour";
+import { BuilderBuddy } from "@/components/mascot/BuilderBuddy";
 
 /**
  * Business Builder Console layout — role gate + lifecycle sidebar.
@@ -37,6 +38,10 @@ export default async function CoachLayout({
       </div>
       {/* First-visit workflow walkthrough for new Business Builderes. */}
       <CoachTour />
+      {/* Builder Buddy — friendly mascot tucked into the corner that
+          surfaces page-specific tips when clicked. Dismissible per
+          page or globally. */}
+      <BuilderBuddy />
     </div>
   );
 }
