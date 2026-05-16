@@ -41,8 +41,7 @@ export default async function CoachActionItemsPage() {
           Action items — all engagements
         </h1>
         <p className="font-sans text-muted-foreground max-w-md leading-relaxed">
-          Cross-engagement view. Drafts are visible to Business Builder roles only — the
-          chip is empty in 1.2 and fills in 1.6 with Fireflies AI extraction.
+          Every action item across every active client, in one list.
         </p>
       </header>
 

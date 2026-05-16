@@ -161,10 +161,9 @@ export default async function CoachWelcomePage() {
             <li>Planned start date</li>
           </ul>
           <p className="mt-2">
-            Submitting creates a Clerk Organization for the client, an
-            orgs row in our database, and emails the client lead a
-            sign-up invitation. Their first sign-in lands them on the
-            client portal with the Welcome tour.
+            Submitting sets up the client&apos;s private workspace and emails
+            the client lead a sign-up invitation. Their first sign-in
+            lands them on the client portal with the Welcome tour.
           </p>
         </Step>
 
