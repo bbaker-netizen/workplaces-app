@@ -59,16 +59,33 @@ const TIPS: { match: (p: string) => boolean; tips: Tip[] }[] = [
   {
     match: (p) => p === "/coach/action-items" || p.startsWith("/coach/action-items/"),
     tips: [
-      { emoji: "⏱️", text: "Action items = things measured in HOURS or DAYS. If it's measured in weeks, it's a Deliverable." },
-      { emoji: "🤖", text: "These get drafted by AI from Fireflies transcripts. Edit, assign, hit Publish, done." },
+      { emoji: "⏱️", text: "Action items = HOURS/DAYS commitments. \"Send Q3 numbers by Friday.\" If it takes weeks, make it a Deliverable instead." },
+      { emoji: "🤖", text: "Fireflies records a BBS session → Claude reads the transcript → drafts the action items for you. Edit, assign, hit Publish." },
       { emoji: "🔥", text: "Overdue items pin to the top. Don't ignore them — they're how clients lose trust." },
     ],
   },
   {
     match: (p) => p === "/coach/deliverables" || p.startsWith("/coach/deliverables/"),
     tips: [
-      { emoji: "📚", text: "Deliverables = the BIG artifacts. The 9 types: SOPs, Org Charts, Job Profiles, Financials, etc." },
-      { emoji: "🏗️", text: "Each deliverable has a lifecycle — Not started → In progress → Review → Done. Tracks billable work." },
+      { emoji: "📚", text: "Deliverables = the 9 BIG artifacts you produce for clients. SOPs, Org Charts, Job Profiles, Financial Dashboards, Business Plans, etc." },
+      { emoji: "🏗️", text: "Lifecycle: Not started → In progress → Review → Done. These are what clients actually buy from you." },
+      { emoji: "🧭", text: "Difference from Projects: a Deliverable IS the artifact (a Marketing Plan). A Project is the INITIATIVE around it (\"build out Acme's marketing function\")." },
+    ],
+  },
+  {
+    match: (p) => p === "/coach/projects" || p.startsWith("/coach/projects/"),
+    tips: [
+      { emoji: "🏗️", text: "Projects = big initiatives inside a client. \"Build Acme's hiring system.\" \"Launch their marketing function.\" Spans weeks or months." },
+      { emoji: "🧭", text: "Projects vs Deliverables: the Project is the JOB (\"build a hiring system\"); the Deliverables are the OUTPUTS (the Org Chart, the Job Profile, the Interview Guide)." },
+      { emoji: "📐", text: "Tasks live INSIDE a project. Action items live across the engagement. Use Projects for multi-week initiatives." },
+    ],
+  },
+  {
+    match: (p) => p.startsWith("/coach/sessions"),
+    tips: [
+      { emoji: "🗓️", text: "BBS Sessions = the actual meetings — twice-monthly, 2 hours, one in-person and one virtual." },
+      { emoji: "🎙️", text: "Paste a Fireflies recording ID after the session and Claude drafts the action items for you." },
+      { emoji: "🧭", text: "Sessions = WHEN you meet. Projects = WHAT you're building. Action items = WHAT'S DUE this week. Deliverables = the artifacts you produce. Different views, same engagement." },
     ],
   },
   {

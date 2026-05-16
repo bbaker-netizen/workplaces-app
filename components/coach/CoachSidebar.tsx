@@ -17,7 +17,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
   Briefcase,
@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CreditCard,
+  Eye,
   FileText,
   Filter,
   HelpCircle,
@@ -33,6 +34,7 @@ import {
   Inbox,
   LineChart,
   Link as LinkIcon,
+  LogOut,
   MessagesSquare,
   PenSquare,
   Search,
@@ -146,9 +148,19 @@ export function CoachSidebar({
   collapsedInitial: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname() ?? "";
   const [collapsed, setCollapsed] = useState(collapsedInitial);
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
+
+  /** True when this nav item's href corresponds to the current page.
+   *  Exact match for the /coach root; prefix match for deeper routes
+   *  so /coach/pipeline/[id] still marks the Prospects link active. */
+  function isActiveHref(href: string): boolean {
+    if (href === "/coach") return pathname === "/coach";
+    if (href === "/diagnostic") return false; // external preview link
+    return pathname === href || pathname.startsWith(href + "/");
+  }
 
   function onToggleCollapse() {
     const next = !collapsed;
@@ -251,6 +263,7 @@ export function CoachSidebar({
                   item={item}
                   collapsed={collapsed}
                   isPinned
+                  isActive={isActiveHref(item.href)}
                   onTogglePin={onTogglePin}
                 />
               ))}
@@ -290,6 +303,7 @@ export function CoachSidebar({
                   item={item}
                   collapsed={collapsed}
                   isPinned={pins.includes(item.href)}
+                  isActive={isActiveHref(item.href)}
                   onTogglePin={onTogglePin}
                 />
               ))}
@@ -306,18 +320,22 @@ export function CoachSidebar({
         }
       >
         {!collapsed && (
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 space-y-2">
             <p className="text-[11px] font-bold text-tbb-cream truncate">{fullName}</p>
-            <div className="flex gap-3 mt-0.5">
-              <Link
-                href="/portal?preview=1"
-                className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base"
-                title="Preview the client portal as your client would see it"
-              >
-                Client Portal View
-              </Link>
+            {/* Client Portal View — pill-styled preview action, visually
+                distinct from the destructive Sign Out below. */}
+            <Link
+              href="/portal?preview=1"
+              title="Preview the client portal as your client would see it"
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill bg-tbb-cream/10 text-tbb-cream/80 hover:bg-tbb-cream/20 hover:text-tbb-cream transition-colors duration-tbb-base border border-tbb-cream/15"
+            >
+              <Eye className="w-3 h-3" aria-hidden />
+              Client Portal View
+            </Link>
+            <div>
               <SignOutButton redirectUrl="/">
-                <button className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base">
+                <button className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/45 hover:text-tbb-danger transition-colors duration-tbb-base">
+                  <LogOut className="w-3 h-3" aria-hidden />
                   Sign out
                 </button>
               </SignOutButton>
@@ -350,11 +368,13 @@ function NavItemRow({
   item,
   collapsed,
   isPinned,
+  isActive,
   onTogglePin,
 }: {
   item: CoachNavItem;
   collapsed: boolean;
   isPinned: boolean;
+  isActive: boolean;
   onTogglePin: (href: string) => void;
 }) {
   const Icon = item.icon ?? Settings;
@@ -370,8 +390,14 @@ function NavItemRow({
         data-tour={item.tourId}
         title={item.label}
         aria-label={item.label}
+        aria-current={isActive ? "page" : undefined}
         {...linkExtras}
-        className="grid place-items-center w-10 h-10 mx-auto rounded-md text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors duration-tbb-base"
+        className={
+          "grid place-items-center w-10 h-10 mx-auto rounded-md transition-colors duration-tbb-base " +
+          (isActive
+            ? "bg-tbb-blue text-white shadow-tbb-sm"
+            : "text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream")
+        }
       >
         <Icon className="w-4 h-4" aria-hidden />
       </Link>
@@ -380,11 +406,25 @@ function NavItemRow({
 
   return (
     <div className="group relative flex items-center">
+      {/* Vertical accent strip on the left edge when active — gives the
+          item an unmistakable "you are here" marker. */}
+      {isActive && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-tbb-warning"
+        />
+      )}
       <Link
         href={item.href}
         data-tour={item.tourId}
+        aria-current={isActive ? "page" : undefined}
         {...linkExtras}
-        className="flex-1 flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-bold text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors duration-tbb-base"
+        className={
+          "flex-1 flex items-center gap-2.5 pl-3 pr-2.5 py-2 rounded-md text-sm font-bold transition-colors duration-tbb-base " +
+          (isActive
+            ? "bg-tbb-cream/15 text-tbb-cream"
+            : "text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream")
+        }
       >
         <Icon className="w-4 h-4 flex-none" aria-hidden />
         <span className="truncate">{item.label}</span>

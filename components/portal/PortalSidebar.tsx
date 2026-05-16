@@ -16,7 +16,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
   Briefcase,
@@ -89,9 +89,15 @@ export function PortalSidebar({
   isCoach: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname() ?? "";
   const [collapsed, setCollapsed] = useState(collapsedInitial);
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
+
+  function isActiveHref(href: string): boolean {
+    if (href === "/portal") return pathname === "/portal";
+    return pathname === href || pathname.startsWith(href + "/");
+  }
 
   function onToggleCollapse() {
     const next = !collapsed;
@@ -204,6 +210,7 @@ export function PortalSidebar({
                   module={m}
                   collapsed={collapsed}
                   isPinned
+                  isActive={isActiveHref(m.href)}
                   onTogglePin={onTogglePin}
                 />
               ))}
@@ -239,6 +246,7 @@ export function PortalSidebar({
                     module={m}
                     collapsed={collapsed}
                     isPinned={pins.includes(m.href)}
+                    isActive={isActiveHref(m.href)}
                     onTogglePin={onTogglePin}
                   />
                 ))}
@@ -291,11 +299,13 @@ function ModuleRow({
   module,
   collapsed,
   isPinned,
+  isActive,
   onTogglePin,
 }: {
   module: PortalModule;
   collapsed: boolean;
   isPinned: boolean;
+  isActive: boolean;
   onTogglePin: (href: string) => void;
 }) {
   const Icon = ICON_FOR_MODULE[module.key] ?? Settings;
@@ -307,7 +317,13 @@ function ModuleRow({
         data-tour={`module-${module.key}`}
         title={module.label}
         aria-label={module.label}
-        className="grid place-items-center w-10 h-10 mx-auto rounded-md text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors duration-tbb-base"
+        aria-current={isActive ? "page" : undefined}
+        className={
+          "grid place-items-center w-10 h-10 mx-auto rounded-md transition-colors duration-tbb-base " +
+          (isActive
+            ? "bg-tbb-blue text-white shadow-tbb-sm"
+            : "text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream")
+        }
       >
         <Icon className="w-4 h-4" aria-hidden />
       </Link>
@@ -316,10 +332,22 @@ function ModuleRow({
 
   return (
     <div className="group relative flex items-center">
+      {isActive && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-tbb-warning"
+        />
+      )}
       <Link
         href={module.href}
         data-tour={`module-${module.key}`}
-        className="flex-1 flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-bold text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors duration-tbb-base"
+        aria-current={isActive ? "page" : undefined}
+        className={
+          "flex-1 flex items-center gap-2.5 pl-3 pr-2.5 py-2 rounded-md text-sm font-bold transition-colors duration-tbb-base " +
+          (isActive
+            ? "bg-tbb-cream/15 text-tbb-cream"
+            : "text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream")
+        }
       >
         <Icon className="w-4 h-4 flex-none" aria-hidden />
         <span className="truncate">{module.label}</span>
