@@ -82,6 +82,14 @@ function encodeHeader(value: string): string {
   return `=?UTF-8?B?${b64}?=`;
 }
 
+export type EmailAttachment = {
+  filename: string;
+  /** MIME type, e.g. "application/pdf", "image/png". */
+  contentType: string;
+  /** Base64 string of the file bytes (without data: URL prefix). */
+  base64: string;
+};
+
 export type SendEmailInput = {
   to: string[];
   cc?: string[];
@@ -91,11 +99,17 @@ export type SendEmailInput = {
   /** Optional in-reply-to message id for threading. */
   inReplyTo?: string | null;
   references?: string | null;
+  /** Optional file attachments. Total combined size capped at ~24MB
+   *  (Gmail's 25MB limit minus headroom for headers + encoding overhead). */
+  attachments?: EmailAttachment[];
 };
+
+const GMAIL_TOTAL_LIMIT_BYTES = 24 * 1024 * 1024;
 
 /**
  * Send an email through the connected user's Gmail account. Returns
- * the gmail message id + thread id on success.
+ * the gmail message id + thread id on success. Supports attachments
+ * via multipart/mixed MIME.
  */
 export async function sendGmailMessage(
   userProfileId: string,
@@ -108,23 +122,89 @@ export async function sendGmailMessage(
     throw new Error("Google not connected. Visit /coach/profile/google-calendar.");
   }
 
-  const headers: string[] = [];
-  headers.push(`From: ${encodeHeader(fromAddress)}`);
-  headers.push(`To: ${input.to.map(encodeHeader).join(", ")}`);
+  const hasAttachments =
+    input.attachments && input.attachments.length > 0;
+
+  if (hasAttachments) {
+    // Quick total-size guard. Base64 expands payload by 4/3, so we
+    // approximate decoded bytes by reversing the ratio.
+    const totalBase64 = input.attachments!.reduce(
+      (s, a) => s + a.base64.length,
+      0,
+    );
+    const approxBytes = Math.floor((totalBase64 * 3) / 4);
+    if (approxBytes > GMAIL_TOTAL_LIMIT_BYTES) {
+      throw new Error(
+        "Attachments are too big. Gmail caps total at 25MB — keep under 24MB to be safe.",
+      );
+    }
+  }
+
+  const baseHeaders: string[] = [];
+  baseHeaders.push(`From: ${encodeHeader(fromAddress)}`);
+  baseHeaders.push(`To: ${input.to.map(encodeHeader).join(", ")}`);
   if (input.cc && input.cc.length > 0) {
-    headers.push(`Cc: ${input.cc.map(encodeHeader).join(", ")}`);
+    baseHeaders.push(`Cc: ${input.cc.map(encodeHeader).join(", ")}`);
   }
   if (input.bcc && input.bcc.length > 0) {
-    headers.push(`Bcc: ${input.bcc.map(encodeHeader).join(", ")}`);
+    baseHeaders.push(`Bcc: ${input.bcc.map(encodeHeader).join(", ")}`);
   }
-  headers.push(`Subject: ${encodeHeader(input.subject)}`);
-  headers.push("MIME-Version: 1.0");
-  headers.push("Content-Type: text/plain; charset=UTF-8");
-  headers.push("Content-Transfer-Encoding: 8bit");
-  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
-  if (input.references) headers.push(`References: ${input.references}`);
+  baseHeaders.push(`Subject: ${encodeHeader(input.subject)}`);
+  baseHeaders.push("MIME-Version: 1.0");
+  if (input.inReplyTo) baseHeaders.push(`In-Reply-To: ${input.inReplyTo}`);
+  if (input.references) baseHeaders.push(`References: ${input.references}`);
 
-  const raw = headers.join("\r\n") + "\r\n\r\n" + input.body;
+  let raw: string;
+  if (!hasAttachments) {
+    const headers = [
+      ...baseHeaders,
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+    ];
+    raw = headers.join("\r\n") + "\r\n\r\n" + input.body;
+  } else {
+    const boundary = `=_TBB_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+    const headers = [
+      ...baseHeaders,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    ];
+    const parts: string[] = [];
+
+    // Text body part.
+    parts.push(
+      [
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        input.body,
+      ].join("\r\n"),
+    );
+
+    // Attachment parts.
+    for (const att of input.attachments!) {
+      // Break base64 into 76-char lines per RFC 2045 to keep some
+      // mail servers happy.
+      const wrapped = att.base64.replace(/(.{76})/g, "$1\r\n").trimEnd();
+      const safeFilename = att.filename.replace(/"/g, "");
+      parts.push(
+        [
+          `--${boundary}`,
+          `Content-Type: ${att.contentType}; name="${safeFilename}"`,
+          `Content-Disposition: attachment; filename="${safeFilename}"`,
+          "Content-Transfer-Encoding: base64",
+          "",
+          wrapped,
+        ].join("\r\n"),
+      );
+    }
+    parts.push(`--${boundary}--`);
+
+    raw = headers.join("\r\n") + "\r\n\r\n" + parts.join("\r\n");
+  }
+
   const rawEncoded = encodeBase64Url(Buffer.from(raw, "utf8"));
 
   const result = await gmail<{ id: string; threadId: string }>(

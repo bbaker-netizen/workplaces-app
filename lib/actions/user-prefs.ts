@@ -110,6 +110,38 @@ export async function setPipelineColumnPrefs(
 }
 
 /**
+ * Persist the user's email signature. Appended to outbound emails
+ * sent from the communications panel.
+ */
+export async function setEmailSignature(
+  signature: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof signature !== "string" || signature.length > 10_000) {
+    return { ok: false, error: "Signature too long." };
+  }
+  try {
+    await withCaller(async (orgId, userProfileId) => {
+      await withTenantContext(orgId, async (tx) => {
+        await tx
+          .update(userProfiles)
+          .set({
+            emailSignature: signature.trim() || null,
+            updatedAt: new Date(),
+          })
+          .where(eq(userProfiles.id, userProfileId));
+      });
+    });
+    revalidatePath("/coach/templates");
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Server error.",
+    };
+  }
+}
+
+/**
  * Persist the user's home-dashboard layout.
  */
 export async function setHomeDashboardLayout(

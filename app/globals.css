@@ -157,3 +157,10 @@
   80%  { transform: translateX(-2px) rotate(-3deg); }
   100% { transform: translateX(0) rotate(0); }
 }
+
+/* Lifecycle overview: each phase card fades + lifts into view with a
+   staggered delay (driven via inline animation-delay on the card). */
+@keyframes lifecycleFadeIn {
+  0%   { transform: translateY(8px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}

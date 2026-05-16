@@ -25,6 +25,13 @@ import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 import { sendGmailMessage } from "@/lib/integrations/gmail";
 import { isSmsConfigured, sendSms } from "@/lib/integrations/twilio";
 
+const attachmentSchema = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(120),
+  /** base64-encoded file content, sans data URL prefix. */
+  base64: z.string().min(1),
+});
+
 const sendSchema = z
   .object({
     prospectId: z.string().uuid().nullable().optional(),
@@ -35,6 +42,7 @@ const sendSchema = z
     body: z.string().min(1).max(50_000),
     inReplyTo: z.string().max(500).nullable().optional(),
     references: z.string().max(2000).nullable().optional(),
+    attachments: z.array(attachmentSchema).max(10).optional(),
   })
   .refine(
     (v) =>
@@ -84,15 +92,22 @@ export async function sendClientMessage(
     }
   });
 
-  // Look up the sender's email (only needed for email channel).
-  const senderEmail = await withSystemContext(async (tx) => {
+  // Look up the sender's email + email signature (signature appended
+  // to outbound emails so Bruce's contact info / disclaimer rides on
+  // every send without him re-typing).
+  const sender = await withSystemContext(async (tx) => {
     const [u] = await tx
-      .select({ email: userProfiles.email })
+      .select({
+        email: userProfiles.email,
+        emailSignature: userProfiles.emailSignature,
+      })
       .from(userProfiles)
       .where(eq(userProfiles.id, profile.userProfileId))
       .limit(1);
-    return u?.email ?? null;
+    return u ?? null;
   });
+  const senderEmail = sender?.email ?? null;
+  const emailSignature = sender?.emailSignature ?? null;
 
   let externalId: string | null = null;
   let threadKey: string | null = null;
@@ -101,12 +116,17 @@ export async function sendClientMessage(
       if (!senderEmail) {
         return { ok: false, error: "Couldn't resolve your sender email." };
       }
+      const bodyWithSignature =
+        emailSignature && emailSignature.trim().length > 0
+          ? `${data.body}\n\n${emailSignature}`
+          : data.body;
       const r = await sendGmailMessage(profile.userProfileId, senderEmail, {
         to: data.to,
         subject: data.subject ?? "(no subject)",
-        body: data.body,
+        body: bodyWithSignature,
         inReplyTo: data.inReplyTo ?? null,
         references: data.references ?? null,
+        attachments: data.attachments,
       });
       externalId = r.messageId;
       threadKey = r.threadId ?? data.references ?? null;

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { TakeTheTourButton } from "@/components/coach/TakeTheCoachTourButton";
+import { LifecycleOverview } from "@/components/coach/LifecycleOverview";
 
 export default async function CoachWelcomePage() {
   const profile = await ensureUserProfile();
@@ -73,6 +74,20 @@ export default async function CoachWelcomePage() {
         </div>
       </header>
 
+      {/* High-level animated overview — the lifecycle in five phases at
+          a glance, before any reading. */}
+      <section className="space-y-3">
+        <div className="text-center space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue-light">
+            The engagement lifecycle
+          </p>
+          <h2 className="text-tbb-h3 font-bold text-tbb-navy">
+            How a coaching relationship moves through the app
+          </h2>
+        </div>
+        <LifecycleOverview />
+      </section>
+
       <Phase number="01" label="Pipeline" caption="Bring new prospects in">
         <Step
           icon={<Filter className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
@@ -81,11 +96,15 @@ export default async function CoachWelcomePage() {
           hrefLabel="Open the Pipeline"
         >
           <p>
-            Your Pipeline view groups every prospect by lifecycle stage:
-            Diagnostic pending → Diagnostic complete → Proposal sent →
-            Contract sent → Contract signed → Onboarded → Lost. The
-            stage filter chip is also the primary action — change a
-            prospect&apos;s status inline.
+            Your Pipeline is the CRM. Every prospect with their contact
+            info, deal value, owner, and next action — in one sortable
+            table. Stages run: New lead → First contact → Meeting
+            scheduled → Diagnostic complete → Proposal sent → Negotiation
+            → Contract sent → Contract signed → Onboarded → Lost. Click
+            the stage chip on any row to move it. Click the company name
+            to open the full prospect page where you can email, schedule
+            meetings, send the diagnostic, and send for signature — all
+            from one place.
           </p>
         </Step>
 
@@ -115,7 +134,7 @@ export default async function CoachWelcomePage() {
         <Step
           icon={<FileSignature className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
           title="Send for signature"
-          href="/coach/profile/signature"
+          href="/coach/templates"
           hrefLabel="Set up your signature"
         >
           <p>
@@ -123,9 +142,9 @@ export default async function CoachWelcomePage() {
             <strong>Send for signature</strong>. Upload your contract
             PDF, add up to four signers (their contact email + name +
             role), optional message, optional &quot;auto-sign as me&quot;
-            (only enabled if you&apos;ve uploaded your signature image at{" "}
-            <Link href="/coach/profile/signature" className="text-tbb-blue underline">
-              /coach/profile/signature
+            (only enabled if you&apos;ve uploaded your e-signature image at{" "}
+            <Link href="/coach/templates" className="text-tbb-blue underline">
+              Templates &amp; signatures
             </Link>
             ).
           </p>
@@ -417,8 +436,8 @@ export default async function CoachWelcomePage() {
             icon={<HeartPulse className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
-            href="/coach/profile/signature"
-            label="My signature — for auto-sign"
+            href="/coach/templates"
+            label="Templates & signatures — emails, contract sig, email sig"
             icon={<PenSquare className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
@@ -427,9 +446,14 @@ export default async function CoachWelcomePage() {
             icon={<CreditCard className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
-            href="/coach/hiring"
-            label="Hiring — TTI candidates pipeline"
-            icon={<UserCheck className="w-4 h-4 text-tbb-blue" aria-hidden />}
+            href="/coach/templates"
+            label="Email templates — onboarding, contract, follow-up"
+            icon={<FileText className="w-4 h-4 text-tbb-blue" aria-hidden />}
+          />
+          <CheatSheetItem
+            href="/coach/inbox"
+            label="Inbox — all email / SMS / call history"
+            icon={<MessagesSquare className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
             href="/coach/soul-search"

@@ -329,6 +329,9 @@ export const userProfiles = pgTable(
     // Phase 4.5: stored signature image (data:image/png;base64,…) for
     // coaches who pre-apply their signature when creating envelopes.
     signatureImageData: text("signature_image_data"),
+    // Phase 5: email signature appended to outbound emails sent from
+    // the communications panel. Plain text.
+    emailSignature: text("email_signature"),
     // Phase 5: per-user UI prefs (migration 0021). Follow the user across
     // devices so the system feels remembered. Pipeline columns + home
     // dashboard layout are owned by their respective features.

@@ -91,7 +91,7 @@ const COACH_PHASES: CoachPhase[] = [
       { href: "/coach", label: "My work", icon: CheckSquare, tourId: "coach-home" },
       { href: "/coach/action-items", label: "Action items", icon: CheckSquare },
       { href: "/coach/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },
-      { href: "/coach/templates", label: "Email templates", icon: FileText },
+      { href: "/coach/templates", label: "Templates & signatures", icon: FileText },
       { href: "/coach/communication", label: "Communication", icon: MessagesSquare },
     ],
   },
@@ -121,7 +121,6 @@ const COACH_PHASES: CoachPhase[] = [
     caption: "Your tools and connections",
     items: [
       { href: "/coach/engagements/new", label: "New engagement", icon: Sparkles, tourId: "coach-new-engagement" },
-      { href: "/coach/profile/signature", label: "My signature", icon: PenSquare },
       { href: "/coach/profile/google-calendar", label: "Google Calendar", icon: CalendarClock },
       { href: "/coach/profile/quickbooks", label: "QuickBooks", icon: LineChart },
       { href: "/coach/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "coach-guide" },

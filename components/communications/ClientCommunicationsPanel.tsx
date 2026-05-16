@@ -20,6 +20,7 @@ import {
   ArrowUpRight,
   Loader2,
   Mail,
+  Paperclip,
   Phone,
   Smartphone,
   StickyNote,
@@ -67,12 +68,19 @@ export function ClientCommunicationsPanel({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Channel>("all");
+  type Attachment = {
+    filename: string;
+    contentType: string;
+    base64: string;
+    sizeBytes: number;
+  };
   const [composing, setComposing] = useState<null | {
     channel: "email" | "sms";
     to: string;
     subject: string;
     body: string;
     replyTo?: CommunicationRow;
+    attachments: Attachment[];
   }>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -94,6 +102,7 @@ export function ClientCommunicationsPanel({
         : "",
       body: "",
       replyTo,
+      attachments: [],
     });
   }
   function openSmsCompose() {
@@ -103,7 +112,33 @@ export function ClientCommunicationsPanel({
       to: contactPhone ?? "",
       subject: "",
       body: "",
+      attachments: [],
     });
+  }
+
+  async function addAttachments(files: FileList | null) {
+    if (!composing || !files || files.length === 0) return;
+    const newOnes: Attachment[] = [];
+    for (const file of Array.from(files)) {
+      const base64 = await fileToBase64(file);
+      newOnes.push({
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        base64,
+        sizeBytes: file.size,
+      });
+    }
+    setComposing({
+      ...composing,
+      attachments: [...composing.attachments, ...newOnes],
+    });
+  }
+
+  function removeAttachment(index: number) {
+    if (!composing) return;
+    const next = composing.attachments.slice();
+    next.splice(index, 1);
+    setComposing({ ...composing, attachments: next });
   }
 
   function submitCompose() {
@@ -122,6 +157,14 @@ export function ClientCommunicationsPanel({
             ? composing.replyTo.externalId
             : null,
         references: composing.replyTo?.threadKey ?? null,
+        attachments:
+          composing.channel === "email" && composing.attachments.length > 0
+            ? composing.attachments.map((a) => ({
+                filename: a.filename,
+                contentType: a.contentType,
+                base64: a.base64,
+              }))
+            : undefined,
       });
       if (!r.ok) {
         setError(r.error);
@@ -298,6 +341,49 @@ export function ClientCommunicationsPanel({
               }
             />
           </label>
+          {composing.channel === "email" && (
+            <div className="space-y-2">
+              {composing.attachments.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5">
+                  {composing.attachments.map((a, i) => (
+                    <li
+                      key={i}
+                      className="inline-flex items-center gap-1.5 text-[11px] bg-white border border-tbb-line rounded-pill px-2.5 py-1"
+                    >
+                      <Paperclip className="w-3 h-3 text-tbb-ink-3" aria-hidden />
+                      <span className="font-bold text-tbb-navy">{a.filename}</span>
+                      <span className="text-tbb-ink-3">
+                        {formatBytes(a.sizeBytes)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(i)}
+                        disabled={isPending}
+                        aria-label={`Remove ${a.filename}`}
+                        className="text-tbb-ink-3 hover:text-tbb-danger ml-0.5"
+                      >
+                        <X className="w-3 h-3" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:text-tbb-blue-700 cursor-pointer">
+                <Paperclip className="w-3.5 h-3.5" aria-hidden />
+                <span>Attach file</span>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => {
+                    addAttachments(e.target.files);
+                    e.target.value = "";
+                  }}
+                  disabled={isPending}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          )}
           {error && (
             <p className="text-xs text-tbb-danger border border-tbb-danger rounded px-2 py-1.5 bg-white">
               {error}
@@ -419,6 +505,31 @@ function ComposeButton({
       {label}
     </button>
   );
+}
+
+/** Read a File as base64 (no data: prefix). */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Read failed"));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("Unexpected reader result"));
+        return;
+      }
+      // result is "data:<mime>;base64,<payload>" — strip the prefix.
+      const idx = result.indexOf(",");
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function ChannelIcon({
