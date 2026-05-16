@@ -74,14 +74,15 @@ export default async function PortalProjectsPage() {
       </header>
 
       {items.length === 0 ? (
-        <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+        <div className="border border-dashed border-tbb-line rounded-md bg-white p-8 text-center space-y-2">
+          <p className="text-3xl" aria-hidden>🏗️</p>
           <p className="font-bold text-foreground text-base tracking-tight">
-            No projects yet
+            Nothing under construction yet.
           </p>
           <p className="font-sans text-sm text-muted-foreground">
             {canCreate
-              ? "Kick off the first project for this engagement above."
-              : "Your Business Builder will create projects here."}
+              ? "A project is the bigger thing you're building — a hiring system, a new website, a sales playbook. Kick off the first one above."
+              : "Your Business Builder will spin up projects here once one's ready to start."}
           </p>
         </div>
       ) : (

@@ -29,9 +29,17 @@ export default async function CoachProjectsCrossPage() {
       </header>
 
       {items.length === 0 ? (
-        <p className="font-sans text-sm text-muted-foreground italic">
-          No projects across any engagement.
-        </p>
+        <div className="border border-dashed border-tbb-line rounded-md bg-white p-8 text-center space-y-2">
+          <p className="text-3xl" aria-hidden>🏗️</p>
+          <p className="font-bold text-foreground text-base tracking-tight">
+            No projects in flight right now.
+          </p>
+          <p className="font-sans text-sm text-muted-foreground">
+            Projects are the bigger initiatives that span weeks — &quot;Build
+            Acme&apos;s hiring system,&quot; &quot;Launch the new website.&quot;
+            Tasks and milestones live inside each project.
+          </p>
+        </div>
       ) : (
         <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((p) => (

@@ -25,7 +25,14 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
-import { createMeetingWithInvite } from "@/lib/integrations/google-calendar";
+import {
+  createMeetingWithInvite,
+  type CalendarAttachment,
+} from "@/lib/integrations/google-calendar";
+import {
+  getFileMetadata,
+  parseDriveFileId,
+} from "@/lib/integrations/google-drive";
 
 const schema = z.object({
   prospectId: z.string().uuid(),
@@ -40,6 +47,11 @@ const schema = z.object({
     .enum(["none", "weekly", "biweekly", "monthly"])
     .optional()
     .default("none"),
+  /** Up to 10 raw user-supplied attachment URLs (Drive shares or
+   *  arbitrary http(s) links). Drive URLs become real Google Calendar
+   *  attachments; other URLs are appended to the event description so
+   *  the recipient still has them in the invite. */
+  attachmentUrls: z.array(z.string().min(1).max(500)).max(10).optional(),
 });
 
 function recurrenceToRRule(
@@ -118,6 +130,48 @@ export async function scheduleProspectMeeting(
   });
   if (!sender) return { ok: false, error: "Sender profile not found." };
 
+  // Resolve attachments. Drive URLs → real Google Calendar attachments
+  // (fileUrl + fileId); other URLs → tacked onto the event description
+  // so the recipient still has them, but Google won't show a paperclip.
+  const driveAttachments: CalendarAttachment[] = [];
+  const nonDriveUrls: string[] = [];
+  for (const url of data.attachmentUrls ?? []) {
+    const trimmed = url.trim();
+    if (!trimmed) continue;
+    const fileId = parseDriveFileId(trimmed);
+    if (fileId) {
+      try {
+        const meta = await getFileMetadata(profile.userProfileId, fileId);
+        if (meta) {
+          driveAttachments.push({
+            fileUrl: meta.webViewLink ?? trimmed,
+            fileId: meta.id,
+            title: meta.name,
+            mimeType: meta.mimeType,
+            iconLink: meta.iconLink,
+          });
+          continue;
+        }
+      } catch (e) {
+        console.warn(
+          "[schedule-prospect-meeting] drive metadata lookup failed",
+          fileId,
+          e,
+        );
+      }
+    }
+    // Not a Drive URL we can resolve, or lookup failed — fall back to
+    // an inline link in the description.
+    nonDriveUrls.push(trimmed);
+  }
+
+  let descriptionForCalendar = data.description ?? "";
+  if (nonDriveUrls.length > 0) {
+    const linksBlock =
+      "\n\nLinks:\n" + nonDriveUrls.map((u) => `• ${u}`).join("\n");
+    descriptionForCalendar = (descriptionForCalendar + linksBlock).trim();
+  }
+
   // Push to Google Calendar — invite + optional Meet link.
   let calendarResult: {
     hangoutLink: string | null;
@@ -126,7 +180,7 @@ export async function scheduleProspectMeeting(
   try {
     const r = await createMeetingWithInvite(profile.userProfileId, {
       summary: data.title,
-      description: data.description ?? "",
+      description: descriptionForCalendar,
       location:
         data.meetingType === "in_person"
           ? data.location ?? ""
@@ -144,6 +198,7 @@ export async function scheduleProspectMeeting(
       ],
       addMeetLink: data.meetingType === "video",
       recurrence: recurrenceToRRule(data.recurrence),
+      attachments: driveAttachments,
     });
     calendarResult = { hangoutLink: r.hangoutLink, htmlLink: r.htmlLink };
   } catch (e) {

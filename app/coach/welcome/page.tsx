@@ -88,6 +88,40 @@ export default async function CoachWelcomePage() {
         <LifecycleOverview />
       </section>
 
+      <section className="border-t border-tbb-line-soft pt-8 space-y-4">
+        <h2 className="text-tbb-h3 font-bold text-tbb-navy tracking-tbb-tight">
+          Three things to know first
+        </h2>
+        <ul className="space-y-3 text-tbb-ink-2">
+          <li>
+            <strong className="text-tbb-navy">Builder Buddy</strong> — the
+            little orange beacon bottom-right of every page. Click it
+            to chat with the in-app AI assistant. Knows the app, knows
+            the methodology, knows what page you&apos;re on. Use it when
+            you&apos;d otherwise ask &quot;how do I do X here?&quot;
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Templates & signatures hub</strong>{" "}
+            — every reusable email template, your e-signature image
+            (for contracts), and your email signature (rich editor with
+            bold, lists, emoji glyphs as icons) live at{" "}
+            <Link href="/coach/templates" className="text-tbb-blue underline">
+              /coach/templates
+            </Link>
+            . Templates support variables ({"{{contact_first_name}}"} etc.)
+            and resolve automatically when you send.
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Email = real HTML email</strong>
+            {" "}— every send goes through your connected Gmail as
+            multipart/alternative, so bold, lists, links, and emoji
+            render correctly in the recipient&apos;s inbox. Your
+            signature is auto-appended. Attach files via the paperclip
+            (up to ~24MB).
+          </li>
+        </ul>
+      </section>
+
       <Phase number="01" label="Pipeline" caption="Bring new prospects in">
         <Step
           icon={<Filter className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
@@ -178,11 +212,45 @@ export default async function CoachWelcomePage() {
             <li>Engagement type — Accelerator or Implementer</li>
             <li>Client lead full name + email (their portal invitation)</li>
             <li>Planned start date</li>
+            <li>
+              <strong>Auto-send onboarding email</strong> — optional. Pick
+              one of your templates marked <code className="font-mono text-sm">onboarding</code>{" "}
+              and we fire it right after the portal invitation, from your
+              Gmail, signature appended. Build templates at{" "}
+              <Link href="/coach/templates" className="text-tbb-blue underline">
+                /coach/templates
+              </Link>
+              .
+            </li>
           </ul>
           <p className="mt-2">
             Submitting sets up the client&apos;s private workspace and emails
             the client lead a sign-up invitation. Their first sign-in
             lands them on the client portal with the Welcome tour.
+          </p>
+        </Step>
+
+        <Step
+          icon={<Folder className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Link the client's Google Drive folder"
+          href="/coach/documents/[engagementId]"
+          hrefLabel="(from each engagement's Documents page)"
+        >
+          <p>
+            One Google connection at{" "}
+            <Link href="/coach/profile/google-calendar" className="text-tbb-blue underline">
+              /coach/profile/google-calendar
+            </Link>{" "}
+            powers three things: two-way Calendar sync for BBS sessions,
+            Gmail capture into the Inbox, and Drive folder mirroring
+            per engagement.
+          </p>
+          <p className="mt-2">
+            On any engagement&apos;s Documents page, paste the share URL
+            of that client&apos;s Drive folder. Files inside the folder
+            appear right on the page (read-only, click-through to Drive).
+            Bruce keeps everything in Drive as usual; clients see the
+            mirror in The Builder.
           </p>
         </Step>
 
@@ -211,12 +279,22 @@ export default async function CoachWelcomePage() {
         >
           <p>
             Two BBS per month per client: one in person, one virtual.
-            Two hours each. Add the date and time in Mountain Time
-            (Luxon converts to UTC for storage); the client sees their
-            local format.
+            Two hours each. Add the date and time in Mountain Time;
+            the client sees their local format.
           </p>
           <p className="mt-2">
-            On the session detail page you can paste in a Fireflies
+            For prospect meetings, the <strong>Get on the books</strong>{" "}
+            button on any prospect page sends a real Google Calendar
+            invite. Title defaults to &quot;Business Building Session.&quot;
+            Pick Video and a Google Meet link gets generated automatically
+            and stored as the location. Repeat is optional — weekly,
+            biweekly, or monthly (RRULE). Paste any Drive share URL into
+            the Attachments slot and it rides along on the invite as a
+            one-click attachment; non-Drive URLs (Notion, Loom) get
+            listed in the description.
+          </p>
+          <p className="mt-2">
+            On any BBS session detail page you can paste in a Fireflies
             recording ID. The system pulls the transcript and Claude
             extracts proposed action items as drafts — you review,
             assign, and publish them within 24 hours.
@@ -359,7 +437,7 @@ export default async function CoachWelcomePage() {
 
         <Step
           icon={<HeartPulse className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Track the subscription assets you maintain"
+          title="Track subscriptions and link them to billing"
           href="/coach/subscriptions"
           hrefLabel="Open Subscriptions"
         >
@@ -367,13 +445,31 @@ export default async function CoachWelcomePage() {
             The Workplaces default billing model is Model C — Productized
             Retention. You maintain client-facing infrastructure
             (Netlify apps, Make.com, Resend, Clerk, custom domains)
-            under your accounts indefinitely, even after the Business Buildering
+            under your accounts indefinitely, even after the coaching
             engagement ends.
           </p>
           <p className="mt-2">
             Subscriptions inventories each external service per
             engagement, who pays for it, what it costs per month, and
-            the transfer status if/when the client takes ownership.
+            the transfer status if/when the client takes ownership. The
+            cross-client view is at{" "}
+            <Link href="/coach/subscriptions" className="text-tbb-blue underline">
+              /coach/subscriptions
+            </Link>
+            ; the product catalogue (the things you sell as a subscription
+            — apps, retainers, automation builds) is at{" "}
+            <Link href="/coach/subscriptions/catalogue" className="text-tbb-blue underline">
+              /coach/subscriptions/catalogue
+            </Link>
+            .
+          </p>
+          <p className="mt-2">
+            On each subscription row, hit the link icon to point it at
+            the source-of-truth charge — QuickBooks (recurring invoice id
+            + customer id) or Stripe (subscription id + price id), plus a
+            direct URL. A &quot;Billed · QuickBooks&quot; or &quot;Billed
+            · Stripe&quot; pill appears with a click-through to the
+            invoice / subscription page.
           </p>
         </Step>
       </Phase>

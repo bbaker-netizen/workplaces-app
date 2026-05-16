@@ -91,7 +91,8 @@ export default async function PortalWelcomePage() {
         <p className="mt-3">
           After each session, the action items we agreed on appear in
           your portal automatically as drafts. I review and publish them
-          within 24 hours.
+          within 24 hours. You&apos;ll get an email the moment each one
+          lands on your plate.
         </p>
       </Section>
 
@@ -136,13 +137,42 @@ export default async function PortalWelcomePage() {
         <p>
           Every file related to our engagement lives in the Documents
           module — SOPs, signed contracts, assessments, financial
-          dashboards, anything. Nothing goes to Drive or a third-party
-          link.
+          dashboards, anything.
         </p>
         <p className="mt-3">
-          Upload by clicking the upload button on the Documents page.
-          Files larger than 25 MB don&apos;t upload here — for those,
-          send via email and I&apos;ll attach them on my side.
+          Two sources show up on the same page:
+        </p>
+        <ul className="list-disc pl-5 mt-2 space-y-1 text-tbb-ink-2">
+          <li>
+            <strong className="text-tbb-navy">Uploaded here</strong> —
+            click the upload button on the Documents page. Up to 25 MB
+            per file.
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Mirrored from Drive</strong>{" "}
+            — I link a Google Drive folder to our engagement so the
+            files I keep in Drive show up here read-only with one-click
+            open in Drive. You don&apos;t need a Drive account.
+          </li>
+        </ul>
+      </Section>
+
+      <Section
+        eyebrow="On the calendar"
+        icon={<Sparkles className="w-7 h-7 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+        title="Meetings and invites"
+      >
+        <p>
+          When I schedule a Business Building Session or a discovery
+          call, you&apos;ll get a real Google Calendar invite at your
+          email. Video sessions include a Google Meet link as the
+          location — one click to join.
+        </p>
+        <p className="mt-3">
+          If I attach any pre-read documents to the invite, they appear
+          as one-click attachments on the calendar event. Recurring
+          sessions (weekly, biweekly, monthly) show up as a series so
+          you can accept once.
         </p>
       </Section>
 

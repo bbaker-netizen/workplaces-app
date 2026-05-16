@@ -43,12 +43,13 @@ export default async function PortalInvoicesPage() {
       </header>
 
       {items.length === 0 ? (
-        <div className="border border-tbb-line rounded-md bg-white p-6 space-y-2">
+        <div className="border border-dashed border-tbb-line rounded-md bg-white p-8 text-center space-y-2">
+          <p className="text-3xl" aria-hidden>🧾</p>
           <p className="font-bold text-foreground text-base tracking-tight">
-            No invoices yet
+            No invoices yet — wallet still in pocket.
           </p>
           <p className="font-sans text-sm text-muted-foreground">
-            Once your subscription is active, invoices appear here. The Stripe webhook integration that auto-populates this list lands in Phase 2.
+            Once your subscription is active, invoices land here with a click-through to the hosted bill.
           </p>
         </div>
       ) : (

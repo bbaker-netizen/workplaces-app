@@ -49,8 +49,8 @@ export default async function CoachActionItemsPage() {
         items={items}
         statusOptions={STATUSES_VISIBLE_TO_COACH}
         newItemHref="/coach/action-items/new"
-        emptyHeadline="No action items yet"
-        emptyDescription="Create one to start tracking — or wait for AI extraction in 1.6."
+        emptyHeadline="Clear plate across every client."
+        emptyDescription="Either you just shipped a lot, or you have a Fireflies recording sitting on a BBS session waiting for Claude to extract action items from it. Either way: well done. Or get to work."
       />
     </main>
   );

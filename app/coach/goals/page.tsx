@@ -30,9 +30,17 @@ export default async function CoachGoalsCrossPage() {
       </header>
 
       {items.length === 0 ? (
-        <p className="font-sans text-sm text-muted-foreground italic">
-          No goals yet.
-        </p>
+        <div className="border border-dashed border-tbb-line rounded-md bg-white p-8 text-center space-y-2">
+          <p className="text-3xl" aria-hidden>🎯</p>
+          <p className="font-bold text-foreground text-base tracking-tight">
+            No goals on the board yet.
+          </p>
+          <p className="font-sans text-sm text-muted-foreground">
+            Goals are the destinations. Once a client picks one (and it&apos;s
+            SMART — Specific, Measurable, Attainable, Relevant, Time-bound),
+            it shows up here.
+          </p>
+        </div>
       ) : (
         <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((g) => {

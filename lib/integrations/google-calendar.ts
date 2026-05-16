@@ -313,6 +313,17 @@ export async function createCalendarEvent(
  * scheduler — Google handles sending the calendar invite emails so we
  * don't have to compose them.
  */
+/** Calendar event attachment. Google Calendar's attachments field
+ *  works for Drive files when you supply `fileUrl` + `fileId`. The
+ *  recipient sees a paperclip icon on the event with one-click open. */
+export type CalendarAttachment = {
+  fileUrl: string;
+  fileId?: string | null;
+  title: string;
+  mimeType?: string | null;
+  iconLink?: string | null;
+};
+
 export async function createMeetingWithInvite(
   userProfileId: string,
   payload: GoogleEventPayload & {
@@ -320,6 +331,10 @@ export async function createMeetingWithInvite(
     /** Array of RFC-5545 RRULE strings, e.g. ["RRULE:FREQ=WEEKLY"].
      *  Omitted / empty array = one-off event. */
     recurrence?: string[];
+    /** Up to 25 Drive file attachments. Non-Drive attachments are
+     *  rejected by Google Calendar's API — for arbitrary URLs we
+     *  append them to the event description instead (see caller). */
+    attachments?: CalendarAttachment[];
   },
 ): Promise<{
   eventId: string;
@@ -349,12 +364,26 @@ export async function createMeetingWithInvite(
       },
     };
   }
+  if (payload.attachments && payload.attachments.length > 0) {
+    body.attachments = payload.attachments.map((a) => {
+      const out: Record<string, unknown> = {
+        fileUrl: a.fileUrl,
+        title: a.title,
+      };
+      if (a.fileId) out.fileId = a.fileId;
+      if (a.mimeType) out.mimeType = a.mimeType;
+      if (a.iconLink) out.iconLink = a.iconLink;
+      return out;
+    });
+  }
 
   // conferenceDataVersion=1 is mandatory to create Meet links.
   // sendUpdates=all → Google emails the calendar invite to attendees.
+  // supportsAttachments=true unlocks the attachments field.
   const qs = new URLSearchParams({
     sendUpdates: "all",
     conferenceDataVersion: payload.addMeetLink ? "1" : "0",
+    supportsAttachments: "true",
   });
 
   const data = await api<{

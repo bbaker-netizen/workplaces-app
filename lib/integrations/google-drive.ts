@@ -119,6 +119,72 @@ export async function listFolderFiles(
 }
 
 /**
+ * Pull a single Drive file's metadata. Used for calendar event
+ * attachments — we need name + mimeType + webViewLink to feed to
+ * Google Calendar's attachments field. Returns null when the file
+ * isn't visible to the caller.
+ */
+export async function getFileMetadata(
+  userProfileId: string,
+  fileId: string,
+): Promise<{
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink: string | null;
+  iconLink: string | null;
+} | null> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) {
+    throw new Error("Google not connected for this user.");
+  }
+  try {
+    const data = await drive<{
+      id: string;
+      name: string;
+      mimeType: string;
+      webViewLink?: string;
+      iconLink?: string;
+    }>(
+      token.token,
+      `/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,webViewLink,iconLink`,
+    );
+    return {
+      id: data.id,
+      name: data.name,
+      mimeType: data.mimeType,
+      webViewLink: data.webViewLink ?? null,
+      iconLink: data.iconLink ?? null,
+    };
+  } catch (e) {
+    if (e instanceof Error && /404|403/.test(e.message)) {
+      return null;
+    }
+    throw e;
+  }
+}
+
+/**
+ * Extract a file id from one of the Drive URL shapes:
+ *   - https://drive.google.com/file/d/<id>/view
+ *   - https://docs.google.com/document/d/<id>/edit
+ *   - https://docs.google.com/spreadsheets/d/<id>/edit
+ *   - https://docs.google.com/presentation/d/<id>/edit
+ *   - https://drive.google.com/open?id=<id>
+ *   - a bare id
+ */
+export function parseDriveFileId(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const m1 = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (m1) return m1[1];
+  const m2 = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m2) return m2[1];
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(trimmed)) return trimmed;
+  return null;
+}
+
+/**
  * Extract the folder id from one of the URL shapes Drive uses:
  *   - https://drive.google.com/drive/folders/<id>
  *   - https://drive.google.com/drive/u/0/folders/<id>?usp=…

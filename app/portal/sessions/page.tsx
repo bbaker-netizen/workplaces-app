@@ -55,11 +55,11 @@ export default async function PortalSessionsPage() {
           upcoming={upcoming}
           past={past}
           hrefBase="/portal/sessions"
-          emptyHeadline="No sessions yet"
+          emptyHeadline="Calendar's wide open."
           emptyDescription={
             canSchedule
-              ? "Schedule your first session above."
-              : "Your Business Builder will schedule sessions here."
+              ? "Schedule the first session above and the rhythm starts."
+              : "Your Business Builder is lining up sessions. They'll land here with a real Google Calendar invite."
           }
         />
       </div>

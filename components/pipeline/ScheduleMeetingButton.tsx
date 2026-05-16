@@ -12,7 +12,10 @@ import {
   Calendar,
   Loader2,
   MapPin,
+  Paperclip,
   Phone,
+  Plus,
+  Trash2,
   Video,
   X,
 } from "lucide-react";
@@ -40,6 +43,7 @@ export function ScheduleMeetingButton({
   const [recurrence, setRecurrence] = useState<
     "none" | "weekly" | "biweekly" | "monthly"
   >("none");
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<
     | { hangoutLink: string | null; htmlLink: string | null }
@@ -60,6 +64,9 @@ export function ScheduleMeetingButton({
         location: location.trim() || null,
         description: description.trim() || null,
         recurrence,
+        attachmentUrls: attachmentUrls
+          .map((u) => u.trim())
+          .filter((u) => u.length > 0),
       });
       if (!r.ok) {
         setError(r.error);
@@ -253,6 +260,61 @@ export function ScheduleMeetingButton({
               className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
             />
           </label>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 flex items-center gap-1">
+                <Paperclip className="w-3 h-3" aria-hidden /> Attachments (optional)
+              </span>
+              <button
+                type="button"
+                onClick={() => setAttachmentUrls((a) => [...a, ""])}
+                disabled={isPending || attachmentUrls.length >= 10}
+                className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline disabled:opacity-40"
+              >
+                <Plus className="w-3 h-3" aria-hidden /> Add
+              </button>
+            </div>
+            {attachmentUrls.length === 0 ? (
+              <p className="text-[11px] text-tbb-ink-3">
+                Paste Google Drive share URLs — they ride along on the calendar
+                invite as one-click attachments. Other URLs (e.g. a Notion or
+                Loom link) get listed in the description.
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {attachmentUrls.map((url, idx) => (
+                  <li key={idx} className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={url}
+                      onChange={(e) =>
+                        setAttachmentUrls((a) =>
+                          a.map((v, i) => (i === idx ? e.target.value : v)),
+                        )
+                      }
+                      placeholder="https://drive.google.com/file/d/…"
+                      disabled={isPending}
+                      className="flex-1 bg-white border border-tbb-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachmentUrls((a) =>
+                          a.filter((_, i) => i !== idx),
+                        )
+                      }
+                      disabled={isPending}
+                      aria-label="Remove attachment"
+                      className="p-1 rounded text-tbb-ink-3 hover:text-tbb-danger hover:bg-white"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           {error && (
             <p className="text-xs text-tbb-danger border border-tbb-danger rounded px-2 py-1.5 bg-white">

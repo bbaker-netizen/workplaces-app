@@ -86,11 +86,11 @@ export default async function PortalActionItemsPage() {
         items={items}
         statusOptions={statusOptions}
         newItemHref={canCreate ? "/portal/action-items/new" : null}
-        emptyHeadline="Nothing here yet"
+        emptyHeadline="Clean slate."
         emptyDescription={
           canCreate
-            ? "Create your first action item to get rolling."
-            : "Your Business Builder will publish action items here after your next session."
+            ? "No action items yet — which is either a blissful Tuesday or a sign that the next session is going to be productive. Add one and get rolling."
+            : "Nothing on your plate right now. Enjoy it — the next session will fix that."
         }
         pillDisabledForRoles={!fullEditor}
       />
