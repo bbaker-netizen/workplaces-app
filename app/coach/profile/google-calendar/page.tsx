@@ -13,7 +13,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
-import { Calendar, CheckCircle2, AlertTriangle, Mail } from "lucide-react";
+import {
+  Calendar,
+  CheckCircle2,
+  AlertTriangle,
+  FolderOpen,
+  Mail,
+} from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getConnectionStatus } from "@/lib/integrations/google-calendar";
 import { googleCalendarTokens } from "@/lib/db/schema";
@@ -62,6 +68,7 @@ export default async function GoogleCalendarConnectPage({
     }
   }
   const hasGmailScope = (gmailState?.scope ?? "").includes("gmail.readonly");
+  const hasDriveScope = (gmailState?.scope ?? "").includes("drive.readonly");
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-8">
@@ -71,8 +78,9 @@ export default async function GoogleCalendarConnectPage({
           Google Workspace
         </h1>
         <p className="text-sm text-tbb-ink-3">
-          Sync your sessions to Google Calendar and pull your client emails
-          into the CRM automatically. One connection, two integrations.
+          One Google connection powers three things: calendar sync for
+          your BBS sessions, Gmail capture for client emails, and Drive
+          folder mirroring per engagement.
         </p>
       </header>
 
@@ -199,6 +207,55 @@ export default async function GoogleCalendarConnectPage({
               }
             />
           )}
+        </div>
+
+        <div className="border-t border-tbb-line-soft pt-4 space-y-3 text-sm text-tbb-ink-2">
+          <div className="flex items-center gap-2 text-tbb-blue">
+            <FolderOpen className="w-4 h-4" aria-hidden />
+            <p className="font-bold">Drive folder mirror</p>
+            <span className="ml-auto text-[10px] uppercase tracking-tbb-caps text-tbb-ink-3">
+              {!status.connected
+                ? "Off"
+                : !hasDriveScope
+                  ? "Reconnect required"
+                  : "Available per engagement"}
+            </span>
+          </div>
+          {status.connected && !hasDriveScope && (
+            <div className="border border-tbb-warning/40 bg-tbb-warning/10 text-tbb-ink-2 rounded-md px-3 py-2 text-[13px]">
+              You connected before Drive support was added. Click{" "}
+              <strong>Reconnect Google</strong> below to grant the
+              read-only Drive permission. Calendar + Gmail keep working
+              while you do.
+              <div className="mt-2">
+                <Link
+                  href="/api/google-calendar/connect"
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
+                >
+                  Reconnect Google
+                </Link>
+              </div>
+            </div>
+          )}
+          <ul className="list-disc pl-5 space-y-1 text-tbb-ink-3 text-[13px]">
+            <li>
+              Link a Drive folder per client (right-click the folder in
+              Drive → Share → Copy link, paste it in the engagement&apos;s
+              Documents page).
+            </li>
+            <li>
+              Files inside the linked folder show up alongside uploaded
+              documents with click-throughs to open in Drive.
+            </li>
+            <li>
+              Read-only. The app never modifies your Drive — it just
+              mirrors what&apos;s there.
+            </li>
+            <li>
+              You also need the Drive API enabled in your Google Cloud
+              project (one-click toggle, same as Gmail / Calendar).
+            </li>
+          </ul>
         </div>
       </section>
     </main>
