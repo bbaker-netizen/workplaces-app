@@ -120,7 +120,7 @@ export async function sendClientMessage(
         return {
           ok: false,
           error:
-            "Twilio SMS isn't configured yet. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in Netlify.",
+            "Twilio SMS isn't configured yet. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and EITHER TWILIO_MESSAGING_SERVICE_SID (preferred) OR TWILIO_PHONE_NUMBER in Netlify.",
         };
       }
       const r = await sendSms({ to: data.to[0], body: data.body });
