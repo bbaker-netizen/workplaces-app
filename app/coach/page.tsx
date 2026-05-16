@@ -531,6 +531,23 @@ export default async function CoachConsole() {
     },
   ];
 
+  // Time-of-day greeting + a small encouraging line based on the day's
+  // shape. Keeps the dashboard from feeling like a clinical readout.
+  const hour = new Date().getHours();
+  const timeBucket =
+    hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+  const greetingEmoji =
+    timeBucket === "morning" ? "☀️" : timeBucket === "afternoon" ? "👋" : "🌙";
+  const firstName = profile.fullName.split(" ")[0] ?? profile.fullName;
+  const encouragements = buildEncouragements({
+    newLeadsCount: newLeads.length,
+    overdueCount: myWork.filter(
+      (i) => i.dueDate && i.dueDate < now,
+    ).length,
+    upcomingSessionsCount: upcomingSessions.length,
+    negotiationCount: negotiationProspects.length,
+  });
+
   return (
     <main className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-6 py-10 sm:py-12 space-y-8">
@@ -540,11 +557,12 @@ export default async function CoachConsole() {
               Business Builder Console
             </p>
             <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
-              Hey {profile.fullName.split(" ")[0] ?? profile.fullName}.
+              Good {timeBucket}, {firstName}.{" "}
+              <span className="inline-block animate-[wave_2s_ease-in-out_1]" aria-hidden>
+                {greetingEmoji}
+              </span>
             </h1>
-            <p className="text-sm text-muted-foreground">
-              {engagements.length} engagement{engagements.length === 1 ? "" : "s"} active.
-            </p>
+            <p className="text-sm text-muted-foreground">{encouragements}</p>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -611,4 +629,31 @@ function CardShell({
       {children}
     </section>
   );
+}
+
+/**
+ * One-line encouraging summary based on what's on the plate today.
+ * Picks the most-meaningful nugget so the homepage doesn't feel like a
+ * dashboard readout — it feels like a teammate giving you the lay of
+ * the land.
+ */
+function buildEncouragements(input: {
+  newLeadsCount: number;
+  overdueCount: number;
+  upcomingSessionsCount: number;
+  negotiationCount: number;
+}): string {
+  if (input.overdueCount > 0) {
+    return `${input.overdueCount} item${input.overdueCount === 1 ? "" : "s"} overdue. Let's chip away at them.`;
+  }
+  if (input.newLeadsCount > 0) {
+    return `${input.newLeadsCount} new lead${input.newLeadsCount === 1 ? "" : "s"} waiting on first contact. Strike while it's warm.`;
+  }
+  if (input.negotiationCount > 0) {
+    return `${input.negotiationCount} prospect${input.negotiationCount === 1 ? "" : "s"} in negotiation. Close week?`;
+  }
+  if (input.upcomingSessionsCount > 0) {
+    return `${input.upcomingSessionsCount} session${input.upcomingSessionsCount === 1 ? "" : "s"} coming up. Great rhythm.`;
+  }
+  return "Clear plate. Good moment to think, plan, or hunt new leads.";
 }

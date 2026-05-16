@@ -30,6 +30,8 @@ import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeS
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
 import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
+import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButton";
+import { ProspectNextStep } from "@/components/pipeline/ProspectNextStep";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
   STAGE_STYLES,
@@ -141,24 +143,31 @@ export default async function ProspectDetailPage({
             </div>
           </section>
 
-          {/* Send Diagnostic action — drops into the same surface as Send for
-              Signature. Replaces the previous "Diagnostic pending" stage which
-              was really an action, not a stage. */}
-          <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
-            <div className="space-y-1">
-              <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-                Diagnostic intake
-              </h2>
-              <p className="text-xs text-tbb-ink-3">
-                Email the prospect the public business diagnostic form.
-                Their submission will land back on this record.
-              </p>
-            </div>
-            <SendDiagnosticButton
+          {/* What's next — surfaces the obvious next move based on the
+              current stage so Bruce always sees a clear suggested action. */}
+          <ProspectNextStep status={prospect.status as ProspectStatus} />
+
+          {/* Quick actions — Schedule a meeting + send the diagnostic. */}
+          <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-4 shadow-tbb-sm">
+            <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Quick actions
+            </h2>
+            <ScheduleMeetingButton
               prospectId={prospect.id}
+              companyName={prospect.companyName}
               recipientName={prospect.contactName}
-              recipientEmail={prospect.contactEmail}
             />
+            <div className="border-t border-tbb-line-soft pt-4 space-y-2">
+              <p className="text-xs text-tbb-ink-3">
+                Email them the public business diagnostic form. Their
+                submission will land back on this record.
+              </p>
+              <SendDiagnosticButton
+                prospectId={prospect.id}
+                recipientName={prospect.contactName}
+                recipientEmail={prospect.contactEmail}
+              />
+            </div>
           </section>
 
           {/* Deal card */}

@@ -111,3 +111,15 @@
     color: var(--tbb-blue);
   }
 }
+
+/* Subtle wave animation for the time-of-day emoji in the dashboard
+   greeting. Fires once on load so the page feels alive without being
+   distracting. */
+@keyframes wave {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-12deg); }
+  40% { transform: rotate(10deg); }
+  60% { transform: rotate(-8deg); }
+  80% { transform: rotate(6deg); }
+  100% { transform: rotate(0deg); }
+}

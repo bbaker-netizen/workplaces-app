@@ -304,6 +304,67 @@ export async function createCalendarEvent(
   return { eventId: data.id, calendarId: token.calendarId };
 }
 
+/**
+ * Create a Google Calendar event WITH a Google Meet link AND send the
+ * invite to all attendees. Used by the prospect / client meeting
+ * scheduler — Google handles sending the calendar invite emails so we
+ * don't have to compose them.
+ */
+export async function createMeetingWithInvite(
+  userProfileId: string,
+  payload: GoogleEventPayload & {
+    addMeetLink?: boolean;
+  },
+): Promise<{
+  eventId: string;
+  calendarId: string;
+  hangoutLink: string | null;
+  htmlLink: string | null;
+}> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) throw new Error("Google Calendar not connected for this user.");
+
+  const body: Record<string, unknown> = {
+    summary: payload.summary,
+    description: payload.description,
+    location: payload.location,
+    start: payload.start,
+    end: payload.end,
+    attendees: payload.attendees,
+  };
+  if (payload.addMeetLink) {
+    body.conferenceData = {
+      createRequest: {
+        requestId: `meet-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    };
+  }
+
+  // conferenceDataVersion=1 is mandatory to create Meet links.
+  // sendUpdates=all → Google emails the calendar invite to attendees.
+  const qs = new URLSearchParams({
+    sendUpdates: "all",
+    conferenceDataVersion: payload.addMeetLink ? "1" : "0",
+  });
+
+  const data = await api<{
+    id: string;
+    hangoutLink?: string;
+    htmlLink?: string;
+  }>(
+    token.token,
+    `/calendars/${encodeURIComponent(token.calendarId)}/events?${qs.toString()}`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+  return {
+    eventId: data.id,
+    calendarId: token.calendarId,
+    hangoutLink: data.hangoutLink ?? null,
+    htmlLink: data.htmlLink ?? null,
+  };
+}
+
 export async function updateCalendarEvent(
   userProfileId: string,
   eventId: string,
