@@ -329,6 +329,16 @@ export const userProfiles = pgTable(
     // Phase 4.5: stored signature image (data:image/png;base64,…) for
     // coaches who pre-apply their signature when creating envelopes.
     signatureImageData: text("signature_image_data"),
+    // Phase 5: per-user UI prefs (migration 0021). Follow the user across
+    // devices so the system feels remembered. Pipeline columns + home
+    // dashboard layout are owned by their respective features.
+    pinnedNavItems: text("pinned_nav_items")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    sidebarCollapsed: boolean("sidebar_collapsed").notNull().default(false),
+    pipelineColumnPrefs: jsonb("pipeline_column_prefs"),
+    homeDashboardLayout: jsonb("home_dashboard_layout"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1159,6 +1169,181 @@ export const qboOauthTokens = pgTable(
 );
 
 /**
+ * `google_calendar_tokens` — per-user Google OAuth tokens (Phase 5,
+ * migration 0022). Stored encrypted via lib/crypto/secret-vault.
+ * Used by the BBS-session ↔ Google Calendar two-way sync.
+ */
+export const googleCalendarTokens = pgTable(
+  "google_calendar_tokens",
+  {
+    userProfileId: uuid("user_profile_id")
+      .primaryKey()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
+    accessTokenEncrypted: text("access_token_encrypted"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+    }),
+    scope: text("scope").notNull(),
+    calendarId: text("calendar_id").notNull().default("primary"),
+    googleEmail: text("google_email"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("google_calendar_tokens_org_idx").on(t.orgId),
+  }),
+);
+
+/**
+ * `google_calendar_event_mappings` — links each BBS session to the
+ * Google Calendar event(s) created for it, one row per (session, user).
+ * Lets us PATCH / DELETE the right Google event when a session moves.
+ */
+export const googleCalendarEventMappings = pgTable(
+  "google_calendar_event_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    bbsSessionId: uuid("bbs_session_id")
+      .notNull()
+      .references(() => bbsSessions.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    googleEventId: text("google_event_id").notNull(),
+    googleCalendarId: text("google_calendar_id").notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("google_calendar_event_mappings_org_idx").on(t.orgId),
+    sessionIdx: index("google_calendar_event_mappings_session_idx").on(
+      t.bbsSessionId,
+    ),
+    uniqByUser: uniqueIndex("google_calendar_event_mappings_uniq").on(
+      t.bbsSessionId,
+      t.userProfileId,
+    ),
+  }),
+);
+
+/**
+ * Client communications log (Phase 5, migration 0023).
+ *
+ * Unified audit trail of every external touchpoint with a client —
+ * email, SMS, WhatsApp, phone calls, meeting notes. Replaces the
+ * "we tracked it in 4 different places" problem.
+ *
+ * Attaches to EITHER a prospect (pre-engagement) or an engagement
+ * (post-engagement) but never both. A CHECK constraint enforces this
+ * at the database layer.
+ */
+export const communicationChannelEnum = pgEnum("communication_channel", [
+  "email",
+  "sms",
+  "whatsapp",
+  "phone_call",
+  "meeting_note",
+  "other",
+]);
+
+export const communicationDirectionEnum = pgEnum("communication_direction", [
+  "inbound",
+  "outbound",
+]);
+
+export const clientCommunications = pgTable(
+  "client_communications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    prospectId: uuid("prospect_id").references(
+      (): AnyPgColumn => prospects.id,
+      { onDelete: "cascade" },
+    ),
+    engagementId: uuid("engagement_id").references(() => engagements.id, {
+      onDelete: "cascade",
+    }),
+    channel: communicationChannelEnum("channel").notNull(),
+    direction: communicationDirectionEnum("direction").notNull(),
+    fromAddress: text("from_address"),
+    toAddresses: text("to_addresses")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    subject: text("subject"),
+    body: text("body").notNull().default(""),
+    bodyHtml: text("body_html"),
+    threadKey: text("thread_key"),
+    externalId: text("external_id"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("client_communications_org_idx").on(t.orgId),
+    prospectIdx: index("client_communications_prospect_idx").on(t.prospectId),
+    engagementIdx: index("client_communications_engagement_idx").on(
+      t.engagementId,
+    ),
+    occurredIdx: index("client_communications_occurred_idx").on(t.occurredAt),
+  }),
+);
+
+/**
+ * Per-prospect / per-engagement BCC alias. Bruce BCCs the alias on any
+ * outbound email; the inbound webhook resolves it back to the right
+ * client record.
+ */
+export const communicationAliases = pgTable(
+  "communication_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    alias: text("alias").notNull().unique(),
+    prospectId: uuid("prospect_id").references((): AnyPgColumn => prospects.id, {
+      onDelete: "cascade",
+    }),
+    engagementId: uuid("engagement_id").references(() => engagements.id, {
+      onDelete: "cascade",
+    }),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("communication_aliases_org_idx").on(t.orgId),
+    prospectIdx: index("communication_aliases_prospect_idx").on(t.prospectId),
+    engagementIdx: index("communication_aliases_engagement_idx").on(
+      t.engagementId,
+    ),
+  }),
+);
+
+/**
  * `subscription_assets` — itemized inventory of every external
  * service Bruce maintains under his accounts on the client's behalf
  * (Netlify, Make.com, Resend, Clerk, custom domains). Per the
@@ -1928,6 +2113,16 @@ export type SignatureSigner = typeof signatureSigners.$inferSelect;
 export type NewSignatureSigner = typeof signatureSigners.$inferInsert;
 export type QboOauthToken = typeof qboOauthTokens.$inferSelect;
 export type NewQboOauthToken = typeof qboOauthTokens.$inferInsert;
+export type GoogleCalendarToken = typeof googleCalendarTokens.$inferSelect;
+export type NewGoogleCalendarToken = typeof googleCalendarTokens.$inferInsert;
+export type GoogleCalendarEventMapping =
+  typeof googleCalendarEventMappings.$inferSelect;
+export type NewGoogleCalendarEventMapping =
+  typeof googleCalendarEventMappings.$inferInsert;
+export type ClientCommunication = typeof clientCommunications.$inferSelect;
+export type NewClientCommunication = typeof clientCommunications.$inferInsert;
+export type CommunicationAlias = typeof communicationAliases.$inferSelect;
+export type NewCommunicationAlias = typeof communicationAliases.$inferInsert;
 export type NotificationRead = typeof notificationReads.$inferSelect;
 export type NewNotificationRead = typeof notificationReads.$inferInsert;
 export type LessonCompletion = typeof lessonCompletions.$inferSelect;

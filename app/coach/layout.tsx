@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { CoachSidebar } from "@/components/coach/CoachSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { CoachTour } from "@/components/coach/CoachTour";
@@ -21,9 +22,15 @@ export default async function CoachLayout({
     redirect("/portal");
   }
 
+  const prefs = await getCurrentUserPrefs();
+
   return (
     <div className="min-h-screen bg-background flex">
-      <CoachSidebar fullName={result.fullName} />
+      <CoachSidebar
+        fullName={result.fullName}
+        pinnedNavItems={prefs.pinnedNavItems}
+        collapsedInitial={prefs.sidebarCollapsed}
+      />
       <div className="flex-1 flex flex-col min-w-0">
         <main className="flex-1">{children}</main>
         <PortalFooter />

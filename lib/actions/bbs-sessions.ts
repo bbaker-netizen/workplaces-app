@@ -31,6 +31,27 @@ import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
 } from "@/lib/db/tenant";
+import {
+  removeBbsSessionFromGoogle,
+  syncBbsSessionToGoogle,
+} from "@/lib/integrations/google-calendar";
+
+const SESSION_DEFAULT_DURATION_MIN = 120; // 2 hours
+
+function sessionDescription(args: {
+  engagementName: string;
+  type: string;
+  notes: string | null;
+}): string {
+  const lines = [
+    `Business Building Session · ${args.engagementName}`,
+    `Format: ${args.type === "in_person" ? "In person" : "Virtual"}`,
+  ];
+  if (args.notes && args.notes.trim().length > 0) {
+    lines.push("", args.notes.slice(0, 4000));
+  }
+  return lines.join("\n");
+}
 
 type Role = UserProfile["role"];
 
@@ -105,7 +126,7 @@ export async function scheduleSession(
       data.engagementId,
       async (tx, boundOrgId) => {
         const [eng] = await tx
-          .select({ id: engagements.id })
+          .select({ id: engagements.id, name: engagements.name })
           .from(engagements)
           .where(eq(engagements.id, data.engagementId))
           .limit(1);
@@ -122,12 +143,28 @@ export async function scheduleSession(
             createdByUserProfileId: profile.userProfileId,
           })
           .returning({ id: bbsSessions.id });
-        return row;
+        return { row, orgId: boundOrgId, engagementName: eng.name ?? "Engagement" };
       },
     );
 
-    revalidateSessionPaths(data.engagementId, created.id);
-    return { ok: true, data: created };
+    // Best-effort Google Calendar push — failure logged, doesn't block.
+    void syncBbsSessionToGoogle({
+      orgId: created.orgId,
+      userProfileId: profile.userProfileId,
+      bbsSessionId: created.row.id,
+      summary: `BBS · ${created.engagementName}`,
+      description: sessionDescription({
+        engagementName: created.engagementName,
+        type: data.type,
+        notes: data.notes ?? null,
+      }),
+      startAt: scheduled,
+      endAt: new Date(scheduled.getTime() + SESSION_DEFAULT_DURATION_MIN * 60_000),
+      location: data.type === "in_person" ? "In person" : undefined,
+    });
+
+    revalidateSessionPaths(data.engagementId, created.row.id);
+    return { ok: true, data: { id: created.row.id } };
   } catch (e) {
     return {
       ok: false,
@@ -178,13 +215,19 @@ export async function updateSession(
     if (!lookupEngId) {
       return { ok: false, error: "Session not found." };
     }
-    const engagementId = await withEngagementContext(
+    const result = await withEngagementContext(
       profile.orgId,
       profile.role,
       lookupEngId,
-      async (tx) => {
+      async (tx, boundOrgId) => {
         const [existing] = await tx
-          .select({ engagementId: bbsSessions.engagementId })
+          .select({
+            engagementId: bbsSessions.engagementId,
+            scheduledAt: bbsSessions.scheduledAt,
+            type: bbsSessions.type,
+            notes: bbsSessions.notes,
+            status: bbsSessions.status,
+          })
           .from(bbsSessions)
           .where(eq(bbsSessions.id, id))
           .limit(1);
@@ -203,14 +246,69 @@ export async function updateSession(
         if (data.firefliesRecordingId !== undefined) {
           update.firefliesRecordingId = data.firefliesRecordingId;
         }
-        if (Object.keys(update).length === 0) return existing.engagementId;
+        if (Object.keys(update).length === 0) {
+          return {
+            engagementId: existing.engagementId,
+            orgId: boundOrgId,
+            merged: {
+              scheduledAt: existing.scheduledAt,
+              type: existing.type,
+              notes: existing.notes,
+              status: existing.status,
+            },
+            changed: false,
+          };
+        }
         await tx
           .update(bbsSessions)
           .set(update)
           .where(eq(bbsSessions.id, id));
-        return existing.engagementId;
+
+        const [eng] = await tx
+          .select({ name: engagements.name })
+          .from(engagements)
+          .where(eq(engagements.id, existing.engagementId))
+          .limit(1);
+
+        return {
+          engagementId: existing.engagementId,
+          orgId: boundOrgId,
+          engagementName: eng?.name ?? "Engagement",
+          merged: {
+            scheduledAt: update.scheduledAt ?? existing.scheduledAt,
+            type: update.type ?? existing.type,
+            notes: update.notes ?? existing.notes,
+            status: existing.status,
+          },
+          changed: true,
+        };
       },
     );
+    const engagementId = result.engagementId;
+    if (
+      result.changed &&
+      result.merged.status === "scheduled" &&
+      result.merged.scheduledAt
+    ) {
+      void syncBbsSessionToGoogle({
+        orgId: result.orgId,
+        userProfileId: profile.userProfileId,
+        bbsSessionId: id,
+        summary: `BBS · ${"engagementName" in result ? result.engagementName : "Engagement"}`,
+        description: sessionDescription({
+          engagementName:
+            "engagementName" in result ? (result.engagementName ?? "Engagement") : "Engagement",
+          type: result.merged.type,
+          notes: result.merged.notes,
+        }),
+        startAt: result.merged.scheduledAt,
+        endAt: new Date(
+          result.merged.scheduledAt.getTime() +
+            SESSION_DEFAULT_DURATION_MIN * 60_000,
+        ),
+        location: result.merged.type === "in_person" ? "In person" : undefined,
+      });
+    }
     revalidateSessionPaths(engagementId, id);
     // If a fireflies id was just attached, queue the background extract.
     if (
@@ -254,11 +352,11 @@ async function setStatus(
     if (!lookupEngId) {
       return { ok: false, error: "Session not found." };
     }
-    const engagementId = await withEngagementContext(
+    const result = await withEngagementContext(
       profile.orgId,
       profile.role,
       lookupEngId,
-      async (tx) => {
+      async (tx, boundOrgId) => {
         const [existing] = await tx
           .select({ engagementId: bbsSessions.engagementId })
           .from(bbsSessions)
@@ -269,10 +367,18 @@ async function setStatus(
           .update(bbsSessions)
           .set({ status: next })
           .where(eq(bbsSessions.id, id));
-        return existing.engagementId;
+        return { engagementId: existing.engagementId, orgId: boundOrgId };
       },
     );
-    revalidateSessionPaths(engagementId, id);
+    // Cancelled sessions get removed from Google. Re-opened ones get re-pushed.
+    if (next === "cancelled") {
+      void removeBbsSessionFromGoogle({
+        orgId: result.orgId,
+        userProfileId: profile.userProfileId,
+        bbsSessionId: id,
+      });
+    }
+    revalidateSessionPaths(result.engagementId, id);
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -307,11 +413,11 @@ export async function deleteSession(id: string): Promise<ActionResult> {
     if (!lookupEngId) {
       return { ok: false, error: "Session not found." };
     }
-    const engagementId = await withEngagementContext(
+    const result = await withEngagementContext(
       profile.orgId,
       profile.role,
       lookupEngId,
-      async (tx) => {
+      async (tx, boundOrgId) => {
         const [existing] = await tx
           .select({ engagementId: bbsSessions.engagementId })
           .from(bbsSessions)
@@ -319,10 +425,15 @@ export async function deleteSession(id: string): Promise<ActionResult> {
           .limit(1);
         if (!existing) throw new Error("Session not found.");
         await tx.delete(bbsSessions).where(eq(bbsSessions.id, id));
-        return existing.engagementId;
+        return { engagementId: existing.engagementId, orgId: boundOrgId };
       },
     );
-    revalidateSessionPaths(engagementId);
+    void removeBbsSessionFromGoogle({
+      orgId: result.orgId,
+      userProfileId: profile.userProfileId,
+      bbsSessionId: id,
+    });
+    revalidateSessionPaths(result.engagementId);
     return { ok: true, data: undefined };
   } catch (e) {
     return {

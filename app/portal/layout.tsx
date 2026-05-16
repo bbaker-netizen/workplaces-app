@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getUnreadNotificationCount } from "@/lib/db/queries/notifications";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { ALL_MODULES, getEnabledModules } from "@/lib/modules";
 import { PortalSidebar } from "@/components/portal/PortalSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
@@ -22,9 +23,10 @@ export default async function PortalLayout({
     redirect("/no-invitation");
   }
 
-  const [unreadCount, engagement] = await Promise.all([
+  const [unreadCount, engagement, prefs] = await Promise.all([
     getUnreadNotificationCount(),
     getCurrentEngagement(),
+    getCurrentUserPrefs(),
   ]);
 
   const modules = engagement
@@ -38,6 +40,8 @@ export default async function PortalLayout({
         unreadCount={unreadCount}
         modules={modules}
         engagementName={engagement?.name ?? null}
+        pinnedNavItems={prefs.pinnedNavItems}
+        collapsedInitial={prefs.sidebarCollapsed}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <main className="flex-1">{children}</main>

@@ -148,6 +148,27 @@
       "when": 1778382000000,
       "tag": "0020_crm_overhaul",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1778385000000,
+      "tag": "0021_user_ui_prefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778386000000,
+      "tag": "0022_google_calendar",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1778387000000,
+      "tag": "0023_client_communications",
+      "breakpoints": true
     }
   ]
 }

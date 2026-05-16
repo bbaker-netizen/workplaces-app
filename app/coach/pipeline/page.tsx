@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listProspects } from "@/lib/db/queries/prospects";
+import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { ProspectTable } from "@/components/pipeline/ProspectTable";
 import { STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 
@@ -22,7 +23,10 @@ export default async function PipelinePage() {
     redirect("/portal");
   }
 
-  const prospects = await listProspects();
+  const [prospects, prefs] = await Promise.all([
+    listProspects(),
+    getCurrentUserPrefs(),
+  ]);
 
   // Stage counts for the summary chips above the table.
   const counts = new Map<string, number>();
@@ -96,7 +100,10 @@ export default async function PipelinePage() {
           </div>
         </div>
       ) : (
-        <ProspectTable prospects={prospects} />
+        <ProspectTable
+          prospects={prospects}
+          initialPrefs={prefs.pipelineColumnPrefs}
+        />
       )}
     </main>
   );
