@@ -9,9 +9,9 @@
  *   "Native diagnostic form; submission auto-creates a Prospect record."
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { orgs, prospects } from "@/lib/db/schema";
+import { orgs, prospectActivities, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
 export type ActionResult<T = void> =
@@ -50,6 +50,48 @@ export async function submitDiagnosticIntake(
         .limit(1);
       if (!master) throw new Error("Master org not configured.");
       const notes = formatNotes(data);
+
+      // Upsert by (org, contactEmail). If Bruce already invited this
+      // contact via "Send Diagnostic" (status=diagnostic_pending), we
+      // want their submission to fall onto that record — not create a
+      // duplicate prospect.
+      const [existing] = await tx
+        .select({ id: prospects.id, currentNotes: prospects.notes })
+        .from(prospects)
+        .where(
+          and(
+            eq(prospects.orgId, master.id),
+            eq(prospects.contactEmail, data.contactEmail),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        // Append diagnostic notes to anything already there so we don't
+        // overwrite a Business Builder's running notes.
+        const mergedNotes = [existing.currentNotes, notes]
+          .filter((s) => s && s.trim().length > 0)
+          .join("\n\n---\n\n");
+        await tx
+          .update(prospects)
+          .set({
+            companyName: data.companyName,
+            contactName: data.contactName,
+            status: "diagnostic_complete",
+            notes: mergedNotes,
+            updatedAt: new Date(),
+          })
+          .where(eq(prospects.id, existing.id));
+        await tx.insert(prospectActivities).values({
+          prospectId: existing.id,
+          orgId: master.id,
+          type: "diagnostic_complete",
+          subject: "Diagnostic submitted",
+          body: notes,
+        });
+        return { id: existing.id };
+      }
+
       const [row] = await tx
         .insert(prospects)
         .values({

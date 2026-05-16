@@ -42,9 +42,13 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     chipClass: "bg-tbb-blue-light-200 text-tbb-navy",
     textClass: "text-tbb-navy",
   },
+  // diagnostic_pending was a stage but is really an action (send the
+  // diagnostic from the prospect detail page). Style kept for any
+  // legacy rows still carrying the value; STAGE_ORDER below omits it
+  // so it never appears as a selectable option.
   diagnostic_pending: {
-    label: "Diagnostic pending",
-    caption: "Started but didn't finish",
+    label: "Diagnostic sent",
+    caption: "Waiting for them to fill it out",
     chipClass: "bg-tbb-cream-200 text-tbb-navy",
     textClass: "text-tbb-navy",
   },
@@ -113,7 +117,6 @@ export const STAGE_ORDER: ProspectStatus[] = [
   "first_contact",
   "meeting_scheduled",
   "diagnostic_complete",
-  "diagnostic_pending",
   "proposal_sent",
   "negotiation",
   "contract_sent",

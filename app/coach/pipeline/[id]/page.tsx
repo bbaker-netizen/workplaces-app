@@ -29,6 +29,7 @@ import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivity
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
+import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
   STAGE_STYLES,
@@ -138,6 +139,26 @@ export default async function ProspectDetailPage({
                 />
               )}
             </div>
+          </section>
+
+          {/* Send Diagnostic action — drops into the same surface as Send for
+              Signature. Replaces the previous "Diagnostic pending" stage which
+              was really an action, not a stage. */}
+          <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
+            <div className="space-y-1">
+              <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Diagnostic intake
+              </h2>
+              <p className="text-xs text-tbb-ink-3">
+                Email the prospect the public business diagnostic form.
+                Their submission will land back on this record.
+              </p>
+            </div>
+            <SendDiagnosticButton
+              prospectId={prospect.id}
+              recipientName={prospect.contactName}
+              recipientEmail={prospect.contactEmail}
+            />
           </section>
 
           {/* Deal card */}

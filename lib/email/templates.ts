@@ -324,6 +324,73 @@ export type SignatureCompletedEmailInput = {
   isSender: boolean;
 };
 
+/* ---------------------------- diagnostic invite ---------------------------- */
+
+export type DiagnosticInviteEmailInput = {
+  to: string;
+  recipientName: string | null;
+  senderName: string;
+  diagnosticUrl: string;
+  personalNote: string | null;
+};
+
+/**
+ * Diagnostic invitation — Business Builder sending the public intake
+ * form to a prospect they're already in conversation with. Friendly,
+ * short, gives them an out if the timing isn't right.
+ */
+export function diagnosticInviteEmail(
+  input: DiagnosticInviteEmailInput,
+): EmailEnvelope {
+  const url = input.diagnosticUrl.startsWith("http")
+    ? input.diagnosticUrl
+    : appUrl() + input.diagnosticUrl;
+  const firstName = (input.recipientName ?? "")
+    .trim()
+    .split(/\s+/)[0];
+  const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : "Hello,";
+  const subject = `Quick business diagnostic from ${input.senderName} — 5 minutes`;
+  const personalBlock = input.personalNote
+    ? `<blockquote style="margin:16px 0;padding:12px 14px;border-left:3px solid #2C6CB0;background:#F4F6F9;font-size:14px;line-height:1.5;color:#14181D;">${escapeHtml(input.personalNote)}</blockquote>`
+    : "";
+
+  const html = shell({
+    preheader: `${input.senderName} is asking you to fill out a short business diagnostic.`,
+    heading: "A quick diagnostic for you",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">${greeting}</p>
+      <p style="margin:0 0 12px 0;">
+        Before our next conversation, I&rsquo;d love to get a clearer picture
+        of where your business is today and what would move it forward. The
+        diagnostic below takes about five minutes and gives me a real head
+        start so our time together is high signal.
+      </p>
+      ${personalBlock}
+      <p style="margin:0 0 12px 0;">
+        — ${escapeHtml(input.senderName)}
+      </p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Open the diagnostic",
+  });
+
+  const text = [
+    greeting,
+    "",
+    `Before our next conversation, I'd love to get a clearer picture of where your business is today. The diagnostic below takes about five minutes:`,
+    "",
+    url,
+    "",
+    input.personalNote ? input.personalNote : null,
+    input.personalNote ? "" : null,
+    `— ${input.senderName}`,
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
 /* ---------------------------- new web lead ---------------------------- */
 
 export type NewLeadEmailInput = {
