@@ -23,27 +23,35 @@ import ws from "ws";
 // so we provide one explicitly via the `ws` package.
 neonConfig.webSocketConstructor = ws;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL is not set — copy .env.example to .env.local and fill it in.",
-  );
-}
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
 /**
- * Drizzle database handle. Internal — application code should NOT import
- * this directly; reach the database through `withTenantContext()` so
- * tenant scoping is enforced at the boundary. Migrations and admin
- * scripts that legitimately need owner privileges construct their own
- * Pool elsewhere.
+ * Lazy DB handle. The module is safe to *import* anywhere — including
+ * paths that webpack may transitively pull into a client bundle — and
+ * only throws on actual *use*. Important because Next.js's chunking
+ * occasionally drags server-only modules into client chunks via type
+ * graphs; eager throws at module-init crashed the page render with a
+ * cryptic "DATABASE_URL is not set" client-side error.
  */
-const db = drizzle(pool);
+let _pool: Pool | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
+
+function getDb(): ReturnType<typeof drizzle> {
+  if (_db) return _db;
+  if (!process.env.DATABASE_URL) {
+    throw new Error(
+      "DATABASE_URL is not set — copy .env.example to .env.local and fill it in.",
+    );
+  }
+  _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  _db = drizzle(_pool);
+  return _db;
+}
 
 // Extract the transaction-callback's tx parameter type from Drizzle's
 // signature. The tx itself isn't generic over the callback return type,
 // so this resolves to a concrete Drizzle PgTransaction.
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Tx = Parameters<
+  Parameters<ReturnType<typeof drizzle>["transaction"]>[0]
+>[0];
 
 /**
  * Run a callback inside a Postgres transaction with tenant context set:
@@ -71,7 +79,7 @@ export async function withTenantContext<T>(
   orgId: string,
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
-  return db.transaction(async (tx) => {
+  return getDb().transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE workplaces_app`);
     await tx.execute(
       sql`SELECT set_config('app.current_org_id', ${orgId}, true)`,
@@ -106,7 +114,7 @@ export const withBootstrapContext = withTenantContext;
 export async function withSystemContext<T>(
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
-  return db.transaction(async (tx) => fn(tx));
+  return getDb().transaction(async (tx) => fn(tx));
 }
 
 /* -------------------- Engagement-aware tenant helper -------------------- */
@@ -129,7 +137,7 @@ async function resolveEngagementOrgId(
 ): Promise<string | null> {
   const cached = engagementOrgCache.get(engagementId);
   if (cached) return cached;
-  return db.transaction(async (tx) => {
+  return getDb().transaction(async (tx) => {
     const [row] = await tx
       .select({ orgId: engagements.orgId })
       .from(engagements)
@@ -174,7 +182,7 @@ export async function withEngagementContext<T>(
     targetOrgId = resolved;
   }
 
-  return db.transaction(async (tx) => {
+  return getDb().transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE workplaces_app`);
     await tx.execute(
       sql`SELECT set_config('app.current_org_id', ${targetOrgId}, true)`,
@@ -234,7 +242,7 @@ export async function resolveEngagementIdFromRecord(
     | "enrollments",
   recordId: string,
 ): Promise<string | null> {
-  return db.transaction(async (tx) => {
+  return getDb().transaction(async (tx) => {
     if (table === "message_reactions") {
       const result = await tx.execute(
         sql`SELECT m.engagement_id AS "engagementId"
