@@ -18,8 +18,20 @@ import {
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secret-vault";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 
+/**
+ * Scope set for the unified Google connection.
+ *
+ *   - calendar.events — read/write calendar events for BBS-session sync
+ *   - gmail.readonly — read sent + received messages, to auto-capture
+ *     client emails into client_communications. Personal email is
+ *     ignored — only messages where a participant matches a prospect
+ *     contact or engagement member get written through.
+ *   - gmail.metadata — listed for completeness; gmail.readonly already
+ *     includes header + label access. Kept here for documentation.
+ *   - openid email — identifies the connected Google account.
+ */
 export const GOOGLE_CALENDAR_SCOPE =
-  "https://www.googleapis.com/auth/calendar.events openid email";
+  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly openid email";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

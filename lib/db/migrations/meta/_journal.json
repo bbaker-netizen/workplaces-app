@@ -169,6 +169,13 @@
       "when": 1778387000000,
       "tag": "0023_client_communications",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778388000000,
+      "tag": "0024_gmail_sync_watermark",
+      "breakpoints": true
     }
   ]
 }

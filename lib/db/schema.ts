@@ -1190,6 +1190,12 @@ export const googleCalendarTokens = pgTable(
     scope: text("scope").notNull(),
     calendarId: text("calendar_id").notNull().default("primary"),
     googleEmail: text("google_email"),
+    // Gmail sync state (migration 0024). Disabled => no Gmail polling for
+    // this user. lastSyncedAt = wall-clock time we last ran sync; lastMessageAt
+    // = internalDate of the newest message captured (used as next-sync floor).
+    gmailSyncEnabled: boolean("gmail_sync_enabled").notNull().default(true),
+    gmailLastSyncedAt: timestamp("gmail_last_synced_at", { withTimezone: true }),
+    gmailLastMessageAt: timestamp("gmail_last_message_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
