@@ -314,7 +314,7 @@ export function CoachSidebar({
                 className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base"
                 title="Preview the client portal as your client would see it"
               >
-                Portal preview
+                Client Portal View
               </Link>
               <SignOutButton redirectUrl="/">
                 <button className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base">

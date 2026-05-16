@@ -558,7 +558,7 @@ export default async function CoachConsole() {
               title="Preview what a client sees when they log in"
               className="text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
             >
-              Portal preview
+              Client Portal View
             </Link>
           </div>
         </header>
