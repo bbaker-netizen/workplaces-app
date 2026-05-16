@@ -77,7 +77,7 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 **05 Practice — your tools and connections**
 - New engagement (/coach/engagements/new) — turn a signed prospect into a client. Sets up their private workspace.
 - My signature (/coach/profile/signature) — e-signature image for contract sending.
-- Google Workspace (/coach/profile/google-calendar) — connects Bruce's Google account. Two-way calendar sync + Gmail capture into the Inbox.
+- Google Workspace (/coach/profile/google-calendar) — connects Bruce's Google account. Three integrations roll on the one connection: two-way calendar sync, Gmail capture into the Inbox, and Drive folder mirroring (per-engagement Drive folders show their files inside the documents page).
 - QuickBooks (/coach/profile/quickbooks) — accounting + invoicing integration.
 - Business Builder guide (/coach/welcome) — workflow walkthrough.
 - Module reference (/coach/welcome/modules) — full module cheat sheet.

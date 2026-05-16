@@ -15,14 +15,23 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listCoachEngagements } from "@/lib/db/queries/engagements";
 import { listEngagementDocuments } from "@/lib/db/queries/documents";
 import { listEnvelopesForEngagement } from "@/lib/db/queries/signatures";
-import { userProfiles } from "@/lib/db/schema";
+import {
+  engagements as engagementsTable,
+  googleCalendarTokens,
+  userProfiles,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import {
+  listFolderFiles,
+  type DriveFile,
+} from "@/lib/integrations/google-drive";
 import { DocumentUploadForm } from "@/components/documents/DocumentUploadForm";
 import {
   DocumentList,
   type DocumentRow,
 } from "@/components/documents/DocumentList";
 import { DocumentSigningPanel } from "@/components/signing/DocumentSigningPanel";
+import { EngagementDrivePanel } from "@/components/drive/EngagementDrivePanel";
 
 export default async function CoachDocumentsPage({
   params,
@@ -39,18 +48,56 @@ export default async function CoachDocumentsPage({
   const engagement = engagements.find((e) => e.id === params.engagementId);
   if (!engagement) notFound();
 
-  const [docs, envelopes, hasStoredSig] = await Promise.all([
-    listEngagementDocuments(engagement.id),
-    listEnvelopesForEngagement(engagement.id),
-    withSystemContext(async (tx) => {
-      const [row] = await tx
-        .select({ signatureImageData: userProfiles.signatureImageData })
-        .from(userProfiles)
-        .where(eq(userProfiles.id, profile.userProfileId))
-        .limit(1);
-      return Boolean(row?.signatureImageData);
-    }),
-  ]);
+  const [docs, envelopes, hasStoredSig, googleState, engagementWithDrive] =
+    await Promise.all([
+      listEngagementDocuments(engagement.id),
+      listEnvelopesForEngagement(engagement.id),
+      withSystemContext(async (tx) => {
+        const [row] = await tx
+          .select({ signatureImageData: userProfiles.signatureImageData })
+          .from(userProfiles)
+          .where(eq(userProfiles.id, profile.userProfileId))
+          .limit(1);
+        return Boolean(row?.signatureImageData);
+      }),
+      withSystemContext(async (tx) => {
+        const [row] = await tx
+          .select({ scope: googleCalendarTokens.scope })
+          .from(googleCalendarTokens)
+          .where(
+            eq(googleCalendarTokens.userProfileId, profile.userProfileId),
+          )
+          .limit(1);
+        return row ?? null;
+      }),
+      withSystemContext(async (tx) => {
+        const [row] = await tx
+          .select({
+            folderId: engagementsTable.googleDriveFolderId,
+            folderName: engagementsTable.googleDriveFolderName,
+          })
+          .from(engagementsTable)
+          .where(eq(engagementsTable.id, engagement.id))
+          .limit(1);
+        return row ?? null;
+      }),
+    ]);
+
+  const isGoogleConnected = Boolean(googleState);
+  const hasDriveScope = (googleState?.scope ?? "").includes("drive.readonly");
+  const linkedFolderId = engagementWithDrive?.folderId ?? null;
+  const linkedFolderName = engagementWithDrive?.folderName ?? null;
+
+  // Pull files for the linked folder if there is one and Drive scope is granted.
+  let driveFiles: DriveFile[] = [];
+  let driveError: string | null = null;
+  if (linkedFolderId && hasDriveScope) {
+    try {
+      driveFiles = await listFolderFiles(profile.userProfileId, linkedFolderId);
+    } catch (e) {
+      driveError = e instanceof Error ? e.message : "Drive is unreachable.";
+    }
+  }
   const rows: DocumentRow[] = docs.map((d) => ({
     id: d.id,
     filename: d.originalFilename,
@@ -98,6 +145,16 @@ export default async function CoachDocumentsPage({
           )}
         </nav>
       </header>
+
+      <EngagementDrivePanel
+        engagementId={engagement.id}
+        linkedFolderId={linkedFolderId}
+        linkedFolderName={linkedFolderName}
+        files={driveFiles}
+        fileFetchError={driveError}
+        isGoogleConnected={isGoogleConnected}
+        hasDriveScope={hasDriveScope}
+      />
 
       <DocumentUploadForm engagementId={engagement.id} />
 

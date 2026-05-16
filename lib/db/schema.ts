@@ -402,6 +402,15 @@ export const engagements = pgTable(
     stripeSubscriptionId: text("stripe_subscription_id"),
     qboCustomerId: text("qbo_customer_id"),
     qboRealmId: text("qbo_realm_id"),
+    // Linked Google Drive folder for this engagement (read-only mirror).
+    googleDriveFolderId: text("google_drive_folder_id"),
+    googleDriveFolderName: text("google_drive_folder_name"),
+    googleDriveLinkedByUserProfileId: uuid(
+      "google_drive_linked_by_user_profile_id",
+    ).references(() => userProfiles.id, { onDelete: "set null" }),
+    googleDriveLinkedAt: timestamp("google_drive_linked_at", {
+      withTimezone: true,
+    }),
     stageOfGrowthStage: bigint("stage_of_growth_stage", { mode: "number" }),
     stageAssessedAt: timestamp("stage_assessed_at", { withTimezone: true }),
     slug: text("slug"),
