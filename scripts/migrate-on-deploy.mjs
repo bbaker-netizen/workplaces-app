@@ -2,11 +2,8 @@
 /**
  * Production migrate — runs `drizzle-kit migrate` against the runtime
  * DATABASE_URL. Designed to be wired into the Netlify build pipeline
- * so every deploy applies any pending migrations before the new
- * build serves traffic.
- *
- * Phase 4. Replaces the manual `pnpm drizzle-kit migrate` step in the
- * Live Impactica handoff runbook.
+ * so every deploy applies any pending migrations before the new build
+ * serves traffic.
  *
  * Behaviour:
  *   - Skips entirely when DATABASE_URL is unset (e.g. preview builds
@@ -14,13 +11,22 @@
  *   - Otherwise runs migrations using DATABASE_URL_OWNER if set
  *     (recommended — RLS owners need DDL rights), falling back to
  *     DATABASE_URL.
- *   - Exits non-zero on failure so the deploy aborts rather than
- *     serving traffic against a stale schema.
+ *   - On migration failure, logs the error verbosely and EXITS 0
+ *     (build continues). The schema may end up stale; the deploy
+ *     itself shouldn't be the thing that takes the site down. Apply
+ *     missing SQL out-of-band via the Neon SQL editor when a
+ *     migration step refuses to run from this script — e.g., the
+ *     build agent can't reach Neon from its IP, or the configured
+ *     role lacks DDL rights.
+ *   - Use FAIL_BUILD_ON_MIGRATE_ERROR=1 to opt back into hard-fail
+ *     behaviour for environments where stale schema is worse than
+ *     no deploy.
  */
 
 import { spawnSync } from "node:child_process";
 
 const skip = process.env.SKIP_DB_MIGRATE === "1";
+const failOnError = process.env.FAIL_BUILD_ON_MIGRATE_ERROR === "1";
 const ownerUrl =
   process.env.DATABASE_URL_OWNER ?? process.env.DATABASE_URL ?? "";
 
@@ -49,6 +55,15 @@ if (result.status !== 0) {
   console.error(
     `[migrate-on-deploy] drizzle-kit migrate failed (exit ${result.status}).`,
   );
-  process.exit(result.status ?? 1);
+  console.error(
+    `[migrate-on-deploy] Continuing build anyway. Apply missing SQL manually ` +
+      `via the Neon SQL editor: https://console.neon.tech/ → select the project ` +
+      `→ SQL Editor. Paste the contents of any unapplied migration files from ` +
+      `lib/db/migrations/. Set FAIL_BUILD_ON_MIGRATE_ERROR=1 to switch this back to a hard fail.`,
+  );
+  if (failOnError) {
+    process.exit(result.status ?? 1);
+  }
+  process.exit(0);
 }
 console.log("[migrate-on-deploy] Migrations applied successfully.");
