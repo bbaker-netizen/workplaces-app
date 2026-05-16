@@ -141,9 +141,13 @@ export const portalModuleEnum = pgEnum("portal_module", [
 ]);
 
 export const prospectStatusEnum = pgEnum("prospect_status", [
-  "diagnostic_pending",
-  "diagnostic_complete",
+  "new_lead",            // Just came in, no contact yet
+  "diagnostic_pending",  // Legacy: prospect started but didn't finish diagnostic
+  "first_contact",       // Initial outreach done
+  "meeting_scheduled",   // Intro call booked
+  "diagnostic_complete", // Filled out the diagnostic
   "proposal_sent",
+  "negotiation",
   "contract_sent",
   "contract_signed",
   "onboarded",
@@ -1469,8 +1473,20 @@ export const prospects = pgTable(
     companyName: text("company_name").notNull(),
     contactName: text("contact_name"),
     contactEmail: text("contact_email").notNull(),
+    phone: text("phone"),
+    companyWebsite: text("company_website"),
     industry: text("industry"),
-    status: prospectStatusEnum("status").notNull().default("diagnostic_pending"),
+    leadSource: text("lead_source"),
+    expectedValueCents: bigint("expected_value_cents", { mode: "number" }),
+    currency: text("currency").notNull().default("CAD"),
+    nextActionDate: timestamp("next_action_date", { withTimezone: false }),
+    nextActionNote: text("next_action_note"),
+    lastContactAt: timestamp("last_contact_at", { withTimezone: true }),
+    ownerUserProfileId: uuid("owner_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    status: prospectStatusEnum("status").notNull().default("new_lead"),
     diagnosticSubmissionId: uuid(
       "diagnostic_submission_id",
     ).references(() => formSubmissions.id, { onDelete: "set null" }),
@@ -1486,6 +1502,47 @@ export const prospects = pgTable(
     orgIdx: index("prospects_org_idx").on(t.orgId),
     statusIdx: index("prospects_status_idx").on(t.status),
     emailIdx: index("prospects_email_idx").on(t.contactEmail),
+    ownerIdx: index("prospects_owner_idx").on(t.ownerUserProfileId),
+    nextActionIdx: index("prospects_next_action_idx").on(t.nextActionDate),
+  }),
+);
+
+/**
+ * `prospect_activities` — per-prospect timeline of calls, emails,
+ * meetings, notes, stage changes. Anything that belongs on the
+ * activity log. `type` is a free-text discriminator so we can add
+ * new activity types without a migration (call / email / meeting /
+ * note / stage_change / web_lead / signature_request).
+ */
+export const prospectActivities = pgTable(
+  "prospect_activities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references((): AnyPgColumn => prospects.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    subject: text("subject"),
+    body: text("body"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    prospectIdx: index("prospect_activities_prospect_idx").on(
+      t.prospectId,
+      t.occurredAt,
+    ),
+    orgIdx: index("prospect_activities_org_idx").on(t.orgId),
   }),
 );
 
@@ -1857,6 +1914,8 @@ export type PortalModuleAssignment = typeof portalModuleAssignments.$inferSelect
 export type NewPortalModuleAssignment = typeof portalModuleAssignments.$inferInsert;
 export type Prospect = typeof prospects.$inferSelect;
 export type NewProspect = typeof prospects.$inferInsert;
+export type ProspectActivity = typeof prospectActivities.$inferSelect;
+export type NewProspectActivity = typeof prospectActivities.$inferInsert;
 export type PersonProfile = typeof personProfiles.$inferSelect;
 export type NewPersonProfile = typeof personProfiles.$inferInsert;
 export type SchedulingLink = typeof schedulingLinks.$inferSelect;

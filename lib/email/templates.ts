@@ -324,6 +324,77 @@ export type SignatureCompletedEmailInput = {
   isSender: boolean;
 };
 
+/* ---------------------------- new web lead ---------------------------- */
+
+export type NewLeadEmailInput = {
+  to: string;
+  companyName: string;
+  contactName: string | null;
+  contactEmail: string;
+  phone: string | null;
+  leadSource: string;
+  message: string | null;
+  prospectUrl: string; // /coach/pipeline/<id>
+};
+
+/**
+ * New lead intake email — fires when someone fills out the public web
+ * form and we want every master_admin / coach to know within minutes.
+ * Single Safety Vest Orange accent (per the brand guide) because a new
+ * lead deserves the same visual urgency as an overdue action item.
+ */
+export function newLeadEmail(input: NewLeadEmailInput): EmailEnvelope {
+  const url = input.prospectUrl.startsWith("http")
+    ? input.prospectUrl
+    : appUrl() + input.prospectUrl;
+  const subject = `New lead: ${input.companyName} (${input.leadSource})`;
+
+  const contactLine = input.contactName
+    ? `${escapeHtml(input.contactName)} &lt;${escapeHtml(input.contactEmail)}&gt;`
+    : escapeHtml(input.contactEmail);
+  const phoneLine = input.phone
+    ? `<div><strong>Phone:</strong> ${escapeHtml(input.phone)}</div>`
+    : "";
+  const messageBlock = input.message
+    ? `<blockquote style="margin:16px 0;padding:12px 14px;border-left:3px solid #E87722;background:#FFF7EE;font-size:14px;line-height:1.5;color:#1A1A1A;">${escapeHtml(flattenMarkdown(input.message, 800))}</blockquote>`
+    : "";
+
+  const html = shell({
+    preheader: `${input.companyName} just submitted the web form via ${input.leadSource}.`,
+    heading: "New lead just landed",
+    accent: "#E87722", // Safety Vest Orange — urgency accent
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">A new lead just came in through <strong>${escapeHtml(input.leadSource)}</strong>. First Business Builder to claim it owns the follow-up.</p>
+      <div style="margin:16px 0;padding:12px 14px;background:#F5F1E8;border:1px solid #E8ECF1;border-radius:8px;font-size:14px;line-height:1.7;">
+        <div><strong>Company:</strong> ${escapeHtml(input.companyName)}</div>
+        <div><strong>Contact:</strong> ${contactLine}</div>
+        ${phoneLine}
+        <div><strong>Source:</strong> ${escapeHtml(input.leadSource)}</div>
+      </div>
+      ${messageBlock}
+      <p style="margin:0 0 12px 0;font-size:13px;color:#5A6470;">Open the prospect in the Pipeline to log first contact, set a next action, or move them through the stages.</p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Open prospect",
+  });
+
+  const text = [
+    `New lead via ${input.leadSource}`,
+    "",
+    `Company: ${input.companyName}`,
+    `Contact: ${input.contactName ? input.contactName + " <" + input.contactEmail + ">" : input.contactEmail}`,
+    input.phone ? `Phone: ${input.phone}` : null,
+    "",
+    input.message ? `Message:\n${flattenMarkdown(input.message, 800)}` : null,
+    input.message ? "" : null,
+    `Open: ${url}`,
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
 export function signatureCompletedEmail(
   input: SignatureCompletedEmailInput,
 ): EmailEnvelope {

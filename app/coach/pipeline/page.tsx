@@ -1,36 +1,19 @@
 /**
- * Coach Pipeline view — Phase 4.
+ * Coach Pipeline view — Phase 5 CRM.
  *
- * Lists prospects across the master org grouped by status. Source
- * of truth for the "Prospect → diagnostic → proposal → contract →
- * onboarded" journey from CLAUDE.md.
+ * Tabular list of every prospect in the master org with all the
+ * columns a real CRM needs: company, contact, email, phone, stage,
+ * expected value, next action, owner, last contact, created. Each
+ * row links to the prospect detail page.
  */
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listProspects } from "@/lib/db/queries/prospects";
-import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect";
-
-const STATUS_ORDER = [
-  "diagnostic_pending",
-  "diagnostic_complete",
-  "proposal_sent",
-  "contract_sent",
-  "contract_signed",
-  "onboarded",
-  "lost",
-] as const;
-
-const STATUS_LABEL: Record<(typeof STATUS_ORDER)[number], string> = {
-  diagnostic_pending: "Diagnostic pending",
-  diagnostic_complete: "Diagnostic complete",
-  proposal_sent: "Proposal sent",
-  contract_sent: "Contract sent",
-  contract_signed: "Contract signed",
-  onboarded: "Onboarded",
-  lost: "Lost",
-};
+import { ProspectTable } from "@/components/pipeline/ProspectTable";
+import { STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 
 export default async function PipelinePage() {
   const profile = await ensureUserProfile();
@@ -41,83 +24,79 @@ export default async function PipelinePage() {
 
   const prospects = await listProspects();
 
-  const grouped = new Map<string, typeof prospects>();
+  // Stage counts for the summary chips above the table.
+  const counts = new Map<string, number>();
   for (const p of prospects) {
-    const arr = grouped.get(p.status) ?? [];
-    arr.push(p);
-    grouped.set(p.status, arr);
+    counts.set(p.status, (counts.get(p.status) ?? 0) + 1);
   }
 
   return (
-    <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
-      <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Business Builder Console
-        </p>
-        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
-          Pipeline
-        </h1>
-        <p className="font-sans text-sm text-muted-foreground">
-          {prospects.length} prospect{prospects.length === 1 ? "" : "s"} across all
-          stages.
-        </p>
-        <Link
-          href="/coach"
-          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
-        >
-          ← Console
-        </Link>
+    <main className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="space-y-1">
+          <p className="tbb-eyebrow">Pipeline</p>
+          <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
+            Your prospects
+          </h1>
+          <p className="text-sm text-tbb-ink-3">
+            {prospects.length} prospect{prospects.length === 1 ? "" : "s"} across
+            all stages.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/coach/pipeline/new"
+            className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base shadow-tbb-cta"
+          >
+            <Plus className="w-4 h-4" aria-hidden />
+            New prospect
+          </Link>
+        </div>
       </header>
 
+      {/* Stage summary chips */}
+      <div className="flex flex-wrap gap-2">
+        {STAGE_ORDER.map((s) => {
+          const count = counts.get(s) ?? 0;
+          if (count === 0) return null;
+          const style = STAGE_STYLES[s];
+          return (
+            <span
+              key={s}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps ${style.chipClass}`}
+            >
+              {style.label}
+              <span className="bg-white/30 px-1.5 py-0 rounded-pill tabular-nums">
+                {count}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+
       {prospects.length === 0 ? (
-        <p className="font-sans text-sm text-muted-foreground italic border border-tbb-line rounded-md bg-white p-6">
-          No prospects yet. Direct people to{" "}
-          <code className="font-mono text-xs">/diagnostic</code> to capture
-          their first contact.
-        </p>
-      ) : (
-        <div className="space-y-8">
-          {STATUS_ORDER.map((status) => {
-            const list = grouped.get(status) ?? [];
-            if (list.length === 0) return null;
-            return (
-              <section key={status} className="space-y-2">
-                <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-                  {STATUS_LABEL[status]} · {list.length}
-                </h2>
-                <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
-                  {list.map((p) => (
-                    <li
-                      key={p.id}
-                      className="py-3 flex items-baseline gap-x-3 gap-y-1 flex-wrap"
-                    >
-                      <Link
-                        href={`/coach/pipeline/${p.id}`}
-                        className="font-sans text-sm font-bold text-foreground hover:underline underline-offset-4"
-                      >
-                        {p.companyName}
-                      </Link>
-                      {p.contactName && (
-                        <span className="font-sans text-xs text-muted-foreground">
-                          {p.contactName}
-                        </span>
-                      )}
-                      <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                        {p.contactEmail}
-                      </span>
-                      <span className="ml-auto">
-                        <ProspectStatusSelect
-                          prospectId={p.id}
-                          current={p.status}
-                        />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
+        <div className="border border-tbb-line rounded-lg bg-white p-8 text-center space-y-2">
+          <p className="font-bold text-tbb-navy">
+            No prospects yet.
+          </p>
+          <p className="text-sm text-tbb-ink-3">
+            New leads land here automatically when someone submits the public
+            diagnostic at <code className="font-mono text-xs">/diagnostic</code>{" "}
+            or when your web form posts to{" "}
+            <code className="font-mono text-xs">/api/leads</code>. You can
+            also add one manually.
+          </p>
+          <div className="pt-3">
+            <Link
+              href="/coach/pipeline/new"
+              className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
+            >
+              <Plus className="w-4 h-4" aria-hidden /> Add prospect manually
+            </Link>
+          </div>
         </div>
+      ) : (
+        <ProspectTable prospects={prospects} />
       )}
     </main>
   );

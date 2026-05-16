@@ -141,6 +141,13 @@
       "when": 1778376000000,
       "tag": "0019_quickbooks_online",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778382000000,
+      "tag": "0020_crm_overhaul",
+      "breakpoints": true
     }
   ]
 }

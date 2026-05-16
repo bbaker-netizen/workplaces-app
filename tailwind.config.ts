@@ -100,12 +100,19 @@ const config: Config = {
           "system-ui",
           "sans-serif",
         ],
+        // Per the TBB brand spec ("one typeface only — Arial"), the
+        // `font-mono` alias intentionally points at the same Arial stack.
+        // This keeps every existing eyebrow / timestamp / label visually
+        // consistent across the app even where authors reached for
+        // `font-mono` historically. True monospace (for inline <code>
+        // technical strings) still renders via the browser default on
+        // the <code>/<kbd>/<samp>/<pre> elements, not this alias.
         mono: [
-          "ui-monospace",
-          '"SF Mono"',
-          "Menlo",
-          "Consolas",
-          "monospace",
+          "Arial",
+          '"Helvetica Neue"',
+          "Helvetica",
+          "system-ui",
+          "sans-serif",
         ],
         script: ['"Pacifico"', '"Brush Script MT"', "cursive"],
       },

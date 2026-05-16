@@ -1,15 +1,22 @@
 /**
- * Prospects queries — Coach Pipeline view. Phase 4.
- *
- * Prospects live in the master org. Coach-side reads run via
- * withSystemContext.
+ * Prospects queries — Coach Pipeline + per-prospect detail.
+ * Phase 5 — CRM expansion.
  */
 
 import { desc, eq } from "drizzle-orm";
-import { orgs, prospects, type Prospect } from "@/lib/db/schema";
+import {
+  orgs,
+  prospectActivities,
+  prospects,
+  userProfiles,
+  type Prospect,
+  type ProspectActivity,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
-export type PipelineProspect = Prospect;
+export type PipelineProspect = Prospect & {
+  ownerName: string | null;
+};
 
 export async function listProspects(): Promise<PipelineProspect[]> {
   return withSystemContext(async (tx) => {
@@ -19,21 +26,63 @@ export async function listProspects(): Promise<PipelineProspect[]> {
       .where(eq(orgs.type, "master"))
       .limit(1);
     if (!master) return [];
-    return tx
-      .select()
+    // Left join the owner profile so the list can render the owner name
+    // without a per-row lookup.
+    const rows = await tx
+      .select({
+        prospect: prospects,
+        ownerName: userProfiles.fullName,
+      })
       .from(prospects)
+      .leftJoin(
+        userProfiles,
+        eq(userProfiles.id, prospects.ownerUserProfileId),
+      )
       .where(eq(prospects.orgId, master.id))
       .orderBy(desc(prospects.updatedAt));
+    return rows.map((r) => ({ ...r.prospect, ownerName: r.ownerName }));
   });
 }
 
-export async function getProspect(id: string): Promise<Prospect | null> {
+export async function getProspect(id: string): Promise<PipelineProspect | null> {
   return withSystemContext(async (tx) => {
     const [row] = await tx
-      .select()
+      .select({
+        prospect: prospects,
+        ownerName: userProfiles.fullName,
+      })
       .from(prospects)
+      .leftJoin(
+        userProfiles,
+        eq(userProfiles.id, prospects.ownerUserProfileId),
+      )
       .where(eq(prospects.id, id))
       .limit(1);
-    return row ?? null;
+    if (!row) return null;
+    return { ...row.prospect, ownerName: row.ownerName };
+  });
+}
+
+export type ProspectActivityWithAuthor = ProspectActivity & {
+  authorName: string | null;
+};
+
+export async function listProspectActivities(
+  prospectId: string,
+): Promise<ProspectActivityWithAuthor[]> {
+  return withSystemContext(async (tx) => {
+    const rows = await tx
+      .select({
+        activity: prospectActivities,
+        authorName: userProfiles.fullName,
+      })
+      .from(prospectActivities)
+      .leftJoin(
+        userProfiles,
+        eq(userProfiles.id, prospectActivities.createdByUserProfileId),
+      )
+      .where(eq(prospectActivities.prospectId, prospectId))
+      .orderBy(desc(prospectActivities.occurredAt));
+    return rows.map((r) => ({ ...r.activity, authorName: r.authorName }));
   });
 }
