@@ -191,18 +191,24 @@ export function BuilderBuddy() {
           aria-label="Builder Buddy chat"
         >
           {/* Header */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-tbb-line-soft bg-gradient-to-br from-tbb-navy to-tbb-blue text-white">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-tbb-line-soft bg-gradient-to-br from-tbb-navy to-tbb-blue text-white">
             <div
               className={
-                "shrink-0 grid place-items-center w-10 h-10 rounded-full bg-white/15 transition-transform " +
+                "shrink-0 relative grid place-items-center w-11 h-11 rounded-full bg-tbb-warning/90 overflow-hidden transition-transform " +
                 (walkedIn ? "" : "animate-[buddyWalkIn_700ms_ease-out]")
               }
             >
               <BuilderSvg />
+              {/* Online indicator — small green dot bottom-right of the
+                  avatar, says "I'm awake and listening". */}
+              <span
+                aria-hidden
+                className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-tbb-success ring-2 ring-tbb-navy"
+              />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold leading-tight">Builder Buddy</p>
-              <p className="text-[10px] uppercase tracking-tbb-caps text-white/70 leading-tight">
+            <div className="flex-1 min-w-0 leading-tight">
+              <p className="text-base font-bold">Builder Buddy</p>
+              <p className="text-[11px] text-white/70 mt-0.5">
                 Your in-app assistant
               </p>
             </div>
@@ -210,7 +216,7 @@ export function BuilderBuddy() {
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close"
-              className="grid place-items-center w-7 h-7 rounded-full text-white/70 hover:text-white hover:bg-white/15 transition-colors"
+              className="grid place-items-center w-8 h-8 rounded-full text-white/70 hover:text-white hover:bg-white/15 transition-colors"
             >
               <X className="w-4 h-4" aria-hidden />
             </button>
@@ -289,11 +295,18 @@ export function BuilderBuddy() {
                 <Send className="w-4 h-4" aria-hidden />
               </button>
             </div>
-            <div className="flex items-center justify-between mt-1.5 px-1">
-              <span className="text-[10px] text-tbb-ink-4">
-                Enter to send · Shift+Enter for newline · Press &quot;?&quot; to summon Buddy
+            <div className="mt-2 px-1 flex items-center justify-between gap-3 flex-wrap">
+              <span className="text-[10px] text-tbb-ink-4 leading-relaxed">
+                <kbd className="px-1 py-0.5 bg-tbb-cream-50 border border-tbb-line rounded text-tbb-ink-3 font-mono text-[9px]">
+                  Enter
+                </kbd>{" "}
+                to send ·{" "}
+                <kbd className="px-1 py-0.5 bg-tbb-cream-50 border border-tbb-line rounded text-tbb-ink-3 font-mono text-[9px]">
+                  ?
+                </kbd>{" "}
+                to summon
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {messages.length > 0 && (
                   <button
                     type="button"
@@ -301,7 +314,7 @@ export function BuilderBuddy() {
                       setMessages([]);
                       setError(null);
                     }}
-                    className="text-[10px] text-tbb-ink-3 hover:text-tbb-navy"
+                    className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
                   >
                     New chat
                   </button>
@@ -309,7 +322,7 @@ export function BuilderBuddy() {
                 <button
                   type="button"
                   onClick={muteForever}
-                  className="text-[10px] text-tbb-ink-4 hover:text-tbb-danger"
+                  className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-4 hover:text-tbb-danger"
                 >
                   Hide Buddy
                 </button>
@@ -370,30 +383,45 @@ function ChatBubble({
   );
 }
 
-/** Same Builder mascot, smaller, sized for the chat header. */
+/**
+ * Buddy mascot — sized for a 44px circular avatar. Just head + hat so
+ * it doesn't get awkwardly cropped at the bottom of a round frame.
+ * The full-body version lives on the "Ask Buddy" pill where there's
+ * room.
+ */
 function BuilderSvg() {
   return (
     <svg
-      viewBox="0 0 64 64"
-      className="w-7 h-7"
+      viewBox="0 0 40 40"
+      className="w-10 h-10"
       aria-hidden="true"
       role="img"
     >
-      <ellipse cx="32" cy="24" rx="18" ry="9" fill="#E87722" />
-      <rect x="14" y="22" width="36" height="3" rx="1.5" fill="#C45D14" />
-      <circle cx="32" cy="16" r="2.2" fill="#C45D14" />
-      <ellipse cx="32" cy="34" rx="11" ry="10" fill="#F4C9A7" />
-      <circle cx="27.5" cy="33" r="1.4" fill="#1A1A1A" />
-      <circle cx="36.5" cy="33" r="1.4" fill="#1A1A1A" />
+      {/* Hard hat dome */}
       <path
-        d="M 27 37 Q 32 41 37 37"
+        d="M 8 18 Q 8 8 20 8 Q 32 8 32 18 L 32 20 L 8 20 Z"
+        fill="#E87722"
+      />
+      {/* Hat brim */}
+      <rect x="6" y="19" width="28" height="2.5" rx="1.25" fill="#C45D14" />
+      {/* Top button */}
+      <circle cx="20" cy="9" r="1.6" fill="#C45D14" />
+      {/* Face */}
+      <circle cx="20" cy="26" r="8" fill="#F4C9A7" />
+      {/* Eyes */}
+      <circle cx="17" cy="25" r="1.1" fill="#1A1A1A" />
+      <circle cx="23" cy="25" r="1.1" fill="#1A1A1A" />
+      {/* Smile */}
+      <path
+        d="M 16.5 28.5 Q 20 31.5 23.5 28.5"
         stroke="#1A1A1A"
-        strokeWidth="1.4"
+        strokeWidth="1.2"
         fill="none"
         strokeLinecap="round"
       />
-      <path d="M 16 50 Q 16 44 24 43 L 40 43 Q 48 44 48 50 L 48 56 L 16 56 Z" fill="#2E4057" />
-      <rect x="16" y="49" width="32" height="2" fill="#E87722" />
+      {/* Small rosy cheeks */}
+      <circle cx="14.5" cy="27.5" r="1.2" fill="#E87722" opacity="0.35" />
+      <circle cx="25.5" cy="27.5" r="1.2" fill="#E87722" opacity="0.35" />
     </svg>
   );
 }
