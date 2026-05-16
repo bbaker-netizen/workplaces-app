@@ -6,7 +6,7 @@
  * the right.
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2, X } from "lucide-react";
 import {
@@ -18,6 +18,10 @@ import {
   TEMPLATE_CATEGORIES,
   TEMPLATE_VARIABLES,
 } from "@/lib/templates/variables";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "@/components/communication/RichTextEditor";
 import type { EmailTemplate } from "@/lib/db/schema";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -51,9 +55,24 @@ export function TemplatesManager({
   initialTemplates: EmailTemplate[];
 }) {
   const router = useRouter();
+  const editorRef = useRef<RichTextEditorHandle | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // When the draft swaps from one template to another (or to a brand-new
+  // draft), push the new body into the editor. Without this the editor
+  // keeps showing the previously selected template's body.
+  useEffect(() => {
+    if (!draft) return;
+    const current = editorRef.current?.getMarkdown() ?? "";
+    if (current !== draft.body) {
+      editorRef.current?.setMarkdown(draft.body);
+    }
+    // We only want this to run when the draft IDENTITY changes, not on
+    // every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.id]);
 
   function openNew() {
     setError(null);
@@ -73,18 +92,21 @@ export function TemplatesManager({
   function insertVariable(name: string) {
     if (!draft) return;
     const token = `{{${name}}}`;
-    setDraft({ ...draft, body: draft.body + token });
+    // Insert at the cursor in the rich editor, and keep our React mirror
+    // in sync via the onChange path that fires immediately after.
+    editorRef.current?.insertText(token);
   }
 
   function save() {
     if (!draft) return;
     setError(null);
+    const liveBody = editorRef.current?.getMarkdown() ?? draft.body;
     startTransition(async () => {
       const payload = {
         name: draft.name.trim(),
         category: draft.category as (typeof TEMPLATE_CATEGORIES)[number],
         subject: draft.subject.trim(),
-        body: draft.body.trim(),
+        body: liveBody.trim(),
       };
       const r = draft.id
         ? await updateEmailTemplate(draft.id, payload)
@@ -274,14 +296,14 @@ export function TemplatesManager({
                   </button>
                 ))}
               </div>
-              <textarea
-                value={draft.body}
-                onChange={(e) =>
-                  setDraft({ ...draft, body: e.target.value })
-                }
+              <RichTextEditor
+                key={draft.id ?? "new"}
+                initialMarkdown={draft.body}
+                placeholder="Write the email body. Drop in variables from the chips above, use bold/lists/links, add emoji glyphs for icons."
                 disabled={isPending}
-                rows={12}
-                className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
+                editorRef={editorRef}
+                onChange={(md) => setDraft((d) => (d ? { ...d, body: md } : d))}
+                ariaLabel="Template body"
               />
             </div>
 

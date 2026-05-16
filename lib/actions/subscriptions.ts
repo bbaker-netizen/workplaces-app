@@ -27,6 +27,22 @@ export type ActionResult<T = void> =
 
 const modelEnum = z.enum(["model_a", "model_b", "model_c"]);
 const transferEnum = z.enum(["retained", "pending_transfer", "transferred"]);
+const billingProviderEnum = z.enum(["qbo", "stripe", "none"]);
+
+const billingFields = {
+  billingProvider: billingProviderEnum.optional(),
+  qboInvoiceId: z.string().max(120).nullable().optional(),
+  qboCustomerId: z.string().max(120).nullable().optional(),
+  stripeSubscriptionId: z.string().max(120).nullable().optional(),
+  stripePriceId: z.string().max(120).nullable().optional(),
+  billingExternalUrl: z
+    .string()
+    .max(2000)
+    .url()
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
+};
 
 const createSchema = z.object({
   engagementId: z.string().uuid(),
@@ -43,6 +59,7 @@ const createSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable()
     .optional(),
+  ...billingFields,
 });
 
 const updateSchema = createSchema.partial().omit({ engagementId: true });
@@ -84,6 +101,15 @@ export async function createSubscription(
             renewalDate: data.renewalDate
               ? new Date(data.renewalDate)
               : null,
+            billingProvider:
+              data.billingProvider && data.billingProvider !== "none"
+                ? data.billingProvider
+                : null,
+            qboInvoiceId: data.qboInvoiceId ?? null,
+            qboCustomerId: data.qboCustomerId ?? null,
+            stripeSubscriptionId: data.stripeSubscriptionId ?? null,
+            stripePriceId: data.stripePriceId ?? null,
+            billingExternalUrl: data.billingExternalUrl ?? null,
           })
           .returning({ id: subscriptionAssets.id });
         return row;
@@ -141,6 +167,19 @@ export async function updateSubscription(
           update.renewalDate = data.renewalDate
             ? new Date(data.renewalDate)
             : null;
+        if (data.billingProvider !== undefined)
+          update.billingProvider =
+            data.billingProvider === "none" ? null : data.billingProvider;
+        if (data.qboInvoiceId !== undefined)
+          update.qboInvoiceId = data.qboInvoiceId ?? null;
+        if (data.qboCustomerId !== undefined)
+          update.qboCustomerId = data.qboCustomerId ?? null;
+        if (data.stripeSubscriptionId !== undefined)
+          update.stripeSubscriptionId = data.stripeSubscriptionId ?? null;
+        if (data.stripePriceId !== undefined)
+          update.stripePriceId = data.stripePriceId ?? null;
+        if (data.billingExternalUrl !== undefined)
+          update.billingExternalUrl = data.billingExternalUrl ?? null;
         if (Object.keys(update).length === 0) return;
         await tx
           .update(subscriptionAssets)

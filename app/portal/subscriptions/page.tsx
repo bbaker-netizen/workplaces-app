@@ -53,6 +53,12 @@ export default async function PortalSubscriptionsPage() {
           transferStatus: s.transferStatus,
           notes: s.notes,
           renewalDate: s.renewalDate,
+          billingProvider: s.billingProvider ?? null,
+          qboInvoiceId: s.qboInvoiceId ?? null,
+          qboCustomerId: s.qboCustomerId ?? null,
+          stripeSubscriptionId: s.stripeSubscriptionId ?? null,
+          stripePriceId: s.stripePriceId ?? null,
+          billingExternalUrl: s.billingExternalUrl ?? null,
         }))}
         canEdit={canEdit}
       />

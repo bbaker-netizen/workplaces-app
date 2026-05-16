@@ -1453,6 +1453,12 @@ export const subscriptionProducts = pgTable(
     currency: text("currency").notNull().default("CAD"),
     category: text("category"),
     active: boolean("active").notNull().default(true),
+    /** Optional Stripe Price id to use as the default when this product is
+     *  assigned to an engagement and Bruce wants to bill it through Stripe. */
+    defaultStripePriceId: text("default_stripe_price_id"),
+    /** Optional QuickBooks Online Item id (the product/service the
+     *  recurring invoice line points at). */
+    defaultQboItemId: text("default_qbo_item_id"),
     createdByUserProfileId: uuid("created_by_user_profile_id").references(
       () => userProfiles.id,
       { onDelete: "set null" },
@@ -1492,6 +1498,19 @@ export const subscriptionAssets = pgTable(
       .default("retained"),
     notes: text("notes"),
     renewalDate: timestamp("renewal_date", { withTimezone: true }),
+    /** Which billing system, if any, generates the recurring charge for
+     *  this asset. NULL = not billed (e.g. asset Bruce eats internally). */
+    billingProvider: text("billing_provider"),
+    /** QuickBooks Online identifiers when billingProvider='qbo'. */
+    qboInvoiceId: text("qbo_invoice_id"),
+    qboCustomerId: text("qbo_customer_id"),
+    /** Stripe identifiers when billingProvider='stripe'. */
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    stripePriceId: text("stripe_price_id"),
+    /** Free-form URL to the source-of-truth record in the billing system
+     *  (the QBO recurring invoice page, the Stripe subscription page) so
+     *  Bruce can click straight through. */
+    billingExternalUrl: text("billing_external_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

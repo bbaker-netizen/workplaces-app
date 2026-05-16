@@ -166,30 +166,54 @@ export function EngagementForm({
         <label htmlFor="onboardingTemplateId" className={labelClass}>
           Auto-send onboarding email (optional)
         </label>
-        <select
-          id="onboardingTemplateId"
-          name="onboardingTemplateId"
-          defaultValue=""
-          className={inputClass}
-        >
-          <option value="">— Don&apos;t auto-send anything —</option>
-          {onboardingTemplates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Picks from{" "}
-          <a
-            href="/coach/templates"
-            className="text-tbb-blue underline underline-offset-2"
-          >
-            templates marked &quot;onboarding&quot;
-          </a>
-          . Fires right after the Clerk invitation goes out, from your Gmail
-          if connected.
-        </p>
+        {onboardingTemplates.length === 0 ? (
+          <div className="rounded-md border border-dashed border-tbb-line bg-tbb-cream-50 px-3 py-3 text-sm space-y-2">
+            <p className="text-tbb-ink-2">
+              No onboarding templates yet — that&apos;s why the dropdown is
+              empty.
+            </p>
+            <p className="text-xs text-tbb-ink-3">
+              Build a template with category{" "}
+              <span className="font-mono">onboarding</span> and it&apos;ll
+              show up here automatically next time.
+            </p>
+            <a
+              href="/coach/templates"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              Build onboarding template →
+            </a>
+            {/* Keep the hidden field so the form always submits the key. */}
+            <input type="hidden" name="onboardingTemplateId" value="" />
+          </div>
+        ) : (
+          <>
+            <select
+              id="onboardingTemplateId"
+              name="onboardingTemplateId"
+              defaultValue=""
+              className={inputClass}
+            >
+              <option value="">— Don&apos;t auto-send anything —</option>
+              {onboardingTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Picks from{" "}
+              <a
+                href="/coach/templates"
+                className="text-tbb-blue underline underline-offset-2"
+              >
+                templates marked &quot;onboarding&quot;
+              </a>
+              . Fires right after the Clerk invitation goes out, from your
+              Gmail if connected.
+            </p>
+          </>
+        )}
       </div>
 
       {state.kind === "error" && (

@@ -1,23 +1,31 @@
 "use client";
 
 /**
- * Email signature editor — plain text block appended to every email
- * sent from the communications panel. Bruce can paste in whatever he
- * has at the bottom of his Gmail (name, title, phone, disclaimer).
+ * Email signature editor — markdown-aware rich editor so Bruce can drop
+ * in bold, links, and lists (icons via emoji glyphs). The signature is
+ * appended to every outbound email, rendered as both plain text and
+ * HTML at send time.
  */
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { setEmailSignature } from "@/lib/actions/user-prefs";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "@/components/communication/RichTextEditor";
 
-const STARTER = `Bruce Baker
+const STARTER = `**Bruce Baker**
 Business Builder · Workplaces
-+1 780-555-1234
-bruce@4workplaces.com
 
-CONFIDENTIALITY NOTICE: This email and any attachments are confidential. If you received this in error, please reply to let me know and delete.`;
+📞 +1 780-555-1234
+✉️ [bruce@4workplaces.com](mailto:bruce@4workplaces.com)
+🌐 [4workplaces.com](https://4workplaces.com)
+
+> CONFIDENTIALITY NOTICE: This email and any attachments are confidential. If you received this in error, please reply to let me know and delete.`;
 
 export function EmailSignatureEditor({ initial }: { initial: string }) {
+  const editorRef = useRef<RichTextEditorHandle | null>(null);
   const [value, setValue] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -26,8 +34,9 @@ export function EmailSignatureEditor({ initial }: { initial: string }) {
   function save() {
     setError(null);
     setSaved(false);
+    const md = editorRef.current?.getMarkdown() ?? value;
     startTransition(async () => {
-      const r = await setEmailSignature(value);
+      const r = await setEmailSignature(md);
       if (!r.ok) {
         setError(r.error);
         return;
@@ -37,21 +46,30 @@ export function EmailSignatureEditor({ initial }: { initial: string }) {
     });
   }
 
+  function loadStarter() {
+    editorRef.current?.setMarkdown(STARTER);
+    setValue(STARTER);
+  }
+
   return (
     <div className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
-      <label className="block">
+      <div className="space-y-1">
         <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-          Signature text
+          Signature
         </span>
-        <textarea
-          rows={8}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          disabled={isPending}
-          placeholder={STARTER}
-          className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
-        />
-      </label>
+        <p className="text-[11px] text-tbb-ink-3">
+          Use bold, lists, and links. Drop in emoji glyphs for icons
+          (📞 ✉️ 🌐 📍). Appears on every email you send through the app.
+        </p>
+      </div>
+      <RichTextEditor
+        initialMarkdown={initial}
+        placeholder="Your name, title, contact info, disclaimer…"
+        disabled={isPending}
+        editorRef={editorRef}
+        onChange={setValue}
+        ariaLabel="Email signature"
+      />
       {error && (
         <p className="text-xs text-tbb-danger border border-tbb-danger rounded px-2 py-1.5 bg-tbb-cream-50">
           {error}
@@ -74,10 +92,10 @@ export function EmailSignatureEditor({ initial }: { initial: string }) {
             ✓ Saved. New emails will include this.
           </span>
         )}
-        {!value && (
+        {(!value || value.trim().length === 0) && (
           <button
             type="button"
-            onClick={() => setValue(STARTER)}
+            onClick={loadStarter}
             className="text-[11px] text-tbb-blue hover:underline"
           >
             Use a starter template

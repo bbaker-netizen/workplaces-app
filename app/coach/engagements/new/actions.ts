@@ -350,10 +350,12 @@ async function fireOnboardingEmail(args: {
     sender_email: data.sender.email,
   };
   const subject = applyTemplate(data.tmpl.subject, vars);
-  let body = applyTemplate(data.tmpl.body, vars);
-  if (data.sender.emailSignature?.trim()) {
-    body = `${body}\n\n${data.sender.emailSignature.trim()}`;
-  }
+  const bodyTextOnly = applyTemplate(data.tmpl.body, vars);
+  const { appendSignature, markdownToEmailHtml } = await import(
+    "@/lib/templates/markdown-to-html"
+  );
+  const body = appendSignature(bodyTextOnly, data.sender.emailSignature ?? null);
+  const bodyHtml = markdownToEmailHtml(body);
 
   // Try Gmail first, then Resend.
   const { sendGmailMessage } = await import("@/lib/integrations/gmail");
@@ -364,6 +366,7 @@ async function fireOnboardingEmail(args: {
       to: [args.toEmail],
       subject,
       body,
+      bodyHtml,
     });
     sentVia = "gmail";
     externalId = r.messageId;
@@ -378,7 +381,7 @@ async function fireOnboardingEmail(args: {
       const r = await sendEmail({
         to: args.toEmail,
         subject,
-        html: `<pre style="font-family:inherit;white-space:pre-wrap">${body}</pre>`,
+        html: bodyHtml,
         text: body,
         bypassWorkingHours: true,
       });

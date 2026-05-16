@@ -24,6 +24,10 @@ import {
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 import { sendGmailMessage } from "@/lib/integrations/gmail";
 import { isSmsConfigured, sendSms } from "@/lib/integrations/twilio";
+import {
+  appendSignature,
+  markdownToEmailHtml,
+} from "@/lib/templates/markdown-to-html";
 
 const attachmentSchema = z.object({
   filename: z.string().min(1).max(255),
@@ -116,14 +120,13 @@ export async function sendClientMessage(
       if (!senderEmail) {
         return { ok: false, error: "Couldn't resolve your sender email." };
       }
-      const bodyWithSignature =
-        emailSignature && emailSignature.trim().length > 0
-          ? `${data.body}\n\n${emailSignature}`
-          : data.body;
+      const bodyWithSignature = appendSignature(data.body, emailSignature);
+      const bodyHtml = markdownToEmailHtml(bodyWithSignature);
       const r = await sendGmailMessage(profile.userProfileId, senderEmail, {
         to: data.to,
         subject: data.subject ?? "(no subject)",
         body: bodyWithSignature,
+        bodyHtml,
         inReplyTo: data.inReplyTo ?? null,
         references: data.references ?? null,
         attachments: data.attachments,

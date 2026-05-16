@@ -95,7 +95,11 @@ export type SendEmailInput = {
   cc?: string[];
   bcc?: string[];
   subject: string;
-  body: string; // plain text
+  body: string; // plain text fallback
+  /** Optional HTML body. When provided, the message is sent as
+   *  multipart/alternative so clients pick the rendered HTML; clients
+   *  that can't render HTML fall back to `body`. */
+  bodyHtml?: string | null;
   /** Optional in-reply-to message id for threading. */
   inReplyTo?: string | null;
   references?: string | null;
@@ -124,6 +128,7 @@ export async function sendGmailMessage(
 
   const hasAttachments =
     input.attachments && input.attachments.length > 0;
+  const hasHtml = !!(input.bodyHtml && input.bodyHtml.trim().length > 0);
 
   if (hasAttachments) {
     // Quick total-size guard. Base64 expands payload by 4/3, so we
@@ -154,33 +159,67 @@ export async function sendGmailMessage(
   if (input.inReplyTo) baseHeaders.push(`In-Reply-To: ${input.inReplyTo}`);
   if (input.references) baseHeaders.push(`References: ${input.references}`);
 
-  let raw: string;
-  if (!hasAttachments) {
-    const headers = [
-      ...baseHeaders,
-      "Content-Type: text/plain; charset=UTF-8",
-      "Content-Transfer-Encoding: 8bit",
-    ];
-    raw = headers.join("\r\n") + "\r\n\r\n" + input.body;
-  } else {
-    const boundary = `=_TBB_${Date.now().toString(36)}_${Math.random()
+  /** Build the "body" portion (text-only, or multipart/alternative if HTML). */
+  function bodyBlock(): { headers: string[]; body: string } {
+    if (!hasHtml) {
+      return {
+        headers: [
+          "Content-Type: text/plain; charset=UTF-8",
+          "Content-Transfer-Encoding: 8bit",
+        ],
+        body: input.body,
+      };
+    }
+    const altBoundary = `=_ALT_${Date.now().toString(36)}_${Math.random()
       .toString(36)
       .slice(2, 10)}`;
-    const headers = [
-      ...baseHeaders,
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    ];
-    const parts: string[] = [];
-
-    // Text body part.
-    parts.push(
+    const altParts: string[] = [];
+    altParts.push(
       [
-        `--${boundary}`,
+        `--${altBoundary}`,
         "Content-Type: text/plain; charset=UTF-8",
         "Content-Transfer-Encoding: 8bit",
         "",
         input.body,
       ].join("\r\n"),
+    );
+    altParts.push(
+      [
+        `--${altBoundary}`,
+        "Content-Type: text/html; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        input.bodyHtml!,
+      ].join("\r\n"),
+    );
+    altParts.push(`--${altBoundary}--`);
+    return {
+      headers: [`Content-Type: multipart/alternative; boundary="${altBoundary}"`],
+      body: altParts.join("\r\n"),
+    };
+  }
+
+  let raw: string;
+  if (!hasAttachments) {
+    const bb = bodyBlock();
+    raw =
+      [...baseHeaders, ...bb.headers].join("\r\n") +
+      "\r\n\r\n" +
+      bb.body;
+  } else {
+    const mixedBoundary = `=_TBB_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+    const headers = [
+      ...baseHeaders,
+      `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
+    ];
+    const parts: string[] = [];
+
+    // First part: the body (text-only or multipart/alternative nested).
+    const bb = bodyBlock();
+    parts.push(
+      [`--${mixedBoundary}`, ...bb.headers, "", bb.body].join("\r\n"),
     );
 
     // Attachment parts.
@@ -191,7 +230,7 @@ export async function sendGmailMessage(
       const safeFilename = att.filename.replace(/"/g, "");
       parts.push(
         [
-          `--${boundary}`,
+          `--${mixedBoundary}`,
           `Content-Type: ${att.contentType}; name="${safeFilename}"`,
           `Content-Disposition: attachment; filename="${safeFilename}"`,
           "Content-Transfer-Encoding: base64",
@@ -200,7 +239,7 @@ export async function sendGmailMessage(
         ].join("\r\n"),
       );
     }
-    parts.push(`--${boundary}--`);
+    parts.push(`--${mixedBoundary}--`);
 
     raw = headers.join("\r\n") + "\r\n\r\n" + parts.join("\r\n");
   }
