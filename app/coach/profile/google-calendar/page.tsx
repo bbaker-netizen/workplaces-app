@@ -36,9 +36,16 @@ export default async function GoogleCalendarConnectPage({
   const justConnected = params.connected === "1";
   const error = params.error ?? null;
 
-  // Pull Gmail sync state to render on the page.
-  const gmailState = status.connected
-    ? await withSystemContext(async (tx) => {
+  // Pull Gmail sync state to render on the page. Wrapped in try/catch so
+  // a transient DB error doesn't take the page out — degrade to "Off".
+  let gmailState: {
+    enabled: boolean;
+    lastSyncedAt: Date | null;
+    scope: string;
+  } | null = null;
+  if (status.connected) {
+    try {
+      gmailState = await withSystemContext(async (tx) => {
         const [row] = await tx
           .select({
             enabled: googleCalendarTokens.gmailSyncEnabled,
@@ -49,8 +56,11 @@ export default async function GoogleCalendarConnectPage({
           .where(eq(googleCalendarTokens.userProfileId, profile.userProfileId))
           .limit(1);
         return row ?? null;
-      })
-    : null;
+      });
+    } catch (e) {
+      console.error("[google-calendar page] gmail state lookup failed:", e);
+    }
+  }
   const hasGmailScope = (gmailState?.scope ?? "").includes("gmail.readonly");
 
   return (

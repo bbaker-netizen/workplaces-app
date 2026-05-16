@@ -56,26 +56,34 @@ export async function getCurrentUserPrefs(): Promise<UserUIPrefs> {
   const { userId } = await auth();
   if (!userId) return EMPTY;
 
-  return withSystemContext(async (tx) => {
-    const [row] = await tx
-      .select({
-        pinnedNavItems: userProfiles.pinnedNavItems,
-        sidebarCollapsed: userProfiles.sidebarCollapsed,
-        pipelineColumnPrefs: userProfiles.pipelineColumnPrefs,
-        homeDashboardLayout: userProfiles.homeDashboardLayout,
-      })
-      .from(userProfiles)
-      .where(eq(userProfiles.clerkUserId, userId))
-      .limit(1);
+  try {
+    return await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          pinnedNavItems: userProfiles.pinnedNavItems,
+          sidebarCollapsed: userProfiles.sidebarCollapsed,
+          pipelineColumnPrefs: userProfiles.pipelineColumnPrefs,
+          homeDashboardLayout: userProfiles.homeDashboardLayout,
+        })
+        .from(userProfiles)
+        .where(eq(userProfiles.clerkUserId, userId))
+        .limit(1);
 
-    if (!row) return EMPTY;
-    return {
-      pinnedNavItems: row.pinnedNavItems ?? [],
-      sidebarCollapsed: row.sidebarCollapsed ?? false,
-      pipelineColumnPrefs:
-        (row.pipelineColumnPrefs as PipelineColumnPrefs | null) ?? null,
-      homeDashboardLayout:
-        (row.homeDashboardLayout as HomeDashboardLayout | null) ?? null,
-    };
-  });
+      if (!row) return EMPTY;
+      return {
+        pinnedNavItems: row.pinnedNavItems ?? [],
+        sidebarCollapsed: row.sidebarCollapsed ?? false,
+        pipelineColumnPrefs:
+          (row.pipelineColumnPrefs as PipelineColumnPrefs | null) ?? null,
+        homeDashboardLayout:
+          (row.homeDashboardLayout as HomeDashboardLayout | null) ?? null,
+      };
+    });
+  } catch (e) {
+    // Schema not migrated yet, transient DB error, etc. — fall back to
+    // defaults so the layout still renders. Logging lets us investigate
+    // without taking pages offline.
+    console.error("[user-prefs] getCurrentUserPrefs failed:", e);
+    return EMPTY;
+  }
 }

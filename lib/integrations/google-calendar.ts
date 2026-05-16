@@ -235,18 +235,25 @@ export async function disconnectUserTokens(
 export async function getConnectionStatus(
   userProfileId: string,
 ): Promise<{ connected: false } | { connected: true; email: string | null }> {
-  const row = await withSystemContext(async (tx) => {
-    const [r] = await tx
-      .select({
-        googleEmail: googleCalendarTokens.googleEmail,
-      })
-      .from(googleCalendarTokens)
-      .where(eq(googleCalendarTokens.userProfileId, userProfileId))
-      .limit(1);
-    return r ?? null;
-  });
-  if (!row) return { connected: false };
-  return { connected: true, email: row.googleEmail ?? null };
+  try {
+    const row = await withSystemContext(async (tx) => {
+      const [r] = await tx
+        .select({
+          googleEmail: googleCalendarTokens.googleEmail,
+        })
+        .from(googleCalendarTokens)
+        .where(eq(googleCalendarTokens.userProfileId, userProfileId))
+        .limit(1);
+      return r ?? null;
+    });
+    if (!row) return { connected: false };
+    return { connected: true, email: row.googleEmail ?? null };
+  } catch (e) {
+    // Table missing, permission denied, transient DB error — render the
+    // page in "not connected" mode rather than 500.
+    console.error("[google-calendar] getConnectionStatus failed:", e);
+    return { connected: false };
+  }
 }
 
 /* ------------------------------ Events ------------------------------ */
