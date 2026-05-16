@@ -1,5 +1,5 @@
 /**
- * Twilio client — SMS + WhatsApp send paths.
+ * Twilio client — SMS send path.
  *
  * Pure HTTP wrapper over Twilio's REST API. No `twilio` npm package
  * to keep the bundle small.
@@ -15,14 +15,8 @@
  *   - TWILIO_PHONE_NUMBER — fallback. A single number in E.164 format
  *     (e.g. +17805551234). Useful for trial accounts or simple setups.
  *
- *   WhatsApp:
- *   - TWILIO_WHATSAPP_FROM — WhatsApp sender id, in the form
- *     "whatsapp:+14155238886" (Twilio sandbox) or
- *     "whatsapp:+1XXXXXXXXXX" (production, after Meta business approval).
- *
- * When required pieces are missing, the functions throw a friendly
- * error so the UI can show "Configure Twilio first" instead of a
- * generic crash.
+ * When required pieces are missing, sendSms throws a friendly error so
+ * the UI can show "Configure Twilio first" instead of a generic crash.
  */
 
 const TWILIO_BASE = "https://api.twilio.com/2010-04-01";
@@ -54,22 +48,8 @@ function smsSender(): { kind: "service"; sid: string } | { kind: "from"; from: s
   );
 }
 
-function whatsappFrom(): string {
-  const v = process.env.TWILIO_WHATSAPP_FROM;
-  if (!v) {
-    throw new Error(
-      "Twilio WhatsApp not configured. Set TWILIO_WHATSAPP_FROM in Netlify env (e.g. whatsapp:+14155238886).",
-    );
-  }
-  return v;
-}
-
 export function isTwilioConfigured(): boolean {
   return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
-}
-
-export function isWhatsAppConfigured(): boolean {
-  return isTwilioConfigured() && Boolean(process.env.TWILIO_WHATSAPP_FROM);
 }
 
 export function isSmsConfigured(): boolean {
@@ -90,27 +70,21 @@ type TwilioMessageResponse = {
   error_message?: string | null;
 };
 
-type PostMessageInput =
-  | { kind: "sms"; to: string; body: string }
-  | { kind: "whatsapp"; to: string; body: string };
-
-async function postMessage(input: PostMessageInput): Promise<TwilioMessageResponse> {
+export async function sendSms(args: {
+  to: string;
+  body: string;
+}): Promise<{ messageSid: string }> {
   const { accountSid, authToken } = creds();
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
   const params = new URLSearchParams();
-  params.set("To", input.to);
-  params.set("Body", input.body);
+  params.set("To", args.to);
+  params.set("Body", args.body);
 
-  if (input.kind === "sms") {
-    const sender = smsSender();
-    if (sender.kind === "service") {
-      params.set("MessagingServiceSid", sender.sid);
-    } else {
-      params.set("From", sender.from);
-    }
+  const sender = smsSender();
+  if (sender.kind === "service") {
+    params.set("MessagingServiceSid", sender.sid);
   } else {
-    // WhatsApp always sends From a whatsapp: address.
-    params.set("From", whatsappFrom());
+    params.set("From", sender.from);
   }
 
   const res = await fetch(`${TWILIO_BASE}/Accounts/${accountSid}/Messages.json`, {
@@ -125,24 +99,6 @@ async function postMessage(input: PostMessageInput): Promise<TwilioMessageRespon
     const text = await res.text().catch(() => "");
     throw new Error(`Twilio ${res.status}: ${text}`);
   }
-  return (await res.json()) as TwilioMessageResponse;
-}
-
-export async function sendSms(args: {
-  to: string;
-  body: string;
-}): Promise<{ messageSid: string }> {
-  const r = await postMessage({ kind: "sms", to: args.to, body: args.body });
-  return { messageSid: r.sid };
-}
-
-export async function sendWhatsApp(args: {
-  to: string; // E.164 number; we'll prefix "whatsapp:" automatically
-  body: string;
-}): Promise<{ messageSid: string }> {
-  const to = args.to.startsWith("whatsapp:")
-    ? args.to
-    : `whatsapp:${args.to.replace(/[^+\d]/g, "")}`;
-  const r = await postMessage({ kind: "whatsapp", to, body: args.body });
+  const r = (await res.json()) as TwilioMessageResponse;
   return { messageSid: r.sid };
 }

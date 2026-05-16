@@ -20,7 +20,6 @@ import {
   ArrowUpRight,
   Loader2,
   Mail,
-  MessageSquare,
   Phone,
   Smartphone,
   StickyNote,
@@ -29,7 +28,7 @@ import {
 import { sendClientMessage } from "@/lib/actions/send-client-message";
 import type { CommunicationRow } from "@/lib/db/queries/client-communications";
 
-type Channel = "all" | "email" | "sms" | "whatsapp" | "phone_call" | "meeting_note";
+type Channel = "all" | "email" | "sms" | "phone_call" | "meeting_note";
 
 export function ClientCommunicationsPanel({
   prospectId,
@@ -39,7 +38,6 @@ export function ClientCommunicationsPanel({
   contactPhone,
   rows,
   smsEnabled,
-  whatsappEnabled,
 }: {
   prospectId?: string;
   engagementId?: string;
@@ -49,13 +47,11 @@ export function ClientCommunicationsPanel({
   rows: CommunicationRow[];
   /** Whether Twilio SMS is configured in env. */
   smsEnabled: boolean;
-  /** Whether Twilio WhatsApp is configured in env. */
-  whatsappEnabled: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Channel>("all");
   const [composing, setComposing] = useState<null | {
-    channel: "email" | "sms" | "whatsapp";
+    channel: "email" | "sms";
     to: string;
     subject: string;
     body: string;
@@ -87,15 +83,6 @@ export function ClientCommunicationsPanel({
     setError(null);
     setComposing({
       channel: "sms",
-      to: contactPhone ?? "",
-      subject: "",
-      body: "",
-    });
-  }
-  function openWhatsAppCompose() {
-    setError(null);
-    setComposing({
-      channel: "whatsapp",
       to: contactPhone ?? "",
       subject: "",
       body: "",
@@ -148,12 +135,6 @@ export function ClientCommunicationsPanel({
             SMS
           </ChannelTab>
           <ChannelTab
-            active={filter === "whatsapp"}
-            onClick={() => setFilter("whatsapp")}
-          >
-            WhatsApp
-          </ChannelTab>
-          <ChannelTab
             active={filter === "phone_call"}
             onClick={() => setFilter("phone_call")}
           >
@@ -178,19 +159,6 @@ export function ClientCommunicationsPanel({
           tooltip={
             !smsEnabled
               ? "Configure Twilio SMS in Netlify env vars"
-              : !contactPhone
-                ? "Add a contact phone on the prospect first"
-                : undefined
-          }
-        />
-        <ComposeButton
-          icon={<MessageSquare className="w-3.5 h-3.5" aria-hidden />}
-          onClick={openWhatsAppCompose}
-          label="WhatsApp"
-          disabled={!whatsappEnabled || !contactPhone}
-          tooltip={
-            !whatsappEnabled
-              ? "Configure Twilio WhatsApp in Netlify env vars"
               : !contactPhone
                 ? "Add a contact phone on the prospect first"
                 : undefined
@@ -385,14 +353,16 @@ function ComposeButton({
   );
 }
 
-function ChannelIcon({ channel }: { channel: CommunicationRow["channel"] | "email" | "sms" | "whatsapp" }) {
+function ChannelIcon({
+  channel,
+}: {
+  channel: CommunicationRow["channel"] | "email" | "sms";
+}) {
   switch (channel) {
     case "email":
       return <Mail className="w-4 h-4 text-tbb-blue" aria-hidden />;
     case "sms":
       return <Smartphone className="w-4 h-4 text-tbb-blue" aria-hidden />;
-    case "whatsapp":
-      return <MessageSquare className="w-4 h-4 text-tbb-blue" aria-hidden />;
     case "phone_call":
       return <Phone className="w-4 h-4 text-tbb-blue" aria-hidden />;
     default:

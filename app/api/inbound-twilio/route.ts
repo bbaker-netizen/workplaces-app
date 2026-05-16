@@ -48,9 +48,7 @@ function safeEq(a: string, b: string): boolean {
 }
 
 function normalizePhone(addr: string): string {
-  // Strip "whatsapp:" prefix, collapse to digits + leading "+".
-  const trimmed = addr.replace(/^whatsapp:/i, "").trim();
-  // Keep leading + then digits only.
+  const trimmed = addr.trim();
   const m = trimmed.match(/\+?\d+/);
   return m ? (m[0].startsWith("+") ? m[0] : `+${m[0]}`) : trimmed;
 }
@@ -93,10 +91,7 @@ export async function POST(req: Request): Promise<Response> {
   const toRaw = formParams.To ?? "";
   const body = formParams.Body ?? "";
   const messageSid = formParams.MessageSid ?? null;
-  const isWhatsApp =
-    fromRaw.toLowerCase().startsWith("whatsapp:") ||
-    toRaw.toLowerCase().startsWith("whatsapp:");
-  const channel: "sms" | "whatsapp" = isWhatsApp ? "whatsapp" : "sms";
+  const channel = "sms" as const;
 
   const fromPhone = normalizePhone(fromRaw);
   const toPhone = normalizePhone(toRaw);

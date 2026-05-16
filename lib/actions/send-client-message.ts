@@ -23,18 +23,13 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 import { sendGmailMessage } from "@/lib/integrations/gmail";
-import {
-  isSmsConfigured,
-  isWhatsAppConfigured,
-  sendSms,
-  sendWhatsApp,
-} from "@/lib/integrations/twilio";
+import { isSmsConfigured, sendSms } from "@/lib/integrations/twilio";
 
 const sendSchema = z
   .object({
     prospectId: z.string().uuid().nullable().optional(),
     engagementId: z.string().uuid().nullable().optional(),
-    channel: z.enum(["email", "sms", "whatsapp"]),
+    channel: z.enum(["email", "sms"]),
     to: z.array(z.string().min(1)).min(1).max(10),
     subject: z.string().max(500).nullable().optional(),
     body: z.string().min(1).max(50_000),
@@ -124,16 +119,6 @@ export async function sendClientMessage(
         };
       }
       const r = await sendSms({ to: data.to[0], body: data.body });
-      externalId = r.messageSid;
-    } else if (data.channel === "whatsapp") {
-      if (!isWhatsAppConfigured()) {
-        return {
-          ok: false,
-          error:
-            "Twilio WhatsApp isn't configured yet. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_WHATSAPP_FROM in Netlify, and complete Meta business verification first.",
-        };
-      }
-      const r = await sendWhatsApp({ to: data.to[0], body: data.body });
       externalId = r.messageSid;
     }
   } catch (e) {

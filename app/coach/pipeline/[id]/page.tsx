@@ -29,10 +29,7 @@ import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivity
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
-import {
-  isSmsConfigured,
-  isWhatsAppConfigured,
-} from "@/lib/integrations/twilio";
+import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
   STAGE_STYLES,
   type ProspectStatus,
@@ -207,7 +204,6 @@ export default async function ProspectDetailPage({
         contactPhone={prospect.phone}
         rows={communications}
         smsEnabled={isSmsConfigured()}
-        whatsappEnabled={isWhatsAppConfigured()}
       />
     </main>
   );

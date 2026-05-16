@@ -18,10 +18,7 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { MessageThread } from "@/components/communication/MessageThread";
 import { RecentActivity } from "@/components/communication/RecentActivity";
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
-import {
-  isSmsConfigured,
-  isWhatsAppConfigured,
-} from "@/lib/integrations/twilio";
+import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
   THREAD_TYPE,
   canViewThread,
@@ -139,7 +136,6 @@ export default async function CoachCommunicationPage({
           contactPhone={null}
           rows={communications}
           smsEnabled={isSmsConfigured()}
-          whatsappEnabled={isWhatsAppConfigured()}
         />
       </section>
 
