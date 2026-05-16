@@ -183,6 +183,13 @@
       "when": 1778389000000,
       "tag": "0025_phase_5_fixup",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778390000000,
+      "tag": "0026_email_templates",
+      "breakpoints": true
     }
   ]
 }

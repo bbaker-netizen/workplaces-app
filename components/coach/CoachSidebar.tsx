@@ -91,6 +91,7 @@ const COACH_PHASES: CoachPhase[] = [
       { href: "/coach", label: "My work", icon: CheckSquare, tourId: "coach-home" },
       { href: "/coach/action-items", label: "Action items", icon: CheckSquare },
       { href: "/coach/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },
+      { href: "/coach/templates", label: "Email templates", icon: FileText },
       { href: "/coach/communication", label: "Communication", icon: MessagesSquare },
     ],
   },

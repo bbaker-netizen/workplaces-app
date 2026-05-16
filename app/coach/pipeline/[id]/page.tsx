@@ -20,7 +20,7 @@ import {
 } from "@/lib/db/queries/prospects";
 import { listEnvelopesForProspect } from "@/lib/db/queries/signatures";
 import { listForProspect } from "@/lib/db/queries/client-communications";
-import { userProfiles } from "@/lib/db/schema";
+import { emailTemplates, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect";
@@ -52,19 +52,30 @@ export default async function ProspectDetailPage({
   const prospect = await getProspect(params.id);
   if (!prospect) notFound();
 
-  const [activities, envelopes, hasStoredSig, communications] = await Promise.all([
-    listProspectActivities(prospect.id),
-    listEnvelopesForProspect(prospect.id),
-    withSystemContext(async (tx) => {
-      const [row] = await tx
-        .select({ signatureImageData: userProfiles.signatureImageData })
-        .from(userProfiles)
-        .where(eq(userProfiles.id, profile.userProfileId))
-        .limit(1);
-      return Boolean(row?.signatureImageData);
-    }),
-    listForProspect(prospect.id),
-  ]);
+  const [activities, envelopes, hasStoredSig, communications, templates] =
+    await Promise.all([
+      listProspectActivities(prospect.id),
+      listEnvelopesForProspect(prospect.id),
+      withSystemContext(async (tx) => {
+        const [row] = await tx
+          .select({ signatureImageData: userProfiles.signatureImageData })
+          .from(userProfiles)
+          .where(eq(userProfiles.id, profile.userProfileId))
+          .limit(1);
+        return Boolean(row?.signatureImageData);
+      }),
+      listForProspect(prospect.id),
+      withSystemContext(async (tx) => {
+        return tx
+          .select({
+            id: emailTemplates.id,
+            name: emailTemplates.name,
+            category: emailTemplates.category,
+          })
+          .from(emailTemplates)
+          .where(eq(emailTemplates.orgId, profile.orgId));
+      }),
+    ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
 
@@ -234,6 +245,7 @@ export default async function ProspectDetailPage({
         contactPhone={prospect.phone}
         rows={communications}
         smsEnabled={isSmsConfigured()}
+        emailTemplates={templates}
       />
     </main>
   );

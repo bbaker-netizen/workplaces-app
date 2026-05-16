@@ -1315,6 +1315,36 @@ export const clientCommunications = pgTable(
 );
 
 /**
+ * Reusable email templates Bruce builds once, sends to many. Subject
+ * and body support `{{variable}}` interpolation against the prospect
+ * or engagement context at send time (e.g. {{contact_name}},
+ * {{company_name}}, {{sender_name}}).
+ */
+export const emailTemplates = pgTable(
+  "email_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    category: text("category").notNull().default("other"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("email_templates_org_idx").on(t.orgId),
+    categoryIdx: index("email_templates_category_idx").on(t.orgId, t.category),
+  }),
+);
+
+/**
  * Per-prospect / per-engagement BCC alias. Bruce BCCs the alias on any
  * outbound email; the inbound webhook resolves it back to the right
  * client record.
@@ -2129,6 +2159,8 @@ export type ClientCommunication = typeof clientCommunications.$inferSelect;
 export type NewClientCommunication = typeof clientCommunications.$inferInsert;
 export type CommunicationAlias = typeof communicationAliases.$inferSelect;
 export type NewCommunicationAlias = typeof communicationAliases.$inferInsert;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
 export type NotificationRead = typeof notificationReads.$inferSelect;
 export type NewNotificationRead = typeof notificationReads.$inferInsert;
 export type LessonCompletion = typeof lessonCompletions.$inferSelect;

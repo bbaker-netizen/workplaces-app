@@ -26,7 +26,14 @@ import {
   X,
 } from "lucide-react";
 import { sendClientMessage } from "@/lib/actions/send-client-message";
+import { resolveTemplateForProspect } from "@/lib/actions/email-templates";
 import type { CommunicationRow } from "@/lib/db/queries/client-communications";
+
+export type EmailTemplateOption = {
+  id: string;
+  name: string;
+  category: string;
+};
 
 type Channel = "all" | "email" | "sms" | "phone_call" | "meeting_note";
 
@@ -39,6 +46,7 @@ export function ClientCommunicationsPanel({
   rows,
   smsEnabled,
   readOnly = false,
+  emailTemplates = [],
 }: {
   prospectId?: string;
   engagementId?: string;
@@ -52,6 +60,10 @@ export function ClientCommunicationsPanel({
    *  client-portal side where the audit trail is visible but the
    *  client uses their own email / phone to reply. */
   readOnly?: boolean;
+  /** Available email templates the user can pick from when composing.
+   *  Only meaningful for prospect context — engagement-level template
+   *  resolution lands in a later phase. */
+  emailTemplates?: EmailTemplateOption[];
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Channel>("all");
@@ -209,20 +221,61 @@ export function ClientCommunicationsPanel({
             />
           </label>
           {composing.channel === "email" && (
-            <label className="block">
-              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-                Subject
-              </span>
-              <input
-                type="text"
-                value={composing.subject}
-                onChange={(e) =>
-                  setComposing({ ...composing, subject: e.target.value })
-                }
-                className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-                disabled={isPending}
-              />
-            </label>
+            <>
+              {emailTemplates.length > 0 && prospectId && (
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                    Use template (optional)
+                  </span>
+                  <select
+                    value=""
+                    onChange={async (e) => {
+                      const tmplId = e.target.value;
+                      if (!tmplId) return;
+                      // Reset selection so picking the same template
+                      // again re-applies it.
+                      e.target.value = "";
+                      const r = await resolveTemplateForProspect({
+                        templateId: tmplId,
+                        prospectId,
+                      });
+                      if (r.ok) {
+                        setComposing({
+                          ...composing,
+                          subject: r.subject,
+                          body: r.body,
+                        });
+                      } else {
+                        setError(r.error);
+                      }
+                    }}
+                    disabled={isPending}
+                    className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                  >
+                    <option value="">— Pick a template —</option>
+                    {emailTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}{t.category !== "other" ? ` · ${t.category}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Subject
+                </span>
+                <input
+                  type="text"
+                  value={composing.subject}
+                  onChange={(e) =>
+                    setComposing({ ...composing, subject: e.target.value })
+                  }
+                  className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                  disabled={isPending}
+                />
+              </label>
+            </>
           )}
           <label className="block">
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
