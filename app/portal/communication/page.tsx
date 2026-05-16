@@ -16,8 +16,10 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import { listForEngagement } from "@/lib/db/queries/client-communications";
 import { MessageThread } from "@/components/communication/MessageThread";
 import { RecentActivity } from "@/components/communication/RecentActivity";
+import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
 import {
   THREAD_TYPE,
   canViewThread,
@@ -55,6 +57,12 @@ export default async function PortalCommunicationPage({
     ? "leadership"
     : "team";
 
+  // External communications captured for this engagement — emails / SMS
+  // / WhatsApp / call notes between Bruce and the client team. Read-only
+  // on the portal side; clients reply through their own email/phone and
+  // those replies sync back via Gmail / Twilio webhooks.
+  const externalComms = await listForEngagement(engagement.id);
+
   return (
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-10">
       <header className="space-y-2">
@@ -71,6 +79,26 @@ export default async function PortalCommunicationPage({
           Recent activity
         </h2>
         <RecentActivity engagementId={engagement.id} scope="portal" />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-bold text-foreground text-xl tracking-tight">
+          External communications
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Emails, texts, and call notes between your Business Builder and your
+          team — a running audit trail. Reply with your normal email; your
+          response will appear here automatically.
+        </p>
+        <ClientCommunicationsPanel
+          engagementId={engagement.id}
+          contactName={null}
+          contactEmail={null}
+          contactPhone={null}
+          rows={externalComms}
+          smsEnabled={false}
+          readOnly
+        />
       </section>
 
       <section className="space-y-4">

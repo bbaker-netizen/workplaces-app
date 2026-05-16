@@ -38,6 +38,7 @@ export function ClientCommunicationsPanel({
   contactPhone,
   rows,
   smsEnabled,
+  readOnly = false,
 }: {
   prospectId?: string;
   engagementId?: string;
@@ -47,6 +48,10 @@ export function ClientCommunicationsPanel({
   rows: CommunicationRow[];
   /** Whether Twilio SMS is configured in env. */
   smsEnabled: boolean;
+  /** When true, hide compose buttons + reply actions. Used on the
+   *  client-portal side where the audit trail is visible but the
+   *  client uses their own email / phone to reply. */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Channel>("all");
@@ -143,28 +148,30 @@ export function ClientCommunicationsPanel({
         </div>
       </header>
 
-      <div className="px-5 py-3 border-b border-tbb-line-soft flex flex-wrap gap-2">
-        <ComposeButton
-          icon={<Mail className="w-3.5 h-3.5" aria-hidden />}
-          onClick={() => openEmailCompose()}
-          label="Email"
-          disabled={!contactEmail}
-          tooltip={contactEmail ? undefined : "Add a contact email on the prospect first"}
-        />
-        <ComposeButton
-          icon={<Smartphone className="w-3.5 h-3.5" aria-hidden />}
-          onClick={openSmsCompose}
-          label="SMS"
-          disabled={!smsEnabled || !contactPhone}
-          tooltip={
-            !smsEnabled
-              ? "Configure Twilio SMS in Netlify env vars"
-              : !contactPhone
-                ? "Add a contact phone on the prospect first"
-                : undefined
-          }
-        />
-      </div>
+      {!readOnly && (
+        <div className="px-5 py-3 border-b border-tbb-line-soft flex flex-wrap gap-2">
+          <ComposeButton
+            icon={<Mail className="w-3.5 h-3.5" aria-hidden />}
+            onClick={() => openEmailCompose()}
+            label="Email"
+            disabled={!contactEmail}
+            tooltip={contactEmail ? undefined : "Add a contact email on the prospect first"}
+          />
+          <ComposeButton
+            icon={<Smartphone className="w-3.5 h-3.5" aria-hidden />}
+            onClick={openSmsCompose}
+            label="SMS"
+            disabled={!smsEnabled || !contactPhone}
+            tooltip={
+              !smsEnabled
+                ? "Configure Twilio SMS in Netlify env vars"
+                : !contactPhone
+                  ? "Add a contact phone on the prospect first"
+                  : undefined
+            }
+          />
+        </div>
+      )}
 
       {composing && (
         <div className="px-5 py-4 border-b border-tbb-line-soft bg-tbb-cream-50 space-y-2">
@@ -278,8 +285,9 @@ export function ClientCommunicationsPanel({
             No {filter === "all" ? "communications" : `${filter} messages`} yet.
           </p>
           <p>
-            Send an email above, or log a call from the activity panel. Inbound
-            emails sync from your connected Gmail every 10 minutes.
+            {readOnly
+              ? "Emails between your Business Builder and your team will appear here once they happen."
+              : "Send an email above, or log a call from the activity panel. Inbound emails sync from your connected Gmail every 10 minutes."}
           </p>
         </div>
       ) : (
@@ -289,7 +297,9 @@ export function ClientCommunicationsPanel({
               key={r.id}
               row={r}
               onReply={
-                r.direction === "inbound" && r.channel === "email"
+                !readOnly &&
+                r.direction === "inbound" &&
+                r.channel === "email"
                   ? () => openEmailCompose(r)
                   : undefined
               }

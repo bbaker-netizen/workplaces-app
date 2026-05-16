@@ -343,6 +343,8 @@ export async function syncUserGmail(args: {
   }
 
   const lookup = await buildMatchLookup(args.masterOrgId);
+  const ownerEmail = await ownerEmailFor(args.userProfileId);
+  const ownerEmailLower = ownerEmail?.toLowerCase() ?? null;
 
   let captured = 0;
   let latest = args.since.getTime();
@@ -360,12 +362,18 @@ export async function syncUserGmail(args: {
       const bccAddrs = extractAddresses(headers.get("bcc"));
       const participants = [...fromAddrs, ...toAddrs, ...ccAddrs, ...bccAddrs];
 
-      const match = matchParticipantToClient(lookup, participants);
+      // Exclude the syncing user's own email from the match-set so a
+      // self-as-prospect test record doesn't cause every email to match.
+      // We only care whether the OTHER party is a known client.
+      const otherParticipants = ownerEmailLower
+        ? participants.filter((p) => p.toLowerCase() !== ownerEmailLower)
+        : participants;
+
+      const match = matchParticipantToClient(lookup, otherParticipants);
       if (!match) continue;
 
-      const ownerEmail = await ownerEmailFor(args.userProfileId);
       const fromOwner = fromAddrs.some(
-        (a) => ownerEmail && a === ownerEmail.toLowerCase(),
+        (a) => ownerEmailLower && a.toLowerCase() === ownerEmailLower,
       );
       const direction = fromOwner ? "outbound" : "inbound";
 
