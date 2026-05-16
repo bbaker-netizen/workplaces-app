@@ -52,6 +52,10 @@ type CoachNavItem = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   tourId?: string;
+  /** Open in a new tab. Use for client-facing surfaces (e.g. the
+   *  public diagnostic) so the Business Builder doesn't get trapped
+   *  on a page with no nav back to the console. */
+  external?: boolean;
 };
 
 type CoachPhase = {
@@ -68,7 +72,13 @@ const COACH_PHASES: CoachPhase[] = [
     caption: "Bring new prospects in",
     items: [
       { href: "/coach/pipeline", label: "Prospects", icon: Filter, tourId: "coach-pipeline" },
-      { href: "/diagnostic", label: "Public diagnostic", icon: LinkIcon, tourId: "coach-diagnostic" },
+      {
+        href: "/diagnostic",
+        label: "Public diagnostic",
+        icon: LinkIcon,
+        tourId: "coach-diagnostic",
+        external: true,
+      },
     ],
   },
   {
@@ -348,6 +358,10 @@ function NavItemRow({
 }) {
   const Icon = item.icon ?? Settings;
 
+  const linkExtras = item.external
+    ? { target: "_blank", rel: "noreferrer noopener" }
+    : {};
+
   if (collapsed) {
     return (
       <Link
@@ -355,6 +369,7 @@ function NavItemRow({
         data-tour={item.tourId}
         title={item.label}
         aria-label={item.label}
+        {...linkExtras}
         className="grid place-items-center w-10 h-10 mx-auto rounded-md text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors duration-tbb-base"
       >
         <Icon className="w-4 h-4" aria-hidden />
@@ -367,6 +382,7 @@ function NavItemRow({
       <Link
         href={item.href}
         data-tour={item.tourId}
+        {...linkExtras}
         className="flex-1 flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-bold text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors duration-tbb-base"
       >
         <Icon className="w-4 h-4 flex-none" aria-hidden />
