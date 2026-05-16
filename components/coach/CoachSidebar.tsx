@@ -310,10 +310,11 @@ export function CoachSidebar({
             <p className="text-[11px] font-bold text-tbb-cream truncate">{fullName}</p>
             <div className="flex gap-3 mt-0.5">
               <Link
-                href="/portal"
+                href="/portal?preview=1"
                 className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base"
+                title="Preview the client portal as your client would see it"
               >
-                Portal
+                Portal preview
               </Link>
               <SignOutButton redirectUrl="/">
                 <button className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base">

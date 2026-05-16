@@ -22,14 +22,23 @@ import {
   SESSION_TYPE_LABEL,
 } from "@/components/sessions/utils";
 
-export default async function PortalDashboard() {
+export default async function PortalDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ preview?: string }>;
+}) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
 
-  // Business Builders should land on their console, not the client view.
-  // If they want to peek at the client portal, the Coach footer has a
-  // "Portal" link.
-  if (profile.role === "master_admin" || profile.role === "coach") {
+  // Business Builders should land on their console by default. But the
+  // "Portal view" link in the console passes ?preview=1 so coaches can
+  // peek at what a client would see without getting redirected away.
+  const sp = await searchParams;
+  const isPreview = sp.preview === "1";
+  if (
+    !isPreview &&
+    (profile.role === "master_admin" || profile.role === "coach")
+  ) {
     redirect("/coach");
   }
 
@@ -83,6 +92,22 @@ export default async function PortalDashboard() {
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-10 sm:py-12 space-y-10">
+      {isPreview && (
+        <div className="border border-tbb-warning/40 bg-tbb-warning/10 text-tbb-ink-2 rounded-md px-4 py-3 text-sm flex items-center gap-3 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-warning">
+            Preview
+          </span>
+          <span>
+            You&apos;re viewing the client portal as a client would see it.
+          </span>
+          <Link
+            href="/coach"
+            className="ml-auto text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+          >
+            ← Back to Business Builder Console
+          </Link>
+        </div>
+      )}
       <header className="space-y-1">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           {engagement.name ?? "Engagement"}

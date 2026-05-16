@@ -554,10 +554,11 @@ export default async function CoachConsole() {
               <Plus className="w-4 h-4" aria-hidden /> New engagement
             </Link>
             <Link
-              href="/portal"
+              href="/portal?preview=1"
+              title="Preview what a client sees when they log in"
               className="text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
             >
-              Portal view
+              Portal preview
             </Link>
           </div>
         </header>
