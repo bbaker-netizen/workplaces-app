@@ -314,6 +314,9 @@ export async function createMeetingWithInvite(
   userProfileId: string,
   payload: GoogleEventPayload & {
     addMeetLink?: boolean;
+    /** Array of RFC-5545 RRULE strings, e.g. ["RRULE:FREQ=WEEKLY"].
+     *  Omitted / empty array = one-off event. */
+    recurrence?: string[];
   },
 ): Promise<{
   eventId: string;
@@ -332,6 +335,9 @@ export async function createMeetingWithInvite(
     end: payload.end,
     attendees: payload.attendees,
   };
+  if (payload.recurrence && payload.recurrence.length > 0) {
+    body.recurrence = payload.recurrence;
+  }
   if (payload.addMeetLink) {
     body.conferenceData = {
       createRequest: {

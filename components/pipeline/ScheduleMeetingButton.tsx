@@ -31,12 +31,15 @@ export function ScheduleMeetingButton({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState(`Workplaces ↔ ${companyName}`);
+  const [title, setTitle] = useState("Business Building Session");
   const [startAt, setStartAt] = useState(defaultStart());
   const [duration, setDuration] = useState<number>(30);
   const [meetingType, setMeetingType] = useState<MeetingType>("video");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [recurrence, setRecurrence] = useState<
+    "none" | "weekly" | "biweekly" | "monthly"
+  >("none");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<
     | { hangoutLink: string | null; htmlLink: string | null }
@@ -56,6 +59,7 @@ export function ScheduleMeetingButton({
         meetingType,
         location: location.trim() || null,
         description: description.trim() || null,
+        recurrence,
       });
       if (!r.ok) {
         setError(r.error);
@@ -118,8 +122,8 @@ export function ScheduleMeetingButton({
             </button>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <label className="block sm:col-span-2">
+          <div className="grid sm:grid-cols-3 gap-3">
+            <label className="block sm:col-span-3">
               <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
                 Title
               </span>
@@ -159,6 +163,30 @@ export function ScheduleMeetingButton({
                 <option value={60}>60 minutes</option>
                 <option value={90}>90 minutes</option>
                 <option value={120}>2 hours</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Repeat
+              </span>
+              <select
+                value={recurrence}
+                onChange={(e) =>
+                  setRecurrence(
+                    e.target.value as
+                      | "none"
+                      | "weekly"
+                      | "biweekly"
+                      | "monthly",
+                  )
+                }
+                disabled={isPending}
+                className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+              >
+                <option value="none">Just once</option>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Every 2 weeks</option>
+                <option value="monthly">Monthly</option>
               </select>
             </label>
           </div>

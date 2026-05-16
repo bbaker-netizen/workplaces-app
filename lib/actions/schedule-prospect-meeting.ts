@@ -36,7 +36,30 @@ const schema = z.object({
   meetingType: z.enum(["video", "in_person", "phone"]),
   location: z.string().max(500).nullable().optional(),
   description: z.string().max(4000).nullable().optional(),
+  recurrence: z
+    .enum(["none", "weekly", "biweekly", "monthly"])
+    .optional()
+    .default("none"),
 });
+
+function recurrenceToRRule(
+  recurrence: "none" | "weekly" | "biweekly" | "monthly",
+): string[] {
+  // Google Calendar's recurrence field is an array of RFC-5545 RRULE
+  // strings. We default to "no end" — most coaching cadences are open-
+  // ended; the user can edit the series in Google Calendar to cap it.
+  switch (recurrence) {
+    case "weekly":
+      return ["RRULE:FREQ=WEEKLY"];
+    case "biweekly":
+      return ["RRULE:FREQ=WEEKLY;INTERVAL=2"];
+    case "monthly":
+      return ["RRULE:FREQ=MONTHLY"];
+    case "none":
+    default:
+      return [];
+  }
+}
 
 export type ScheduleProspectMeetingInput = z.input<typeof schema>;
 
@@ -120,6 +143,7 @@ export async function scheduleProspectMeeting(
         { email: sender.email, displayName: sender.name },
       ],
       addMeetLink: data.meetingType === "video",
+      recurrence: recurrenceToRRule(data.recurrence),
     });
     calendarResult = { hangoutLink: r.hangoutLink, htmlLink: r.htmlLink };
   } catch (e) {
