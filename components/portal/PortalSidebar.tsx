@@ -78,6 +78,7 @@ export function PortalSidebar({
   engagementName,
   pinnedNavItems,
   collapsedInitial,
+  isCoach,
 }: {
   fullName: string;
   unreadCount: number;
@@ -85,6 +86,7 @@ export function PortalSidebar({
   engagementName?: string | null;
   pinnedNavItems: string[];
   collapsedInitial: boolean;
+  isCoach: boolean;
 }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(collapsedInitial);
@@ -259,11 +261,21 @@ export function PortalSidebar({
               <p className="text-[11px] font-bold text-tbb-cream truncate">
                 {fullName}
               </p>
-              <SignOutButton redirectUrl="/">
-                <button className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base">
-                  Sign out
-                </button>
-              </SignOutButton>
+              <div className="flex gap-3 mt-0.5">
+                {isCoach && (
+                  <Link
+                    href="/coach"
+                    className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base"
+                  >
+                    Console
+                  </Link>
+                )}
+                <SignOutButton redirectUrl="/">
+                  <button className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base">
+                    Sign out
+                  </button>
+                </SignOutButton>
+              </div>
             </div>
             <NotificationBell unreadCount={unreadCount} />
           </>

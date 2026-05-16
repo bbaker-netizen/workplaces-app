@@ -26,6 +26,13 @@ export default async function PortalDashboard() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
 
+  // Business Builders should land on their console, not the client view.
+  // If they want to peek at the client portal, the Coach footer has a
+  // "Portal" link.
+  if (profile.role === "master_admin" || profile.role === "coach") {
+    redirect("/coach");
+  }
+
   const engagement = await getCurrentEngagement();
   if (!engagement) {
     return (
@@ -51,18 +58,15 @@ export default async function PortalDashboard() {
       getSoulFileForEngagement(engagement.id),
     ]);
 
-  const isCoachLike =
-    profile.role === "master_admin" || profile.role === "coach";
-
-  // What "my open items" means: assigned to me, not done, not draft
-  // (drafts are Business-Builder-side WIP). Sort overdue first, then by due date.
+  // Coach roles were redirected to /coach above, so by this point the
+  // viewer is always a client-side role and "draft" items stay hidden.
   const now = new Date();
   const myOpen = allItems
     .filter(
       (i) =>
         i.assigneeUserProfileId === profile.userProfileId &&
         i.status !== "done" &&
-        (isCoachLike || i.status !== "draft"),
+        i.status !== "draft",
     )
     .sort((a, b) => {
       const aOverdue = a.dueDate && a.dueDate < now ? 0 : 1;
