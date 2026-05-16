@@ -148,3 +148,12 @@
   0%   { transform: scale(0.85) translateY(6px); opacity: 0; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
 }
+
+/* Buddy walks in from off-screen when the chat panel first opens —
+   little intro flourish that won't replay on subsequent opens. */
+@keyframes buddyWalkIn {
+  0%   { transform: translateX(-40px) rotate(-8deg); opacity: 0; }
+  60%  { transform: translateX(4px) rotate(6deg); opacity: 1; }
+  80%  { transform: translateX(-2px) rotate(-3deg); }
+  100% { transform: translateX(0) rotate(0); }
+}

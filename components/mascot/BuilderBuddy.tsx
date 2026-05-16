@@ -1,295 +1,390 @@
 "use client";
 
 /**
- * Builder Buddy — a tiny construction-worker mascot that sits in the
- * bottom-right corner of the Business Builder Console. Click them and
- * they pop a speech bubble with a contextual tip for whatever page
- * you're on. Tasteful homage to the old Office Assistant — friendly,
- * idle by default, never interrupts.
+ * Builder Buddy v2 — an AI chat assistant you summon on demand.
  *
- * UX rules:
- *   - Sleeps quietly until clicked (no popups, no auto-trigger).
- *   - Idle animation: gentle bob + occasional hat tip.
- *   - Speech bubble closes on click-outside or via "Got it".
- *   - "Hide on this page" stores a dismissal in localStorage per path.
- *   - Mute toggle stores a global "don't show me Buddy anywhere" flag.
+ * v1 was a bobbing mascot in the corner that auto-popped tips. Bruce
+ * said it drove him nuts. So v1 is gone. This version:
+ *
+ *   - Hides until you call it (small "Ask Buddy" pill button in the
+ *     bottom-right; press "?" to summon from keyboard).
+ *   - Opens a chat panel that slides up from the corner.
+ *   - Buddy character walks in from off-screen the first time the
+ *     panel opens — bit of welcome animation, then settles.
+ *   - You can type any question. Powered by Claude with a system
+ *     prompt that knows the app's modules, methodology, and brand
+ *     voice.
+ *   - Multi-turn conversation kept in component state.
+ *   - "New chat" resets the thread.
+ *   - Suggested starter questions when the panel first opens.
+ *   - localStorage remembers if you've muted Buddy globally.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import {
+  HelpCircle,
+  Loader2,
+  MessageCircle,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { askBuddy, type BuddyMessage } from "@/lib/actions/ask-buddy";
 
-const STORAGE_GLOBAL_KEY = "tbb_buddy_muted";
-const STORAGE_PATH_KEY = "tbb_buddy_hidden_paths";
+const STORAGE_MUTED = "tbb_buddy_muted_v2";
 
-type Tip = {
-  emoji?: string;
-  text: string;
-};
-
-/**
- * Page-aware tips. Match in priority order — most-specific first.
- * Each path can have multiple tips; clicking "Next tip" cycles.
- */
-const TIPS: { match: (p: string) => boolean; tips: Tip[] }[] = [
+const STARTERS: { label: string; text: string }[] = [
   {
-    match: (p) => /^\/coach\/pipeline\/[^/]+$/.test(p) && p !== "/coach/pipeline/new",
-    tips: [
-      { emoji: "👋", text: "Read the What's Next card up top — it tells you exactly what to do at this stage." },
-      { emoji: "📅", text: "Quick Actions has Schedule Meeting AND Send Diagnostic. Save typing — let the app email them for you." },
-      { emoji: "📝", text: "The Communications panel at the bottom is the per-client audit trail. Email, SMS, call notes — all in one feed." },
-      { emoji: "🎯", text: "Set a Next Action date on the Deal card so the prospect surfaces in the list when it's time to follow up." },
-    ],
+    label: "How do I add a prospect?",
+    text: "How do I add a new prospect to the pipeline?",
   },
   {
-    match: (p) => p === "/coach/pipeline" || p === "/coach/pipeline/new",
-    tips: [
-      { emoji: "🎯", text: "Pipeline is your sales radar. New leads at the top, won deals at the bottom — work it left to right." },
-      { emoji: "🪛", text: "Hit the Columns button to add / hide / resize. Make the table show exactly what you care about." },
-      { emoji: "✉️", text: "Web form leads land here automatically. Set up your form to POST to /api/leads — see the Welcome guide." },
-    ],
+    label: "Action items vs Deliverables?",
+    text: "What's the difference between Action Items, Deliverables, Projects, and Goals?",
   },
   {
-    match: (p) => p === "/coach/inbox",
-    tips: [
-      { emoji: "📬", text: "This is every email + text across every prospect, in one place. The per-client copies live inside each prospect page." },
-      { emoji: "🔍", text: "Use the search bar — it scans subjects, bodies, and senders. Way faster than scrolling." },
-      { emoji: "🏷️", text: "Tag conversations to filter later. 'Renewal', 'Hot', 'Cold' — whatever your brain wants to group by." },
-    ],
+    label: "What's the Soul File?",
+    text: "What is the Soul File and why does it matter?",
   },
   {
-    match: (p) => p === "/coach/action-items" || p.startsWith("/coach/action-items/"),
-    tips: [
-      { emoji: "⏱️", text: "Action items = HOURS/DAYS commitments. \"Send Q3 numbers by Friday.\" If it takes weeks, make it a Deliverable instead." },
-      { emoji: "🤖", text: "Fireflies records a BBS session → Claude reads the transcript → drafts the action items for you. Edit, assign, hit Publish." },
-      { emoji: "🔥", text: "Overdue items pin to the top. Don't ignore them — they're how clients lose trust." },
-    ],
-  },
-  {
-    match: (p) => p === "/coach/deliverables" || p.startsWith("/coach/deliverables/"),
-    tips: [
-      { emoji: "📚", text: "Deliverables = the 9 BIG artifacts you produce for clients. SOPs, Org Charts, Job Profiles, Financial Dashboards, Business Plans, etc." },
-      { emoji: "🏗️", text: "Lifecycle: Not started → In progress → Review → Done. These are what clients actually buy from you." },
-      { emoji: "🧭", text: "Difference from Projects: a Deliverable IS the artifact (a Marketing Plan). A Project is the INITIATIVE around it (\"build out Acme's marketing function\")." },
-    ],
-  },
-  {
-    match: (p) => p === "/coach/projects" || p.startsWith("/coach/projects/"),
-    tips: [
-      { emoji: "🏗️", text: "Projects = big initiatives inside a client. \"Build Acme's hiring system.\" \"Launch their marketing function.\" Spans weeks or months." },
-      { emoji: "🧭", text: "Projects vs Deliverables: the Project is the JOB (\"build a hiring system\"); the Deliverables are the OUTPUTS (the Org Chart, the Job Profile, the Interview Guide)." },
-      { emoji: "📐", text: "Tasks live INSIDE a project. Action items live across the engagement. Use Projects for multi-week initiatives." },
-    ],
-  },
-  {
-    match: (p) => p.startsWith("/coach/sessions"),
-    tips: [
-      { emoji: "🗓️", text: "BBS Sessions = the actual meetings — twice-monthly, 2 hours, one in-person and one virtual." },
-      { emoji: "🎙️", text: "Paste a Fireflies recording ID after the session and Claude drafts the action items for you." },
-      { emoji: "🧭", text: "Sessions = WHEN you meet. Projects = WHAT you're building. Action items = WHAT'S DUE this week. Deliverables = the artifacts you produce. Different views, same engagement." },
-    ],
-  },
-  {
-    match: (p) => p === "/coach" || p.startsWith("/coach/communication"),
-    tips: [
-      { emoji: "👋", text: "Welcome to the console. Hit Customize on the dashboard to rearrange the cards how you like." },
-      { emoji: "📌", text: "Hover any sidebar item and hit the star to pin it to Favourites." },
-      { emoji: "👀", text: "Click Client Portal View top-right to see what your clients see when they log in." },
-    ],
-  },
-  {
-    match: () => true, // fallback for any other coach page
-    tips: [
-      { emoji: "👷", text: "I'm Buddy. Click me on any page for a quick tip." },
-      { emoji: "🦉", text: "The sidebar groups your work by phase: Pipeline → Engage → Deliver → Bill → Practice." },
-    ],
+    label: "How do I send a contract?",
+    text: "How do I send a contract for signature?",
   },
 ];
 
 export function BuilderBuddy() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const [muted, setMuted] = useState<boolean>(false);
-  const [hiddenPaths, setHiddenPaths] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
-  const [tipIndex, setTipIndex] = useState(0);
-  const [waved, setWaved] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [walkedIn, setWalkedIn] = useState(false);
+  const [messages, setMessages] = useState<BuddyMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load dismissal state once on mount.
+  // Load mute pref once.
   useEffect(() => {
     try {
-      setMuted(localStorage.getItem(STORAGE_GLOBAL_KEY) === "1");
-      const raw = localStorage.getItem(STORAGE_PATH_KEY);
-      if (raw) {
-        const arr: string[] = JSON.parse(raw);
-        setHiddenPaths(new Set(arr));
-      }
+      setMuted(localStorage.getItem(STORAGE_MUTED) === "1");
     } catch {
-      // localStorage unavailable (SSR, private mode) — fall through.
+      /* SSR / private mode */
     }
   }, []);
 
-  // Pick the matching tip set for the current path.
-  const tips = useMemo(() => {
-    const match = TIPS.find((entry) => entry.match(pathname));
-    return match?.tips ?? [];
-  }, [pathname]);
-
-  // Reset tip index on path change so each new page starts at tip 0.
+  // Keyboard: "?" or "/" toggles Buddy, "Esc" closes.
   useEffect(() => {
-    setTipIndex(0);
-    setOpen(false);
-  }, [pathname]);
-
-  // Close on click-outside.
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+    if (muted) return;
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName ?? "";
+      const inField =
+        tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      if (!inField && (e.key === "?" || e.key === "/")) {
+        e.preventDefault();
+        setOpen((v) => !v);
+      } else if (open && e.key === "Escape") {
         setOpen(false);
       }
     }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [muted, open]);
+
+  // Trigger the walk-in animation the first time the panel opens.
+  useEffect(() => {
+    if (open && !walkedIn) {
+      // Slight delay so the panel slide-in completes first.
+      const t = setTimeout(() => setWalkedIn(true), 50);
+      return () => clearTimeout(t);
+    }
+  }, [open, walkedIn]);
+
+  // Auto-scroll the chat to the bottom on new messages.
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isThinking]);
+
+  // Focus the input when the panel opens.
+  useEffect(() => {
+    if (open) {
+      const t = setTimeout(() => inputRef.current?.focus(), 250);
+      return () => clearTimeout(t);
+    }
   }, [open]);
 
-  // Wave once when arriving on a new page (only if not hidden / muted).
-  useEffect(() => {
-    if (muted || hiddenPaths.has(pathname)) return;
-    setWaved(true);
-    const t = setTimeout(() => setWaved(false), 1500);
-    return () => clearTimeout(t);
-  }, [pathname, muted, hiddenPaths]);
+  const send = useCallback(
+    async (text: string) => {
+      const userMsg: BuddyMessage = { role: "user", content: text };
+      const next = [...messages, userMsg];
+      setMessages(next);
+      setDraft("");
+      setError(null);
+      setIsThinking(true);
+      try {
+        const r = await askBuddy(next, pathname);
+        if (!r.ok) {
+          setError(r.error);
+        } else {
+          setMessages([...next, { role: "assistant", content: r.reply }]);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Buddy is unreachable.");
+      } finally {
+        setIsThinking(false);
+      }
+    },
+    [messages, pathname],
+  );
 
-  if (muted) return null;
-  if (hiddenPaths.has(pathname)) return null;
-  if (tips.length === 0) return null;
-
-  const tip = tips[tipIndex % tips.length];
-
-  function hideThisPage() {
-    const next = new Set(hiddenPaths);
-    next.add(pathname);
-    setHiddenPaths(next);
-    try {
-      localStorage.setItem(
-        STORAGE_PATH_KEY,
-        JSON.stringify(Array.from(next)),
-      );
-    } catch {
-      /* no-op */
-    }
-    setOpen(false);
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = draft.trim();
+    if (!trimmed || isThinking) return;
+    send(trimmed);
   }
 
-  function muteEverywhere() {
+  function muteForever() {
     setMuted(true);
+    setOpen(false);
     try {
-      localStorage.setItem(STORAGE_GLOBAL_KEY, "1");
+      localStorage.setItem(STORAGE_MUTED, "1");
     } catch {
       /* no-op */
     }
   }
 
-  function nextTip() {
-    setTipIndex((i) => (i + 1) % tips.length);
+  function unmute() {
+    setMuted(false);
+    try {
+      localStorage.removeItem(STORAGE_MUTED);
+    } catch {
+      /* no-op */
+    }
+  }
+
+  if (muted) {
+    // Tiny ghost button so you can bring Buddy back without digging.
+    return (
+      <button
+        type="button"
+        onClick={unmute}
+        title="Bring Buddy back"
+        className="fixed bottom-3 right-3 z-40 grid place-items-center w-7 h-7 rounded-full text-tbb-ink-4 hover:text-tbb-blue bg-white/60 backdrop-blur border border-tbb-line/40 transition-colors"
+        aria-label="Bring Builder Buddy back"
+      >
+        <HelpCircle className="w-3.5 h-3.5" aria-hidden />
+      </button>
+    );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="fixed bottom-6 right-6 z-40 flex items-end gap-2 pointer-events-none"
-    >
+    <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2 pointer-events-none">
       {open && (
-        <div className="pointer-events-auto bg-white border border-tbb-line rounded-2xl rounded-br-md shadow-tbb-md p-4 max-w-xs space-y-3 origin-bottom-right animate-[buddyPop_180ms_ease-out]">
-          <div className="flex items-start gap-2">
-            <span className="text-xl leading-none" aria-hidden>
-              {tip.emoji ?? "💡"}
-            </span>
-            <p className="text-sm text-tbb-ink-2 leading-snug">{tip.text}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-tbb-line-soft">
-            {tips.length > 1 && (
-              <button
-                type="button"
-                onClick={nextTip}
-                className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
-              >
-                Next tip →
-              </button>
-            )}
+        <div
+          className="pointer-events-auto bg-white border border-tbb-line rounded-2xl shadow-tbb-lg w-[min(380px,calc(100vw-3rem))] h-[min(540px,calc(100vh-7rem))] flex flex-col origin-bottom-right animate-[buddyPop_220ms_ease-out] overflow-hidden"
+          role="dialog"
+          aria-label="Builder Buddy chat"
+        >
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-tbb-line-soft bg-gradient-to-br from-tbb-navy to-tbb-blue text-white">
+            <div
+              className={
+                "shrink-0 grid place-items-center w-10 h-10 rounded-full bg-white/15 transition-transform " +
+                (walkedIn ? "" : "animate-[buddyWalkIn_700ms_ease-out]")
+              }
+            >
+              <BuilderSvg />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold leading-tight">Builder Buddy</p>
+              <p className="text-[10px] uppercase tracking-tbb-caps text-white/70 leading-tight">
+                Your in-app assistant
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
+              aria-label="Close"
+              className="grid place-items-center w-7 h-7 rounded-full text-white/70 hover:text-white hover:bg-white/15 transition-colors"
             >
-              Got it
+              <X className="w-4 h-4" aria-hidden />
             </button>
-            <span className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={hideThisPage}
-                title="Don't show on this page"
-                className="text-[10px] text-tbb-ink-4 hover:text-tbb-ink-2"
-              >
-                Hide here
-              </button>
-              <button
-                type="button"
-                onClick={muteEverywhere}
-                title="Hide Buddy everywhere"
-                className="text-[10px] text-tbb-ink-4 hover:text-tbb-ink-2"
-              >
-                Mute
-              </button>
-            </span>
           </div>
+
+          {/* Messages */}
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-tbb-cream-50"
+          >
+            {messages.length === 0 ? (
+              <div className="space-y-3">
+                <div className="bg-white border border-tbb-line rounded-2xl rounded-tl-md px-3 py-2.5 text-sm text-tbb-ink-2 leading-snug">
+                  Hey — I&apos;m Buddy. Ask me anything about the app, your
+                  practice, or whatever&apos;s on your screen. I&apos;ll keep
+                  it short. Try one of these to start, or just type:
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {STARTERS.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => send(s.text)}
+                      className="text-[11px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill bg-white text-tbb-blue border border-tbb-line hover:bg-tbb-blue hover:text-white transition-colors duration-tbb-fast"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              messages.map((m, i) => (
+                <ChatBubble key={i} role={m.role} content={m.content} />
+              ))
+            )}
+            {isThinking && (
+              <div className="flex items-center gap-2 text-xs text-tbb-ink-3">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                <span>Buddy&apos;s thinking…</span>
+              </div>
+            )}
+            {error && (
+              <p className="text-xs text-tbb-danger border border-tbb-danger rounded px-2 py-1.5 bg-white">
+                {error}
+              </p>
+            )}
+          </div>
+
+          {/* Composer */}
+          <form
+            onSubmit={onSubmit}
+            className="border-t border-tbb-line-soft p-2 bg-white"
+          >
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={inputRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSubmit(e as unknown as React.FormEvent);
+                  }
+                }}
+                rows={1}
+                placeholder="Ask Buddy anything…"
+                disabled={isThinking}
+                className="flex-1 resize-none bg-tbb-cream-50 border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue min-h-[36px] max-h-32"
+              />
+              <button
+                type="submit"
+                disabled={isThinking || !draft.trim()}
+                aria-label="Send"
+                className="grid place-items-center w-9 h-9 rounded-md bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-40 transition-colors"
+              >
+                <Send className="w-4 h-4" aria-hidden />
+              </button>
+            </div>
+            <div className="flex items-center justify-between mt-1.5 px-1">
+              <span className="text-[10px] text-tbb-ink-4">
+                Enter to send · Shift+Enter for newline · Press &quot;?&quot; to summon Buddy
+              </span>
+              <div className="flex items-center gap-2">
+                {messages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMessages([]);
+                      setError(null);
+                    }}
+                    className="text-[10px] text-tbb-ink-3 hover:text-tbb-navy"
+                  >
+                    New chat
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={muteForever}
+                  className="text-[10px] text-tbb-ink-4 hover:text-tbb-danger"
+                >
+                  Hide Buddy
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
 
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Open Builder Buddy tip"
-        title="Builder Buddy — click me for a tip"
+        aria-label="Ask Builder Buddy"
+        title="Ask Buddy — keyboard shortcut: ?"
         className={
-          "pointer-events-auto relative grid place-items-center w-14 h-14 rounded-full bg-tbb-navy text-white shadow-tbb-md cursor-pointer transition-transform duration-tbb-base hover:scale-110 " +
-          (waved ? "animate-[buddyWave_1.4s_ease-in-out_1]" : "animate-[buddyBob_3s_ease-in-out_infinite]")
+          "pointer-events-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-pill bg-tbb-navy text-white shadow-tbb-md cursor-pointer transition-all duration-tbb-base hover:scale-105 hover:shadow-tbb-lg " +
+          (open ? "opacity-0 pointer-events-none" : "opacity-100")
         }
       >
-        <BuilderSvg />
-        <span className="sr-only">Builder Buddy</span>
+        <span className="relative grid place-items-center w-7 h-7 rounded-full bg-white/15">
+          <Sparkles className="w-3.5 h-3.5" aria-hidden />
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-tbb-warning ring-2 ring-tbb-navy" />
+        </span>
+        <span className="text-xs font-bold uppercase tracking-tbb-caps">
+          Ask Buddy
+        </span>
       </button>
     </div>
   );
 }
 
-/**
- * Minimalist construction-worker mascot. Hard hat in the brand's
- * Safety Vest Orange, friendly face, no gender. Pure SVG so it scales
- * crisply at any size.
- */
+function ChatBubble({
+  role,
+  content,
+}: {
+  role: "user" | "assistant";
+  content: string;
+}) {
+  const isUser = role === "user";
+  return (
+    <div className={"flex gap-2 " + (isUser ? "justify-end" : "justify-start")}>
+      {!isUser && (
+        <div className="shrink-0 grid place-items-center w-7 h-7 rounded-full bg-tbb-navy text-white mt-0.5">
+          <MessageCircle className="w-3.5 h-3.5" aria-hidden />
+        </div>
+      )}
+      <div
+        className={
+          "max-w-[78%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap leading-snug " +
+          (isUser
+            ? "bg-tbb-blue text-white rounded-tr-md"
+            : "bg-white border border-tbb-line text-tbb-ink-2 rounded-tl-md")
+        }
+      >
+        {content}
+      </div>
+    </div>
+  );
+}
+
+/** Same Builder mascot, smaller, sized for the chat header. */
 function BuilderSvg() {
   return (
     <svg
       viewBox="0 0 64 64"
-      className="w-10 h-10"
+      className="w-7 h-7"
       aria-hidden="true"
       role="img"
     >
-      {/* Hard hat — Safety Vest Orange */}
       <ellipse cx="32" cy="24" rx="18" ry="9" fill="#E87722" />
       <rect x="14" y="22" width="36" height="3" rx="1.5" fill="#C45D14" />
-      {/* Top button on hat */}
       <circle cx="32" cy="16" r="2.2" fill="#C45D14" />
-      {/* Face — warm peach */}
       <ellipse cx="32" cy="34" rx="11" ry="10" fill="#F4C9A7" />
-      {/* Eyes */}
       <circle cx="27.5" cy="33" r="1.4" fill="#1A1A1A" />
       <circle cx="36.5" cy="33" r="1.4" fill="#1A1A1A" />
-      {/* Smile */}
       <path
         d="M 27 37 Q 32 41 37 37"
         stroke="#1A1A1A"
@@ -297,9 +392,7 @@ function BuilderSvg() {
         fill="none"
         strokeLinecap="round"
       />
-      {/* Shoulders — Steel Blue */}
       <path d="M 16 50 Q 16 44 24 43 L 40 43 Q 48 44 48 50 L 48 56 L 16 56 Z" fill="#2E4057" />
-      {/* Safety stripe */}
       <rect x="16" y="49" width="32" height="2" fill="#E87722" />
     </svg>
   );

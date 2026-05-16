@@ -102,7 +102,6 @@ const COACH_PHASES: CoachPhase[] = [
       { href: "/coach/deliverables", label: "Deliverables", icon: FileText, tourId: "coach-deliverables" },
       { href: "/coach/projects", label: "Projects", icon: Briefcase },
       { href: "/coach/goals", label: "Goals", icon: Target },
-      { href: "/coach/hiring", label: "Hiring", icon: UserCheck },
       { href: "/coach/soul-search", label: "Soul File search", icon: Search },
     ],
   },
