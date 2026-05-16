@@ -150,7 +150,7 @@ export default async function CoachConsole() {
         >
           {myWork.length === 0 ? (
             <p className="text-sm text-muted-foreground italic">
-              Nothing on your plate. Maybe go for a walk.
+              {pickEmptyMyWork()}
             </p>
           ) : (
             <ul className="space-y-1">
@@ -632,28 +632,104 @@ function CardShell({
 }
 
 /**
- * One-line encouraging summary based on what's on the plate today.
- * Picks the most-meaningful nugget so the homepage doesn't feel like a
- * dashboard readout — it feels like a teammate giving you the lay of
- * the land.
+ * One-line vibe check based on what's on the plate. Tries hard NOT to
+ * sound like a dashboard. Picks one of a few lines per state so the
+ * page never reads the same way two visits in a row.
+ *
+ * Day-of-week + time-of-day matter — Monday morning sounds different
+ * from Friday evening. The deck-shuffling is light: a small pool per
+ * state, rotated by date so it's stable through the day but changes.
  */
+/** Empty-state line for the My Work card. Picks fresh daily so the
+ *  joke doesn't get stale. */
+function pickEmptyMyWork(): string {
+  const now = new Date();
+  const dayKey = now.getFullYear() * 366 + now.getMonth() * 31 + now.getDate();
+  const lines = [
+    "Nothing on your plate. Maybe go for a walk.",
+    "Inbox zero of the action item world. Earned it.",
+    "Plate's empty. Suspiciously empty. Did you ship something?",
+    "All clear. Now pick the long thing you've been avoiding.",
+    "No assigned items. Either you're crushing it, or someone's about to.",
+  ];
+  return lines[dayKey % lines.length];
+}
+
 function buildEncouragements(input: {
   newLeadsCount: number;
   overdueCount: number;
   upcomingSessionsCount: number;
   negotiationCount: number;
 }): string {
+  const now = new Date();
+  const dow = now.getDay(); // 0 = Sun, 5 = Fri, 6 = Sat
+  const hour = now.getHours();
+  // Deterministic rotation index so the line is stable for the day but
+  // different tomorrow.
+  const dayKey = now.getFullYear() * 366 + now.getMonth() * 31 + now.getDate();
+  const pick = <T,>(arr: T[]) => arr[dayKey % arr.length];
+
+  // Day/time tone overrides — these stomp the data-driven picks for moments
+  // where the calendar matters more than the queue.
+  if (dow === 6) {
+    return pick([
+      "Saturday. You shouldn't be here. Go outside.",
+      "Saturday. The pipeline survives without you for 48 hours. Promise.",
+      "Saturday. Builders rest too.",
+    ]);
+  }
+  if (dow === 0) {
+    return pick([
+      "Sunday. Plan the week, then close the laptop.",
+      "Sunday — light planning, heavy coffee.",
+    ]);
+  }
+  if (dow === 5 && hour >= 15) {
+    return pick([
+      "Friday afternoon. The pipeline can wait an hour.",
+      "Friday — wrap one thing, leave the rest for Monday.",
+      "Friday afternoon. Earn the weekend.",
+    ]);
+  }
+  if (dow === 1 && hour < 10) {
+    return pick([
+      "Monday. Let's go.",
+      "Monday morning — the week's a blank page. Make it count.",
+      "Fresh week. Big things compound from small Mondays.",
+    ]);
+  }
+
   if (input.overdueCount > 0) {
-    return `${input.overdueCount} item${input.overdueCount === 1 ? "" : "s"} overdue. Let's chip away at them.`;
+    return pick([
+      `${input.overdueCount} item${input.overdueCount === 1 ? "" : "s"} overdue. Let's chip 'em down.`,
+      `${input.overdueCount} thing${input.overdueCount === 1 ? "" : "s"} past due. Five-minute rule: knock one out.`,
+      `${input.overdueCount} overdue. Future-Bruce will thank you for clearing them.`,
+    ]);
   }
   if (input.newLeadsCount > 0) {
-    return `${input.newLeadsCount} new lead${input.newLeadsCount === 1 ? "" : "s"} waiting on first contact. Strike while it's warm.`;
+    return pick([
+      `${input.newLeadsCount} fresh lead${input.newLeadsCount === 1 ? "" : "s"}. Coffee, then call.`,
+      `${input.newLeadsCount} new lead${input.newLeadsCount === 1 ? "" : "s"} hit overnight. First 5 minutes are worth 9 hours later.`,
+      `${input.newLeadsCount} new lead${input.newLeadsCount === 1 ? "" : "s"} waiting on hello. Strike while warm.`,
+    ]);
   }
   if (input.negotiationCount > 0) {
-    return `${input.negotiationCount} prospect${input.negotiationCount === 1 ? "" : "s"} in negotiation. Close week?`;
+    return pick([
+      `${input.negotiationCount} prospect${input.negotiationCount === 1 ? "" : "s"} in negotiation. Close week?`,
+      `${input.negotiationCount} in the red zone. Don't fumble.`,
+      `${input.negotiationCount} negotiating. Listen for the real objection.`,
+    ]);
   }
   if (input.upcomingSessionsCount > 0) {
-    return `${input.upcomingSessionsCount} session${input.upcomingSessionsCount === 1 ? "" : "s"} coming up. Great rhythm.`;
+    return pick([
+      `${input.upcomingSessionsCount} session${input.upcomingSessionsCount === 1 ? "" : "s"} on deck. Great rhythm.`,
+      `${input.upcomingSessionsCount} session${input.upcomingSessionsCount === 1 ? "" : "s"} coming. Show up prepared, leave them better.`,
+    ]);
   }
-  return "Clear plate. Good moment to think, plan, or hunt new leads.";
+  return pick([
+    "Plate's clear. Rare bird, that. 🦅",
+    "Empty queue. Think, plan, or go hunt.",
+    "Clean dashboard, clear head. Build something.",
+    "All caught up. The dangerous moment — pick a long thing and start.",
+  ]);
 }

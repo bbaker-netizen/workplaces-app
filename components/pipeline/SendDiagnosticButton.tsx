@@ -40,7 +40,7 @@ export function SendDiagnosticButton({
         setError(r.error);
         return;
       }
-      setSentMessage(`Diagnostic link sent to ${recipientEmail}.`);
+      setSentMessage(`📋 Diagnostic flying to ${recipientEmail} — and the pipeline now says "waiting on them."`);
       setNote("");
       setOpen(false);
       router.refresh();
@@ -112,7 +112,7 @@ export function SendDiagnosticButton({
               {isPending && (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
               )}
-              Send Diagnostic now
+              {isPending ? "Firing it off…" : "Send it"}
             </button>
             <button
               type="button"

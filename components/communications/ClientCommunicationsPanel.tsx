@@ -280,14 +280,19 @@ export function ClientCommunicationsPanel({
       )}
 
       {filtered.length === 0 ? (
-        <div className="px-5 py-10 text-center text-sm text-tbb-ink-3 space-y-2">
+        <div className="px-5 py-10 text-center space-y-2">
+          <div className="text-3xl" aria-hidden>
+            {filter === "email" ? "📨" : filter === "sms" ? "📱" : filter === "phone_call" ? "📞" : "💬"}
+          </div>
           <p className="font-bold text-tbb-navy">
-            No {filter === "all" ? "communications" : `${filter} messages`} yet.
+            {filter === "all"
+              ? "No communications here — yet."
+              : `No ${filter.replace("_", " ")} messages yet.`}
           </p>
-          <p>
+          <p className="text-sm text-tbb-ink-3 max-w-md mx-auto">
             {readOnly
-              ? "Emails between your Business Builder and your team will appear here once they happen."
-              : "Send an email above, or log a call from the activity panel. Inbound emails sync from your connected Gmail every 10 minutes."}
+              ? "Once your Business Builder reaches out (or you reply), every message lands here. Audit trail you can actually trust."
+              : "Send a quick email above, or log the call you just had from the activity panel. Inbound emails sync from Gmail every 10 minutes."}
           </p>
         </div>
       ) : (

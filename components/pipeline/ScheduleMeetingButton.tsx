@@ -80,14 +80,14 @@ export function ScheduleMeetingButton({
           className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta transition-transform duration-tbb-fast hover:scale-[1.02]"
         >
           <Calendar className="w-3.5 h-3.5" aria-hidden />
-          {open ? "Close" : "Schedule Meeting"}
+          {open ? "Close" : "Get on the books"}
         </button>
         {success && (
           <span className="text-[11px] text-tbb-success font-bold">
-            ✓ Invite sent
+            📨 Invite&apos;s out the door — Google handled the rest.
             {success.hangoutLink && (
               <>
-                {" — "}
+                {" "}
                 <a
                   href={success.hangoutLink}
                   target="_blank"
@@ -242,7 +242,7 @@ export function ScheduleMeetingButton({
               {isPending && (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
               )}
-              Send invite
+              {isPending ? "Firing it off…" : "Send the invite"}
             </button>
             <button
               type="button"

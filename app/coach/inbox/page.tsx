@@ -92,13 +92,17 @@ export default async function CoachInboxPage({
 
       <div className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-10 text-center text-sm text-tbb-ink-3 space-y-2">
-            <p className="font-bold text-tbb-navy">No communications match.</p>
-            <p>
-              Set up a private drop-box address on a prospect or engagement, then
-              BCC it on any email — the message lands here automatically. Or
-              click <strong>Log communication</strong> on any prospect/engagement
-              to record a call or text manually.
+          <div className="p-10 text-center space-y-3">
+            <div className="text-5xl" aria-hidden>
+              📭
+            </div>
+            <p className="font-bold text-tbb-navy text-lg">
+              Inbox zero — the cleanest kind of empty.
+            </p>
+            <p className="text-sm text-tbb-ink-3 max-w-md mx-auto">
+              Once you start emailing or texting prospects (or they reply
+              back), every message lands here automatically. Until then,
+              go enjoy the quiet.
             </p>
           </div>
         ) : (

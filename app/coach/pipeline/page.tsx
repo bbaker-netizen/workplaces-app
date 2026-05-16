@@ -79,23 +79,24 @@ export default async function PipelinePage() {
       </div>
 
       {prospects.length === 0 ? (
-        <div className="border border-tbb-line rounded-lg bg-white p-8 text-center space-y-2">
-          <p className="font-bold text-tbb-navy">
-            No prospects yet.
+        <div className="border border-tbb-line rounded-lg bg-gradient-to-br from-tbb-cream-50 to-white p-10 text-center space-y-3">
+          <div className="text-5xl" aria-hidden>
+            🎣
+          </div>
+          <p className="font-bold text-tbb-navy text-lg">
+            Empty pipeline. Quietest it&apos;ll be all year.
           </p>
-          <p className="text-sm text-tbb-ink-3">
-            New leads land here automatically when someone submits the public
-            diagnostic at <code className="font-mono text-xs">/diagnostic</code>{" "}
-            or when your web form posts to{" "}
-            <code className="font-mono text-xs">/api/leads</code>. You can
-            also add one manually.
+          <p className="text-sm text-tbb-ink-3 max-w-md mx-auto">
+            New leads land here automatically when someone fills out your
+            diagnostic, or when your website form pings the app. Until then,
+            it&apos;s on you to go find them. Add one to get rolling.
           </p>
           <div className="pt-3">
             <Link
               href="/coach/pipeline/new"
-              className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
+              className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-5 py-2.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta transition-transform duration-tbb-fast hover:scale-[1.02]"
             >
-              <Plus className="w-4 h-4" aria-hidden /> Add prospect manually
+              <Plus className="w-4 h-4" aria-hidden /> Add the first one
             </Link>
           </div>
         </div>

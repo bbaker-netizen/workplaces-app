@@ -1,10 +1,8 @@
 /**
- * "What's next" suggestion box on the prospect detail page. Reads the
- * current stage and surfaces the obvious next move(s) — turns the
- * stage chip from a label into a guided workflow.
- *
- * Server component (no client interactivity) — just renders copy +
- * deep links into the actions already on the page.
+ * "What's next" suggestion card on the prospect detail page. Reads the
+ * current stage and surfaces the obvious next move with a bit of
+ * personality — turns the stage chip from a dry label into a guided
+ * workflow that doesn't sound like a manual.
  */
 
 import {
@@ -28,99 +26,99 @@ type NextStep = {
 const STEPS_BY_STATUS: Record<ProspectStatus, NextStep> = {
   new_lead: {
     emoji: "👋",
-    heading: "Fresh lead — make first contact",
-    body: "Send a quick intro email or pick up the phone. The longer they sit, the colder they get.",
+    heading: "Fresh lead — say hi before they cool off",
+    body: "First five minutes of contact convert nine times better than the next hour. Pick up the phone, fire off an email, just don't let them sit.",
     prompts: [
-      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Send a quick intro email (Communications panel below)" },
-      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Or jump straight to scheduling a meeting" },
+      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Send a quick intro (Communications panel below)" },
+      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Or skip the dance — get them on the calendar" },
     ],
   },
   first_contact: {
     emoji: "📞",
-    heading: "Schedule the discovery call",
-    body: "You've made contact — get a real conversation on the calendar before momentum fades.",
+    heading: "You said hi. Now get a real conversation booked.",
+    body: "Email tag is where deals go to die. Twenty minutes on the calendar moves the ball further than a week of follow-ups.",
     prompts: [
-      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Schedule a meeting — sends a Google Calendar invite" },
-      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Send the diagnostic so they come to the call prepared" },
+      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Schedule a meeting — Google sends the invite" },
+      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Send the diagnostic so they show up loaded with answers" },
     ],
   },
   meeting_scheduled: {
     emoji: "🗓️",
-    heading: "Meeting is on the books",
-    body: "Optional but powerful: send the diagnostic so they arrive prepped, then write your call notes here after.",
+    heading: "It's on the books",
+    body: "Send the diagnostic now so they show up already half-coached. After the call, dump your notes here — future-you will thank you.",
     prompts: [
-      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Send the diagnostic if they haven't filled it out" },
-      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "After the call, log a Note in the activity panel" },
+      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Send the diagnostic if they haven't filled it out yet" },
+      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "After the call → log a Note in the activity panel" },
     ],
   },
   diagnostic_pending: {
     emoji: "⏳",
-    heading: "Waiting on their diagnostic",
-    body: "You've sent the form. Give them a couple days; if no response, a gentle nudge works.",
+    heading: "Ball's in their court",
+    body: "You sent the form. Resist the urge to nudge for at least 48 hours. If you must, blame the system: \"just making sure the email landed.\"",
     prompts: [
-      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Follow up if it's been 3+ days" },
-      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Or schedule the call now without waiting" },
+      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Gentle follow-up if it's been 3+ days" },
+      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Or skip the form and just get on the call" },
     ],
   },
   diagnostic_complete: {
     emoji: "✅",
-    heading: "They filled it out — review and propose",
-    body: "Read their answers in the Notes section below. Then craft a proposal that speaks to what they said.",
+    heading: "They filled it out. Time to be useful.",
+    body: "Their answers are in the Notes section below. Read them like you mean it, then send a proposal that quotes their own words back to them — works every time.",
     prompts: [
-      { icon: <FileText className="w-3.5 h-3.5" aria-hidden />, label: "Draft a proposal tailored to their answers" },
-      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Book the follow-up call to walk through it" },
+      { icon: <FileText className="w-3.5 h-3.5" aria-hidden />, label: "Draft a proposal that speaks their language" },
+      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Book the walk-through call" },
     ],
   },
   proposal_sent: {
     emoji: "📨",
-    heading: "Proposal out — keep momentum",
-    body: "Most deals close in the follow-up. Give them 2–3 business days, then check in.",
+    heading: "Proposal's out. Now we wait. (Briefly.)",
+    body: "Most deals close in the follow-up, not the proposal. Give it 2–3 business days, then check in. If you hear crickets, the proposal probably needed to be shorter.",
     prompts: [
-      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Send a friendly check-in if they go quiet" },
-      { icon: <TrendingUp className="w-3.5 h-3.5" aria-hidden />, label: "When they're ready, move to Negotiation" },
+      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Friendly check-in if they go quiet" },
+      { icon: <TrendingUp className="w-3.5 h-3.5" aria-hidden />, label: "When they push back on something, move to Negotiation" },
     ],
   },
   negotiation: {
     emoji: "🤝",
-    heading: "Negotiating — get to a yes",
-    body: "Last yard before the goal line. Listen for the real objection, name it, solve it.",
+    heading: "Last yard before the goal line",
+    body: "Their stated objection is rarely their real objection. Slow down. Ask what's actually in the way. Solve THAT, and you'll have a client by Friday.",
     prompts: [
-      { icon: <FileText className="w-3.5 h-3.5" aria-hidden />, label: "Adjust scope or pricing in the proposal if needed" },
-      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "When agreed, send the contract for signature" },
+      { icon: <FileText className="w-3.5 h-3.5" aria-hidden />, label: "Tweak the proposal — scope, price, or pace" },
+      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "When you've got a handshake, send the contract" },
     ],
   },
   contract_sent: {
     emoji: "✍️",
-    heading: "Contract is out — almost there",
-    body: "They've got it. Don't chase too hard — one well-timed follow-up usually does it.",
+    heading: "Contract's out — almost a client",
+    body: "They have it. Don't chase too hard — that smells desperate. One well-timed nudge after 5 business days usually does the trick.",
     prompts: [
-      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Nudge if not signed within 5 business days" },
+      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Friendly nudge if not signed in 5 business days" },
     ],
   },
   contract_signed: {
     emoji: "🎉",
-    heading: "Won! Time to onboard",
-    body: "Big one. Create the engagement, send the kickoff invite, get them into the portal.",
+    heading: "WON. Crack open something cold.",
+    body: "Big one. Now: lock in the kickoff before they get distracted by their own business. Onboarding momentum sets the whole relationship.",
     prompts: [
-      { icon: <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />, label: "Create the engagement from this prospect" },
-      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Schedule the kickoff session" },
+      { icon: <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />, label: "Spin up the engagement (turns them into a real client)" },
+      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Get the kickoff session on the calendar — this week if you can" },
     ],
   },
   onboarded: {
     emoji: "🏗️",
-    heading: "Active client",
-    body: "They're a Workplaces client now. Move client-facing work into their engagement.",
+    heading: "Live client. Build what compounds.",
+    body: "They're in the building now. From here on, the engagement view is home base — that's where you'll do the deep work.",
     prompts: [
-      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Switch to the engagement view to work with them" },
+      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Switch to their engagement and get to work" },
     ],
   },
   lost: {
     emoji: "💭",
-    heading: "Closed lost — leave the door open",
-    body: "Not every prospect closes. A short \"keep in touch\" note now can become a deal a year from now.",
+    heading: "Closed lost — and that's okay",
+    body: "Not every fish bites. The ones you lose teach you the ones you'll win. Leave a kind door-open note — surprising number of \"lost\" deals come back in six months.",
     prompts: [
-      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Send a brief 'door open' email if you haven't" },
-      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "Note why it didn't close — useful for the next one" },
+      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Quick \"door's open\" email — no pressure, just warm" },
+      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "Note why it didn't close — patterns matter" },
     ],
   },
 };
@@ -129,16 +127,21 @@ export function ProspectNextStep({ status }: { status: ProspectStatus }) {
   const step = STEPS_BY_STATUS[status];
   if (!step) return null;
   return (
-    <section className="border border-tbb-blue/30 rounded-lg bg-gradient-to-br from-tbb-blue-100 to-white p-5 space-y-3 shadow-tbb-sm">
-      <div className="flex items-baseline gap-2">
-        <span className="text-2xl leading-none" aria-hidden>
+    <section className="border border-tbb-blue/30 rounded-lg bg-gradient-to-br from-tbb-blue-100 via-tbb-cream-50 to-white p-5 space-y-3 shadow-tbb-sm">
+      <div className="flex items-start gap-3">
+        <span
+          className="text-3xl leading-none mt-1 transition-transform duration-tbb-base hover:scale-110"
+          aria-hidden
+        >
           {step.emoji}
         </span>
-        <div className="space-y-0.5">
+        <div className="space-y-0.5 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue-700">
             What&apos;s next
           </p>
-          <h2 className="text-base font-bold text-tbb-navy">{step.heading}</h2>
+          <h2 className="text-base font-bold text-tbb-navy leading-snug">
+            {step.heading}
+          </h2>
         </div>
       </div>
       <p className="text-sm text-tbb-ink-2 leading-relaxed">{step.body}</p>
