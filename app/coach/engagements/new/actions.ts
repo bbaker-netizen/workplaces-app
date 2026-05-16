@@ -76,6 +76,11 @@ const schema = z.object({
   startDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  onboardingTemplateId: z
+    .string()
+    .uuid("Invalid template id")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 });
 
 export type CreateEngagementState =
@@ -109,6 +114,7 @@ export async function createEngagementAction(
     clientLeadEmail: formData.get("clientLeadEmail"),
     clientLeadFullName: formData.get("clientLeadFullName"),
     startDate: formData.get("startDate"),
+    onboardingTemplateId: formData.get("onboardingTemplateId") ?? undefined,
   });
   if (!parsed.success) {
     return {
@@ -261,6 +267,30 @@ export async function createEngagementAction(
     );
   }
 
+  // 8. If Bruce picked an onboarding template, fire a personal welcome
+  //    email right behind the Clerk invitation. Best-effort: a failure
+  //    here doesn't roll back the engagement — Bruce can still send it
+  //    manually from the Templates page if needed.
+  if (parsed.data.onboardingTemplateId && callerProfile.status === "ok") {
+    try {
+      await fireOnboardingEmail({
+        templateId: parsed.data.onboardingTemplateId,
+        toEmail: clientLeadEmail,
+        toName: clientLeadFullName,
+        engagementName: parsed.data.engagementName,
+        senderUserProfileId: callerProfile.userProfileId,
+        engagementId: newEngagementId,
+        engagementOrgId: newAppOrgId,
+      });
+    } catch (e) {
+      console.warn(
+        `Onboarding email failed for engagement ${newEngagementId}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
+
   return {
     kind: "success",
     engagementId: newEngagementId,
@@ -268,4 +298,125 @@ export async function createEngagementAction(
     clerkOrgId: newClerkOrg.id,
     invitedEmail: clientLeadEmail,
   };
+}
+
+/**
+ * Send the onboarding email after engagement creation. Uses Bruce's
+ * connected Gmail when available so the email lands in his Sent folder
+ * and the conversation history stays in his inbox; falls back to Resend
+ * if Gmail isn't connected (so the email still goes out).
+ */
+async function fireOnboardingEmail(args: {
+  templateId: string;
+  toEmail: string;
+  toName: string;
+  engagementName: string;
+  senderUserProfileId: string;
+  engagementId: string;
+  engagementOrgId: string;
+}): Promise<void> {
+  const { emailTemplates, userProfiles, clientCommunications } = await import(
+    "@/lib/db/schema"
+  );
+  const { eq } = await import("drizzle-orm");
+  const { applyTemplate } = await import("@/lib/templates/variables");
+
+  const data = await withSystemContext(async (tx) => {
+    const [tmpl] = await tx
+      .select()
+      .from(emailTemplates)
+      .where(eq(emailTemplates.id, args.templateId))
+      .limit(1);
+    const [sender] = await tx
+      .select({
+        name: userProfiles.fullName,
+        email: userProfiles.email,
+        emailSignature: userProfiles.emailSignature,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, args.senderUserProfileId))
+      .limit(1);
+    return { tmpl: tmpl ?? null, sender: sender ?? null };
+  });
+  if (!data.tmpl || !data.sender) return;
+
+  const vars: Record<string, string> = {
+    company_name: args.engagementName,
+    contact_name: args.toName,
+    contact_first_name: args.toName.split(" ")[0] ?? args.toName,
+    contact_email: args.toEmail,
+    sender_name: data.sender.name,
+    sender_first_name: data.sender.name.split(" ")[0] ?? data.sender.name,
+    sender_email: data.sender.email,
+  };
+  const subject = applyTemplate(data.tmpl.subject, vars);
+  let body = applyTemplate(data.tmpl.body, vars);
+  if (data.sender.emailSignature?.trim()) {
+    body = `${body}\n\n${data.sender.emailSignature.trim()}`;
+  }
+
+  // Try Gmail first, then Resend.
+  const { sendGmailMessage } = await import("@/lib/integrations/gmail");
+  let sentVia: "gmail" | "resend" | null = null;
+  let externalId: string | null = null;
+  try {
+    const r = await sendGmailMessage(args.senderUserProfileId, data.sender.email, {
+      to: [args.toEmail],
+      subject,
+      body,
+    });
+    sentVia = "gmail";
+    externalId = r.messageId;
+  } catch (e) {
+    // Likely: Gmail not connected. Fall through to Resend.
+    console.warn(
+      "[onboarding-email] Gmail send failed, falling back to Resend:",
+      e instanceof Error ? e.message : e,
+    );
+    try {
+      const { sendEmail } = await import("@/lib/email/send");
+      const r = await sendEmail({
+        to: args.toEmail,
+        subject,
+        html: `<pre style="font-family:inherit;white-space:pre-wrap">${body}</pre>`,
+        text: body,
+        bypassWorkingHours: true,
+      });
+      if (r.delivered) {
+        sentVia = "resend";
+        externalId = r.id;
+      }
+    } catch (e2) {
+      console.warn(
+        "[onboarding-email] Resend fallback also failed:",
+        e2 instanceof Error ? e2.message : e2,
+      );
+    }
+  }
+
+  // Log the outbound message into the engagement's communications log.
+  if (sentVia) {
+    try {
+      await withTenantContext(args.engagementOrgId, async (tx) => {
+        await tx.insert(clientCommunications).values({
+          orgId: args.engagementOrgId,
+          engagementId: args.engagementId,
+          channel: "email",
+          direction: "outbound",
+          fromAddress: data.sender!.email,
+          toAddresses: [args.toEmail],
+          subject,
+          body,
+          externalId,
+          occurredAt: new Date(),
+          createdByUserProfileId: args.senderUserProfileId,
+        });
+      });
+    } catch (e) {
+      console.warn(
+        "[onboarding-email] Failed to log communication:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
 }

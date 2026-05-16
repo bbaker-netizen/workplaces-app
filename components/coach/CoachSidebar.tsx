@@ -36,13 +36,11 @@ import {
   Link as LinkIcon,
   LogOut,
   MessagesSquare,
-  PenSquare,
   Search,
   Settings,
   Sparkles,
   Star,
   Target,
-  UserCheck,
 } from "lucide-react";
 import {
   setSidebarCollapsed,

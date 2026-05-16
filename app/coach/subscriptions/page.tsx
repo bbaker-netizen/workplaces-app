@@ -41,6 +41,17 @@ export default async function CoachSubscriptionsCrossPage() {
             </>
           )}
         </p>
+        <div className="pt-2 flex flex-wrap gap-2">
+          <Link
+            href="/coach/subscriptions/catalogue"
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
+          >
+            Manage product catalogue
+          </Link>
+          <span className="self-center text-[11px] text-tbb-ink-3">
+            Build the things you sell once. Assign them to clients.
+          </span>
+        </div>
       </header>
 
       {items.length === 0 ? (

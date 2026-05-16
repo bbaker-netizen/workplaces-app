@@ -648,6 +648,39 @@ export const soulFiles = pgTable(
 );
 
 /**
+ * Claude-extracted Soul File insights — proposed additions Bruce can
+ * Accept (merged into the Soul File body) or Dismiss. Originates from
+ * BBS session notes / transcripts.
+ */
+export const soulFileAiInsights = pgTable(
+  "soul_file_ai_insights",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    soulFileId: uuid("soul_file_id")
+      .notNull()
+      .references((): AnyPgColumn => soulFiles.id, { onDelete: "cascade" }),
+    sourceSessionId: uuid("source_session_id").references(
+      (): AnyPgColumn => bbsSessions.id,
+      { onDelete: "set null" },
+    ),
+    body: text("body").notNull(),
+    /** pending | accepted | dismissed */
+    status: text("status").notNull().default("pending"),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("soul_file_ai_insights_org_idx").on(t.orgId),
+    soulIdx: index("soul_file_ai_insights_soul_idx").on(t.soulFileId),
+  }),
+);
+
+/**
  * `bbs_sessions` — Business Building Sessions per engagement.
  *
  * Methodology: twice-monthly 2-hour sessions with each client (one
@@ -1389,6 +1422,40 @@ export const communicationAliases = pgTable(
  * Model C default, Bruce maintains these indefinitely; Models A & B
  * are graduation paths.
  */
+/**
+ * Subscription product catalogue — the things Bruce sells as recurring
+ * services (Netlify-hosted apps, automation builds, retainers, etc.).
+ * Master-org-level; a product can be assigned to many engagements as
+ * subscription_assets rows.
+ */
+export const subscriptionProducts = pgTable(
+  "subscription_products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    vendor: text("vendor").notNull().default("Workplaces"),
+    description: text("description"),
+    defaultMonthlyCents: bigint("default_monthly_cents", { mode: "number" })
+      .notNull()
+      .default(0),
+    currency: text("currency").notNull().default("CAD"),
+    category: text("category"),
+    active: boolean("active").notNull().default(true),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("subscription_products_org_idx").on(t.orgId),
+  }),
+);
+
 export const subscriptionAssets = pgTable(
   "subscription_assets",
   {
@@ -1399,6 +1466,10 @@ export const subscriptionAssets = pgTable(
     engagementId: uuid("engagement_id")
       .notNull()
       .references(() => engagements.id, { onDelete: "cascade" }),
+    productId: uuid("product_id").references(
+      (): AnyPgColumn => subscriptionProducts.id,
+      { onDelete: "set null" },
+    ),
     name: text("name").notNull(),
     vendor: text("vendor").notNull(),
     monthlyCostCents: bigint("monthly_cost_cents", { mode: "number" })
@@ -2104,6 +2175,8 @@ export type BbsSession = typeof bbsSessions.$inferSelect;
 export type NewBbsSession = typeof bbsSessions.$inferInsert;
 export type SoulFile = typeof soulFiles.$inferSelect;
 export type NewSoulFile = typeof soulFiles.$inferInsert;
+export type SoulFileAiInsight = typeof soulFileAiInsights.$inferSelect;
+export type NewSoulFileAiInsight = typeof soulFileAiInsights.$inferInsert;
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
 export type Project = typeof projects.$inferSelect;
@@ -2122,6 +2195,8 @@ export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type SubscriptionAsset = typeof subscriptionAssets.$inferSelect;
 export type NewSubscriptionAsset = typeof subscriptionAssets.$inferInsert;
+export type SubscriptionProduct = typeof subscriptionProducts.$inferSelect;
+export type NewSubscriptionProduct = typeof subscriptionProducts.$inferInsert;
 export type EmbeddedApp = typeof embeddedApps.$inferSelect;
 export type NewEmbeddedApp = typeof embeddedApps.$inferInsert;
 export type Course = typeof courses.$inferSelect;

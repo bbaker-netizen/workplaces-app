@@ -17,18 +17,12 @@ import {
   emailTemplates,
   prospects,
   userProfiles,
-  type EmailTemplate,
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
-
-const CATEGORY_VALUES = [
-  "onboarding",
-  "contract",
-  "proposal",
-  "follow_up",
-  "intro",
-  "other",
-] as const;
+import {
+  applyTemplate,
+  TEMPLATE_CATEGORIES as CATEGORY_VALUES,
+} from "@/lib/templates/variables";
 
 const upsertSchema = z.object({
   name: z.string().min(1).max(200),
@@ -133,24 +127,6 @@ export async function deleteEmailTemplate(
 }
 
 /**
- * Resolve {{variable}} placeholders against a context object. Unknown
- * variables stay as `{{name}}` so the sender notices and edits them
- * before hitting send.
- */
-export function applyTemplate(
-  text: string,
-  vars: Record<string, string | null | undefined>,
-): string {
-  return text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, name) => {
-    const v = vars[name];
-    if (v === undefined || v === null || v === "") {
-      return `{{${name}}}`;
-    }
-    return v;
-  });
-}
-
-/**
  * Resolve a template against a prospect — fetches the prospect + sender,
  * returns the prefilled subject + body. The composer takes it from there.
  */
@@ -212,18 +188,5 @@ export async function resolveTemplateForProspect(args: {
   }
 }
 
-/** The known variable names + helper labels, surfaced by the editor's
- *  "Insert variable" menu. */
-export const TEMPLATE_VARIABLES = [
-  { name: "company_name", label: "Company name" },
-  { name: "contact_name", label: "Contact full name" },
-  { name: "contact_first_name", label: "Contact first name" },
-  { name: "contact_email", label: "Contact email" },
-  { name: "sender_name", label: "Your full name" },
-  { name: "sender_first_name", label: "Your first name" },
-  { name: "sender_email", label: "Your email" },
-] as const;
-
-export const TEMPLATE_CATEGORIES = CATEGORY_VALUES;
-
-export type EmailTemplateRow = EmailTemplate;
+// Variables + categories live in lib/templates/variables.ts so client
+// components can import them without the "use server" constraint.

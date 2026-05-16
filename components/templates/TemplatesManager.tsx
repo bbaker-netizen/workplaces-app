@@ -12,10 +12,12 @@ import { Loader2, Plus, Trash2, X } from "lucide-react";
 import {
   createEmailTemplate,
   deleteEmailTemplate,
-  TEMPLATE_CATEGORIES,
-  TEMPLATE_VARIABLES,
   updateEmailTemplate,
 } from "@/lib/actions/email-templates";
+import {
+  TEMPLATE_CATEGORIES,
+  TEMPLATE_VARIABLES,
+} from "@/lib/templates/variables";
 import type { EmailTemplate } from "@/lib/db/schema";
 
 const CATEGORY_LABELS: Record<string, string> = {

@@ -33,7 +33,11 @@ function SubmitButton() {
   );
 }
 
-export function EngagementForm() {
+export function EngagementForm({
+  onboardingTemplates = [],
+}: {
+  onboardingTemplates?: { id: string; name: string; category: string }[];
+} = {}) {
   const [state, action] = useFormState(createEngagementAction, initial);
 
   if (state.kind === "success") {
@@ -156,6 +160,36 @@ export function EngagementForm() {
           required
           className={inputClass}
         />
+      </div>
+
+      <div>
+        <label htmlFor="onboardingTemplateId" className={labelClass}>
+          Auto-send onboarding email (optional)
+        </label>
+        <select
+          id="onboardingTemplateId"
+          name="onboardingTemplateId"
+          defaultValue=""
+          className={inputClass}
+        >
+          <option value="">— Don&apos;t auto-send anything —</option>
+          {onboardingTemplates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Picks from{" "}
+          <a
+            href="/coach/templates"
+            className="text-tbb-blue underline underline-offset-2"
+          >
+            templates marked &quot;onboarding&quot;
+          </a>
+          . Fires right after the Clerk invitation goes out, from your Gmail
+          if connected.
+        </p>
       </div>
 
       {state.kind === "error" && (
