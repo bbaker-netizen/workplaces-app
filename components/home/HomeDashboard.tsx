@@ -249,11 +249,16 @@ export function HomeDashboard({
               onDragEnd={onDragEnd}
               onDragOver={(e) => onDragOver(e, slot.id)}
               className={
-                "app-card-lift relative bg-white border rounded-md shadow-tbb-sm overflow-hidden " +
+                // border-t-[3px] gives every card a thin Steel Blue
+                // accent stripe at the top so they read as structured
+                // rather than floating white boxes.
+                "app-card-lift relative bg-white border border-t-[3px] rounded-md shadow-tbb-sm overflow-hidden " +
                 SIZE_CLASSES[slot.size] +
                 " " +
                 (draggingId === slot.id ? "opacity-50 " : "") +
-                (editing ? "border-tbb-blue/40 ring-1 ring-tbb-blue/20" : "border-tbb-line")
+                (editing
+                  ? "border-tbb-blue/40 border-t-tbb-blue ring-1 ring-tbb-blue/20"
+                  : "border-tbb-line border-t-tbb-navy")
               }
             >
               {editing && (

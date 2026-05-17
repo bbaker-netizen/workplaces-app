@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import NextTopLoader from "nextjs-toploader";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
+import { PageTransition } from "@/components/layout/PageTransition";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,13 +38,13 @@ export default function RootLayout({
           {/* Global top progress bar — animates on every page
               navigation so the user sees the system is working. */}
           <NextTopLoader
-            color="#2C6CB0"
+            color="#CC6A20"
             height={3}
             showSpinner={false}
-            shadow="0 0 8px rgba(44, 108, 176, 0.4)"
+            shadow="0 0 8px rgba(204, 106, 32, 0.4)"
           />
           <ServiceWorkerRegistrar />
-          {children}
+          <PageTransition>{children}</PageTransition>
         </body>
       </html>
     </ClerkProvider>

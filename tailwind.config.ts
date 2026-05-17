@@ -68,14 +68,14 @@ const config: Config = {
           cream: "#F5F1E8",           // Drafting Cream
           "cream-200": "#FAF7EE",
           "cream-50": "#FCFAF5",
-          blue: "#E87722",            // Safety Vest Orange (CTAs)
-          "blue-600": "#D86614",
-          "blue-700": "#B85510",
-          "blue-100": "#FDEBD8",
-          "blue-light": "#F4A56E",
-          "blue-light-200": "#FAD0AC",
+          blue: "#CC6A20",            // Muted Safety Vest Orange (CTAs)
+          "blue-600": "#B85812",
+          "blue-700": "#9C4A0E",
+          "blue-100": "#F5E2CC",
+          "blue-light": "#E59568",
+          "blue-light-200": "#F0C9A8",
           steel: "#2E4057",           // explicit Steel Blue alias
-          orange: "#E87722",          // explicit Safety Vest Orange alias
+          orange: "#CC6A20",          // explicit muted-orange alias
           ink: "#1A1A1A",             // Foreman Black
           "ink-2": "#333333",
           "ink-3": "#666666",
@@ -153,7 +153,7 @@ const config: Config = {
         "tbb-sm": "0 2px 6px rgba(46, 64, 87, 0.10)",
         "tbb-md": "0 8px 20px rgba(46, 64, 87, 0.14)",
         "tbb-lg": "0 18px 40px rgba(46, 64, 87, 0.18)",
-        "tbb-cta": "0 8px 24px rgba(232, 119, 34, 0.40)",
+        "tbb-cta": "0 8px 24px rgba(204, 106, 32, 0.40)",
       },
       transitionTimingFunction: {
         "tbb-standard": "cubic-bezier(0.4, 0, 0.2, 1)",
