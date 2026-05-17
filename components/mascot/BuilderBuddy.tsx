@@ -27,7 +27,6 @@ import {
   Loader2,
   MessageCircle,
   Send,
-  Sparkles,
   X,
 } from "lucide-react";
 import { askBuddy, type BuddyMessage } from "@/lib/actions/ask-buddy";
@@ -198,7 +197,7 @@ export function BuilderBuddy() {
                 (walkedIn ? "" : "animate-[buddyWalkIn_700ms_ease-out]")
               }
             >
-              <BuilderSvg />
+              <BuilderSvg animated={false} />
               {/* Online indicator — small green dot bottom-right of the
                   avatar, says "I'm awake and listening". */}
               <span
@@ -332,23 +331,78 @@ export function BuilderBuddy() {
         </div>
       )}
 
+      <BeaconCharacter
+        open={open}
+        onOpen={() => setOpen(true)}
+      />
+    </div>
+  );
+}
+
+/**
+ * Animated mascot beacon. Replaces the older "ASK BUDDY" pill so
+ * the footer doesn't get covered by a wide button. Behaviour:
+ *   - 64px circular avatar bottom-right.
+ *   - Idle: gentle bob (3.2s loop) + occasional eye blink + lazy
+ *     head tilt every ~9s.
+ *   - Hover: scale up 8%, ring intensifies, "Ask Buddy" tooltip
+ *     fades in to the left of the avatar.
+ *   - Click: opens the chat panel (parent state).
+ *
+ * Visually disappears when the panel is open so the panel itself
+ * is the focal point.
+ */
+function BeaconCharacter({
+  open,
+  onOpen,
+}: {
+  open: boolean;
+  onOpen: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      className={
+        "relative pointer-events-auto transition-opacity duration-tbb-base " +
+        (open ? "opacity-0 pointer-events-none" : "opacity-100")
+      }
+    >
+      {/* Hover tooltip — sits to the LEFT of the character so it
+          never extends past the right edge of the viewport. */}
+      {hovered && !open && (
+        <div className="buddy-tooltip absolute right-[72px] top-1/2 -translate-y-1/2 whitespace-nowrap bg-tbb-navy text-white text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill shadow-tbb-md">
+          Ask Buddy
+          {/* Arrow */}
+          <span
+            aria-hidden
+            className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-2 h-2 rotate-45 bg-tbb-navy"
+          />
+        </div>
+      )}
+
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onOpen}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={() => setHovered(true)}
+        onBlur={() => setHovered(false)}
         aria-label="Ask Builder Buddy"
         title="Ask Buddy — keyboard shortcut: ?"
-        className={
-          "app-drift pointer-events-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-pill app-cta-orange shadow-tbb-md cursor-pointer transition-all duration-tbb-base hover:scale-105 hover:shadow-tbb-lg " +
-          (open ? "opacity-0 pointer-events-none" : "opacity-100")
-        }
+        className="buddy-bob relative group w-16 h-16 rounded-full grid place-items-center bg-tbb-orange shadow-tbb-md hover:scale-[1.08] transition-transform duration-tbb-base cursor-pointer"
       >
-        <span className="app-pulse relative grid place-items-center w-7 h-7 rounded-full bg-white/20">
-          <Sparkles className="w-3.5 h-3.5" aria-hidden />
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-tbb-success ring-2 ring-white" />
-        </span>
-        <span className="text-xs font-bold uppercase tracking-tbb-caps">
-          Ask Buddy
-        </span>
+        {/* Soft halo behind the character to lift it off the page. */}
+        <span
+          aria-hidden
+          className="absolute inset-0 rounded-full ring-4 ring-tbb-orange/25 group-hover:ring-tbb-orange/40 transition-all"
+        />
+        <BuilderSvg className="w-12 h-12 relative" />
+        {/* Online indicator — emerald dot bottom-right with a pulse
+            ring around it so the character feels alive. */}
+        <span
+          aria-hidden
+          className="app-pulse absolute bottom-1 right-1 w-3 h-3 rounded-full bg-tbb-success ring-2 ring-white"
+        />
       </button>
     </div>
   );
@@ -389,39 +443,72 @@ function ChatBubble({
  * The full-body version lives on the "Ask Buddy" pill where there's
  * room.
  */
-function BuilderSvg() {
+/**
+ * Builder character — hard-hat, face, eyes, smile, rosy cheeks.
+ *
+ * Animation hooks (CSS in globals.css):
+ *   - `.buddy-head` group: occasional lazy tilt every ~9s.
+ *   - `.buddy-eye` circles: blink every ~6s.
+ *
+ * `animated` defaults to true. Pass `animated={false}` for the
+ * panel-header avatar where animation would compete with the
+ * walk-in entrance.
+ */
+function BuilderSvg({
+  className = "w-10 h-10",
+  animated = true,
+}: {
+  className?: string;
+  animated?: boolean;
+}) {
   return (
     <svg
       viewBox="0 0 40 40"
-      className="w-10 h-10"
+      className={className}
       aria-hidden="true"
       role="img"
     >
-      {/* Hard hat dome */}
-      <path
-        d="M 8 18 Q 8 8 20 8 Q 32 8 32 18 L 32 20 L 8 20 Z"
-        fill="#E87722"
-      />
-      {/* Hat brim */}
-      <rect x="6" y="19" width="28" height="2.5" rx="1.25" fill="#C45D14" />
-      {/* Top button */}
-      <circle cx="20" cy="9" r="1.6" fill="#C45D14" />
-      {/* Face */}
-      <circle cx="20" cy="26" r="8" fill="#F4C9A7" />
-      {/* Eyes */}
-      <circle cx="17" cy="25" r="1.1" fill="#1A1A1A" />
-      <circle cx="23" cy="25" r="1.1" fill="#1A1A1A" />
-      {/* Smile */}
-      <path
-        d="M 16.5 28.5 Q 20 31.5 23.5 28.5"
-        stroke="#1A1A1A"
-        strokeWidth="1.2"
-        fill="none"
-        strokeLinecap="round"
-      />
-      {/* Small rosy cheeks */}
-      <circle cx="14.5" cy="27.5" r="1.2" fill="#E87722" opacity="0.35" />
-      <circle cx="25.5" cy="27.5" r="1.2" fill="#E87722" opacity="0.35" />
+      <g className={animated ? "buddy-head" : undefined}>
+        {/* Hard hat dome */}
+        <path
+          d="M 8 18 Q 8 8 20 8 Q 32 8 32 18 L 32 20 L 8 20 Z"
+          fill="#E87722"
+        />
+        {/* Hat brim */}
+        <rect x="6" y="19" width="28" height="2.5" rx="1.25" fill="#C45D14" />
+        {/* Top button */}
+        <circle cx="20" cy="9" r="1.6" fill="#C45D14" />
+        {/* Face */}
+        <circle cx="20" cy="26" r="8" fill="#F4C9A7" />
+        {/* Eyes — animated blink. Stagger the right eye by 100ms so
+            the wink reads as natural. */}
+        <circle
+          cx="17"
+          cy="25"
+          r="1.1"
+          fill="#1A1A1A"
+          className={animated ? "buddy-eye" : undefined}
+        />
+        <circle
+          cx="23"
+          cy="25"
+          r="1.1"
+          fill="#1A1A1A"
+          className={animated ? "buddy-eye" : undefined}
+          style={animated ? { animationDelay: "120ms" } : undefined}
+        />
+        {/* Smile */}
+        <path
+          d="M 16.5 28.5 Q 20 31.5 23.5 28.5"
+          stroke="#1A1A1A"
+          strokeWidth="1.2"
+          fill="none"
+          strokeLinecap="round"
+        />
+        {/* Small rosy cheeks */}
+        <circle cx="14.5" cy="27.5" r="1.2" fill="#E87722" opacity="0.35" />
+        <circle cx="25.5" cy="27.5" r="1.2" fill="#E87722" opacity="0.35" />
+      </g>
     </svg>
   );
 }

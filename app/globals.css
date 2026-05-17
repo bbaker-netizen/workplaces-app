@@ -259,6 +259,43 @@
   animation: app-page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Buddy character beacon — the on-page mascot avatar that opens
+ * the chat. Idle = gentle bob + occasional eye blink + occasional
+ * head tilt. Hover = subtle scale up + tooltip fade-in. */
+@keyframes buddyIdleBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+@keyframes buddyBlink {
+  /* Closes the eyes briefly every 6s. Eyes use this animation +
+   * transform-origin: center so the scaleY squashes vertically. */
+  0%, 92%, 96%, 100% { transform: scaleY(1); }
+  94%                { transform: scaleY(0.1); }
+}
+@keyframes buddyHeadTilt {
+  /* Slow lazy tilt — fires every 9 seconds, lasts a beat, returns. */
+  0%, 85%, 100% { transform: rotate(0deg); }
+  90%, 95%      { transform: rotate(-5deg); }
+}
+@keyframes buddyTooltipIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.buddy-bob {
+  animation: buddyIdleBob 3.2s ease-in-out infinite;
+}
+.buddy-eye {
+  transform-origin: center;
+  animation: buddyBlink 6s ease-in-out infinite;
+}
+.buddy-head {
+  transform-origin: 50% 60%;
+  animation: buddyHeadTilt 9s ease-in-out infinite;
+}
+.buddy-tooltip {
+  animation: buddyTooltipIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Squiggle spinner — hand-drawn-looking circle that draws on then
  * draws off, while the whole SVG rotates slowly. Used by the
  * loading.tsx files across the app so route data fetches show a
@@ -295,7 +332,11 @@
   .app-page-enter,
   .app-squiggle-path,
   .app-squiggle-wrap,
-  .app-squiggle-inner {
+  .app-squiggle-inner,
+  .buddy-bob,
+  .buddy-eye,
+  .buddy-head,
+  .buddy-tooltip {
     animation: none !important;
   }
   .app-card-lift,
