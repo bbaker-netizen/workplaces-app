@@ -185,32 +185,70 @@ export async function listCoachSubscriptions(): Promise<
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
   const cid = await coachId(profile.userProfileId);
   if (!cid) return [];
+  // The billing-link columns (billing_provider, billing_external_url)
+  // landed in migration 0031. If a production database hasn't applied
+  // that migration yet, the full SELECT will throw with "column does
+  // not exist." We attempt the full query first, and on failure fall
+  // back to the pre-0031 column set — the Console page renders without
+  // billing pills until the migration runs.
   return withSystemContext(async (tx) => {
-    const rows = await tx
-      .select({
-        id: subscriptionAssets.id,
-        name: subscriptionAssets.name,
-        vendor: subscriptionAssets.vendor,
-        monthlyCostCents: subscriptionAssets.monthlyCostCents,
-        currency: subscriptionAssets.currency,
-        transferStatus: subscriptionAssets.transferStatus,
-        renewalDate: subscriptionAssets.renewalDate,
-        engagementId: subscriptionAssets.engagementId,
-        engagementName: engagements.name,
-        billingProvider: subscriptionAssets.billingProvider,
-        billingExternalUrl: subscriptionAssets.billingExternalUrl,
-      })
-      .from(subscriptionAssets)
-      .innerJoin(
-        engagements,
-        eq(engagements.id, subscriptionAssets.engagementId),
-      )
-      .where(eq(engagements.coachId, cid))
-      .orderBy(subscriptionAssets.renewalDate);
-    return rows.map((r) => ({
-      ...r,
-      monthlyCostCents: Number(r.monthlyCostCents),
-    }));
+    try {
+      const rows = await tx
+        .select({
+          id: subscriptionAssets.id,
+          name: subscriptionAssets.name,
+          vendor: subscriptionAssets.vendor,
+          monthlyCostCents: subscriptionAssets.monthlyCostCents,
+          currency: subscriptionAssets.currency,
+          transferStatus: subscriptionAssets.transferStatus,
+          renewalDate: subscriptionAssets.renewalDate,
+          engagementId: subscriptionAssets.engagementId,
+          engagementName: engagements.name,
+          billingProvider: subscriptionAssets.billingProvider,
+          billingExternalUrl: subscriptionAssets.billingExternalUrl,
+        })
+        .from(subscriptionAssets)
+        .innerJoin(
+          engagements,
+          eq(engagements.id, subscriptionAssets.engagementId),
+        )
+        .where(eq(engagements.coachId, cid))
+        .orderBy(subscriptionAssets.renewalDate);
+      return rows.map((r) => ({
+        ...r,
+        monthlyCostCents: Number(r.monthlyCostCents),
+      }));
+    } catch (e) {
+      console.warn(
+        "[listCoachSubscriptions] billing columns may be missing — falling back. Apply migration 0031_subscription_billing_links.sql to remove this fallback.",
+        e instanceof Error ? e.message : e,
+      );
+      const rows = await tx
+        .select({
+          id: subscriptionAssets.id,
+          name: subscriptionAssets.name,
+          vendor: subscriptionAssets.vendor,
+          monthlyCostCents: subscriptionAssets.monthlyCostCents,
+          currency: subscriptionAssets.currency,
+          transferStatus: subscriptionAssets.transferStatus,
+          renewalDate: subscriptionAssets.renewalDate,
+          engagementId: subscriptionAssets.engagementId,
+          engagementName: engagements.name,
+        })
+        .from(subscriptionAssets)
+        .innerJoin(
+          engagements,
+          eq(engagements.id, subscriptionAssets.engagementId),
+        )
+        .where(eq(engagements.coachId, cid))
+        .orderBy(subscriptionAssets.renewalDate);
+      return rows.map((r) => ({
+        ...r,
+        monthlyCostCents: Number(r.monthlyCostCents),
+        billingProvider: null,
+        billingExternalUrl: null,
+      }));
+    }
   });
 }
 
