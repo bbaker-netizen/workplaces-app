@@ -259,13 +259,43 @@
   animation: app-page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Squiggle spinner — hand-drawn-looking circle that draws on then
+ * draws off, while the whole SVG rotates slowly. Used by the
+ * loading.tsx files across the app so route data fetches show a
+ * characterful loader instead of a thin progress bar.
+ */
+@keyframes app-squiggle-draw {
+  0%   { stroke-dashoffset: 220; }
+  50%  { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -220; }
+}
+@keyframes app-squiggle-spin {
+  to { transform: rotate(360deg); }
+}
+.app-squiggle-path {
+  stroke-dasharray: 220;
+  stroke-dashoffset: 220;
+  animation: app-squiggle-draw 2s cubic-bezier(0.55, 0, 0.45, 1) infinite;
+}
+.app-squiggle-wrap {
+  animation: app-squiggle-spin 3.6s linear infinite;
+  transform-origin: 50% 50%;
+}
+.app-squiggle-inner {
+  animation: app-squiggle-spin 5s linear infinite reverse;
+  transform-origin: 50% 50%;
+}
+
 /* Respect users who prefer reduced motion — collapse the entry/drift
  * animations to a no-op so the surfaces still render but don't move. */
 @media (prefers-reduced-motion: reduce) {
   .app-rise,
   .app-drift,
   .app-pulse,
-  .app-page-enter {
+  .app-page-enter,
+  .app-squiggle-path,
+  .app-squiggle-wrap,
+  .app-squiggle-inner {
     animation: none !important;
   }
   .app-card-lift,
