@@ -21,7 +21,7 @@ export default function MockupsHub() {
         </p>
       </header>
 
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid sm:grid-cols-3 gap-4">
         <Link
           href="/mockups/b"
           className="group block border border-tbb-line rounded-lg bg-white p-6 hover:border-tbb-blue hover:shadow-lg transition-all"
@@ -33,13 +33,34 @@ export default function MockupsHub() {
             Heritage + motion
           </h2>
           <p className="text-sm text-tbb-ink-2 mb-4">
-            Same brand palette (Drafting Cream / Foreman Black / Safety
-            Vest Orange / Steel Blue). Cards lift on hover, hero
-            illustrations on empty states, micro-interactions everywhere.
-            Less ledger, more product.
+            Same brand palette. Cards lift on hover, hero illustrations
+            on empty states. Less ledger, more product.
           </p>
           <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue group-hover:underline">
-            Open mockup B →
+            Open B →
+          </span>
+        </Link>
+
+        <Link
+          href="/mockups/middle"
+          className="group block border-2 border-tbb-blue rounded-lg bg-white p-6 hover:shadow-lg transition-all relative"
+        >
+          <span className="absolute -top-2 left-4 text-[9px] font-bold uppercase tracking-tbb-caps bg-tbb-blue text-white px-2 py-0.5 rounded">
+            ← You asked for this
+          </span>
+          <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue mb-2">
+            Middle path
+          </p>
+          <h2 className="font-black text-tbb-navy text-2xl tracking-tight mb-2">
+            B + C blend
+          </h2>
+          <p className="text-sm text-tbb-ink-2 mb-4">
+            Heritage colours kept (orange + steel blue + cream) but with
+            modern motion: soft warm wash backdrop, glass cards, shimmer
+            headline, glowing CTAs. Bright, alive.
+          </p>
+          <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue group-hover:underline">
+            Open middle →
           </span>
         </Link>
 
@@ -54,12 +75,11 @@ export default function MockupsHub() {
             Real brand pivot
           </h2>
           <p className="text-sm text-tbb-ink-2 mb-4">
-            Drop heritage entirely. Modern AI-coach aesthetic — animated
-            gradient backdrop, glass cards, electric accents, bold
-            typography. Reads like Linear or Cursor, not a ledger.
+            Drop heritage. Dark canvas, animated gradient mesh, glass
+            cards, electric coral. Reads like Linear or Cursor.
           </p>
           <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue group-hover:underline">
-            Open mockup C →
+            Open C →
           </span>
         </Link>
       </div>
