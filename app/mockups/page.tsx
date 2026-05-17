@@ -21,7 +21,7 @@ export default function MockupsHub() {
         </p>
       </header>
 
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link
           href="/mockups/b"
           className="group block border border-tbb-line rounded-lg bg-white p-6 hover:border-tbb-blue hover:shadow-lg transition-all"
@@ -80,6 +80,30 @@ export default function MockupsHub() {
           </p>
           <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue group-hover:underline">
             Open C →
+          </span>
+        </Link>
+
+        <Link
+          href="/mockups/editorial"
+          className="group block border border-tbb-line rounded-lg bg-white p-6 hover:border-tbb-blue hover:shadow-lg transition-all"
+          style={{ fontFamily: "Georgia, serif" }}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue mb-2"
+            style={{ fontFamily: "var(--font-mono, monospace)" }}>
+            Option E
+          </p>
+          <h2 className="text-tbb-navy text-2xl tracking-tight mb-2 italic">
+            <span className="font-black not-italic">Editorial</span> — a
+            confident publication.
+          </h2>
+          <p className="text-sm text-tbb-ink-2 mb-4">
+            Different axis. Big serif display type, generous whitespace,
+            pull-quotes, oversized numbers. Reads like Stratechery or
+            the New Yorker — authority without animation.
+          </p>
+          <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue group-hover:underline"
+            style={{ fontFamily: "var(--font-mono, monospace)" }}>
+            Open editorial →
           </span>
         </Link>
       </div>
