@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import NextTopLoader from "nextjs-toploader";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 import { PageTransition } from "@/components/layout/PageTransition";
+import { NavLoaderOverlay } from "@/components/layout/NavLoaderOverlay";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -44,6 +45,7 @@ export default function RootLayout({
             shadow="0 0 8px rgba(204, 106, 32, 0.4)"
           />
           <ServiceWorkerRegistrar />
+          <NavLoaderOverlay />
           <PageTransition>{children}</PageTransition>
         </body>
       </html>
