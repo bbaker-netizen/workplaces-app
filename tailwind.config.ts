@@ -82,7 +82,7 @@ const config: Config = {
           "ink-4": "#999999",
           line: "#CCCCCC",
           "line-soft": "#E5E5E5",
-          "bg-soft": "#F5F1E8",       // page bg = Drafting Cream
+          "bg-soft": "#EADFC7",       // page canvas — deeper cream
           success: "#2E8B57",
           warning: "#D89F2F",
           danger: "#C0392B",

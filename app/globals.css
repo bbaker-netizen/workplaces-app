@@ -51,14 +51,15 @@
     --tbb-line:        #CCCCCC;
     --tbb-line-soft:   #E5E5E5;
     --tbb-bg:          #FFFFFF;
-    --tbb-bg-soft:     #F5F1E8;   /* page background = Drafting Cream */
+    --tbb-bg-soft:     #EADFC7;   /* page canvas — deeper cream so
+                                     white cards pop */
 
     --tbb-success:     #2E8B57;
     --tbb-warning:     #D89F2F;
     --tbb-danger:      #C0392B;
 
     /* ---------- shadcn semantic tokens (HSL for Tailwind) ---------- */
-    --background: 39 33% 94%;       /* Drafting Cream */
+    --background: 39 33% 85%;       /* deeper cream — page canvas */
     --foreground: 0 0% 10%;         /* Foreman Black */
     --card: 0 0% 100%;              /* pure white */
     --card-foreground: 0 0% 10%;
