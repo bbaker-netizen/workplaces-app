@@ -21,7 +21,7 @@ export default function MockupsHub() {
         </p>
       </header>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Link
           href="/mockups/b"
           className="group block border border-tbb-line rounded-lg bg-white p-6 hover:border-tbb-blue hover:shadow-lg transition-all"
@@ -38,6 +38,30 @@ export default function MockupsHub() {
           </p>
           <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue group-hover:underline">
             Open B →
+          </span>
+        </Link>
+
+        <Link
+          href="/mockups/refined"
+          className="group block border-2 border-[#E87722] rounded-lg bg-white p-6 hover:shadow-lg transition-all relative"
+        >
+          <span className="absolute -top-2 left-4 text-[9px] font-bold uppercase tracking-tbb-caps bg-[#E87722] text-white px-2 py-0.5 rounded">
+            ← Your latest ask
+          </span>
+          <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue mb-2">
+            Refined
+          </p>
+          <h2 className="font-black text-tbb-navy text-2xl tracking-tight mb-2">
+            Live app + B motion
+          </h2>
+          <p className="text-sm text-tbb-ink-2 mb-4">
+            Structure and formality of what we have today (sidebar,
+            cards, heritage palette) — with B&apos;s motion: hover lift,
+            counters, pulse-ring, drifting mascot, blueprint empty
+            state. <strong>No text shimmer.</strong>
+          </p>
+          <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue group-hover:underline">
+            Open refined →
           </span>
         </Link>
 
