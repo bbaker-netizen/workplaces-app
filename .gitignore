@@ -39,3 +39,8 @@ next-env.d.ts
 
 # Claude Code temp worktrees (created automatically by tooling).
 .claude-worktrees/
+
+# One-off data-migration SQL files contain real client PII (emails,
+# phones, notes about businesses). Keep the builder script in git
+# (transform logic, no PII), but never commit the generated SQL.
+scripts/import-monday-*.sql
