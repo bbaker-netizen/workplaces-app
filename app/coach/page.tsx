@@ -696,7 +696,7 @@ export default async function CoachConsole() {
   return (
     <main className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-6 py-10 sm:py-12 space-y-8">
-        <header className="flex items-end justify-between gap-4 flex-wrap">
+        <header className="app-rise flex items-end justify-between gap-4 flex-wrap">
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-tbb-caps text-muted-foreground">
               Business Builder Console

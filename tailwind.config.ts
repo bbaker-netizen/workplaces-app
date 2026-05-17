@@ -56,28 +56,33 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
 
-        // TBB direct color tokens. Reference these in components as
-        // `bg-tbb-navy`, `text-tbb-blue`, etc.
+        // Brand direct color tokens. Heritage palette per CLAUDE.md:
+        // Drafting Cream + Foreman Black + Steel Blue + Safety Vest
+        // Orange. Existing tokens keep their names so every existing
+        // component re-skins automatically; the values now point at
+        // the heritage palette instead of the older blue-navy spec.
         tbb: {
-          navy: "#14385B",
-          "navy-700": "#1B4A77",
-          "navy-900": "#0C2740",
-          cream: "#EFE6D7",
-          "cream-200": "#F7F1E6",
-          "cream-50": "#FBF8F2",
-          blue: "#2C6CB0",
-          "blue-600": "#2560A0",
-          "blue-700": "#1E5189",
-          "blue-100": "#E2ECF7",
-          "blue-light": "#6FA8DC",
-          "blue-light-200": "#C9DEF1",
-          ink: "#14181D",
-          "ink-2": "#2A323B",
-          "ink-3": "#5A6470",
-          "ink-4": "#8B95A1",
-          line: "#D6DDE5",
-          "line-soft": "#E8ECF1",
-          "bg-soft": "#F4F6F9",
+          navy: "#2E4057",            // Steel Blue (structural)
+          "navy-700": "#25364A",
+          "navy-900": "#1A2733",
+          cream: "#F5F1E8",           // Drafting Cream
+          "cream-200": "#FAF7EE",
+          "cream-50": "#FCFAF5",
+          blue: "#E87722",            // Safety Vest Orange (CTAs)
+          "blue-600": "#D86614",
+          "blue-700": "#B85510",
+          "blue-100": "#FDEBD8",
+          "blue-light": "#F4A56E",
+          "blue-light-200": "#FAD0AC",
+          steel: "#2E4057",           // explicit Steel Blue alias
+          orange: "#E87722",          // explicit Safety Vest Orange alias
+          ink: "#1A1A1A",             // Foreman Black
+          "ink-2": "#333333",
+          "ink-3": "#666666",
+          "ink-4": "#999999",
+          line: "#CCCCCC",
+          "line-soft": "#E5E5E5",
+          "bg-soft": "#F5F1E8",       // page bg = Drafting Cream
           success: "#2E8B57",
           warning: "#D89F2F",
           danger: "#C0392B",
@@ -142,12 +147,13 @@ const config: Config = {
         pill: "9999px",
       },
       boxShadow: {
-        // All TBB shadows are navy-tinted, soft, downward.
-        "tbb-xs": "0 1px 2px rgba(20, 56, 91, 0.06)",
-        "tbb-sm": "0 2px 6px rgba(20, 56, 91, 0.08)",
-        "tbb-md": "0 8px 20px rgba(20, 56, 91, 0.10)",
-        "tbb-lg": "0 18px 40px rgba(20, 56, 91, 0.14)",
-        "tbb-cta": "0 6px 18px rgba(44, 108, 176, 0.30)",
+        // Heritage shadows: structural ones tinted Steel Blue, CTA
+        // shadow tinted Safety Vest Orange so primary buttons glow.
+        "tbb-xs": "0 1px 2px rgba(46, 64, 87, 0.06)",
+        "tbb-sm": "0 2px 6px rgba(46, 64, 87, 0.10)",
+        "tbb-md": "0 8px 20px rgba(46, 64, 87, 0.14)",
+        "tbb-lg": "0 18px 40px rgba(46, 64, 87, 0.18)",
+        "tbb-cta": "0 8px 24px rgba(232, 119, 34, 0.40)",
       },
       transitionTimingFunction: {
         "tbb-standard": "cubic-bezier(0.4, 0, 0.2, 1)",

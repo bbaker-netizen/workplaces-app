@@ -338,13 +338,13 @@ export function BuilderBuddy() {
         aria-label="Ask Builder Buddy"
         title="Ask Buddy — keyboard shortcut: ?"
         className={
-          "pointer-events-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-pill bg-tbb-navy text-white shadow-tbb-md cursor-pointer transition-all duration-tbb-base hover:scale-105 hover:shadow-tbb-lg " +
+          "app-drift pointer-events-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-pill app-cta-orange shadow-tbb-md cursor-pointer transition-all duration-tbb-base hover:scale-105 hover:shadow-tbb-lg " +
           (open ? "opacity-0 pointer-events-none" : "opacity-100")
         }
       >
-        <span className="relative grid place-items-center w-7 h-7 rounded-full bg-white/15">
+        <span className="app-pulse relative grid place-items-center w-7 h-7 rounded-full bg-white/20">
           <Sparkles className="w-3.5 h-3.5" aria-hidden />
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-tbb-warning ring-2 ring-tbb-navy" />
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-tbb-success ring-2 ring-white" />
         </span>
         <span className="text-xs font-bold uppercase tracking-tbb-caps">
           Ask Buddy

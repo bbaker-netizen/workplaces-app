@@ -249,7 +249,7 @@ export function HomeDashboard({
               onDragEnd={onDragEnd}
               onDragOver={(e) => onDragOver(e, slot.id)}
               className={
-                "relative bg-white border rounded-md shadow-tbb-sm overflow-hidden " +
+                "app-card-lift relative bg-white border rounded-md shadow-tbb-sm overflow-hidden " +
                 SIZE_CLASSES[slot.size] +
                 " " +
                 (draggingId === slot.id ? "opacity-50 " : "") +

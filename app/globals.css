@@ -14,57 +14,70 @@
 
 @layer base {
   :root {
-    /* ---------- TBB brand tokens (direct hex) ---------- */
-    --tbb-navy:        #14385B;
-    --tbb-navy-700:    #1B4A77;
-    --tbb-navy-900:    #0C2740;
+    /* ---------- Heritage brand tokens (direct hex) ----------
+     * The Builder · By Workplaces. Heritage industrial palette per
+     * the brand spec in CLAUDE.md: Drafting Cream canvas, Foreman
+     * Black ink, Steel Blue structure, Safety Vest Orange accent.
+     * Class names from the earlier palette stay the same so every
+     * existing component re-skins automatically. */
+    --tbb-navy:        #2E4057;   /* Steel Blue — structural */
+    --tbb-navy-700:    #25364A;
+    --tbb-navy-900:    #1A2733;
 
-    --tbb-cream:       #EFE6D7;
-    --tbb-cream-200:   #F7F1E6;
-    --tbb-cream-50:    #FBF8F2;
+    --tbb-cream:       #F5F1E8;   /* Drafting Cream — backdrop */
+    --tbb-cream-200:   #FAF7EE;
+    --tbb-cream-50:    #FCFAF5;
 
-    --tbb-blue:        #2C6CB0;
-    --tbb-blue-600:    #2560A0;
-    --tbb-blue-700:    #1E5189;
-    --tbb-blue-100:    #E2ECF7;
+    /* `tbb-blue` historically meant "the CTA color." Repointed at
+     * Safety Vest Orange so existing CTA buttons inherit the brand
+     * accent without touching every call site. */
+    --tbb-blue:        #E87722;   /* Safety Vest Orange — accent / CTA */
+    --tbb-blue-600:    #D86614;
+    --tbb-blue-700:    #B85510;
+    --tbb-blue-100:    #FDEBD8;
 
-    --tbb-blue-light:  #6FA8DC;
-    --tbb-blue-light-200: #C9DEF1;
+    --tbb-blue-light:  #F4A56E;
+    --tbb-blue-light-200: #FAD0AC;
 
-    --tbb-ink:         #14181D;
-    --tbb-ink-2:       #2A323B;
-    --tbb-ink-3:       #5A6470;
-    --tbb-ink-4:       #8B95A1;
-    --tbb-line:        #D6DDE5;
-    --tbb-line-soft:   #E8ECF1;
+    /* Standalone steel + orange tokens for places that want them
+     * explicitly, without piggybacking on `tbb-navy` / `tbb-blue`. */
+    --tbb-steel:       #2E4057;
+    --tbb-orange:      #E87722;
+
+    --tbb-ink:         #1A1A1A;   /* Foreman Black */
+    --tbb-ink-2:       #333333;
+    --tbb-ink-3:       #666666;
+    --tbb-ink-4:       #999999;
+    --tbb-line:        #CCCCCC;
+    --tbb-line-soft:   #E5E5E5;
     --tbb-bg:          #FFFFFF;
-    --tbb-bg-soft:     #F4F6F9;
+    --tbb-bg-soft:     #F5F1E8;   /* page background = Drafting Cream */
 
     --tbb-success:     #2E8B57;
     --tbb-warning:     #D89F2F;
     --tbb-danger:      #C0392B;
 
     /* ---------- shadcn semantic tokens (HSL for Tailwind) ---------- */
-    --background: 220 29% 97%;      /* tbb-bg-soft */
-    --foreground: 215 18% 10%;      /* tbb-ink */
+    --background: 39 33% 94%;       /* Drafting Cream */
+    --foreground: 0 0% 10%;         /* Foreman Black */
     --card: 0 0% 100%;              /* pure white */
-    --card-foreground: 215 18% 10%;
+    --card-foreground: 0 0% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 215 18% 10%;
-    --primary: 209 60% 43%;         /* tbb-blue — CTAs */
+    --popover-foreground: 0 0% 10%;
+    --primary: 24 80% 53%;          /* Safety Vest Orange — CTAs */
     --primary-foreground: 0 0% 100%;
-    --secondary: 209 64% 22%;       /* tbb-navy — secondary surfaces */
-    --secondary-foreground: 36 39% 89%;
-    --muted: 213 18% 87%;           /* tbb-line — soft surfaces */
-    --muted-foreground: 212 11% 40%; /* tbb-ink-3 */
-    --accent: 36 39% 89%;           /* tbb-cream — warm callouts */
-    --accent-foreground: 209 64% 22%;
-    --destructive: 6 64% 46%;       /* tbb-danger */
+    --secondary: 213 32% 26%;       /* Steel Blue — secondary surfaces */
+    --secondary-foreground: 39 33% 94%;
+    --muted: 0 0% 80%;              /* light grey rule */
+    --muted-foreground: 0 0% 40%;   /* neutral grey text */
+    --accent: 39 33% 94%;           /* Drafting Cream — warm callouts */
+    --accent-foreground: 213 32% 26%;
+    --destructive: 6 64% 46%;
     --destructive-foreground: 0 0% 100%;
-    --border: 213 18% 87%;          /* tbb-line */
-    --input: 213 18% 87%;
-    --ring: 209 60% 43%;            /* tbb-blue focus ring */
-    --radius: 0.625rem;             /* 10px — input default */
+    --border: 0 0% 80%;
+    --input: 0 0% 80%;
+    --ring: 24 80% 53%;             /* orange focus ring */
+    --radius: 0.625rem;
   }
 }
 
@@ -163,4 +176,85 @@
 @keyframes lifecycleFadeIn {
   0%   { transform: translateY(8px); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
+}
+
+/* ---------- Shared motion utilities ----------
+ * Applied across pages so the live app picks up the polish from the
+ * Refined mockup without each surface re-inventing it.
+ *
+ *   .app-rise         fade + lift into view on first render
+ *   .app-drift        gentle vertical drift (mascots, illustrations)
+ *   .app-pulse        pulse-ring on live indicators
+ *   .app-card-lift    hover-rise + Steel-Blue-tinted shadow
+ *   .app-row-hover    cream tint on row hover
+ *   .app-cta-orange   Safety Vest Orange CTA with hover lift + glow
+ */
+
+@keyframes app-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes app-drift {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@keyframes app-pulse-orange {
+  0%   { box-shadow: 0 0 0 0 rgba(232, 119, 34, 0.55); }
+  70%  { box-shadow: 0 0 0 9px rgba(232, 119, 34, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(232, 119, 34, 0); }
+}
+
+.app-rise {
+  animation: app-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.app-drift {
+  animation: app-drift 4.5s ease-in-out infinite;
+}
+.app-pulse {
+  animation: app-pulse-orange 2.4s ease-out infinite;
+}
+.app-card-lift {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease;
+}
+.app-card-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--tbb-steel);
+  box-shadow: 0 12px 28px -14px rgba(46, 64, 87, 0.22);
+}
+.app-row-hover {
+  transition: background-color 180ms ease;
+}
+.app-row-hover:hover {
+  background-color: var(--tbb-cream-200);
+}
+.app-cta-orange {
+  background-color: var(--tbb-orange);
+  color: #ffffff;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+.app-cta-orange:hover {
+  background-color: var(--tbb-blue-600);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px -10px rgba(232, 119, 34, 0.55);
+}
+
+/* Respect users who prefer reduced motion — collapse the entry/drift
+ * animations to a no-op so the surfaces still render but don't move. */
+@media (prefers-reduced-motion: reduce) {
+  .app-rise,
+  .app-drift,
+  .app-pulse {
+    animation: none !important;
+  }
+  .app-card-lift,
+  .app-row-hover,
+  .app-cta-orange {
+    transition: none !important;
+  }
 }
