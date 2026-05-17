@@ -136,6 +136,75 @@ export default async function CoachConsole() {
     0,
   );
 
+  /**
+   * Unified Commitments stream — action items, deliverables, and goals
+   * collapsed into one ranked list. Bruce's complaint: "action items
+   * feel the same as deliverables, goals feel redundant." Methodology
+   * keeps them distinct (small commitments vs. named artifacts vs.
+   * SMART destinations) but operationally he just wants to see what's
+   * on the plate. This card gives him that view; the dedicated module
+   * pages still exist for when he wants to slice.
+   */
+  type CommitmentRow = {
+    id: string;
+    kind: "Action item" | "Deliverable" | "Goal";
+    title: string;
+    href: string;
+    engagementName: string | null;
+    dueDate: Date | null;
+    status: string;
+  };
+  const commitments: CommitmentRow[] = [
+    ...actionItems
+      .filter((i) => i.status !== "done" && i.status !== "draft")
+      .map(
+        (i): CommitmentRow => ({
+          id: `ai-${i.id}`,
+          kind: "Action item",
+          title: i.title,
+          href: `/coach/action-items/${i.id}`,
+          engagementName: i.engagementName ?? null,
+          dueDate: i.dueDate ?? null,
+          status: i.status,
+        }),
+      ),
+    ...inflightDeliverables.map(
+      (d): CommitmentRow => ({
+        id: `dv-${d.id}`,
+        kind: "Deliverable",
+        title: d.title,
+        href: `/coach/deliverables`,
+        engagementName: d.engagementName ?? null,
+        // Deliverables don't carry a due date today — they're paced by
+        // session cadence. Null sorts to the bottom of the list which
+        // is fine.
+        dueDate: null,
+        status: d.status,
+      }),
+    ),
+    ...goals
+      .filter((g) => g.status !== "achieved" && g.status !== "abandoned")
+      .map(
+        (g): CommitmentRow => ({
+          id: `gl-${g.id}`,
+          kind: "Goal",
+          title: g.title,
+          href: `/portal/goals/${g.id}`,
+          engagementName: g.engagementName ?? null,
+          dueDate: g.targetDate ?? null,
+          status: g.status,
+        }),
+      ),
+  ].sort((a, b) => {
+    const ao = a.dueDate && a.dueDate < now ? 0 : 1;
+    const bo = b.dueDate && b.dueDate < now ? 0 : 1;
+    if (ao !== bo) return ao - bo;
+    const at = a.dueDate ? a.dueDate.getTime() : Number.MAX_SAFE_INTEGER;
+    const bt = b.dueDate ? b.dueDate.getTime() : Number.MAX_SAFE_INTEGER;
+    return at - bt;
+  });
+  const commitmentsTop = commitments.slice(0, 10);
+
   const cards: DashboardCard[] = [
     {
       type: "my_work",
@@ -184,6 +253,82 @@ export default async function CoachConsole() {
                           >
                             Due{" "}
                             {it.dueDate.toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardShell>
+      ),
+    },
+    {
+      type: "commitments",
+      label: "Commitments — all clients",
+      defaultSize: "large",
+      node: (
+        <CardShell
+          icon={<CheckSquare className="w-4 h-4" aria-hidden />}
+          title="Commitments — across every client"
+          href="/coach/action-items"
+          cta="Open action items"
+        >
+          {commitmentsTop.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">
+              Nothing on the plate across action items, deliverables, or
+              goals. Suspicious. Or impressive.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {commitmentsTop.map((c) => {
+                const overdue = c.dueDate && c.dueDate < now;
+                return (
+                  <li key={c.id}>
+                    <Link
+                      href={c.href}
+                      className={
+                        "block py-1.5 pl-3 border-l-2 group hover:bg-tbb-cream-50 transition-colors " +
+                        (overdue ? "border-tbb-danger" : "border-transparent")
+                      }
+                    >
+                      <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
+                        <span
+                          className={
+                            "text-[9px] font-mono uppercase tracking-tbb-caps px-1.5 py-0.5 rounded " +
+                            (c.kind === "Action item"
+                              ? "bg-tbb-blue/10 text-tbb-blue border border-tbb-blue/40"
+                              : c.kind === "Deliverable"
+                                ? "bg-amber-50 text-amber-700 border border-amber-300"
+                                : "bg-emerald-50 text-emerald-700 border border-emerald-300")
+                          }
+                        >
+                          {c.kind}
+                        </span>
+                        <span className="text-sm font-bold text-foreground group-hover:underline underline-offset-4">
+                          {c.title}
+                        </span>
+                        {c.engagementName && (
+                          <span className="text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+                            {c.engagementName}
+                          </span>
+                        )}
+                        {c.dueDate && (
+                          <span
+                            className={
+                              "ml-auto text-[10px] uppercase tracking-tbb-caps " +
+                              (overdue
+                                ? "text-tbb-danger font-bold"
+                                : "text-muted-foreground")
+                            }
+                          >
+                            {overdue ? "Overdue · " : "Due "}
+                            {c.dueDate.toLocaleDateString(undefined, {
                               month: "short",
                               day: "numeric",
                             })}

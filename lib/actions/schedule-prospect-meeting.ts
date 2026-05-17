@@ -177,6 +177,36 @@ export async function scheduleProspectMeeting(
     hangoutLink: string | null;
     htmlLink: string | null;
   };
+  /** Translate Google Calendar API gunk into something Bruce can act
+   *  on. The raw messages look like `Google Calendar API 401: {…}`. */
+  function friendlyCalendarError(raw: string): string {
+    const lower = raw.toLowerCase();
+    if (
+      lower.includes("not connected") ||
+      lower.includes("no token") ||
+      lower.includes("invalid_grant") ||
+      lower.includes("401")
+    ) {
+      return "Google isn't connected, or the connection expired. Reconnect at /coach/profile/google-calendar and try again.";
+    }
+    if (lower.includes("insufficient") || lower.includes("scope")) {
+      return "Your Google connection is missing the calendar permission. Reconnect at /coach/profile/google-calendar and accept the new scopes.";
+    }
+    if (lower.includes("quota") || lower.includes("rate")) {
+      return "Google Calendar's rate-limited you for a minute. Wait 60 seconds and try again.";
+    }
+    if (lower.includes("forbidden") || lower.includes("403")) {
+      return "Google refused this request. Common cause: the prospect's email domain blocks external calendar invites. Send a meeting link manually instead.";
+    }
+    if (lower.includes("notfound") || lower.includes("404")) {
+      return "Couldn't find your primary calendar. Reconnect Google at /coach/profile/google-calendar.";
+    }
+    if (lower.includes("400")) {
+      return `Google rejected the meeting details. Often means the date/time landed in the past. (${raw})`;
+    }
+    return `Couldn't reach Google Calendar: ${raw}`;
+  }
+
   try {
     const r = await createMeetingWithInvite(profile.userProfileId, {
       summary: data.title,
@@ -202,13 +232,9 @@ export async function scheduleProspectMeeting(
     });
     calendarResult = { hangoutLink: r.hangoutLink, htmlLink: r.htmlLink };
   } catch (e) {
-    return {
-      ok: false,
-      error:
-        e instanceof Error
-          ? `Couldn't reach Google Calendar: ${e.message}`
-          : "Couldn't reach Google Calendar.",
-    };
+    const raw = e instanceof Error ? e.message : String(e);
+    console.error("[schedule-prospect-meeting] calendar error:", raw);
+    return { ok: false, error: friendlyCalendarError(raw) };
   }
 
   // Log activity + communication + update next-action.

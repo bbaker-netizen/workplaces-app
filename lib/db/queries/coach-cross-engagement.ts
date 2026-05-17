@@ -173,6 +173,8 @@ export type CoachSubscriptionRow = {
   renewalDate: Date | null;
   engagementId: string;
   engagementName: string | null;
+  billingProvider: string | null;
+  billingExternalUrl: string | null;
 };
 
 export async function listCoachSubscriptions(): Promise<
@@ -195,6 +197,8 @@ export async function listCoachSubscriptions(): Promise<
         renewalDate: subscriptionAssets.renewalDate,
         engagementId: subscriptionAssets.engagementId,
         engagementName: engagements.name,
+        billingProvider: subscriptionAssets.billingProvider,
+        billingExternalUrl: subscriptionAssets.billingExternalUrl,
       })
       .from(subscriptionAssets)
       .innerJoin(
