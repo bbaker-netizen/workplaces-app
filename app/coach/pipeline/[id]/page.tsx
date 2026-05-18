@@ -32,6 +32,7 @@ import { ClientCommunicationsPanel } from "@/components/communications/ClientCom
 import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
 import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButton";
 import { ProspectNextStep } from "@/components/pipeline/ProspectNextStep";
+import { SoulFilePreviewButton } from "@/components/pipeline/SoulFilePreviewButton";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
   STAGE_STYLES,
@@ -178,6 +179,16 @@ export default async function ProspectDetailPage({
                 recipientName={prospect.contactName}
                 recipientEmail={prospect.contactEmail}
               />
+            </div>
+            <div className="border-t border-tbb-line-soft pt-4 space-y-2">
+              <p className="text-xs text-tbb-ink-3">
+                If we&apos;ve already had Fireflies-recorded sessions with
+                this prospect, draft what their Soul File would look like
+                — no engagement created, no portal invite sent. Pure
+                preview so you can see what we know before deciding to
+                formalise them.
+              </p>
+              <SoulFilePreviewButton prospectId={prospect.id} />
             </div>
           </section>
 
