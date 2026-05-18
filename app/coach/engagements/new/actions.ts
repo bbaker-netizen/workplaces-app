@@ -81,6 +81,13 @@ const schema = z.object({
     .uuid("Invalid template id")
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  // Form checkbox — when present (HTML form sends "on" / undefined),
+  // we pull the last 3 Fireflies transcripts with this client's email
+  // and Claude drafts a Soul File starter.
+  seedSoulFile: z
+    .union([z.literal("on"), z.literal("true"), z.literal(""), z.undefined()])
+    .transform((v) => v === "on" || v === "true")
+    .optional(),
 });
 
 export type CreateEngagementState =
@@ -115,6 +122,7 @@ export async function createEngagementAction(
     clientLeadFullName: formData.get("clientLeadFullName"),
     startDate: formData.get("startDate"),
     onboardingTemplateId: formData.get("onboardingTemplateId") ?? undefined,
+    seedSoulFile: formData.get("seedSoulFile") ?? undefined,
   });
   if (!parsed.success) {
     return {
@@ -285,6 +293,45 @@ export async function createEngagementAction(
     } catch (e) {
       console.warn(
         `Onboarding email failed for engagement ${newEngagementId}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
+
+  // 9. If Bruce ticked "Seed Soul File from Fireflies", pull the last
+  //    3 transcripts where this client's email is an attendee and
+  //    have Claude draft a starter Soul File. Best-effort — never
+  //    blocks the success return.
+  if (parsed.data.seedSoulFile) {
+    try {
+      const { seedSoulFileFromFireflies } = await import(
+        "@/lib/soul-files/seed-from-fireflies"
+      );
+      const result = await seedSoulFileFromFireflies({
+        engagementId: newEngagementId,
+        engagementOrgId: newAppOrgId,
+        clientLeadEmail,
+        engagementName,
+        senderUserProfileId: callerProfile.userProfileId,
+        maxTranscripts: 3,
+      });
+      if (result.kind === "seeded") {
+        console.log(
+          `[engagement-create] Soul File seeded for ${newEngagementId} from ${result.transcriptCount} Fireflies transcript(s) (${result.bodyLength} chars).`,
+        );
+      } else if (result.kind === "no_transcripts") {
+        console.log(
+          `[engagement-create] No Fireflies transcripts found for ${clientLeadEmail} — Soul File starts empty.`,
+        );
+      } else {
+        console.warn(
+          `[engagement-create] Soul File seed skipped: ${result.reason}`,
+        );
+      }
+    } catch (e) {
+      console.warn(
+        `[engagement-create] Soul File seed threw: ${
           e instanceof Error ? e.message : String(e)
         }`,
       );

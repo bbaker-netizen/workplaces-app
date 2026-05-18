@@ -162,6 +162,29 @@ export function EngagementForm({
         />
       </div>
 
+      <div className="border border-tbb-line rounded-md bg-white p-4 space-y-2">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            id="seedSoulFile"
+            name="seedSoulFile"
+            type="checkbox"
+            defaultChecked
+            className="mt-1 w-4 h-4 rounded border-tbb-line text-tbb-orange focus:ring-tbb-orange"
+          />
+          <span>
+            <span className={labelClass + " mb-0.5"}>
+              Seed Soul File from Fireflies (recommended)
+            </span>
+            <span className="block text-xs text-muted-foreground leading-snug">
+              Pulls the last 3 Fireflies transcripts where this client&apos;s
+              email is an attendee and has Claude draft a starter Soul File
+              you can edit. If there&apos;s no history, the Soul File just
+              starts empty — no harm done.
+            </span>
+          </span>
+        </label>
+      </div>
+
       <div>
         <label htmlFor="onboardingTemplateId" className={labelClass}>
           Auto-send onboarding email (optional)

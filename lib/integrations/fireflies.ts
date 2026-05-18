@@ -96,6 +96,71 @@ export async function fetchTranscript(
   return json.data?.transcript ?? null;
 }
 
+export type FirefliesTranscriptSummary = {
+  id: string;
+  title: string;
+  date: number;
+  duration: number;
+  organizer_email: string | null;
+};
+
+/**
+ * Search Fireflies for recent transcripts that include the given
+ * email address as an attendee. Used by the Soul-File auto-seed on
+ * engagement creation — we want the last N sessions Bruce ran with
+ * this client (if any) so Claude can draft a starter Soul File.
+ *
+ * Returns transcripts ordered newest first. Limit defaults to 3.
+ * Returns an empty array if the email never appears in any
+ * Fireflies attendee list.
+ */
+export async function searchTranscriptsByAttendee(
+  participantEmail: string,
+  opts: { limit?: number } = {},
+): Promise<FirefliesTranscriptSummary[]> {
+  const limit = opts.limit ?? 3;
+  const query = /* GraphQL */ `
+    query FindForAttendee($email: String!, $limit: Int!) {
+      transcripts(participant_email: $email, limit: $limit) {
+        id
+        title
+        date
+        duration
+        organizer_email
+      }
+    }
+  `;
+  const resp = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query,
+      variables: { email: participantEmail.toLowerCase(), limit },
+    }),
+    cache: "no-store",
+  });
+  if (!resp.ok) {
+    throw new Error(
+      `Fireflies search failed (${resp.status}): ${await resp.text()}`,
+    );
+  }
+  const json = (await resp.json()) as {
+    data?: { transcripts: FirefliesTranscriptSummary[] | null };
+    errors?: Array<{ message: string }>;
+  };
+  if (json.errors?.length) {
+    throw new Error(
+      `Fireflies search: ${json.errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+  const list = json.data?.transcripts ?? [];
+  // Fireflies' ordering isn't guaranteed — sort newest-first ourselves.
+  return list.sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
+}
+
 /**
  * Flatten a transcript's sentences into a plain text block tagged
  * with speaker names. The output goes into the LLM action-item
