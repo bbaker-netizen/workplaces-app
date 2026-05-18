@@ -57,7 +57,11 @@ export function ProspectStatusSelect({
       <span className="relative inline-flex items-center">
         <span
           className={
-            "inline-flex items-center gap-1 px-3 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps " +
+            // whitespace-nowrap + justify-center + min-w-[10rem]
+            // keep every pill the same width regardless of which
+            // label fills it ("Lost" vs "Contract signed" used to
+            // wrap to two lines in narrow columns).
+            "inline-flex items-center justify-center gap-1 px-3 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps whitespace-nowrap min-w-[10rem] " +
             style.chipClass
           }
         >
