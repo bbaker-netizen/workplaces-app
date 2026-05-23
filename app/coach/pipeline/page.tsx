@@ -35,7 +35,7 @@ export default async function PipelinePage() {
   }
 
   return (
-    <main className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+    <main className="max-w-screen-2xl mx-auto px-6 py-12 space-y-8">
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div className="space-y-1">
           <p className="tbb-eyebrow">Pipeline</p>

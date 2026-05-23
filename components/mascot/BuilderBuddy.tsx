@@ -389,19 +389,25 @@ function BeaconCharacter({
         onBlur={() => setHovered(false)}
         aria-label="Ask Builder Buddy"
         title="Ask Buddy — keyboard shortcut: ?"
-        className="buddy-bob relative group w-16 h-16 rounded-full grid place-items-center bg-tbb-orange shadow-tbb-md hover:scale-[1.08] transition-transform duration-tbb-base cursor-pointer"
+        // Pale Drafting Cream pad + thick white outline + soft orange
+        // halo so the character itself (orange hat, peach face) reads
+        // clearly against the page. Was a saturated orange pad which
+        // visually merged with the hat.
+        className="buddy-bob relative group w-16 h-16 rounded-full grid place-items-center bg-tbb-cream-50 ring-4 ring-white shadow-tbb-md hover:scale-[1.08] transition-transform duration-tbb-base cursor-pointer"
       >
-        {/* Soft halo behind the character to lift it off the page. */}
+        {/* Soft orange halo behind the character — sits OUTSIDE the
+            white ring so the beacon still reads as an interactive
+            highlighted element. */}
         <span
           aria-hidden
-          className="absolute inset-0 rounded-full ring-4 ring-tbb-orange/25 group-hover:ring-tbb-orange/40 transition-all"
+          className="absolute -inset-1 rounded-full ring-2 ring-tbb-orange/30 group-hover:ring-tbb-orange/50 transition-all"
         />
         <BuilderSvg className="w-12 h-12 relative" />
         {/* Online indicator — emerald dot bottom-right with a pulse
             ring around it so the character feels alive. */}
         <span
           aria-hidden
-          className="app-pulse absolute bottom-1 right-1 w-3 h-3 rounded-full bg-tbb-success ring-2 ring-white"
+          className="app-pulse absolute bottom-0 right-0 w-3 h-3 rounded-full bg-tbb-success ring-2 ring-white"
         />
       </button>
     </div>
