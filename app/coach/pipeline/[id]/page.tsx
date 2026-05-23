@@ -239,6 +239,40 @@ export default async function ProspectDetailPage({
               </p>
               <SoulFilePreviewButton prospectId={prospect.id} />
             </div>
+            {/* Convert prospect → engagement. Appears once the contract
+                is signed (or whenever Bruce wants to formalise). Carries
+                program type, pricing tier, monthly fee, and start date
+                across so the engagement form is pre-filled. */}
+            {!prospect.convertedEngagementId && (
+              <div className="border-t border-tbb-line-soft pt-4 space-y-2">
+                <p className="text-xs text-tbb-ink-3">
+                  Ready to formalise this prospect into a paying
+                  engagement? We&apos;ll carry every field you&apos;ve
+                  captured — contact, program, tier, fee, start date —
+                  into the engagement form so you confirm rather than
+                  retype.
+                </p>
+                <a
+                  href={`/coach/engagements/new?prospectId=${prospect.id}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
+                >
+                  Convert to engagement →
+                </a>
+              </div>
+            )}
+            {prospect.convertedEngagementId && (
+              <div className="border-t border-tbb-line-soft pt-4 space-y-2">
+                <p className="text-xs text-tbb-success font-bold">
+                  ✓ Converted to engagement
+                </p>
+                <a
+                  href={`/coach/engagements/${prospect.convertedEngagementId}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+                >
+                  Open engagement workspace →
+                </a>
+              </div>
+            )}
           </section>
 
           {/* Deal card */}

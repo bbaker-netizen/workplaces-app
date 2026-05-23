@@ -1,16 +1,37 @@
 import { and, asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { emailTemplates, pricingTiers } from "@/lib/db/schema";
+import { emailTemplates, pricingTiers, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementForm } from "./EngagementForm";
 
-export default async function NewEngagementPage() {
+export default async function NewEngagementPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ prospectId?: string }>;
+}) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     redirect("/portal");
   }
+
+  const { prospectId } = await searchParams;
+
+  // If we landed here via "Convert to engagement" on a prospect page,
+  // load the prospect so we can pre-fill the form fields. Saves Bruce
+  // retyping name / email / program / fee — everything the prospect
+  // record already knows.
+  const prefillProspect = prospectId
+    ? await withSystemContext(async (tx) => {
+        const [p] = await tx
+          .select()
+          .from(prospects)
+          .where(eq(prospects.id, prospectId))
+          .limit(1);
+        return p ?? null;
+      })
+    : null;
 
   // Pull onboarding-category templates so the form can offer them as
   // "auto-send when the client accepts" options. Pull pricing tiers
@@ -65,9 +86,42 @@ export default async function NewEngagementPage() {
             time.
           </p>
         </header>
+        {prefillProspect && (
+          <div className="border border-tbb-blue/30 bg-tbb-blue-50 rounded-md px-4 py-3 text-sm text-tbb-navy">
+            <p className="font-bold">
+              Pre-filled from {prefillProspect.companyName}
+            </p>
+            <p className="text-xs text-tbb-ink-3 mt-0.5">
+              We&apos;ve copied this prospect&apos;s contact, program, and
+              fee details across. Confirm or adjust, then click Create.
+            </p>
+          </div>
+        )}
         <EngagementForm
           onboardingTemplates={onboardingTemplates}
           pricingTiers={tiers}
+          prefill={
+            prefillProspect
+              ? {
+                  prospectId: prefillProspect.id,
+                  engagementName: prefillProspect.companyName,
+                  clientLeadFullName: prefillProspect.contactName ?? "",
+                  clientLeadEmail: prefillProspect.contactEmail,
+                  programType:
+                    prefillProspect.programType === "accelerator" ||
+                    prefillProspect.programType === "implementer"
+                      ? prefillProspect.programType
+                      : "",
+                  pricingTier: prefillProspect.pricingTier ?? "",
+                  monthlyFeeCents: prefillProspect.monthlyFeeCents,
+                  startDate: prefillProspect.expectedStartDate
+                    ? new Date(prefillProspect.expectedStartDate)
+                        .toISOString()
+                        .slice(0, 10)
+                    : "",
+                }
+              : null
+          }
         />
       </div>
     </main>

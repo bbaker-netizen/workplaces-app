@@ -48,21 +48,41 @@ function SubmitButton() {
   );
 }
 
+type PrefillData = {
+  prospectId: string;
+  engagementName: string;
+  clientLeadFullName: string;
+  clientLeadEmail: string;
+  programType: string;
+  pricingTier: string;
+  monthlyFeeCents: number | null;
+  startDate: string;
+};
+
 export function EngagementForm({
   onboardingTemplates = [],
   pricingTiers = [],
+  prefill = null,
 }: {
   onboardingTemplates?: { id: string; name: string; category: string }[];
   pricingTiers?: PricingTierOption[];
+  /** When set, the form fields seed from this data — used when
+   *  converting a contract-signed prospect to a paying engagement. */
+  prefill?: PrefillData | null;
 } = {}) {
   const [state, action] = useFormState(createEngagementAction, initial);
 
   // Pricing UI state. Selected program drives which tiers show; the
   // selected tier pre-fills the fee input; the input is editable so
-  // Bruce can override per-deal.
-  const [program, setProgram] = useState<string>("");
-  const [tierKey, setTierKey] = useState<string>("");
-  const [feeInput, setFeeInput] = useState<string>("");
+  // Bruce can override per-deal. When prefill is set, seed every
+  // field from it; the user can still tweak before submitting.
+  const [program, setProgram] = useState<string>(prefill?.programType ?? "");
+  const [tierKey, setTierKey] = useState<string>(prefill?.pricingTier ?? "");
+  const [feeInput, setFeeInput] = useState<string>(
+    prefill?.monthlyFeeCents
+      ? formatCentsForInput(prefill.monthlyFeeCents)
+      : "",
+  );
 
   const tiersForProgram = useMemo(
     () => pricingTiers.filter((t) => t.program === program),
@@ -142,10 +162,14 @@ export function EngagementForm({
           type="text"
           required
           maxLength={200}
+          defaultValue={prefill?.engagementName ?? ""}
           placeholder="Impactica"
           className={inputClass}
         />
       </div>
+      {prefill?.prospectId && (
+        <input type="hidden" name="prospectId" value={prefill.prospectId} />
+      )}
 
       <div>
         <label htmlFor="engagementType" className={labelClass}>
@@ -272,6 +296,7 @@ export function EngagementForm({
           type="text"
           required
           maxLength={200}
+          defaultValue={prefill?.clientLeadFullName ?? ""}
           placeholder="First Last"
           className={inputClass}
         />
@@ -286,6 +311,7 @@ export function EngagementForm({
           name="clientLeadEmail"
           type="email"
           required
+          defaultValue={prefill?.clientLeadEmail ?? ""}
           placeholder="lead@example.com"
           className={inputClass}
         />
@@ -300,6 +326,7 @@ export function EngagementForm({
           name="startDate"
           type="date"
           required
+          defaultValue={prefill?.startDate ?? ""}
           className={inputClass}
         />
       </div>

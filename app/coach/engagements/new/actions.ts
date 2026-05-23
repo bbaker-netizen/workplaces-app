@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { coaches, engagements, orgs } from "@/lib/db/schema";
+import { coaches, engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 
 function slugify(name: string, id: string): string {
@@ -106,6 +106,14 @@ const schema = z.object({
     .max(60)
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  /** If converting from a prospect record, the prospect's UUID. The
+   *  action sets prospects.converted_engagement_id back-reference and
+   *  bumps the prospect's status to "onboarded". */
+  prospectId: z
+    .string()
+    .uuid()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 });
 
 export type CreateEngagementState =
@@ -143,6 +151,7 @@ export async function createEngagementAction(
     seedSoulFile: formData.get("seedSoulFile") ?? undefined,
     monthlyFee: formData.get("monthlyFee") ?? undefined,
     pricingTier: formData.get("pricingTier") ?? undefined,
+    prospectId: formData.get("prospectId") ?? undefined,
   });
   if (!parsed.success) {
     return {
@@ -483,6 +492,28 @@ export async function createEngagementAction(
         `[engagement-create] Soul File seed threw: ${
           e instanceof Error ? e.message : String(e)
         }`,
+      );
+    }
+  }
+
+  // Back-link the source prospect if we converted from one — sets
+  // prospects.converted_engagement_id and flips status to onboarded
+  // so the prospect drops out of the "active deals" view and into
+  // the historical record.
+  if (parsed.data.prospectId) {
+    try {
+      await withSystemContext(async (tx) => {
+        await tx
+          .update(prospects)
+          .set({
+            convertedEngagementId: newEngagementId,
+            status: "onboarded",
+          })
+          .where(eq(prospects.id, parsed.data.prospectId!));
+      });
+    } catch (e) {
+      console.warn(
+        `[engagement-create] couldn't back-link prospect ${parsed.data.prospectId}: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   }
