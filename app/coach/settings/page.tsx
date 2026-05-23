@@ -9,7 +9,6 @@ import {
   Building2,
   CreditCard,
   FileText,
-  MailCheck,
   Plug,
   User,
 } from "lucide-react";
@@ -51,28 +50,20 @@ const CARDS: SettingsCard[] = [
     status: "ready",
   },
   {
-    href: "/coach/inbox",
-    title: "Email & SMS connections",
+    href: "/coach/settings/integrations",
+    title: "Integrations & connections",
     description:
-      "Gmail, Twilio — what's connected, what isn't. Reconnect if anything's drifted.",
-    icon: MailCheck,
-    status: "soon",
+      "Google (Calendar + Gmail), QuickBooks Online, Twilio (SMS), Fireflies, Resend. Connection status and management links.",
+    icon: Plug,
+    status: "ready",
   },
   {
-    href: "/coach",
+    href: "/coach/settings/profile",
     title: "Profile",
     description:
-      "Your name, email, time zone, notification preferences. (Coming soon — currently editable via the Clerk profile menu.)",
+      "Your name, email, password, two-factor authentication, email signature, e-signature image. Most fields live in Clerk.",
     icon: User,
-    status: "soon",
-  },
-  {
-    href: "/coach",
-    title: "Integrations",
-    description:
-      "QuickBooks Online, Google Calendar, Fireflies. (Coming soon — each integration's status will appear here.)",
-    icon: Plug,
-    status: "soon",
+    status: "ready",
   },
 ];
 
