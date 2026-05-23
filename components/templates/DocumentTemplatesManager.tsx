@@ -1,15 +1,20 @@
 "use client";
 
 /**
- * DocumentTemplatesManager — CRUD UI for the markdown bodies used by
- * the native signing compose flow. Sibling of TemplatesManager (which
- * handles email templates), with a slightly different shape: documents
- * carry a body but no subject (the subject is set per-send when Bruce
- * actually fires the envelope).
+ * DocumentTemplatesManager — CRUD UI for the bodies used by the native
+ * signing compose flow. Sibling of TemplatesManager (which handles
+ * email templates), with a slightly different shape: documents carry a
+ * body but no subject (the subject is set per-send when Bruce actually
+ * fires the envelope).
  *
- * List on the left, editor on the right. Tiptap output is markdown.
- * Variable chips at the top of the editor insert tokens at the
- * cursor (`{{client_name}}`, `{{company_name}}`, `{{today}}`, etc.).
+ * List on the left, editor on the right. The editor now runs in rich
+ * mode (headings, underline, alignment, blockquote) and emits HTML so
+ * alignment and blank-line spacing round-trip exactly. The body column
+ * (`document_templates.body_markdown`) holds either markdown (legacy)
+ * or HTML (new) — the PDF renderer auto-detects which.
+ *
+ * Variable chips at the top of the editor insert tokens at the cursor
+ * (`{{client_name}}`, `{{company_name}}`, `{{today}}`, etc.).
  */
 
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -59,29 +64,26 @@ const NEW_DRAFT: Draft = {
   id: null,
   name: "",
   category: "contract",
-  bodyMarkdown: `# Business Building Agreement
-
-This agreement is between **{{sender_full_name}}** (Workplaces) and **{{company_name}}** ({{client_full_name}}), effective {{start_date}}.
-
-## Scope
-
-We'll deliver a structured Business Building engagement with twice-monthly sessions, a focused set of deliverables (SOPs, org charts, financial dashboards, hiring frameworks), and ongoing access to the Workplaces methodology and tools.
-
-## Term
-
-This engagement begins on {{start_date}} and continues until either party provides 30 days' written notice.
-
-## Fees
-
-- Monthly fee: **[$ amount]**
-- Billed: [QuickBooks / Stripe]
-- First payment due: {{start_date}}
-
-## Acknowledgements
-
-By signing below, both parties confirm they understand the scope, term, and fees outlined above.`,
+  bodyMarkdown: `<h1 style="text-align: center">Business Building Agreement</h1>
+<p>This agreement is between <strong>{{sender_full_name}}</strong> (Workplaces) and <strong>{{company_name}}</strong> ({{client_full_name}}), effective {{start_date}}.</p>
+<h2>Scope</h2>
+<p>We'll deliver a structured Business Building engagement with twice-monthly sessions, a focused set of deliverables (SOPs, org charts, financial dashboards, hiring frameworks), and ongoing access to the Workplaces methodology and tools.</p>
+<h2>Term</h2>
+<p>This engagement begins on {{start_date}} and continues until either party provides 30 days' written notice.</p>
+<h2>Fees</h2>
+<ul>
+<li>Monthly fee: <strong>[$ amount]</strong></li>
+<li>Billed: [QuickBooks / Stripe]</li>
+<li>First payment due: {{start_date}}</li>
+</ul>
+<h2>Acknowledgements</h2>
+<p>By signing below, both parties confirm they understand the scope, term, and fees outlined above.</p>`,
   defaultSubject: "Business building agreement",
 };
+
+function looksLikeHtml(s: string): boolean {
+  return s.trim().startsWith("<");
+}
 
 export function DocumentTemplatesManager({
   initialTemplates,
@@ -100,8 +102,12 @@ export function DocumentTemplatesManager({
 
   useEffect(() => {
     if (!draft) return;
-    const current = editorRef.current?.getMarkdown() ?? "";
-    if (current !== draft.bodyMarkdown) {
+    // The body is either HTML (new format) or markdown (legacy). Push
+    // it into the editor via the matching imperative method so initial
+    // load works for both.
+    if (looksLikeHtml(draft.bodyMarkdown)) {
+      editorRef.current?.setHTML(draft.bodyMarkdown);
+    } else {
       editorRef.current?.setMarkdown(draft.bodyMarkdown);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,7 +139,9 @@ export function DocumentTemplatesManager({
         return;
       }
       // Open the editor pre-filled with the conversion result. Bruce
-      // reviews, edits, saves through the normal Create flow.
+      // reviews, edits, saves through the normal Create flow. Claude's
+      // convertor returns markdown — the editor will accept it on first
+      // load and then start emitting HTML from that point on.
       setDraft({
         id: null,
         name: r.data.name,
@@ -142,10 +150,14 @@ export function DocumentTemplatesManager({
         defaultSubject: r.data.default_subject ?? "",
       });
       // Force the editor to re-mount with the new content (key on
-      // draft.id || 'new', but here we explicitly push the markdown
-      // in via the imperative handle once the editor remounts).
+      // draft.id || 'new', but here we explicitly push the content in
+      // via the imperative handle once the editor remounts).
       setTimeout(() => {
-        editorRef.current?.setMarkdown(r.data.body_markdown);
+        if (looksLikeHtml(r.data.body_markdown)) {
+          editorRef.current?.setHTML(r.data.body_markdown);
+        } else {
+          editorRef.current?.setMarkdown(r.data.body_markdown);
+        }
       }, 0);
     });
   }
@@ -168,7 +180,9 @@ export function DocumentTemplatesManager({
   function save() {
     if (!draft) return;
     setError(null);
-    const liveBody = editorRef.current?.getMarkdown() ?? draft.bodyMarkdown;
+    // Save HTML — the editor is in HTML mode now so alignment + spacing
+    // survive the round trip. PDF renderer auto-detects HTML on render.
+    const liveBody = editorRef.current?.getHTML() ?? draft.bodyMarkdown;
     startTransition(async () => {
       const payload = {
         name: draft.name.trim(),
@@ -408,12 +422,23 @@ export function DocumentTemplatesManager({
               </div>
               <RichTextEditor
                 key={draft.id ?? "new"}
-                initialMarkdown={draft.bodyMarkdown}
-                placeholder="Write the document body. Use # for headings, ** for bold, - for bullets. Drop in variable chips above."
+                initialHtml={
+                  looksLikeHtml(draft.bodyMarkdown)
+                    ? draft.bodyMarkdown
+                    : undefined
+                }
+                initialMarkdown={
+                  looksLikeHtml(draft.bodyMarkdown)
+                    ? undefined
+                    : draft.bodyMarkdown
+                }
+                richMode
+                outputFormat="html"
+                placeholder="Write the document body. Use the toolbar for headings, alignment, bold, lists. Drop in variable chips above."
                 disabled={isPending}
                 editorRef={editorRef}
-                onChange={(md) =>
-                  setDraft((d) => (d ? { ...d, bodyMarkdown: md } : d))
+                onChange={(html) =>
+                  setDraft((d) => (d ? { ...d, bodyMarkdown: html } : d))
                 }
                 ariaLabel="Document body"
               />

@@ -26,6 +26,7 @@ import { sendGmailMessage } from "@/lib/integrations/gmail";
 import { isSmsConfigured, sendSms } from "@/lib/integrations/twilio";
 import {
   appendSignature,
+  buildHtmlBodyWithSignature,
   markdownToEmailHtml,
 } from "@/lib/templates/markdown-to-html";
 
@@ -120,8 +121,17 @@ export async function sendClientMessage(
       if (!senderEmail) {
         return { ok: false, error: "Couldn't resolve your sender email." };
       }
+      // Plain-text body (Gmail's text/plain part): strip any HTML out of
+      // the signature so a text-only recipient doesn't see tag literals.
       const bodyWithSignature = appendSignature(data.body, emailSignature);
-      const bodyHtml = markdownToEmailHtml(bodyWithSignature);
+      // HTML body (text/html part): when the signature is HTML, splice
+      // it into the rendered email document so its spacing, alignment,
+      // and underline come through faithfully. Falls back to the regular
+      // markdown converter when the signature is markdown.
+      const bodyHtml = buildHtmlBodyWithSignature(data.body, emailSignature);
+      // Suppress the unused-export warning while keeping the symbol live
+      // in case future callers want the bare markdown→HTML path.
+      void markdownToEmailHtml;
       const r = await sendGmailMessage(profile.userProfileId, senderEmail, {
         to: data.to,
         subject: data.subject ?? "(no subject)",

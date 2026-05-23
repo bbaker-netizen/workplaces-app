@@ -2069,6 +2069,11 @@ export const signatureEnvelopes = pgTable(
       { onDelete: "set null" },
     ),
     auditLog: jsonb("audit_log").notNull().default([]),
+    /** SHA-256 hex digest of the final signed PDF. Written when the
+     *  envelope completes. Lets anyone re-hash the file and verify it
+     *  hasn't been altered since signing — the cornerstone of an
+     *  enforceable tamper-evident audit trail. */
+    signedDocumentHash: text("signed_document_hash"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     voidedAt: timestamp("voided_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -2116,6 +2121,15 @@ export const signatureSigners = pgTable(
     signatureImageData: text("signature_image_data"),
     signatureMethod: text("signature_method"),
     viewedAt: timestamp("viewed_at", { withTimezone: true }),
+    /** When the signer explicitly ticked "I agree to sign electronically".
+     *  Distinguishes "viewed the doc" from "agreed to e-sign" — the
+     *  evidentiary backbone of the ESIGN / UETA / Alberta ETA consent
+     *  prong. */
+    consentedAt: timestamp("consented_at", { withTimezone: true }),
+    /** Verbatim snapshot of the consent disclosure the signer saw when
+     *  they ticked the box. If the disclosure wording changes later we
+     *  still know exactly what THIS signer agreed to. */
+    consentText: text("consent_text"),
     signedAt: timestamp("signed_at", { withTimezone: true }),
     declinedReason: text("declined_reason"),
     signerIp: text("signer_ip"),

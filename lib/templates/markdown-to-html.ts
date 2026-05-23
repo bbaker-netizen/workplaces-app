@@ -205,12 +205,124 @@ function wrapInEmailDocument(body: string): string {
 }
 
 /**
- * Append the user's email signature to the body. Markdown-aware — both
- * the body and the signature are markdown; we join with two blank lines
- * so they render as separate blocks.
+ * Append the user's email signature to the body.
+ *
+ * The signature can be either markdown (legacy — written before the
+ * signature editor switched to HTML output) or HTML (new — preserves
+ * spacing, alignment, underline, blank lines).
+ *
+ * For the plain-text body (what we hand to Gmail's text/plain part)
+ * we strip HTML tags out of the signature on the fly so the recipient's
+ * text-only client doesn't see `<p>` literals.
+ *
+ * For the HTML body (text/html part) the signature is concatenated
+ * after running the body through `markdownToEmailHtml`. If the sig
+ * itself is HTML, we use it directly. If it's markdown, we run it
+ * through the same converter.
  */
 export function appendSignature(body: string, signature: string | null): string {
   const sig = (signature ?? "").trim();
   if (!sig) return body;
-  return `${body.trimEnd()}\n\n${sig}`;
+  // Body is markdown. If the signature is HTML, strip the tags for
+  // the plain-text body. The HTML build path uses `buildHtmlBodyWithSignature`
+  // below instead, which keeps the HTML structure intact.
+  const sigPlain = looksLikeHtml(sig) ? stripHtmlForPlainText(sig) : sig;
+  return `${body.trimEnd()}\n\n${sigPlain}`;
+}
+
+/**
+ * Render the markdown body + signature into an HTML document suitable
+ * for Gmail. Used when the signature is HTML and we want to preserve
+ * its layout faithfully (alignment, blank lines, underline).
+ */
+export function buildHtmlBodyWithSignature(
+  bodyMarkdown: string,
+  signature: string | null,
+): string {
+  const sig = (signature ?? "").trim();
+  if (!sig) return markdownToEmailHtml(bodyMarkdown);
+  const sigHtml = looksLikeHtml(sig)
+    ? styleSignatureHtml(sig)
+    : // Legacy markdown signature — run through the same converter as
+      // the body so the visual treatment lines up.
+      extractBodyFromEmailDoc(markdownToEmailHtml(sig));
+  // Render the body as a full email doc, then splice the styled sig
+  // in just before the closing </body>.
+  const bodyDoc = markdownToEmailHtml(bodyMarkdown);
+  const SIG_SEPARATOR = `<div style="margin:18px 0 0 0;padding-top:14px;border-top:1px solid #E5E5E5;"></div>`;
+  return bodyDoc.replace(
+    /<\/body>\s*<\/html>$/,
+    `${SIG_SEPARATOR}${sigHtml}</body></html>`,
+  );
+}
+
+function looksLikeHtml(s: string): boolean {
+  return s.trim().startsWith("<");
+}
+
+/** Pull body innerHTML out of `<!DOCTYPE html><html><body>…</body></html>`. */
+function extractBodyFromEmailDoc(fullDoc: string): string {
+  const m = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(fullDoc);
+  return m ? m[1] : fullDoc;
+}
+
+/**
+ * Re-style HTML emitted by the signature editor (Tiptap) for email
+ * clients. Email clients strip <style> tags so every block-level
+ * element needs inline styles. We map the editor's tags to the same
+ * inline styles `wrapInEmailDocument` uses for the body.
+ */
+function styleSignatureHtml(html: string): string {
+  return (
+    html
+      .replace(
+        /<p(\s+style="([^"]*)")?>/g,
+        (_m, _attr, existing) => {
+          // Preserve any inline alignment / spacing from the editor.
+          const extra = existing ? `${existing};` : "";
+          return `<p style="${extra}margin:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1A1A1A;">`;
+        },
+      )
+      .replace(/<p[^>]*style="([^"]*)"[^>]*>/g, (m) => m) // already styled
+      .replace(/<h1>/g, '<h1 style="margin:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;color:#2E4057;">')
+      .replace(/<h2>/g, '<h2 style="margin:0 0 6px 0;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:700;color:#2E4057;">')
+      .replace(/<h3>/g, '<h3 style="margin:0 0 6px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#2E4057;">')
+      .replace(/<ul>/g, '<ul style="margin:0 0 8px 0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1A1A1A;">')
+      .replace(/<ol>/g, '<ol style="margin:0 0 8px 0;padding-left:20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1A1A1A;">')
+      .replace(/<li>/g, '<li style="margin:0 0 2px 0;">')
+      .replace(/<blockquote>/g, '<blockquote style="margin:8px 0;padding:6px 12px;border-left:3px solid #2E4057;background:#F5F1E8;color:#1A1A1A;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;">')
+      .replace(/<a /g, '<a style="color:#2E4057;text-decoration:underline;" ')
+      .replace(/<strong>/g, '<strong style="font-weight:700;">')
+      .replace(/<em>/g, '<em style="font-style:italic;">')
+      .replace(/<u>/g, '<u style="text-decoration:underline;">')
+  );
+}
+
+/**
+ * Strip HTML tags for the plain-text email body. Preserves paragraph
+ * breaks as newlines, list bullets as `- `, and link URLs in parens.
+ * Not bulletproof against arbitrary HTML — but the only HTML we ever
+ * accept here is what Tiptap emits, which is a small known set.
+ */
+function stripHtmlForPlainText(html: string): string {
+  return (
+    html
+      // Block-level elements → newlines
+      .replace(/<\/(p|div|h1|h2|h3|h4|h5|h6|blockquote)>/gi, "\n\n")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      .replace(/<br\s*\/?\s*>/gi, "\n")
+      // Inline → drop tags but keep content
+      .replace(/<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, "$2 ($1)")
+      .replace(/<[^>]+>/g, "")
+      // Decode the small set of entities we emit
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }

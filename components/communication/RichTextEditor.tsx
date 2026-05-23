@@ -37,6 +37,8 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Mention from "@tiptap/extension-mention";
+import TextAlign from "@tiptap/extension-text-align";
+import Underline from "@tiptap/extension-underline";
 import type { SuggestionProps, SuggestionKeyDownProps } from "@tiptap/suggestion";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import { Markdown } from "tiptap-markdown";
@@ -44,11 +46,19 @@ import {
   Bold,
   Italic,
   Strikethrough,
+  Underline as UnderlineIcon,
   Code,
   List,
   ListOrdered,
   Quote,
   Link2,
+  Heading1,
+  Heading2,
+  Heading3,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
 } from "lucide-react";
 import {
   MentionList,
@@ -59,8 +69,17 @@ import {
 export type RichTextEditorHandle = {
   /** Returns the current markdown body (trimmed). */
   getMarkdown: () => string;
+  /** Returns the current HTML body (trimmed). Use this when richer
+   *  formatting (alignment, underline, multiple blank lines) needs to
+   *  round-trip losslessly — standard markdown can't express alignment
+   *  and ProseMirror's markdown serializer collapses consecutive blank
+   *  paragraphs, so HTML is the faithful format for signatures and
+   *  document templates. */
+  getHTML: () => string;
   /** Replaces the editor content with the provided markdown. */
   setMarkdown: (markdown: string) => void;
+  /** Replaces the editor content with raw HTML. */
+  setHTML: (html: string) => void;
   /** Inserts plain text (e.g. an emoji glyph) at the current cursor. */
   insertText: (text: string) => void;
   /** Clears the editor. */
@@ -75,6 +94,7 @@ export type RichTextEditorHandle = {
 
 export function RichTextEditor({
   initialMarkdown = "",
+  initialHtml,
   placeholder = "Write a message…",
   disabled = false,
   autoFocus = false,
@@ -83,15 +103,24 @@ export function RichTextEditor({
   editorRef,
   ariaLabel,
   members,
+  richMode = false,
+  outputFormat = "markdown",
 }: {
+  /** Initial body in markdown form. Ignored if `initialHtml` is set. */
   initialMarkdown?: string;
+  /** Initial body in HTML form. Use this for editors backed by HTML
+   *  storage (signatures, document templates). When set, takes precedence
+   *  over `initialMarkdown`. */
+  initialHtml?: string;
   placeholder?: string;
   disabled?: boolean;
   autoFocus?: boolean;
-  /** Called on ⌘/Ctrl + Enter. Receives the current markdown. */
-  onSubmit?: (markdown: string) => void;
-  /** Called on every change with the current markdown. */
-  onChange?: (markdown: string) => void;
+  /** Called on ⌘/Ctrl + Enter. Receives the current value in the
+   *  configured output format. */
+  onSubmit?: (value: string) => void;
+  /** Called on every change with the current value in the configured
+   *  output format. */
+  onChange?: (value: string) => void;
   /** Imperative handle; assigned via React ref-callback pattern. */
   editorRef?: React.MutableRefObject<RichTextEditorHandle | null>;
   ariaLabel?: string;
@@ -101,6 +130,15 @@ export function RichTextEditor({
    * render) but typing `@` produces no suggestions.
    */
   members?: MentionMember[];
+  /** Turn on the richer toolbar: headings (H1/H2/H3), underline, text
+   *  alignment (left / center / right / justify). Defaults to false so
+   *  the message composer stays a simple markdown surface. */
+  richMode?: boolean;
+  /** What the onChange / getValue calls return. `"markdown"` for the
+   *  message composer (lossy on whitespace/alignment), `"html"` for
+   *  signatures + document templates where formatting needs to round-
+   *  trip exactly. */
+  outputFormat?: "markdown" | "html";
 }) {
   // Hold the latest onSubmit / onChange / members so ProseMirror
   // handlers always see fresh closures without re-mounting the editor.
@@ -120,9 +158,10 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Disable defaults we don't expose so the toolbar matches reality.
-        heading: false,
-        horizontalRule: false,
+        // Headings: enable H1-H3 in rich mode (contracts, signatures);
+        // off in the message composer to keep the toolbar simple.
+        heading: richMode ? { levels: [1, 2, 3] } : false,
+        horizontalRule: richMode ? {} : false,
       }),
       Link.configure({
         openOnClick: false,
@@ -145,21 +184,40 @@ export function RichTextEditor({
         },
         suggestion: buildMentionSuggestion(membersRef),
       }),
+      // Markdown extension: always installed so we can still emit
+      // markdown when callers ask for it. In HTML mode it's harmless —
+      // we just don't read from `editor.storage.markdown`. `html: true`
+      // in richMode lets initial HTML content parse correctly.
       Markdown.configure({
-        html: false,
+        html: richMode,
         breaks: false,
         linkify: true,
         transformPastedText: true,
         transformCopiedText: true,
       }),
+      // Rich-mode-only extensions.
+      ...(richMode
+        ? [
+            Underline,
+            TextAlign.configure({
+              // Apply alignment marks to these block-level nodes only.
+              // We don't want alignment buttons setting alignment on
+              // list items or quotes — clients then see nested chrome.
+              types: ["heading", "paragraph"],
+              alignments: ["left", "center", "right", "justify"],
+              defaultAlignment: "left",
+            }),
+          ]
+        : []),
     ],
-    content: initialMarkdown,
+    content: initialHtml ?? initialMarkdown,
     autofocus: autoFocus,
     editable: !disabled,
     editorProps: {
       attributes: {
         class:
-          "prose-none w-full min-h-[72px] max-h-[40vh] overflow-y-auto " +
+          (richMode ? "tbb-rich-editor " : "") +
+          "prose-none w-full min-h-[120px] max-h-[60vh] overflow-y-auto " +
           "bg-white border border-tbb-line rounded-md px-3 py-2 " +
           "font-sans text-sm text-foreground " +
           "focus:outline-none focus:ring-2 focus:ring-tbb-blue focus:border-tbb-blue " +
@@ -169,16 +227,22 @@ export function RichTextEditor({
       handleKeyDown(_view, event) {
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
           event.preventDefault();
-          const md = editor?.storage.markdown.getMarkdown() ?? "";
-          onSubmitRef.current?.(md.trim());
+          const value =
+            outputFormat === "html"
+              ? editor?.getHTML() ?? ""
+              : editor?.storage.markdown.getMarkdown() ?? "";
+          onSubmitRef.current?.(value.trim());
           return true;
         }
         return false;
       },
     },
     onUpdate({ editor: e }) {
-      const md = e.storage.markdown.getMarkdown() ?? "";
-      onChangeRef.current?.(md);
+      const value =
+        outputFormat === "html"
+          ? e.getHTML() ?? ""
+          : e.storage.markdown.getMarkdown() ?? "";
+      onChangeRef.current?.(value);
     },
     immediatelyRender: false,
   });
@@ -201,7 +265,7 @@ export function RichTextEditor({
 
   return (
     <div className={disabled ? "opacity-60" : ""} aria-disabled={disabled}>
-      <Toolbar editor={editor} disabled={disabled} />
+      <Toolbar editor={editor} disabled={disabled} richMode={richMode} />
       <EditorContent editor={editor} />
     </div>
   );
@@ -210,10 +274,16 @@ export function RichTextEditor({
 function makeHandle(editor: Editor | null): RichTextEditorHandle {
   return {
     getMarkdown() {
-      return (editor?.storage.markdown.getMarkdown() ?? "").trim();
+      return (editor?.storage.markdown?.getMarkdown() ?? "").trim();
+    },
+    getHTML() {
+      return (editor?.getHTML() ?? "").trim();
     },
     setMarkdown(markdown) {
       editor?.commands.setContent(markdown);
+    },
+    setHTML(html) {
+      editor?.commands.setContent(html);
     },
     insertText(text) {
       editor?.chain().focus().insertContent(text).run();
@@ -323,9 +393,11 @@ function buildMentionSuggestion(
 function Toolbar({
   editor,
   disabled,
+  richMode,
 }: {
   editor: Editor | null;
   disabled: boolean;
+  richMode: boolean;
 }) {
   if (!editor) {
     // Reserve the toolbar's vertical space so the composer height
@@ -345,6 +417,50 @@ function Toolbar({
       aria-label="Formatting"
       className="flex flex-wrap items-center gap-0.5 mb-1 pb-1 border-b border-tbb-line"
     >
+      {richMode && (
+        <>
+          <ToolbarButton
+            label="Heading 1"
+            ariaPressed={isActive("heading", { level: 1 })}
+            disabled={disabled}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 1 }).run()
+            }
+            className={`${btnClass} ${
+              isActive("heading", { level: 1 }) ? activeClass : ""
+            }`}
+          >
+            <Heading1 className="w-4 h-4" aria-hidden />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Heading 2"
+            ariaPressed={isActive("heading", { level: 2 })}
+            disabled={disabled}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 2 }).run()
+            }
+            className={`${btnClass} ${
+              isActive("heading", { level: 2 }) ? activeClass : ""
+            }`}
+          >
+            <Heading2 className="w-4 h-4" aria-hidden />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Heading 3"
+            ariaPressed={isActive("heading", { level: 3 })}
+            disabled={disabled}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 3 }).run()
+            }
+            className={`${btnClass} ${
+              isActive("heading", { level: 3 }) ? activeClass : ""
+            }`}
+          >
+            <Heading3 className="w-4 h-4" aria-hidden />
+          </ToolbarButton>
+          <span className="w-px h-5 bg-tbb-line mx-1" aria-hidden />
+        </>
+      )}
       <ToolbarButton
         label="Bold"
         ariaPressed={isActive("bold")}
@@ -363,6 +479,17 @@ function Toolbar({
       >
         <Italic className="w-4 h-4" aria-hidden />
       </ToolbarButton>
+      {richMode && (
+        <ToolbarButton
+          label="Underline"
+          ariaPressed={isActive("underline")}
+          disabled={disabled}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          className={`${btnClass} ${isActive("underline") ? activeClass : ""}`}
+        >
+          <UnderlineIcon className="w-4 h-4" aria-hidden />
+        </ToolbarButton>
+      )}
       <ToolbarButton
         label="Strikethrough"
         ariaPressed={isActive("strike")}
@@ -409,6 +536,57 @@ function Toolbar({
       >
         <Quote className="w-4 h-4" aria-hidden />
       </ToolbarButton>
+      {richMode && (
+        <>
+          <span className="w-px h-5 bg-tbb-line mx-1" aria-hidden />
+          <ToolbarButton
+            label="Align left"
+            ariaPressed={editor.isActive("paragraph", { textAlign: "left" }) || editor.isActive("heading", { textAlign: "left" })}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().setTextAlign("left").run()}
+            className={`${btnClass} ${
+              editor.isActive("paragraph", { textAlign: "left" }) || editor.isActive("heading", { textAlign: "left" }) ? activeClass : ""
+            }`}
+          >
+            <AlignLeft className="w-4 h-4" aria-hidden />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Align center"
+            ariaPressed={editor.isActive("paragraph", { textAlign: "center" }) || editor.isActive("heading", { textAlign: "center" })}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().setTextAlign("center").run()}
+            className={`${btnClass} ${
+              editor.isActive("paragraph", { textAlign: "center" }) || editor.isActive("heading", { textAlign: "center" }) ? activeClass : ""
+            }`}
+          >
+            <AlignCenter className="w-4 h-4" aria-hidden />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Align right"
+            ariaPressed={editor.isActive("paragraph", { textAlign: "right" }) || editor.isActive("heading", { textAlign: "right" })}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().setTextAlign("right").run()}
+            className={`${btnClass} ${
+              editor.isActive("paragraph", { textAlign: "right" }) || editor.isActive("heading", { textAlign: "right" }) ? activeClass : ""
+            }`}
+          >
+            <AlignRight className="w-4 h-4" aria-hidden />
+          </ToolbarButton>
+          <ToolbarButton
+            label="Justify"
+            ariaPressed={editor.isActive("paragraph", { textAlign: "justify" }) || editor.isActive("heading", { textAlign: "justify" })}
+            disabled={disabled}
+            onClick={() =>
+              editor.chain().focus().setTextAlign("justify").run()
+            }
+            className={`${btnClass} ${
+              editor.isActive("paragraph", { textAlign: "justify" }) || editor.isActive("heading", { textAlign: "justify" }) ? activeClass : ""
+            }`}
+          >
+            <AlignJustify className="w-4 h-4" aria-hidden />
+          </ToolbarButton>
+        </>
+      )}
       <span className="w-px h-5 bg-tbb-line mx-1" aria-hidden />
       <ToolbarButton
         label={isActive("link") ? "Edit link" : "Insert link"}

@@ -309,6 +309,10 @@ export function signatureRequestEmail(
       <p style="margin:0 0 20px 0;padding:14px 18px;background:#F5F1E8;border-left:4px solid #E87722;font-size:18px;font-weight:700;color:#1A1A1A;line-height:1.4;">${escapeHtml(input.envelopeSubject)}</p>
       ${messageBlock}
       <p style="margin:0 0 12px 0;">The link below opens the document and a signature panel — type or draw your signature, then click Sign. No account required.</p>
+      <p style="margin:18px 0 0 0;padding:12px 14px;background:#F5F1E8;border:1px solid #E5DCC5;border-radius:6px;font-size:13px;line-height:1.55;color:#3A3A3A;">
+        <strong style="display:block;margin-bottom:4px;color:#1A1A1A;">Signing electronically</strong>
+        By clicking the link above and completing the signing process, you agree to sign this document electronically. If you prefer to sign on paper or have any questions, simply reply to this email and we&rsquo;ll send a printed copy. Your name, email, IP address, browser, and timestamps will be recorded as evidence of this signing.
+      </p>
     `,
     buttonHref: url,
     buttonLabel: "Review and sign",
@@ -322,6 +326,9 @@ export function signatureRequestEmail(
     `Sign here: ${url}`,
     "",
     "No account required. Type or draw your signature, then click Sign.",
+    "",
+    "Signing electronically:",
+    "By clicking the link and completing the signing process, you agree to sign this document electronically. If you prefer to sign on paper or have any questions, simply reply to this email and we'll send a printed copy. Your name, email, IP address, browser, and timestamps will be recorded as evidence of this signing.",
   ]
     .filter((l) => l !== null)
     .join("\n");

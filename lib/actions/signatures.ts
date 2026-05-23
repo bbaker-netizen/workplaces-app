@@ -514,6 +514,13 @@ const submitSchema = z.object({
     .regex(/^data:image\/(png|jpe?g);base64,/),
   ip: z.string().max(80).nullable().optional(),
   userAgent: z.string().max(500).nullable().optional(),
+  /** Verbatim disclosure text the signer agreed to. Persisted into
+   *  `signature_signers.consent_text` so we can prove later what THIS
+   *  signer agreed to even if the disclosure wording changes. */
+  consentText: z.string().min(20).max(8000).optional(),
+  /** Version tag of the disclosure text (e.g. "v1-2026-05"). Lets us
+   *  track at a glance which copy of the disclosure was in force. */
+  consentVersion: z.string().max(60).optional(),
 });
 
 export async function submitSignature(
@@ -569,6 +576,11 @@ export async function submitSignature(
     };
   }
 
+  // Consent and sign happen in the same submit click, so the consent
+  // timestamp lands a fraction of a second before the signature
+  // timestamp. We record both — `consentedAt` is the evidentiary
+  // anchor for the ESIGN / UETA / Alberta ETA consent prong.
+  const now = new Date();
   await withSystemContext(async (tx) => {
     await tx
       .update(signatureSigners)
@@ -576,13 +588,21 @@ export async function submitSignature(
         status: "signed",
         signatureImageData: data.signatureImageData,
         signatureMethod: data.signatureMethod,
-        signedAt: new Date(),
+        signedAt: now,
+        consentedAt: now,
+        consentText: data.consentText ?? null,
         signerIp: data.ip ?? null,
         signerUserAgent: data.userAgent ?? null,
       })
       .where(eq(signatureSigners.id, ctx.signer.id));
 
     const audit = (ctx.env.auditLog as AuditEntry[]) ?? [];
+    audit.push(
+      makeAuditEntry("signer_consented", {
+        signerEmail: ctx.signer.email,
+        ip: data.ip ?? null,
+      }),
+    );
     audit.push(
       makeAuditEntry("signer_signed", {
         signerEmail: ctx.signer.email,
@@ -899,17 +919,37 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
     }),
   );
 
+  // SHA-256 of the source PDF. Renders into the certificate so anyone
+  // can verify which exact file got signed.
+  const { createHash } = await import("node:crypto");
+  const sourceBytes =
+    sourceBlob.body instanceof Uint8Array
+      ? sourceBlob.body
+      : new Uint8Array(sourceBlob.body as ArrayBuffer);
+  const sourceDocumentHash = createHash("sha256")
+    .update(sourceBytes)
+    .digest("hex");
+
+  const completedAt = new Date();
   let signedBytes: Uint8Array;
   try {
     signedBytes = await buildSignedPdf(sourceBlob.body, {
       envelopeId: ctx.env.id,
       documentName: ctx.doc.originalFilename,
+      sourceDocumentHash,
+      envelopeCreatedAt: ctx.env.createdAt ?? null,
+      envelopeCompletedAt: completedAt,
+      senderName: ctx.createdByName,
+      senderEmail: ctx.createdByEmail,
       signers: ctx.signers.map((s) => ({
         name: s.name,
         email: s.email,
         roleLabel: s.roleLabel,
         signedAt: s.signedAt ?? new Date(),
+        viewedAt: s.viewedAt ?? null,
+        consentedAt: s.consentedAt ?? null,
         signerIp: s.signerIp,
+        signerUserAgent: s.signerUserAgent,
         signatureMethod: s.signatureMethod,
         signatureImageData: s.signatureImageData,
       })),
@@ -919,6 +959,12 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
     console.error("[signing] PDF build failed:", e);
     return;
   }
+
+  // Hash the FINAL signed PDF too — that's what gets stored on the
+  // envelope row so anyone can verify the signed file later.
+  const signedDocumentHash = createHash("sha256")
+    .update(signedBytes)
+    .digest("hex");
 
   const signedFilename = `${ctx.env.subject.slice(0, 80).replace(/[^\w\- ]+/g, "_")} — signed.pdf`;
   // Copy into a fresh ArrayBuffer to satisfy the BlobPart constraint
@@ -950,8 +996,9 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
       .update(signatureEnvelopes)
       .set({
         status: "completed",
-        completedAt: new Date(),
+        completedAt,
         signedDocumentId: doc.id,
+        signedDocumentHash,
         auditLog: audit,
       })
       .where(eq(signatureEnvelopes.id, ctx.env.id));

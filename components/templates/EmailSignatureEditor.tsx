@@ -1,10 +1,15 @@
 "use client";
 
 /**
- * Email signature editor — markdown-aware rich editor so Bruce can drop
- * in bold, links, and lists (icons via emoji glyphs). The signature is
- * appended to every outbound email, rendered as both plain text and
- * HTML at send time.
+ * Email signature editor — rich editor with alignment + underline so
+ * Bruce can drop in bold, lists, links, and lay things out the way he
+ * wants. Stored as HTML in `user_profiles.email_signature` so spacing,
+ * alignment, and underline round-trip exactly.
+ *
+ * Backward compat: legacy markdown signatures (those that don't start
+ * with a `<` tag) are accepted by Tiptap's Markdown extension as
+ * input — they just become HTML on the next save. Email send path is
+ * already HTML-aware (see `lib/templates/markdown-to-html.ts`).
  */
 
 import { useRef, useState, useTransition } from "react";
@@ -15,14 +20,19 @@ import {
   type RichTextEditorHandle,
 } from "@/components/communication/RichTextEditor";
 
-const STARTER = `**Bruce Baker**
-Business Builder · Workplaces
+const STARTER_HTML = `<p><strong>Bruce Baker</strong></p>
+<p>Business Builder · Workplaces</p>
+<p></p>
+<p>📞 +1 780-555-1234</p>
+<p>✉️ <a href="mailto:bruce@4workplaces.com">bruce@4workplaces.com</a></p>
+<p>🌐 <a href="https://4workplaces.com">4workplaces.com</a></p>
+<p></p>
+<blockquote><p>CONFIDENTIALITY NOTICE: This email and any attachments are confidential. If you received this in error, please reply to let me know and delete.</p></blockquote>`;
 
-📞 +1 780-555-1234
-✉️ [bruce@4workplaces.com](mailto:bruce@4workplaces.com)
-🌐 [4workplaces.com](https://4workplaces.com)
-
-> CONFIDENTIALITY NOTICE: This email and any attachments are confidential. If you received this in error, please reply to let me know and delete.`;
+function looksLikeHtml(s: string): boolean {
+  const trimmed = s.trim();
+  return trimmed.startsWith("<");
+}
 
 export function EmailSignatureEditor({ initial }: { initial: string }) {
   const editorRef = useRef<RichTextEditorHandle | null>(null);
@@ -31,12 +41,30 @@ export function EmailSignatureEditor({ initial }: { initial: string }) {
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  // Backward compat: legacy signatures may be markdown. Detect and
+  // feed the editor whichever format the value actually is — Tiptap's
+  // Markdown extension parses both on initial load.
+  const initialIsHtml = looksLikeHtml(initial);
+
   function save() {
     setError(null);
     setSaved(false);
-    const md = editorRef.current?.getMarkdown() ?? value;
+    // Pull the live HTML from the editor. If the editor isn't ready
+    // yet (no ref attached), fall back to the change-tracked `value`
+    // — never to the original `initial`, which could wipe out unsaved
+    // edits if the user clicked Save before the editor hydrated.
+    const ref = editorRef.current;
+    const html = ref ? ref.getHTML() : value;
+    if (!html || html.trim().length === 0) {
+      // Allow clearing — but require an extra click. This protects
+      // against an accidental "save empty" if the editor hadn't yet
+      // hydrated when the user clicked.
+      if (!confirm("Save an empty signature? Future emails will have no signature appended.")) {
+        return;
+      }
+    }
     startTransition(async () => {
-      const r = await setEmailSignature(md);
+      const r = await setEmailSignature(html);
       if (!r.ok) {
         setError(r.error);
         return;
@@ -47,8 +75,8 @@ export function EmailSignatureEditor({ initial }: { initial: string }) {
   }
 
   function loadStarter() {
-    editorRef.current?.setMarkdown(STARTER);
-    setValue(STARTER);
+    editorRef.current?.setHTML(STARTER_HTML);
+    setValue(STARTER_HTML);
   }
 
   return (
@@ -58,12 +86,17 @@ export function EmailSignatureEditor({ initial }: { initial: string }) {
           Signature
         </span>
         <p className="text-[11px] text-tbb-ink-3">
-          Use bold, lists, and links. Drop in emoji glyphs for icons
-          (📞 ✉️ 🌐 📍). Appears on every email you send through the app.
+          Use bold, underline, alignment, lists, and links. Drop in
+          emoji glyphs for icons (📞 ✉️ 🌐 📍). Spacing, alignment, and
+          underline now stick — appears on every email you send through
+          the app.
         </p>
       </div>
       <RichTextEditor
-        initialMarkdown={initial}
+        initialHtml={initialIsHtml ? initial : undefined}
+        initialMarkdown={!initialIsHtml ? initial : undefined}
+        richMode
+        outputFormat="html"
         placeholder="Your name, title, contact info, disclaimer…"
         disabled={isPending}
         editorRef={editorRef}

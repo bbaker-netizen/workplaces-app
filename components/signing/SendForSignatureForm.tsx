@@ -109,7 +109,8 @@ export function SendForSignatureForm(props: Props) {
 
   // When the user picks a template, resolve its body with variables,
   // push to the editor, and seed the subject (if blank) from the
-  // template's default.
+  // template's default. The body may be HTML (new format) or markdown
+  // (legacy) — feed the editor via the matching imperative method.
   useEffect(() => {
     if (sourceMode !== "compose") return;
     if (props.mode !== "upload") return;
@@ -123,7 +124,11 @@ export function SendForSignatureForm(props: Props) {
       : {};
     const resolved = applyDocumentVariables(tpl.bodyMarkdown ?? "", vars);
     setComposedBody(resolved);
-    bodyEditorRef.current?.setMarkdown(resolved);
+    if (resolved.trim().startsWith("<")) {
+      bodyEditorRef.current?.setHTML(resolved);
+    } else {
+      bodyEditorRef.current?.setMarkdown(resolved);
+    }
     if (!subject.trim() && tpl.defaultSubject) {
       setSubject(tpl.defaultSubject);
     }
@@ -173,10 +178,10 @@ export function SendForSignatureForm(props: Props) {
 
     startTransition(async () => {
       if (props.mode === "upload" && sourceMode === "compose") {
-        // Compose-from-template path: render markdown to PDF server-
-        // side, then run the standard envelope flow.
-        const liveBody =
-          bodyEditorRef.current?.getMarkdown() ?? composedBody;
+        // Compose-from-template path: render the body (HTML or
+        // markdown) to PDF server-side, then run the standard envelope
+        // flow. We grab HTML — the renderer auto-detects format.
+        const liveBody = bodyEditorRef.current?.getHTML() ?? composedBody;
         if (!liveBody.trim() || liveBody.trim().length < 30) {
           setError(
             "Write or paste the actual document body before sending.",
@@ -347,7 +352,18 @@ export function SendForSignatureForm(props: Props) {
                   ))}
                 </div>
                 <RichTextEditor
-                  initialMarkdown={composedBody}
+                  initialHtml={
+                    composedBody.trim().startsWith("<")
+                      ? composedBody
+                      : undefined
+                  }
+                  initialMarkdown={
+                    composedBody.trim().startsWith("<")
+                      ? undefined
+                      : composedBody
+                  }
+                  richMode
+                  outputFormat="html"
                   placeholder="Document body…"
                   disabled={isPending}
                   editorRef={bodyEditorRef}

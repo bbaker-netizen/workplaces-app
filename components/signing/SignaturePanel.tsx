@@ -16,6 +16,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Eraser, Loader2, PenLine, Type } from "lucide-react";
 import { submitSignature } from "@/lib/actions/signatures";
+import {
+  CONSENT_DISCLOSURE_TEXT,
+  CONSENT_DISCLOSURE_VERSION,
+} from "@/lib/signing/consent-disclosure";
 
 type Mode = "typed" | "drawn";
 
@@ -140,7 +144,9 @@ export function SignaturePanel({
 
   function submit() {
     if (!confirmed) {
-      setError("Confirm you intend to sign electronically before submitting.");
+      setError(
+        "Please tick the consent box above before submitting your signature.",
+      );
       return;
     }
     if (mode === "typed" && typedName.trim().length < 2) {
@@ -165,6 +171,8 @@ export function SignaturePanel({
         ip: null, // server reads from headers; we just don't have it client-side
         userAgent:
           typeof navigator !== "undefined" ? navigator.userAgent : null,
+        consentText: CONSENT_DISCLOSURE_TEXT,
+        consentVersion: CONSENT_DISCLOSURE_VERSION,
       });
       if (!result.ok) {
         setError(result.error);
@@ -253,20 +261,27 @@ export function SignaturePanel({
         </div>
       )}
 
-      <label className="flex items-start gap-2 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={confirmed}
-          onChange={(e) => setConfirmed(e.target.checked)}
-          disabled={isPending}
-          className="mt-1"
-        />
-        <span className="font-sans text-sm text-foreground">
-          I agree to do business electronically and consent to use my
-          electronic signature on this document. I understand this signature
-          is legally binding.
-        </span>
-      </label>
+      <div className="border border-tbb-line rounded-md bg-tbb-cream-50 p-4 space-y-3">
+        <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+          Required — please read and confirm
+        </p>
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+            disabled={isPending}
+            className="mt-1 w-4 h-4 shrink-0"
+            aria-describedby="consent-disclosure-text"
+          />
+          <span
+            id="consent-disclosure-text"
+            className="font-sans text-sm text-foreground leading-relaxed whitespace-pre-line"
+          >
+            {CONSENT_DISCLOSURE_TEXT}
+          </span>
+        </label>
+      </div>
 
       {error && (
         <p

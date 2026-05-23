@@ -13,13 +13,17 @@
  */
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { CERTIFICATE_BOILERPLATE } from "./consent-disclosure";
 
 export type SignerForCertificate = {
   name: string;
   email: string;
   roleLabel: string | null;
   signedAt: Date;
+  viewedAt: Date | null;
+  consentedAt: Date | null;
   signerIp: string | null;
+  signerUserAgent: string | null;
   signatureMethod: string | null;
   signatureImageData: string | null; // data:image/png;base64,…
 };
@@ -27,6 +31,14 @@ export type SignerForCertificate = {
 export type CertificateInput = {
   envelopeId: string;
   documentName: string;
+  /** SHA-256 hash of the source document (the original PDF being
+   *  signed). Stamped on the certificate so anyone can verify which
+   *  exact file was signed. */
+  sourceDocumentHash: string | null;
+  envelopeCreatedAt: Date | null;
+  envelopeCompletedAt: Date | null;
+  senderName: string | null;
+  senderEmail: string | null;
   signers: SignerForCertificate[];
   auditTimeline: Array<{ at: Date; event: string }>;
 };
@@ -72,109 +84,202 @@ async function appendCertificatePage(
   const helv = await pdf.embedFont(StandardFonts.Helvetica);
   const helvBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  const page = pdf.addPage();
-  const { width, height } = page.getSize();
+  // Render state — `state.page` and `state.y` advance as we draw; we
+  // call `ensureSpace` before each block to flow onto a new page when
+  // we'd otherwise run off the bottom margin.
   const margin = 56;
-  let y = height - margin;
+  const footerReserved = 86; // boilerplate paragraph + breathing room
+  const state: {
+    page: ReturnType<PDFDocument["addPage"]>;
+    y: number;
+    pageWidth: number;
+    pageHeight: number;
+  } = (() => {
+    const p = pdf.addPage();
+    const { width, height } = p.getSize();
+    return { page: p, y: height - margin, pageWidth: width, pageHeight: height };
+  })();
 
-  // The Business Builders by Workplaces — navy primary ink, blue accent.
-  const black = rgb(0.078, 0.220, 0.357); // #14385B (TBB navy)
-  const grey = rgb(0.353, 0.392, 0.439);  // #5A6470 (TBB ink-3)
-  const orange = rgb(0.173, 0.424, 0.690); // #2C6CB0 (TBB blue — accent slot)
+  // Heritage palette.
+  const navy = rgb(0.078, 0.220, 0.357); // #14385B
+  const grey = rgb(0.353, 0.392, 0.439); // #5A6470
+  const accent = rgb(0.173, 0.424, 0.690); // #2C6CB0
 
-  // Header.
-  page.drawText("CERTIFICATE OF COMPLETION", {
+  const ensureSpace = (needed: number) => {
+    if (state.y - needed < margin + footerReserved) {
+      state.page = pdf.addPage();
+      const { width, height } = state.page.getSize();
+      state.pageWidth = width;
+      state.pageHeight = height;
+      state.y = height - margin;
+      drawCertHeader(state.page, helvBold, grey, margin, height);
+      state.y -= 28;
+    }
+  };
+
+  const drawLine = (label: string, value: string, opts?: { mono?: boolean }) => {
+    ensureSpace(13);
+    state.page.drawText(label, {
+      x: margin,
+      y: state.y,
+      size: 8.5,
+      font: helvBold,
+      color: grey,
+    });
+    state.page.drawText(value, {
+      x: margin + 110,
+      y: state.y,
+      size: opts?.mono ? 8 : 9.5,
+      font: helv,
+      color: navy,
+    });
+    state.y -= 13;
+  };
+
+  // Title block.
+  state.page.drawText("CERTIFICATE OF COMPLETION", {
     x: margin,
-    y,
+    y: state.y,
     size: 11,
     font: helvBold,
     color: grey,
   });
-  y -= 26;
-  page.drawText("Signed electronically.", {
+  state.y -= 26;
+  state.page.drawText("Signed electronically.", {
     x: margin,
-    y,
+    y: state.y,
     size: 22,
     font: helvBold,
-    color: black,
+    color: navy,
   });
-  y -= 22;
-  page.drawText(`Document: ${truncate(cert.documentName, 80)}`, {
-    x: margin,
-    y,
-    size: 10,
-    font: helv,
-    color: black,
-  });
-  y -= 14;
-  page.drawText(`Envelope ID: ${cert.envelopeId}`, {
-    x: margin,
-    y,
-    size: 9,
-    font: helv,
-    color: grey,
-  });
-  y -= 28;
+  state.y -= 26;
+
+  // Document identification block.
+  drawLine("Document:", truncate(cert.documentName, 70));
+  drawLine("Envelope ID:", cert.envelopeId, { mono: true });
+  if (cert.sourceDocumentHash) {
+    drawLine("SHA-256:", cert.sourceDocumentHash, { mono: true });
+  }
+  if (cert.envelopeCreatedAt) {
+    drawLine("Sent:", formatTimestamp(cert.envelopeCreatedAt));
+  }
+  if (cert.envelopeCompletedAt) {
+    drawLine("Completed:", formatTimestamp(cert.envelopeCompletedAt));
+  }
+
+  state.y -= 8;
+  // Sender block.
+  if (cert.senderName || cert.senderEmail) {
+    drawLine(
+      "Sent by:",
+      [cert.senderName, cert.senderEmail].filter(Boolean).join(" · "),
+    );
+    state.y -= 6;
+  }
 
   // Divider.
-  page.drawLine({
-    start: { x: margin, y },
-    end: { x: width - margin, y },
+  ensureSpace(8);
+  state.page.drawLine({
+    start: { x: margin, y: state.y },
+    end: { x: state.pageWidth - margin, y: state.y },
     thickness: 0.5,
     color: grey,
   });
-  y -= 24;
+  state.y -= 18;
 
   // Signer details.
   for (let i = 0; i < cert.signers.length; i++) {
     const signer = cert.signers[i];
-    if (y < 200) {
-      // Page break.
-      const next = pdf.addPage();
-      y = height - margin;
-      drawCertHeader(next, helvBold, helv, grey, margin, height);
-    }
+    // Reserve enough for a full signer block (~165pt with image).
+    ensureSpace(170);
 
-    page.drawText(
+    state.page.drawText(
       `Signer ${i + 1}${signer.roleLabel ? ` · ${signer.roleLabel}` : ""}`,
       {
         x: margin,
-        y,
+        y: state.y,
         size: 9,
         font: helvBold,
-        color: orange,
+        color: accent,
       },
     );
-    y -= 16;
-    page.drawText(signer.name, {
+    state.y -= 16;
+    state.page.drawText(signer.name, {
       x: margin,
-      y,
+      y: state.y,
       size: 14,
       font: helvBold,
-      color: black,
+      color: navy,
     });
-    y -= 14;
-    page.drawText(signer.email, {
+    state.y -= 14;
+    state.page.drawText(signer.email, {
       x: margin,
-      y,
+      y: state.y,
       size: 10,
       font: helv,
       color: grey,
     });
-    y -= 12;
-    page.drawText(
-      `Signed ${formatTimestamp(signer.signedAt)}` +
-        (signer.signerIp ? ` · IP ${signer.signerIp}` : "") +
-        (signer.signatureMethod ? ` · ${signer.signatureMethod}` : ""),
-      {
+    state.y -= 14;
+
+    // Timestamp grid (viewed / consented / signed).
+    if (signer.viewedAt) {
+      state.page.drawText(`Viewed: ${formatTimestamp(signer.viewedAt)}`, {
         x: margin,
-        y,
-        size: 9,
+        y: state.y,
+        size: 8.5,
         font: helv,
         color: grey,
-      },
-    );
-    y -= 18;
+      });
+      state.y -= 11;
+    }
+    if (signer.consentedAt) {
+      state.page.drawText(
+        `Consented to sign electronically: ${formatTimestamp(signer.consentedAt)}`,
+        {
+          x: margin,
+          y: state.y,
+          size: 8.5,
+          font: helv,
+          color: grey,
+        },
+      );
+      state.y -= 11;
+    }
+    state.page.drawText(`Signed: ${formatTimestamp(signer.signedAt)}`, {
+      x: margin,
+      y: state.y,
+      size: 8.5,
+      font: helv,
+      color: grey,
+    });
+    state.y -= 11;
+    const techParts: string[] = [];
+    if (signer.signerIp) techParts.push(`IP ${signer.signerIp}`);
+    if (signer.signatureMethod) techParts.push(`Method: ${signer.signatureMethod}`);
+    if (techParts.length > 0) {
+      state.page.drawText(techParts.join(" · "), {
+        x: margin,
+        y: state.y,
+        size: 8.5,
+        font: helv,
+        color: grey,
+      });
+      state.y -= 11;
+    }
+    if (signer.signerUserAgent) {
+      state.page.drawText(
+        `Browser: ${truncate(signer.signerUserAgent, 100)}`,
+        {
+          x: margin,
+          y: state.y,
+          size: 7.5,
+          font: helv,
+          color: grey,
+        },
+      );
+      state.y -= 11;
+    }
+    state.y -= 4;
 
     // Signature image.
     if (signer.signatureImageData) {
@@ -183,68 +288,107 @@ async function appendCertificatePage(
         if (png) {
           const sigW = 180;
           const sigH = (png.height / png.width) * sigW;
-          page.drawImage(png.image, {
+          ensureSpace(sigH + 12);
+          state.page.drawImage(png.image, {
             x: margin,
-            y: y - sigH,
+            y: state.y - sigH,
             width: sigW,
             height: sigH,
           });
-          y -= sigH + 8;
+          state.y -= sigH + 8;
         }
       } catch {
-        // Fall through — image embed errors aren't fatal.
+        // Image embed errors aren't fatal.
       }
     }
 
-    y -= 18;
-    page.drawLine({
-      start: { x: margin, y },
-      end: { x: width - margin, y },
+    state.y -= 14;
+    state.page.drawLine({
+      start: { x: margin, y: state.y },
+      end: { x: state.pageWidth - margin, y: state.y },
       thickness: 0.25,
       color: grey,
     });
-    y -= 18;
+    state.y -= 16;
   }
 
   // Audit timeline.
-  if (y < 160) {
-    pdf.addPage();
-    y = height - margin;
-  }
-  page.drawText("AUDIT TIMELINE", {
+  ensureSpace(40);
+  state.page.drawText("AUDIT TIMELINE", {
     x: margin,
-    y,
+    y: state.y,
     size: 9,
     font: helvBold,
     color: grey,
   });
-  y -= 14;
+  state.y -= 14;
   for (const entry of cert.auditTimeline) {
-    if (y < 80) break;
-    page.drawText(`${formatTimestamp(entry.at)}  ${entry.event}`, {
-      x: margin,
-      y,
-      size: 8.5,
-      font: helv,
-      color: black,
-    });
-    y -= 11;
+    ensureSpace(11);
+    state.page.drawText(
+      `${formatTimestamp(entry.at)}  ${truncate(entry.event, 90)}`,
+      {
+        x: margin,
+        y: state.y,
+        size: 8.5,
+        font: helv,
+        color: navy,
+      },
+    );
+    state.y -= 11;
   }
+  state.y -= 8;
 
-  // Legal disclaimer pinned at the bottom.
-  const disclaimerY = 60;
-  page.drawText(
-    "Signatures captured electronically. Each signer agreed to do business",
-    { x: margin, y: disclaimerY + 16, size: 8, font: helv, color: grey },
+  // Legal boilerplate — wrap to fit, render on whichever page we ended
+  // up on. ensureSpace handles overflow.
+  const wrappedBoilerplate = wrapText(
+    CERTIFICATE_BOILERPLATE,
+    helv,
+    8,
+    state.pageWidth - margin * 2,
   );
-  page.drawText(
-    "electronically per the US ESIGN Act, Canadian PIPEDA, and Alberta Electronic",
-    { x: margin, y: disclaimerY + 6, size: 8, font: helv, color: grey },
-  );
-  page.drawText(
-    "Transactions Act. The IP, timestamp, and method above form the audit trail.",
-    { x: margin, y: disclaimerY - 4, size: 8, font: helv, color: grey },
-  );
+  ensureSpace(wrappedBoilerplate.length * 10 + 6);
+  state.page.drawText("LEGAL FRAMEWORK", {
+    x: margin,
+    y: state.y,
+    size: 8,
+    font: helvBold,
+    color: grey,
+  });
+  state.y -= 11;
+  for (const line of wrappedBoilerplate) {
+    state.page.drawText(line, {
+      x: margin,
+      y: state.y,
+      size: 8,
+      font: helv,
+      color: grey,
+    });
+    state.y -= 10;
+  }
+}
+
+/** Word-wrap a paragraph to fit within `maxWidthPt` at the given font + size. */
+function wrapText(
+  text: string,
+  font: Awaited<ReturnType<PDFDocument["embedFont"]>>,
+  size: number,
+  maxWidthPt: number,
+): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const tentative = current ? `${current} ${word}` : word;
+    const width = font.widthOfTextAtSize(tentative, size);
+    if (width > maxWidthPt && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = tentative;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 async function stampPageFooters(
@@ -269,7 +413,6 @@ async function stampPageFooters(
 function drawCertHeader(
   page: ReturnType<PDFDocument["addPage"]>,
   bold: Awaited<ReturnType<PDFDocument["embedFont"]>>,
-  _regular: Awaited<ReturnType<PDFDocument["embedFont"]>>,
   grey: ReturnType<typeof rgb>,
   margin: number,
   height: number,
