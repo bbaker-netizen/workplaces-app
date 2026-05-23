@@ -269,8 +269,8 @@ export default async function ProspectDetailPage({
           </p>
           <p className="text-sm text-tbb-ink-2 mt-1">
             Permanently remove this prospect. Use this for genuine
-            duplicates or test rows — not "lost" deals (set Stage =
-            Lost instead so the historical context stays).
+            duplicates or test rows — not &quot;lost&quot; deals (set
+            Stage = Lost instead so the historical context stays).
           </p>
         </div>
         <DeleteProspectButton

@@ -509,3 +509,157 @@ export function signatureCompletedEmail(
 
   return { to: input.to, subject, html, text };
 }
+
+/* ---------------------- engagement welcome (branded) ----------------------
+ *
+ * Fires when Bruce creates a new engagement. This is the personal,
+ * vibrant welcome that lands BEFORE Clerk's generic invitation email —
+ * the recipient gets the Workplaces brand experience first, then
+ * Clerk's technical accept link follows for the actual sign-up.
+ *
+ * Tone: warm, plain-spoken, like Bruce wrote it himself. Includes:
+ *   - "What is the Business Building Program" — one sentence
+ *   - What happens next — three concrete steps
+ *   - Accept invitation CTA → Clerk's accept URL
+ *   - Sign-off from Bruce
+ *
+ * Heading rule: Safety Vest Orange (single-accent rule) — this is a
+ * happy moment, the warmest of the transactional emails we send.
+ */
+
+export type EngagementWelcomeEmailInput = {
+  to: string;
+  recipientName: string;
+  engagementName: string;
+  engagementType: "accelerator" | "implementer";
+  startDate: string; // YYYY-MM-DD
+  acceptUrl: string;
+  senderName: string;
+  senderEmail: string;
+  /** Optional title under the sender's name in the sign-off. */
+  senderTitle?: string | null;
+};
+
+export function engagementWelcomeEmail(
+  input: EngagementWelcomeEmailInput,
+): EmailEnvelope {
+  const firstName =
+    input.recipientName.split(" ")[0] ?? input.recipientName;
+  const senderFirstName =
+    input.senderName.split(" ")[0] ?? input.senderName;
+  const programLabel =
+    input.engagementType === "accelerator"
+      ? "Workplaces Business Building Program · Accelerator"
+      : "Workplaces Business Building Program · Implementer";
+  const startDateLabel = (() => {
+    try {
+      return DateTime.fromISO(input.startDate, {
+        zone: "America/Edmonton",
+      }).toFormat("EEEE, MMMM d, yyyy");
+    } catch {
+      return input.startDate;
+    }
+  })();
+
+  const subject = `Welcome to the Workplaces Business Building Program, ${firstName}`;
+
+  const html = shell({
+    preheader: `${input.senderName} has set up your engagement on The Builder — accept your invitation to get started.`,
+    heading: "Welcome to the program.",
+    accent: "#E87722", // Safety Vest Orange — happy moment, full warm accent
+    buttonHref: input.acceptUrl,
+    buttonLabel: "Accept your invitation",
+    bodyHtml: `
+      <p style="margin:0 0 18px 0;font-size:17px;">Hi ${escapeHtml(firstName)},</p>
+
+      <p style="margin:0 0 18px 0;">
+        I'm thrilled you've decided to join us. This email is your formal
+        welcome to the <strong>${escapeHtml(programLabel)}</strong> —
+        and the start of the work we're going to do together.
+      </p>
+
+      <p style="margin:0 0 24px 0;padding:16px 20px;background:#F5F1E8;border-left:4px solid #E87722;font-size:15px;line-height:1.55;">
+        The Business Building Program is a structured coaching engagement
+        designed to move two needles in your business: <strong>top-line
+        revenue</strong> and <strong>margin</strong>. Twice-monthly
+        sessions, a focused set of deliverables (SOPs, org charts,
+        financial dashboards, hiring frameworks, business plans, and
+        more), and a private portal where every piece of the work lives
+        in one place.
+      </p>
+
+      <p style="margin:0 0 14px 0;font-size:17px;font-weight:700;color:#2E4057;">
+        What happens next
+      </p>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;width:100%;">
+        <tr>
+          <td style="padding:0 0 14px 0;vertical-align:top;width:40px;">
+            <div style="width:32px;height:32px;border-radius:9999px;background:#E87722;color:#FFFFFF;font-weight:700;font-size:14px;text-align:center;line-height:32px;">1</div>
+          </td>
+          <td style="padding:0 0 14px 0;vertical-align:top;font-size:15px;line-height:1.55;">
+            <strong>Accept your invitation</strong> with the button below.
+            You'll set up your secure login and land in your private portal.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 0 14px 0;vertical-align:top;">
+            <div style="width:32px;height:32px;border-radius:9999px;background:#E87722;color:#FFFFFF;font-weight:700;font-size:14px;text-align:center;line-height:32px;">2</div>
+          </td>
+          <td style="padding:0 0 14px 0;vertical-align:top;font-size:15px;line-height:1.55;">
+            <strong>Take a quick tour</strong> of the portal — action items,
+            sessions, documents, communications, and the Soul File. Two
+            minutes, fully optional, dismissable any time.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0;vertical-align:top;">
+            <div style="width:32px;height:32px;border-radius:9999px;background:#E87722;color:#FFFFFF;font-weight:700;font-size:14px;text-align:center;line-height:32px;">3</div>
+          </td>
+          <td style="padding:0;vertical-align:top;font-size:15px;line-height:1.55;">
+            <strong>Our first Business Building Session</strong> is on
+            <strong>${escapeHtml(startDateLabel)}</strong>. I'll send the
+            calendar invite separately. Until then, browse the portal —
+            it's yours.
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:0 0 8px 0;">
+        Anything you need before our first session, just reply to this
+        email — I see them all.
+      </p>
+
+      <p style="margin:0 0 4px 0;">Talk soon,</p>
+      <p style="margin:0 0 2px 0;font-weight:700;font-size:16px;color:#2E4057;">${escapeHtml(senderFirstName)}</p>
+      <p style="margin:0;font-size:13px;color:#666666;">
+        ${escapeHtml(input.senderTitle ?? "Business Builder · Workplaces")}<br>
+        <a href="mailto:${escapeHtml(input.senderEmail)}" style="color:#2E4057;text-decoration:underline;">${escapeHtml(input.senderEmail)}</a>
+      </p>
+    `,
+  });
+
+  const text = [
+    `Hi ${firstName},`,
+    "",
+    `I'm thrilled you've decided to join us. This email is your formal welcome to the ${programLabel} — and the start of the work we're going to do together.`,
+    "",
+    `The Business Building Program is a structured coaching engagement designed to move two needles in your business: top-line revenue and margin. Twice-monthly sessions, a focused set of deliverables, and a private portal where every piece of the work lives in one place.`,
+    "",
+    "What happens next:",
+    "  1. Accept your invitation with the link below. You'll set up your secure login and land in your private portal.",
+    "  2. Take a quick tour of the portal — action items, sessions, documents, communications, the Soul File.",
+    `  3. Our first Business Building Session is on ${startDateLabel}. I'll send the calendar invite separately.`,
+    "",
+    `Accept your invitation: ${input.acceptUrl}`,
+    "",
+    "Anything you need before our first session, just reply to this email.",
+    "",
+    "Talk soon,",
+    senderFirstName,
+    input.senderTitle ?? "Business Builder · Workplaces",
+    input.senderEmail,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}

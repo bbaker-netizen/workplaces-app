@@ -243,8 +243,9 @@ export async function createEngagementAction(
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "https://workplaces-the-builder.netlify.app";
   const redirectUrl = `${appUrl.replace(/\/+$/, "")}/portal/welcome`;
+  let invitationUrl: string | null = null;
   try {
-    await clerk.organizations.createOrganizationInvitation({
+    const invitation = await clerk.organizations.createOrganizationInvitation({
       organizationId: newClerkOrg.id,
       inviterUserId: bruceClerkUserId,
       emailAddress: clientLeadEmail,
@@ -255,6 +256,12 @@ export async function createEngagementAction(
         client_lead_full_name: clientLeadFullName,
       },
     });
+    // Clerk returns the accept URL on the invitation object. We need it
+    // for our branded welcome email (step 9 below) so the recipient can
+    // accept from the Workplaces email instead of waiting for Clerk's
+    // bland default.
+    invitationUrl =
+      (invitation as { url?: string | null }).url ?? null;
   } catch (e) {
     const msg = clerkErrorMessage(e);
     // Non-fatal: the engagement landed in DB; Bruce is still admin of
@@ -284,6 +291,56 @@ export async function createEngagementAction(
         e instanceof Error ? e.message : String(e)
       }`,
     );
+  }
+
+  // 7b. Fire the branded Workplaces welcome email IMMEDIATELY after
+  //     the Clerk invitation. This lands before / alongside Clerk's
+  //     bland default invitation so the first thing the recipient sees
+  //     is a vibrant on-brand welcome from Bruce, with the accept link
+  //     as the primary CTA. Best-effort: a failure here is logged but
+  //     never blocks engagement creation.
+  if (invitationUrl) {
+    try {
+      const { sendEmailQuietly } = await import("@/lib/email/send");
+      const { engagementWelcomeEmail } = await import("@/lib/email/templates");
+      const { userProfiles } = await import("@/lib/db/schema");
+      const sender = await withSystemContext(async (tx) => {
+        const [u] = await tx
+          .select({
+            fullName: userProfiles.fullName,
+            email: userProfiles.email,
+          })
+          .from(userProfiles)
+          .where(eq(userProfiles.id, callerProfile.userProfileId))
+          .limit(1);
+        return u ?? null;
+      });
+      if (sender) {
+        await sendEmailQuietly({
+          ...engagementWelcomeEmail({
+            to: clientLeadEmail,
+            recipientName: clientLeadFullName,
+            engagementName,
+            engagementType,
+            startDate,
+            acceptUrl: invitationUrl,
+            senderName: sender.fullName,
+            senderEmail: sender.email,
+            senderTitle: "Business Builder · Workplaces",
+          }),
+          // Welcome should fire the moment Bruce hits create, no
+          // matter the time of day. Working-hours guard exists for
+          // notifications, not for transactional welcomes.
+          bypassWorkingHours: true,
+        });
+      }
+    } catch (e) {
+      console.warn(
+        `[engagement-create] branded welcome email failed for ${newEngagementId}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
   }
 
   // 8. If Bruce picked an onboarding template, fire a personal welcome
