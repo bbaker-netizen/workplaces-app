@@ -1,9 +1,10 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { emailTemplates, pricingTiers, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementForm } from "./EngagementForm";
+import { ProspectPicker } from "./ProspectPicker";
 
 export default async function NewEngagementPage({
   searchParams,
@@ -32,6 +33,35 @@ export default async function NewEngagementPage({
         return p ?? null;
       })
     : null;
+
+  // Eligible prospects for the "Start from a prospect" picker —
+  // anyone in contract_sent / contract_signed / negotiation /
+  // proposal_sent stages who hasn't already been converted. Lets
+  // Bruce convert from this page if he didn't come in via a
+  // prospect's "Convert to engagement" button.
+  const eligibleProspects = await withSystemContext(async (tx) =>
+    tx
+      .select({
+        id: prospects.id,
+        companyName: prospects.companyName,
+        contactName: prospects.contactName,
+        status: prospects.status,
+      })
+      .from(prospects)
+      .where(
+        and(
+          inArray(prospects.status, [
+            "proposal_sent",
+            "negotiation",
+            "contract_sent",
+            "contract_signed",
+          ]),
+          isNull(prospects.convertedEngagementId),
+        ),
+      )
+      .orderBy(desc(prospects.updatedAt))
+      .limit(50),
+  );
 
   // Pull onboarding-category templates so the form can offer them as
   // "auto-send when the client accepts" options. Pull pricing tiers
@@ -96,6 +126,9 @@ export default async function NewEngagementPage({
               fee details across. Confirm or adjust, then click Create.
             </p>
           </div>
+        )}
+        {!prefillProspect && (
+          <ProspectPicker prospects={eligibleProspects} />
         )}
         <EngagementForm
           onboardingTemplates={onboardingTemplates}

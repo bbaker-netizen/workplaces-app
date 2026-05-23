@@ -16,36 +16,44 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
   Briefcase,
-  CalendarClock,
-  CheckSquare,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CheckSquare,
   CreditCard,
+  DollarSign,
   Eye,
   FileText,
   Filter,
   HelpCircle,
   HeartPulse,
+  Hammer,
   Inbox,
-  LineChart,
   Link as LinkIcon,
   LogOut,
   MessagesSquare,
+  Rocket,
   Search,
   Settings,
   Sparkles,
   Star,
   Target,
+  Workflow,
 } from "lucide-react";
 import {
   setSidebarCollapsed,
   toggleNavPin,
 } from "@/lib/actions/user-prefs";
+
+// Per-phase open/closed state lives in localStorage so it persists
+// across reloads without a DB round-trip. Closed-by-default keeps
+// the sidebar quiet until you click into a section.
+const PHASES_STORAGE_KEY = "tbb.sidebarPhasesOpen.v1";
 
 type BusinessBuilderNavItem = {
   href: string;
@@ -62,6 +70,9 @@ type BusinessBuilderPhase = {
   key: string;
   label: string;
   caption: string;
+  /** Icon rendered alongside the section label so the section header
+   *  is recognisable at a glance — bigger and more "menu-like". */
+  icon: React.ComponentType<{ className?: string }>;
   items: BusinessBuilderNavItem[];
 };
 
@@ -70,6 +81,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     key: "pipeline",
     label: "Pipeline",
     caption: "Bring new prospects in",
+    icon: Filter,
     items: [
       { href: "/business-builder/pipeline", label: "Prospects", icon: Filter, tourId: "Coach-pipeline" },
       {
@@ -85,21 +97,20 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     key: "engage",
     label: "Engage",
     caption: "Run the rhythm",
+    icon: Rocket,
     items: [
       { href: "/business-builder", label: "My work", icon: CheckSquare, tourId: "Coach-home" },
       { href: "/business-builder/engagements", label: "Engagements (Workspace)", icon: Briefcase },
       { href: "/business-builder/action-items", label: "Action items", icon: CheckSquare },
       { href: "/business-builder/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },
-      { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
-      { href: "/business-builder/library", label: "Tools & tutorials", icon: Sparkles },
       { href: "/business-builder/communication", label: "Communication", icon: MessagesSquare },
-      { href: "/business-builder/settings", label: "Settings", icon: Settings },
     ],
   },
   {
     key: "deliver",
     label: "Deliver",
     caption: "Ship the deep work",
+    icon: Workflow,
     items: [
       { href: "/business-builder/deliverables", label: "Deliverables", icon: FileText, tourId: "Coach-deliverables" },
       { href: "/business-builder/projects", label: "Projects", icon: Briefcase },
@@ -111,19 +122,24 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     key: "bill",
     label: "Bill",
     caption: "Invoice and protect margin",
+    icon: DollarSign,
     items: [
       { href: "/business-builder/invoices/new", label: "Create invoice", icon: CreditCard, tourId: "Coach-invoice" },
       { href: "/business-builder/subscriptions", label: "Subscriptions", icon: HeartPulse },
     ],
   },
   {
-    key: "practice",
-    label: "Practice",
-    caption: "Your tools and connections",
+    key: "tools",
+    label: "Tools",
+    caption: "Templates, library, settings",
+    icon: Hammer,
     items: [
+      // QBO + Google Calendar links live in Settings → Integrations
+      // now — Bruce flagged the duplication, removed from here.
       { href: "/business-builder/engagements/new", label: "New engagement", icon: Sparkles, tourId: "Coach-new-engagement" },
-      { href: "/business-builder/profile/google-calendar", label: "Google Calendar", icon: CalendarClock },
-      { href: "/business-builder/profile/quickbooks", label: "QuickBooks", icon: LineChart },
+      { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
+      { href: "/business-builder/library", label: "Tools & tutorials", icon: Sparkles },
+      { href: "/business-builder/settings", label: "Settings", icon: Settings },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },
       { href: "/business-builder/welcome/modules", label: "Module reference", icon: HelpCircle },
     ],
@@ -152,6 +168,50 @@ export function BusinessBuilderSidebar({
   const [collapsed, setCollapsed] = useState(collapsedInitial);
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
+
+  // Per-phase open/closed state. Defaults to ALL CLOSED so the sidebar
+  // is quiet until you click into a section. Persists in localStorage
+  // so the choice survives reloads.
+  const [openPhases, setOpenPhases] = useState<Set<string>>(() => new Set());
+
+  // On mount, hydrate from localStorage. Then ensure the phase
+  // containing the current page is always open so the active item is
+  // visible without an extra click.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(PHASES_STORAGE_KEY);
+      const stored: string[] = raw ? JSON.parse(raw) : [];
+      const next = new Set<string>(stored);
+      // Auto-open the phase the user is currently inside.
+      for (const phase of BUSINESS_BUILDER_PHASES) {
+        if (phase.items.some((it) => isActiveHref(it.href))) {
+          next.add(phase.key);
+        }
+      }
+      setOpenPhases(next);
+    } catch {
+      // localStorage unavailable / corrupted → leave defaults (all closed).
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function togglePhase(key: string) {
+    setOpenPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        window.localStorage.setItem(
+          PHASES_STORAGE_KEY,
+          JSON.stringify(Array.from(next)),
+        );
+      } catch {
+        // silently ignore
+      }
+      return next;
+    });
+  }
 
   /** True when this nav item's href corresponds to the current page.
    *  Exact match for the /business-builder root; prefix match for deeper routes
@@ -271,45 +331,115 @@ export function BusinessBuilderSidebar({
           </section>
         )}
 
-        {BUSINESS_BUILDER_PHASES.map((phase, phaseIdx) => (
-          <section
-            key={phase.key}
-            className={collapsed ? "space-y-1" : "space-y-1.5"}
-            data-tour={`Coach-phase-${phase.key}`}
-          >
-            {!collapsed ? (
-              <div className="px-2 flex items-baseline gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue-light tabular-nums">
-                  {String(phaseIdx + 1).padStart(2, "0")}
-                </span>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue-light">
-                    {phase.label}
-                  </p>
-                  <p className="text-[11px] text-white/75 leading-snug mt-0.5">
-                    {phase.caption}
-                  </p>
+        {BUSINESS_BUILDER_PHASES.map((phase) => {
+          const PhaseIcon = phase.icon;
+          const isOpen = openPhases.has(phase.key);
+          const hasActiveChild = phase.items.some((it) =>
+            isActiveHref(it.href),
+          );
+          // Collapsed (icon-only) sidebar mode renders sections as
+          // flat icon stacks — no expand/collapse needed there.
+          if (collapsed) {
+            return (
+              <section
+                key={phase.key}
+                className="space-y-1"
+                data-tour={`Coach-phase-${phase.key}`}
+              >
+                <div
+                  className={
+                    "grid place-items-center py-1.5 rounded-md " +
+                    (hasActiveChild
+                      ? "text-tbb-blue-light"
+                      : "text-tbb-blue-light/50")
+                  }
+                  title={phase.label}
+                >
+                  <PhaseIcon className="w-4 h-4" aria-hidden />
                 </div>
-              </div>
-            ) : (
-              <div className="grid place-items-center text-tbb-blue-light/60 text-[9px] font-bold tracking-tbb-caps tabular-nums py-0.5">
-                {String(phaseIdx + 1).padStart(2, "0")}
-              </div>
-            )}
-            <div className={collapsed ? "space-y-0.5" : "space-y-0.5 pl-1"}>
-              {phase.items.map((item) => (
-                <NavItemRow
-                  key={item.href}
-                  item={item}
-                  collapsed={collapsed}
-                  isPinned={pins.includes(item.href)}
-                  isActive={isActiveHref(item.href)}
-                  onTogglePin={onTogglePin}
+                <div className="space-y-0.5">
+                  {phase.items.map((item) => (
+                    <NavItemRow
+                      key={item.href}
+                      item={item}
+                      collapsed={collapsed}
+                      isPinned={pins.includes(item.href)}
+                      isActive={isActiveHref(item.href)}
+                      onTogglePin={onTogglePin}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          }
+          // Expanded mode: bigger section header that's a real click
+          // target. Defaults to closed so the sidebar shows just five
+          // tidy section rows; clicking any expands it.
+          return (
+            <section
+              key={phase.key}
+              className="space-y-1"
+              data-tour={`Coach-phase-${phase.key}`}
+            >
+              <button
+                type="button"
+                onClick={() => togglePhase(phase.key)}
+                aria-expanded={isOpen}
+                aria-controls={`phase-items-${phase.key}`}
+                className={
+                  "w-full flex items-center gap-3 px-2.5 py-2 rounded-md transition-colors group " +
+                  (isOpen || hasActiveChild
+                    ? "bg-tbb-cream/8 text-white"
+                    : "text-white/90 hover:bg-tbb-cream/5 hover:text-white")
+                }
+              >
+                <span
+                  className={
+                    "grid place-items-center w-8 h-8 rounded-md shrink-0 transition-colors " +
+                    (hasActiveChild
+                      ? "bg-tbb-blue text-white"
+                      : "bg-tbb-cream/10 text-tbb-blue-light group-hover:bg-tbb-cream/15")
+                  }
+                  aria-hidden
+                >
+                  <PhaseIcon className="w-4 h-4" />
+                </span>
+                <span className="flex-1 min-w-0 text-left">
+                  <span className="block text-sm font-bold text-white tracking-tight">
+                    {phase.label}
+                  </span>
+                  <span className="block text-[11px] text-white/65 leading-snug">
+                    {phase.caption}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={
+                    "w-4 h-4 text-white/60 shrink-0 transition-transform " +
+                    (isOpen ? "rotate-180" : "")
+                  }
+                  aria-hidden
                 />
-              ))}
-            </div>
-          </section>
-        ))}
+              </button>
+              {isOpen && (
+                <div
+                  id={`phase-items-${phase.key}`}
+                  className="space-y-0.5 pl-3 pt-0.5"
+                >
+                  {phase.items.map((item) => (
+                    <NavItemRow
+                      key={item.href}
+                      item={item}
+                      collapsed={collapsed}
+                      isPinned={pins.includes(item.href)}
+                      isActive={isActiveHref(item.href)}
+                      onTogglePin={onTogglePin}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
       </nav>
 
       {/* Footer */}
