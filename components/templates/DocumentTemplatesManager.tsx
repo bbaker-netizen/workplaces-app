@@ -132,8 +132,29 @@ export function DocumentTemplatesManager({
     startTransition(async () => {
       const fd = new FormData();
       fd.set("file", file);
-      const r = await convertDocumentToTemplate(fd);
+      // Defensive call: if the server action throws (network error)
+      // or the gateway times out (504), the promise rejects or
+      // resolves with undefined. Either way we want a graceful error
+      // UI — never a crashed page.
+      let r: Awaited<ReturnType<typeof convertDocumentToTemplate>> | null = null;
+      try {
+        r = await convertDocumentToTemplate(fd);
+      } catch (err) {
+        setImportingFilename(null);
+        setError(
+          err instanceof Error
+            ? `Conversion failed: ${err.message}. Try a smaller file, or paste the text directly into a new template.`
+            : "Conversion failed. Try a smaller file, or paste the text directly into a new template.",
+        );
+        return;
+      }
       setImportingFilename(null);
+      if (!r) {
+        setError(
+          "The conversion took too long and timed out (the server cut us off after ~30 seconds). This happens with very large or complex documents. Try a shorter PDF, or use the New document button and paste the text in.",
+        );
+        return;
+      }
       if (!r.ok) {
         setError(r.error);
         return;

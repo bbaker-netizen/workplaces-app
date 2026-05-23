@@ -148,10 +148,14 @@ export async function convertDocumentToTemplate(
     };
   }
 
-  // Cap the input — Claude has plenty of headroom but no point burning
-  // tokens on multi-megabyte legal docs.
+  // Cap the input — Netlify serverless functions have hard timeouts
+  // (10-60s depending on plan), so we trim aggressively. Most legal
+  // documents fit in 30k chars (≈8k words); anything larger gets
+  // sliced and the user can paste the rest into the editor manually.
   const capped =
-    extracted.length > 60_000 ? extracted.slice(0, 60_000) + "\n\n[…truncated…]" : extracted;
+    extracted.length > 30_000
+      ? extracted.slice(0, 30_000) + "\n\n[…document truncated for processing speed; paste remainder manually if needed…]"
+      : extracted;
 
   // 2. Run Claude to produce the markdown template.
   let json: unknown;
@@ -160,7 +164,10 @@ export async function convertDocumentToTemplate(
       system: SYSTEM_PROMPT,
       user: `Source document filename: ${filename}\n\nExtracted text:\n\n${capped}`,
       model: "claude-sonnet-4-6",
-      maxTokens: 8000,
+      // 6000 tokens covers a 4-5 page contract comfortably; lowering
+      // from the previous 8000 ceiling reduces tail latency on
+      // serverless and rarely matters because contracts cap there.
+      maxTokens: 6000,
       temperature: 0.2,
     });
     const cleaned = result.text

@@ -32,3 +32,15 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+# Background server actions that talk to Claude (document import,
+# soul-file insights, etc.) can take 30-90 seconds. Bump the timeout
+# beyond Netlify's default 10s so the document import flow doesn't
+# 504 mid-conversion. Effective ceiling depends on the Netlify plan
+# (26s on free, 60s on Pro, 15min on enterprise).
+[functions."___netlify-server-handler"]
+  timeout = 60
+
+[functions."*"]
+  timeout = 60
+
