@@ -54,7 +54,10 @@ import {
 // Per-phase open/closed state lives in localStorage so it persists
 // across reloads without a DB round-trip. Closed-by-default keeps
 // the sidebar quiet until you click into a section.
-const PHASES_STORAGE_KEY = "tbb.sidebarPhasesOpen.v1";
+// v2: bumped from v1 so old auto-opened state from the previous
+// build (which auto-opened the section containing the current page)
+// gets discarded — fresh deploy starts everyone all-closed.
+const PHASES_STORAGE_KEY = "tbb.sidebarPhasesOpen.v2";
 
 type BusinessBuilderNavItem = {
   href: string;
@@ -176,26 +179,19 @@ export function BusinessBuilderSidebar({
   // so the choice survives reloads.
   const [openPhases, setOpenPhases] = useState<Set<string>>(() => new Set());
 
-  // On mount, hydrate from localStorage. Then ensure the phase
-  // containing the current page is always open so the active item is
-  // visible without an extra click.
+  // On mount, hydrate from localStorage. Everything stays closed
+  // unless the user has explicitly opened it in a previous session
+  // (we don't auto-open the section containing the current page —
+  // Bruce was clear: closed by default means closed by default).
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const raw = window.localStorage.getItem(PHASES_STORAGE_KEY);
       const stored: string[] = raw ? JSON.parse(raw) : [];
-      const next = new Set<string>(stored);
-      // Auto-open the phase the user is currently inside.
-      for (const phase of BUSINESS_BUILDER_PHASES) {
-        if (phase.items.some((it) => isActiveHref(it.href))) {
-          next.add(phase.key);
-        }
-      }
-      setOpenPhases(next);
+      setOpenPhases(new Set<string>(stored));
     } catch {
       // localStorage unavailable / corrupted → leave defaults (all closed).
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function togglePhase(key: string) {
