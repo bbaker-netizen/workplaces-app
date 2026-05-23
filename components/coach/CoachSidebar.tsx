@@ -87,6 +87,7 @@ const COACH_PHASES: CoachPhase[] = [
     caption: "Run the rhythm",
     items: [
       { href: "/coach", label: "My work", icon: CheckSquare, tourId: "coach-home" },
+      { href: "/coach/engagements", label: "Engagements (Workspace)", icon: Briefcase },
       { href: "/coach/action-items", label: "Action items", icon: CheckSquare },
       { href: "/coach/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },
       { href: "/coach/templates", label: "Templates & signatures", icon: FileText },

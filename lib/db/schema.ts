@@ -515,6 +515,12 @@ export const projects = pgTable(
     engagementId: uuid("engagement_id")
       .notNull()
       .references(() => engagements.id, { onDelete: "cascade" }),
+    /** Optional link to the goal this project supports. A project
+     *  may roll up under a goal or stand alone. Setting null detaches
+     *  without deleting. Drives the Workspace tab's grouping. */
+    goalId: uuid("goal_id").references((): AnyPgColumn => goals.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     description: text("description"),
     status: projectStatusEnum("status").notNull().default("planning"),
@@ -534,6 +540,7 @@ export const projects = pgTable(
     engagementIdx: index("projects_engagement_idx").on(t.engagementId),
     leadIdx: index("projects_lead_idx").on(t.leadUserProfileId),
     statusIdx: index("projects_status_idx").on(t.status),
+    goalIdx: index("projects_goal_idx").on(t.goalId),
   }),
 );
 
@@ -833,6 +840,13 @@ export const actionItems = pgTable(
     engagementId: uuid("engagement_id")
       .notNull()
       .references(() => engagements.id, { onDelete: "cascade" }),
+    /** Optional link to the project this action item is part of.
+     *  Null means it's a one-off commitment (not tied to a specific
+     *  project body of work). Drives the Workspace tab's grouping. */
+    projectId: uuid("project_id").references(
+      (): AnyPgColumn => projects.id,
+      { onDelete: "set null" },
+    ),
     title: text("title").notNull(),
     description: text("description"),
     status: actionItemStatusEnum("status").notNull().default("open"),
@@ -858,6 +872,7 @@ export const actionItems = pgTable(
     engagementIdx: index("action_items_engagement_idx").on(t.engagementId),
     assigneeIdx: index("action_items_assignee_idx").on(t.assigneeUserProfileId),
     statusIdx: index("action_items_status_idx").on(t.status),
+    projectIdx: index("action_items_project_idx").on(t.projectId),
   })
 );
 
