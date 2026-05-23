@@ -2458,6 +2458,81 @@ export const templateConversions = pgTable(
 
 export type TemplateConversion = typeof templateConversions.$inferSelect;
 export type NewTemplateConversion = typeof templateConversions.$inferInsert;
+
+/**
+ * `resources` — Bruce + Jen's growing library of apps, tutorial
+ * videos, and written guides. Catalogued here, deployed to specific
+ * client engagements via the `resource_engagements` junction.
+ *
+ * Resource types:
+ *   - tool: a deployable app (URL points at the live app)
+ *   - video: tutorial video URL (YouTube, Loom, Vimeo, etc.)
+ *   - document: written guide / PDF / article (URL or hosted markdown)
+ *   - link: catch-all for any other useful reference
+ */
+export const resources = pgTable(
+  "resources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    type: text("type").notNull().default("document"),
+    url: text("url"),
+    thumbnailUrl: text("thumbnail_url"),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    audience: text("audience").notNull().default("coach_only"),
+    isPublished: boolean("is_published").notNull().default(true),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("resources_org_idx").on(t.orgId, t.type),
+    audienceIdx: index("resources_audience_idx").on(t.orgId, t.audience),
+  }),
+);
+
+export const resourceEngagements = pgTable(
+  "resource_engagements",
+  {
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    deployedAt: timestamp("deployed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deployedByUserProfileId: uuid("deployed_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.resourceId, t.engagementId] }),
+    engagementIdx: index("resource_engagements_engagement_idx").on(
+      t.engagementId,
+    ),
+  }),
+);
+
+export type Resource = typeof resources.$inferSelect;
+export type NewResource = typeof resources.$inferInsert;
+export type ResourceEngagement = typeof resourceEngagements.$inferSelect;
 export type QboOauthToken = typeof qboOauthTokens.$inferSelect;
 export type NewQboOauthToken = typeof qboOauthTokens.$inferInsert;
 export type GoogleCalendarToken = typeof googleCalendarTokens.$inferSelect;

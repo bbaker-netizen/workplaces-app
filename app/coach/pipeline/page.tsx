@@ -58,7 +58,11 @@ export default async function PipelinePage() {
         </div>
       </header>
 
-      {/* Stage summary chips */}
+      {/* Stage summary chips — uniform white pill + colored dot
+          (the dot uses the stage's chipClass background colour for a
+          quick visual cue). Replaces the earlier mixed-colour chip
+          style that blended into the cream page background for the
+          pale-coloured stages. */}
       <div className="flex flex-wrap gap-2">
         {STAGE_ORDER.map((s) => {
           const count = counts.get(s) ?? 0;
@@ -67,10 +71,14 @@ export default async function PipelinePage() {
           return (
             <span
               key={s}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps ${style.chipClass}`}
+              className="inline-flex items-center gap-2 pl-2 pr-2 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps bg-white border border-tbb-line text-tbb-navy shadow-tbb-sm"
             >
+              <span
+                aria-hidden
+                className={`w-2 h-2 rounded-full ${style.chipClass.split(" ")[0]}`}
+              />
               {style.label}
-              <span className="bg-white/30 px-1.5 py-0 rounded-pill tabular-nums">
+              <span className="bg-tbb-cream-50 border border-tbb-line-soft text-tbb-ink-2 px-1.5 py-0 rounded-pill tabular-nums">
                 {count}
               </span>
             </span>
