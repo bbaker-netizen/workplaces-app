@@ -184,7 +184,7 @@ export function CoachSidebar({
   return (
     <aside
       className={
-        "bg-tbb-navy text-tbb-cream sticky top-0 h-screen flex flex-col transition-all duration-tbb-base " +
+        "bg-tbb-navy text-white sticky top-0 h-screen flex flex-col transition-all duration-tbb-base " +
         (collapsed ? "w-16" : "w-64 lg:w-72")
       }
     >
@@ -220,7 +220,7 @@ export function CoachSidebar({
             type="button"
             onClick={onToggleCollapse}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="shrink-0 grid place-items-center w-7 h-7 rounded-md text-tbb-cream/70 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors"
+            className="shrink-0 grid place-items-center w-7 h-7 rounded-md text-white/85 hover:bg-tbb-cream/8 hover:text-white transition-colors"
           >
             {collapsed ? (
               <ChevronRight className="w-4 h-4" aria-hidden />
@@ -283,7 +283,7 @@ export function CoachSidebar({
                   <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue-light">
                     {phase.label}
                   </p>
-                  <p className="text-[11px] text-tbb-cream/55 leading-snug mt-0.5">
+                  <p className="text-[11px] text-white/75 leading-snug mt-0.5">
                     {phase.caption}
                   </p>
                 </div>
@@ -318,20 +318,20 @@ export function CoachSidebar({
       >
         {!collapsed && (
           <div className="min-w-0 flex-1 space-y-2">
-            <p className="text-[11px] font-bold text-tbb-cream truncate">{fullName}</p>
+            <p className="text-[11px] font-bold text-white truncate">{fullName}</p>
             {/* Client Portal View — pill-styled preview action, visually
                 distinct from the destructive Sign Out below. */}
             <Link
               href="/portal?preview=1"
               title="Preview the client portal as your client would see it"
-              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill bg-tbb-cream/10 text-tbb-cream/80 hover:bg-tbb-cream/20 hover:text-tbb-cream transition-colors duration-tbb-base border border-tbb-cream/15"
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill bg-tbb-cream/10 text-white/90 hover:bg-tbb-cream/20 hover:text-white transition-colors duration-tbb-base border border-tbb-cream/15"
             >
               <Eye className="w-3 h-3" aria-hidden />
               Client Portal View
             </Link>
             <div>
               <SignOutButton redirectUrl="/">
-                <button className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/45 hover:text-tbb-danger transition-colors duration-tbb-base">
+                <button className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-white/70 hover:text-tbb-danger transition-colors duration-tbb-base">
                   <LogOut className="w-3 h-3" aria-hidden />
                   Sign out
                 </button>
@@ -345,7 +345,7 @@ export function CoachSidebar({
               type="button"
               aria-label={`Sign out (${fullName})`}
               title={`Sign out (${fullName})`}
-              className="grid place-items-center w-9 h-9 rounded-md text-tbb-cream/70 hover:bg-tbb-cream/8 hover:text-tbb-cream transition-colors"
+              className="grid place-items-center w-9 h-9 rounded-md text-white/85 hover:bg-tbb-cream/8 hover:text-white transition-colors"
             >
               <Settings className="w-4 h-4" aria-hidden />
             </button>
@@ -393,7 +393,7 @@ function NavItemRow({
           "grid place-items-center w-10 h-10 mx-auto rounded-md transition-colors duration-tbb-base " +
           (isActive
             ? "bg-tbb-blue text-white shadow-tbb-sm"
-            : "text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream")
+            : "text-white/95 hover:bg-tbb-cream/8 hover:text-white")
         }
       >
         <Icon className="w-4 h-4" aria-hidden />
@@ -419,8 +419,8 @@ function NavItemRow({
         className={
           "flex-1 flex items-center gap-2.5 pl-3 pr-2.5 py-2 rounded-md text-sm font-bold transition-colors duration-tbb-base " +
           (isActive
-            ? "bg-tbb-cream/15 text-tbb-cream"
-            : "text-tbb-cream/85 hover:bg-tbb-cream/8 hover:text-tbb-cream")
+            ? "bg-white/15 text-white"
+            : "text-white/95 hover:bg-tbb-cream/8 hover:text-white")
         }
       >
         <Icon className="w-4 h-4 flex-none" aria-hidden />
@@ -439,7 +439,7 @@ function NavItemRow({
           "absolute right-1.5 grid place-items-center w-6 h-6 rounded-md transition-opacity " +
           (isPinned
             ? "opacity-100 text-tbb-warning hover:bg-tbb-cream/8"
-            : "opacity-0 group-hover:opacity-100 text-tbb-cream/55 hover:bg-tbb-cream/8 hover:text-tbb-warning")
+            : "opacity-0 group-hover:opacity-100 text-white/75 hover:bg-tbb-cream/8 hover:text-tbb-warning")
         }
       >
         <Star

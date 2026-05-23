@@ -83,6 +83,7 @@ export function ClientCommunicationsPanel({
     attachments: Attachment[];
   }>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
@@ -170,6 +171,19 @@ export function ClientCommunicationsPanel({
         setError(r.error);
         return;
       }
+      // Give Bruce visible feedback on success. The router.refresh()
+      // will repopulate the timeline with the new row, but a flash
+      // confirmation kills the "did anything happen?" question.
+      // Also surfaces the Gmail self-send routing quirk so testing
+      // by emailing yourself doesn't look like a silent failure.
+      const channelLabel = composing.channel === "email" ? "Email" : "SMS";
+      const toLine = composing.to;
+      setSentNotice(
+        composing.channel === "email"
+          ? `${channelLabel} sent to ${toLine}. Check your Gmail Sent folder to confirm. Note: if you sent to yourself, Gmail doesn't double-deliver — the message lands in Sent only, not your Inbox.`
+          : `${channelLabel} sent to ${toLine}.`,
+      );
+      setTimeout(() => setSentNotice(null), 12_000);
       setComposing(null);
       router.refresh();
     });
@@ -177,6 +191,22 @@ export function ClientCommunicationsPanel({
 
   return (
     <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
+      {sentNotice && (
+        <div
+          role="status"
+          className="border-b border-tbb-success/30 bg-tbb-success/10 px-5 py-3 text-sm text-tbb-ink-2 flex items-start gap-3"
+        >
+          <span aria-hidden className="text-tbb-success text-base">✓</span>
+          <span className="leading-snug">{sentNotice}</span>
+          <button
+            type="button"
+            onClick={() => setSentNotice(null)}
+            className="ml-auto text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <header className="border-b border-tbb-line-soft px-5 py-3 flex items-center gap-3 flex-wrap">
         <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
           Communications

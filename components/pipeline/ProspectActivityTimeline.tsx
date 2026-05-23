@@ -94,7 +94,15 @@ export function ProspectActivityTimeline({
             (t) =>
               t.value !== "stage_change" &&
               t.value !== "web_lead" &&
-              t.value !== "signature_request",
+              t.value !== "signature_request" &&
+              // Email is now logged automatically when sent through the
+              // Communications panel and when Gmail auto-syncs inbound
+              // mail. Manual "log an email" is redundant — removed from
+              // the picker so the only entries here are CALL / MEETING /
+              // NOTE. The email activity TYPE itself stays in
+              // ACTIVITY_TYPES so historical / system-logged emails
+              // still render with the right label.
+              t.value !== "email",
           ).map((t) => {
             const active = type === t.value;
             const Icon = ICONS[t.value] ?? MessageSquare;
