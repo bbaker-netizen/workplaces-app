@@ -18,6 +18,7 @@ import {
   Phone,
   StickyNote,
   Smartphone,
+  PenSquare,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { orgs } from "@/lib/db/schema";
@@ -28,6 +29,7 @@ import {
   type CommunicationRow,
 } from "@/lib/db/queries/client-communications";
 import { InboxFilters } from "@/components/inbox/InboxFilters";
+import { InboxReplyButton } from "@/components/inbox/InboxReplyComposer";
 
 export default async function CoachInboxPage({
   searchParams,
@@ -77,15 +79,25 @@ export default async function CoachInboxPage({
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-12 space-y-6">
-      <header className="space-y-1">
-        <p className="tbb-eyebrow">External communications</p>
-        <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-          Inbox
-        </h1>
-        <p className="text-sm text-tbb-ink-3">
-          Every email, text, WhatsApp message, and call note captured across
-          your prospects and active clients. Searchable and taggable.
-        </p>
+      <header className="space-y-1 flex items-end justify-between gap-4 flex-wrap">
+        <div className="space-y-1">
+          <p className="tbb-eyebrow">External communications</p>
+          <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
+            Inbox
+          </h1>
+          <p className="text-sm text-tbb-ink-3">
+            Every email, text, WhatsApp message, and call note captured
+            across your prospects and active clients. Searchable, taggable,
+            and replyable through your connected Gmail.
+          </p>
+        </div>
+        <Link
+          href="/coach/pipeline"
+          title="Pick a prospect, then compose from their page"
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
+        >
+          <PenSquare className="w-3.5 h-3.5" aria-hidden /> Compose new
+        </Link>
       </header>
 
       <InboxFilters knownTags={knownTags} currentFilters={filters} />
@@ -133,8 +145,12 @@ function CommunicationRowItem({ row }: { row: CommunicationRow }) {
     );
   const preview = (row.body || row.subject || "").slice(0, 200);
   return (
-    <li className="px-5 py-3 hover:bg-tbb-cream-50">
-      <Link href={target} className="flex items-start gap-3">
+    <li className="px-5 py-3 hover:bg-tbb-cream-50 flex items-start gap-3">
+      <Link
+        href={target}
+        className="flex items-start gap-3 flex-1 min-w-0"
+        aria-label={`Open ${label} in ${row.channel}`}
+      >
         <span className="shrink-0 mt-0.5 grid place-items-center w-8 h-8 rounded-md bg-tbb-cream-50 text-tbb-ink-3">
           {icon}
         </span>
@@ -145,7 +161,7 @@ function CommunicationRowItem({ row }: { row: CommunicationRow }) {
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               {row.channel.replace("_", " ")}
             </span>
-            <span className="ml-auto text-[11px] text-tbb-ink-3 whitespace-nowrap">
+            <span className="text-[11px] text-tbb-ink-3 whitespace-nowrap ml-auto">
               {row.occurredAt.toLocaleString(undefined, {
                 month: "short",
                 day: "numeric",
@@ -176,6 +192,26 @@ function CommunicationRowItem({ row }: { row: CommunicationRow }) {
           )}
         </span>
       </Link>
+      <span className="shrink-0 self-center">
+        <InboxReplyButton
+          row={{
+            id: row.id,
+            channel: row.channel,
+            direction: row.direction,
+            fromAddress: row.fromAddress,
+            toAddresses: row.toAddresses,
+            subject: row.subject,
+            body: row.body,
+            externalId: row.externalId,
+            threadKey: row.threadKey,
+            prospectId: row.prospectId,
+            engagementId: row.engagementId,
+            prospectName: row.prospectName,
+            engagementName: row.engagementName,
+            occurredAt: row.occurredAt,
+          }}
+        />
+      </span>
     </li>
   );
 }
