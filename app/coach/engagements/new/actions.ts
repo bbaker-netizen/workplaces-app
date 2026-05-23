@@ -233,12 +233,23 @@ export async function createEngagementAction(
   // 6. Send the Clerk invitation. Bruce is still admin of the org here,
   //    which is required — Clerk's invitation API rejects calls from
   //    non-members with a 403 Forbidden.
+  //
+  //    redirectUrl: tells Clerk where to send the user AFTER they
+  //    accept + sign up. Without this, Clerk falls back to its
+  //    generic "Welcome / Start Building" dev landing page instead
+  //    of the actual Workplaces portal — which is what new clients
+  //    were seeing. Points at /portal/welcome (the onboarding tour
+  //    page we built in Phase 5).
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://workplaces-the-builder.netlify.app";
+  const redirectUrl = `${appUrl.replace(/\/+$/, "")}/portal/welcome`;
   try {
     await clerk.organizations.createOrganizationInvitation({
       organizationId: newClerkOrg.id,
       inviterUserId: bruceClerkUserId,
       emailAddress: clientLeadEmail,
       role: "org:admin",
+      redirectUrl,
       publicMetadata: {
         app_role: "client_lead",
         client_lead_full_name: clientLeadFullName,
