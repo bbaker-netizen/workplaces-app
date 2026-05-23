@@ -18,6 +18,13 @@ export type DocumentVariableContext = {
      *  it. Stays nullable here for historical rows that pre-date the
      *  rule — `{{client_phone}}` falls back to "[phone]" in that case. */
     phone?: string | null;
+    /** Per Phase 5.4: program + tier + fee + start date now live on
+     *  the prospect record so the BBA can be sent before the
+     *  engagement is formally created. These take precedence over
+     *  the corresponding `engagement.*` fields when present. */
+    programType?: "accelerator" | "implementer" | null;
+    monthlyFeeCents?: number | null;
+    expectedStartDate?: Date | string | null;
   } | null;
   engagement?: {
     name: string | null;
@@ -164,7 +171,15 @@ function formatDate(d: Date | string | null | undefined): string {
   }
 }
 
-/** Build the variable map from context. */
+/** Build the variable map from context.
+ *
+ * Resolution order for the deal-specific values (program type, fee,
+ * start date): prospect → engagement → "[placeholder]". The prospect
+ * is the single source of truth — by the time an engagement is
+ * created, these fields have been chosen on the prospect record. The
+ * engagement fallback is for backwards compatibility with the older
+ * flow where the BBA was sent post-engagement-creation.
+ */
 export function buildVariableMap(
   ctx: DocumentVariableContext,
 ): Record<string, string> {
@@ -176,6 +191,15 @@ export function buildVariableMap(
     ctx.sender.fullName.split(" ")[0] ?? ctx.sender.fullName;
   const today = formatDate(new Date());
 
+  // Prefer prospect-level values for program + fee + start date,
+  // fall back to engagement-level for back-compat.
+  const programType =
+    ctx.prospect?.programType ?? ctx.engagement?.type ?? null;
+  const monthlyFeeCents =
+    ctx.prospect?.monthlyFeeCents ?? ctx.engagement?.monthlyFeeCents ?? null;
+  const startDate =
+    ctx.prospect?.expectedStartDate ?? ctx.engagement?.startDate ?? null;
+
   return {
     client_name: firstName,
     client_full_name: ctx.prospect?.contactName ?? "[client name]",
@@ -186,22 +210,19 @@ export function buildVariableMap(
     engagement_name:
       ctx.engagement?.name ?? ctx.prospect?.companyName ?? "[engagement]",
     engagement_type:
-      ctx.engagement?.type === "accelerator"
+      programType === "accelerator"
         ? "Accelerator"
-        : ctx.engagement?.type === "implementer"
+        : programType === "implementer"
           ? "Implementer"
           : "[type]",
     // Pre-filled checkbox glyphs for the BBA Schedule A program
-    // selection. Renders as `[X]` next to whichever program the
-    // engagement is, `[ ]` next to the other. When the engagement
-    // type is unset (e.g., sending from a prospect before formal
-    // engagement), both stay `[ ]` so the client can mark by hand.
-    accelerator_checkbox:
-      ctx.engagement?.type === "accelerator" ? "[X]" : "[ ]",
-    implementer_checkbox:
-      ctx.engagement?.type === "implementer" ? "[X]" : "[ ]",
-    start_date: formatDate(ctx.engagement?.startDate),
-    monthly_fee: formatCents(ctx.engagement?.monthlyFeeCents),
+    // selection. Renders as `[X]` next to whichever program is
+    // selected, `[ ]` next to the other. When neither is set
+    // both stay `[ ]` so the client can mark by hand.
+    accelerator_checkbox: programType === "accelerator" ? "[X]" : "[ ]",
+    implementer_checkbox: programType === "implementer" ? "[X]" : "[ ]",
+    start_date: formatDate(startDate),
+    monthly_fee: formatCents(monthlyFeeCents),
     today,
     sender_name: senderFirstName,
     sender_full_name: ctx.sender.fullName,

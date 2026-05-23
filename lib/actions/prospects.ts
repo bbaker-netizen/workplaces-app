@@ -65,6 +65,21 @@ const createSchema = z.object({
   /** Client ticked "Yes, this is the legal name" to bypass the
    *  "company name looks like a person" soft warning. */
   legalNameConfirmed: z.boolean().optional(),
+  /** Program type for the engagement-to-be. Captured on the prospect
+   *  so the BBA can read it before a formal engagement exists. */
+  programType: z
+    .enum(["accelerator", "implementer"])
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
+  pricingTier: optionalString,
+  monthlyFeeCents: z.number().int().nonnegative().nullable().optional(),
+  expectedStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
 });
 
 export async function createProspect(
@@ -125,6 +140,12 @@ export async function createProspect(
         ownerUserProfileId: data.ownerUserProfileId ?? profile.userProfileId,
         status: data.status ?? "new_lead",
         notes: data.notes ?? null,
+        programType: data.programType ?? null,
+        pricingTier: data.pricingTier ?? null,
+        monthlyFeeCents: data.monthlyFeeCents ?? null,
+        expectedStartDate: data.expectedStartDate
+          ? new Date(data.expectedStartDate)
+          : null,
       })
       .returning({ id: prospects.id });
     return row;
@@ -155,6 +176,19 @@ const updateSchema = z.object({
   notes: z.string().max(40000).nullable().optional(),
   /** Bypass the "company name looks like a person" soft warning. */
   legalNameConfirmed: z.boolean().optional(),
+  programType: z
+    .enum(["accelerator", "implementer"])
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
+  pricingTier: optionalString,
+  monthlyFeeCents: z.number().int().nonnegative().nullable().optional(),
+  expectedStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
 });
 
 export async function updateProspect(
@@ -232,6 +266,16 @@ export async function updateProspect(
         updates.ownerUserProfileId = data.ownerUserProfileId;
       if (data.status !== undefined) updates.status = data.status;
       if (data.notes !== undefined) updates.notes = data.notes;
+      if (data.programType !== undefined)
+        updates.programType = data.programType;
+      if (data.pricingTier !== undefined)
+        updates.pricingTier = data.pricingTier;
+      if (data.monthlyFeeCents !== undefined)
+        updates.monthlyFeeCents = data.monthlyFeeCents;
+      if (data.expectedStartDate !== undefined)
+        updates.expectedStartDate = data.expectedStartDate
+          ? new Date(data.expectedStartDate)
+          : null;
       if (Object.keys(updates).length === 0) return;
       await tx.update(prospects).set(updates).where(eq(prospects.id, data.id));
     });

@@ -6,8 +6,11 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { asc, eq } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { pricingTiers } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
 import { NewProspectForm } from "@/components/pipeline/NewProspectForm";
 
 export default async function NewProspectPage() {
@@ -15,6 +18,37 @@ export default async function NewProspectPage() {
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     redirect("/portal");
+  }
+
+  // Pull pricing tiers for the program-tier selector. Defensive —
+  // an org that hasn't run migration 0035 yet will just see no
+  // suggested tiers, and Bruce can type the fee directly.
+  let tiers: Array<{
+    id: string;
+    program: string;
+    tierKey: string;
+    label: string;
+    monthlyFeeCents: number;
+    sortOrder: number;
+  }> = [];
+  try {
+    tiers = await withSystemContext(async (tx) =>
+      tx
+        .select({
+          id: pricingTiers.id,
+          program: pricingTiers.program,
+          tierKey: pricingTiers.tierKey,
+          label: pricingTiers.label,
+          monthlyFeeCents: pricingTiers.monthlyFeeCents,
+          sortOrder: pricingTiers.sortOrder,
+        })
+        .from(pricingTiers)
+        .where(eq(pricingTiers.orgId, profile.orgId))
+        .orderBy(asc(pricingTiers.program), asc(pricingTiers.sortOrder)),
+    );
+  } catch {
+    // pricingTiers table not yet migrated — fall back to empty list.
+    tiers = [];
   }
 
   return (
@@ -35,7 +69,7 @@ export default async function NewProspectPage() {
           <code className="font-mono text-xs">/api/leads</code> instead.
         </p>
       </header>
-      <NewProspectForm />
+      <NewProspectForm pricingTiers={tiers} />
     </main>
   );
 }

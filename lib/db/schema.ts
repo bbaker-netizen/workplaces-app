@@ -1889,6 +1889,22 @@ export const prospects = pgTable(
     leadSource: text("lead_source"),
     expectedValueCents: bigint("expected_value_cents", { mode: "number" }),
     currency: text("currency").notNull().default("CAD"),
+    /** Which program they're being slotted into. Captured on the
+     *  prospect (not the engagement) so the BBA + contract flows
+     *  pull from a single source of truth. Optional — set as the
+     *  deal qualifies, e.g. after the diagnostic call. */
+    programType: text("program_type"), // "accelerator" | "implementer" | null
+    /** Pricing tier key (matches `pricing_tiers.tier_key`) — drives
+     *  the suggested fee. Editable per-deal. */
+    pricingTier: text("pricing_tier"),
+    /** Monthly fee for the engagement, in cents. Set when the deal
+     *  firms up; auto-fills the {{monthly_fee}} placeholder in the
+     *  contract. */
+    monthlyFeeCents: bigint("monthly_fee_cents", { mode: "number" }),
+    /** When the engagement is expected to begin. Used by the BBA's
+     *  {{start_date}} variable. Becomes the engagement.start_date
+     *  when the prospect converts. */
+    expectedStartDate: timestamp("expected_start_date", { withTimezone: true }),
     nextActionDate: timestamp("next_action_date", { withTimezone: false }),
     nextActionNote: text("next_action_note"),
     lastContactAt: timestamp("last_contact_at", { withTimezone: true }),

@@ -278,6 +278,13 @@ export default async function ProspectDetailPage({
                 companyName: prospect.companyName,
                 contactEmail: prospect.contactEmail,
                 phone: prospect.phone,
+                programType:
+                  prospect.programType === "accelerator" ||
+                  prospect.programType === "implementer"
+                    ? prospect.programType
+                    : null,
+                monthlyFeeCents: prospect.monthlyFeeCents,
+                expectedStartDate: prospect.expectedStartDate,
               },
               sender: {
                 fullName: me?.fullName ?? "",
