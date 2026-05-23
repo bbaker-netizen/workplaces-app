@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 import { ArrowRight, Briefcase, Plus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
