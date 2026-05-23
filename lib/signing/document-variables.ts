@@ -57,6 +57,16 @@ export const DOCUMENT_VARIABLES = [
     description: "Accelerator or Implementer",
   },
   {
+    name: "accelerator_checkbox",
+    label: "Accelerator checkbox",
+    description: "[X] if Accelerator, [ ] otherwise — for program-pick checkbox in BBA",
+  },
+  {
+    name: "implementer_checkbox",
+    label: "Implementer checkbox",
+    description: "[X] if Implementer, [ ] otherwise — for program-pick checkbox in BBA",
+  },
+  {
     name: "start_date",
     label: "Engagement start date",
     description: "When the engagement begins",
@@ -135,6 +145,15 @@ export function buildVariableMap(
         : ctx.engagement?.type === "implementer"
           ? "Implementer"
           : "[type]",
+    // Pre-filled checkbox glyphs for the BBA Schedule A program
+    // selection. Renders as `[X]` next to whichever program the
+    // engagement is, `[ ]` next to the other. When the engagement
+    // type is unset (e.g., sending from a prospect before formal
+    // engagement), both stay `[ ]` so the client can mark by hand.
+    accelerator_checkbox:
+      ctx.engagement?.type === "accelerator" ? "[X]" : "[ ]",
+    implementer_checkbox:
+      ctx.engagement?.type === "implementer" ? "[X]" : "[ ]",
     start_date: formatDate(ctx.engagement?.startDate),
     today,
     sender_name: senderFirstName,
