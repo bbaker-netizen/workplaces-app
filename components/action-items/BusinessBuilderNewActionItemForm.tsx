@@ -15,6 +15,7 @@ import { addDays, format } from "date-fns";
 import {
   ActionItemForm,
   type ActionItemFormMember,
+  type ActionItemFormProject,
 } from "./ActionItemForm";
 import type { ActionItemStatus } from "./utils";
 
@@ -22,6 +23,9 @@ export type CoachFormEngagement = {
   id: string;
   name: string | null;
   members: Array<ActionItemFormMember & { role: string }>;
+  /** Projects available to nest this action item under, scoped to
+   *  the currently picked engagement. */
+  projects?: ActionItemFormProject[];
 };
 
 const inputClass =
@@ -98,6 +102,10 @@ export function BusinessBuilderNewActionItemForm({
           id: m.id,
           fullName: m.fullName,
         }))}
+        projects={(engagement.projects ?? []).map((p) => ({
+          id: p.id,
+          name: p.name,
+        }))}
         statusOptions={statusOptions}
         initialValues={{
           title: "",
@@ -107,6 +115,7 @@ export function BusinessBuilderNewActionItemForm({
           dueDate: defaultDue,
           revenueImpact: false,
           marginImpact: false,
+          projectId: null,
         }}
         cancelHref="/business-builder/action-items"
         successHref="/business-builder/action-items"

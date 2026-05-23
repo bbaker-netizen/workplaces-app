@@ -31,6 +31,11 @@ export type ActionItemFormMember = {
   fullName: string;
 };
 
+export type ActionItemFormProject = {
+  id: string;
+  name: string;
+};
+
 export type ActionItemFormInitial = {
   title: string;
   description: string;
@@ -40,6 +45,9 @@ export type ActionItemFormInitial = {
   dueDate: string;
   revenueImpact: boolean;
   marginImpact: boolean;
+  /** Optional link to the parent project. Null means standalone
+   *  (a one-off commitment that isn't part of a larger project). */
+  projectId?: string | null;
 };
 
 const inputClass =
@@ -55,6 +63,7 @@ export function ActionItemForm({
   itemId,
   engagementId,
   members,
+  projects = [],
   statusOptions,
   initialValues,
   cancelHref,
@@ -64,6 +73,9 @@ export function ActionItemForm({
   itemId?: string;
   engagementId: string;
   members: ActionItemFormMember[];
+  /** Projects available to nest this action item under. Empty
+   *  shows guidance instead of the picker. */
+  projects?: ActionItemFormProject[];
   statusOptions: readonly ActionItemStatus[];
   initialValues: ActionItemFormInitial;
   cancelHref: string;
@@ -82,6 +94,7 @@ export function ActionItemForm({
   const [dueDate, setDueDate] = useState(initialValues.dueDate);
   const [revenueImpact, setRevenueImpact] = useState(initialValues.revenueImpact);
   const [marginImpact, setMarginImpact] = useState(initialValues.marginImpact);
+  const [projectId, setProjectId] = useState(initialValues.projectId ?? "");
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -95,6 +108,7 @@ export function ActionItemForm({
         dueDate: dueDate || null,
         revenueImpact,
         marginImpact,
+        projectId: projectId || null,
       };
 
       const result =
@@ -214,6 +228,42 @@ export function ActionItemForm({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Part of project — nests this action item under a project
+          in the engagement Workspace view. Blank means it's a
+          one-off commitment, not part of a larger initiative. */}
+      <div>
+        <label htmlFor="projectId" className={labelClass}>
+          Part of project{" "}
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        </label>
+        {projects.length === 0 ? (
+          <div className="border border-dashed border-tbb-line rounded-md px-3 py-2 text-xs text-tbb-ink-3 italic">
+            No projects on this engagement yet. Create a project first
+            from the Projects page, then come back here to assign this
+            action item to it.
+          </div>
+        ) : (
+          <select
+            id="projectId"
+            name="projectId"
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">— One-off (not part of a project) —</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <p className="mt-1 font-sans text-xs text-muted-foreground">
+          Nesting under a project makes it show up in the right spot on
+          the engagement Workspace view.
+        </p>
       </div>
 
       <fieldset className="space-y-2">

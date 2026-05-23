@@ -66,6 +66,11 @@ const createProjectSchema = z.object({
     .optional(),
   revenueImpact: z.boolean().default(false),
   marginImpact: z.boolean().default(false),
+  /** Optional link to the goal this project supports. Set/cleared
+   *  from the project edit form's "Supports goal" dropdown. Null
+   *  means the project stands alone (appears in the Workspace
+   *  view's "Projects not tied to a goal" bucket). */
+  goalId: z.string().uuid().nullable().optional(),
 });
 
 const updateProjectSchema = createProjectSchema
@@ -128,6 +133,7 @@ export async function createProject(
             targetDate: data.targetDate ? new Date(data.targetDate) : null,
             revenueImpact: data.revenueImpact,
             marginImpact: data.marginImpact,
+            goalId: data.goalId ?? null,
           })
           .returning({ id: projects.id });
         return row;
@@ -201,6 +207,7 @@ export async function updateProject(
           update.revenueImpact = data.revenueImpact;
         if (data.marginImpact !== undefined)
           update.marginImpact = data.marginImpact;
+        if (data.goalId !== undefined) update.goalId = data.goalId;
         const finalRevenue = update.revenueImpact ?? existing.revenueImpact;
         const finalMargin = update.marginImpact ?? existing.marginImpact;
         if (!finalRevenue && !finalMargin) {

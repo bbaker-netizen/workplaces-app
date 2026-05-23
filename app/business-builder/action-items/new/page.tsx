@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listCoachEngagements } from "@/lib/db/queries/engagements";
+import { listEngagementProjects } from "@/lib/db/queries/projects";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { BusinessBuilderNewActionItemForm } from "@/components/action-items/BusinessBuilderNewActionItemForm";
 import { STATUSES_VISIBLE_TO_COACH } from "@/components/action-items/utils";
@@ -33,18 +34,25 @@ export default async function NewCoachActionItemPage() {
     );
   }
 
-  // Pre-fetch members for each engagement so the form's engagement
-  // picker can switch members without an extra round-trip.
+  // Pre-fetch members + projects for each engagement so the form's
+  // engagement picker can switch context without an extra round-trip.
   const engagementsWithMembers = await Promise.all(
-    engagements.map(async (e) => ({
-      id: e.id,
-      name: e.name,
-      members: (await listEngagementMembers(e.id)).map((m) => ({
-        id: m.id,
-        fullName: m.fullName,
-        role: m.role,
-      })),
-    })),
+    engagements.map(async (e) => {
+      const [members, projects] = await Promise.all([
+        listEngagementMembers(e.id),
+        listEngagementProjects(e.id),
+      ]);
+      return {
+        id: e.id,
+        name: e.name,
+        members: members.map((m) => ({
+          id: m.id,
+          fullName: m.fullName,
+          role: m.role,
+        })),
+        projects: projects.map((p) => ({ id: p.id, name: p.name })),
+      };
+    }),
   );
 
   return (

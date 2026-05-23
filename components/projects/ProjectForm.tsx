@@ -21,6 +21,7 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: ProjectStatus; label: string }> = [
 ];
 
 export type ProjectFormMember = { id: string; fullName: string };
+export type ProjectFormGoal = { id: string; title: string };
 export type ProjectFormInitial = {
   id?: string;
   name: string;
@@ -31,18 +32,26 @@ export type ProjectFormInitial = {
   targetDate: string;
   revenueImpact: boolean;
   marginImpact: boolean;
+  /** Optional link to the parent goal this project supports.
+   *  Null means standalone. Editable via the "Supports goal"
+   *  dropdown below. */
+  goalId?: string | null;
 };
 
 export function ProjectForm({
   engagementId,
   initial,
   members,
+  goals = [],
   redirectTo,
   showDelete = false,
 }: {
   engagementId: string;
   initial: ProjectFormInitial;
   members: ProjectFormMember[];
+  /** Goals available to roll this project up under. Empty = the
+   *  picker shows "No goals yet — create one first" guidance. */
+  goals?: ProjectFormGoal[];
   redirectTo: string;
   showDelete?: boolean;
 }) {
@@ -51,6 +60,7 @@ export function ProjectForm({
   const [description, setDescription] = useState(initial.description);
   const [status, setStatus] = useState<ProjectStatus>(initial.status);
   const [leadId, setLeadId] = useState(initial.leadUserProfileId ?? "");
+  const [goalId, setGoalId] = useState(initial.goalId ?? "");
   const [startDate, setStartDate] = useState(initial.startDate);
   const [targetDate, setTargetDate] = useState(initial.targetDate);
   const [revenueImpact, setRevenueImpact] = useState(initial.revenueImpact);
@@ -80,6 +90,7 @@ export function ProjectForm({
         targetDate: targetDate || null,
         revenueImpact,
         marginImpact,
+        goalId: goalId || null,
       };
       const result = editing
         ? await updateProject(initial.id!, payload)
@@ -186,6 +197,40 @@ export function ProjectForm({
           </select>
         </label>
       </div>
+
+      {/* Supports goal — rolls this project up under a goal so it
+          appears in the Workspace view's tree instead of the
+          "Projects not tied to a goal" bucket. Standalone is fine
+          if there's no parent goal yet. */}
+      <label className="block space-y-1">
+        <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+          Supports goal
+        </span>
+        {goals.length === 0 ? (
+          <div className="border border-dashed border-tbb-line rounded-md px-3 py-2 text-xs text-tbb-ink-3 italic">
+            No goals on this engagement yet. Add one from the Goals page,
+            then come back here to roll this project up under it.
+          </div>
+        ) : (
+          <select
+            value={goalId}
+            onChange={(e) => setGoalId(e.target.value)}
+            disabled={isPending}
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+          >
+            <option value="">— Standalone (no parent goal) —</option>
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.title}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="block text-[11px] text-tbb-ink-3">
+          Picking a goal nests this project under it on the engagement
+          Workspace view. Leave blank for a one-off project.
+        </span>
+      </label>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="block space-y-1">

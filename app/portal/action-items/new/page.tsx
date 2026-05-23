@@ -2,6 +2,7 @@ import { addDays, format } from "date-fns";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import { listEngagementProjects } from "@/lib/db/queries/projects";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { ActionItemForm } from "@/components/action-items/ActionItemForm";
 import {
@@ -43,8 +44,12 @@ export default async function NewPortalActionItemPage() {
   const engagement = await getCurrentEngagement();
   if (!engagement) redirect("/portal");
 
-  const members = await listEngagementMembers(engagement.id);
+  const [members, projects] = await Promise.all([
+    listEngagementMembers(engagement.id),
+    listEngagementProjects(engagement.id),
+  ]);
   const formMembers = members.map((m) => ({ id: m.id, fullName: m.fullName }));
+  const formProjects = projects.map((p) => ({ id: p.id, name: p.name }));
 
   const isCoachLike =
     profile.role === "master_admin" || profile.role === "coach";
@@ -70,6 +75,7 @@ export default async function NewPortalActionItemPage() {
         mode="create"
         engagementId={engagement.id}
         members={formMembers}
+        projects={formProjects}
         statusOptions={statusOptions}
         initialValues={{
           title: "",
@@ -79,6 +85,7 @@ export default async function NewPortalActionItemPage() {
           dueDate: defaultDue,
           revenueImpact: false,
           marginImpact: false,
+          projectId: null,
         }}
         cancelHref="/portal/action-items"
         successHref="/portal/action-items"

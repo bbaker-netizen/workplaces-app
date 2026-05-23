@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import { listEngagementGoals } from "@/lib/db/queries/goals";
 import { getProjectWithTasks } from "@/lib/db/queries/projects";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { ProjectForm } from "@/components/projects/ProjectForm";
@@ -26,7 +27,12 @@ export default async function PortalProjectDetailPage({
     profile.role === "coach" ||
     profile.role === "client_lead" ||
     profile.role === "client_manager";
-  const members = canEdit ? await listEngagementMembers(engagement.id) : [];
+  const [members, goals] = canEdit
+    ? await Promise.all([
+        listEngagementMembers(engagement.id),
+        listEngagementGoals(engagement.id),
+      ])
+    : [[] as Awaited<ReturnType<typeof listEngagementMembers>>, [] as Awaited<ReturnType<typeof listEngagementGoals>>];
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-10">
@@ -88,11 +94,13 @@ export default async function PortalProjectDetailPage({
                 : "",
               revenueImpact: project.revenueImpact,
               marginImpact: project.marginImpact,
+              goalId: project.goalId,
             }}
             members={members.map((m) => ({
               id: m.id,
               fullName: m.fullName,
             }))}
+            goals={goals.map((g) => ({ id: g.id, title: g.title }))}
             redirectTo="/portal/projects"
             showDelete
           />

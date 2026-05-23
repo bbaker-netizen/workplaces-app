@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getActionItem } from "@/lib/db/queries/action-items";
+import { listEngagementProjects } from "@/lib/db/queries/projects";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { ActionItemForm } from "@/components/action-items/ActionItemForm";
 import {
@@ -23,8 +24,12 @@ export default async function EditPortalActionItemPage({
   const item = await getActionItem(params.id);
   if (!item) notFound();
 
-  const members = await listEngagementMembers(item.engagementId);
+  const [members, projects] = await Promise.all([
+    listEngagementMembers(item.engagementId),
+    listEngagementProjects(item.engagementId),
+  ]);
   const formMembers = members.map((m) => ({ id: m.id, fullName: m.fullName }));
+  const formProjects = projects.map((p) => ({ id: p.id, name: p.name }));
 
   const isCoachLike =
     profile.role === "master_admin" || profile.role === "coach";
@@ -48,6 +53,7 @@ export default async function EditPortalActionItemPage({
         itemId={item.id}
         engagementId={item.engagementId}
         members={formMembers}
+        projects={formProjects}
         statusOptions={statusOptions}
         initialValues={{
           title: item.title,
@@ -57,6 +63,7 @@ export default async function EditPortalActionItemPage({
           dueDate: dateToInputValue(item.dueDate),
           revenueImpact: item.revenueImpact,
           marginImpact: item.marginImpact,
+          projectId: item.projectId,
         }}
         cancelHref="/portal/action-items"
         successHref="/portal/action-items"

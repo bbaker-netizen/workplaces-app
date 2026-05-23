@@ -67,6 +67,9 @@ const createSchema = z.object({
     .optional(),
   revenueImpact: z.boolean().default(false),
   marginImpact: z.boolean().default(false),
+  /** Optional link to the parent project this action item is part
+   *  of. Null = one-off commitment, not part of a project. */
+  projectId: z.string().uuid().nullable().optional(),
 });
 
 const updateSchema = z.object({
@@ -81,6 +84,7 @@ const updateSchema = z.object({
     .optional(),
   revenueImpact: z.boolean().optional(),
   marginImpact: z.boolean().optional(),
+  projectId: z.string().uuid().nullable().optional(),
 });
 
 export type CreateActionItemInput = z.input<typeof createSchema>;
@@ -136,6 +140,7 @@ export async function createActionItem(
           dueDate: data.dueDate ? new Date(data.dueDate) : null,
           revenueImpact: data.revenueImpact,
           marginImpact: data.marginImpact,
+          projectId: data.projectId ?? null,
           createdBy: "coach",
         })
         .returning({ id: actionItems.id });
@@ -299,6 +304,7 @@ export async function updateActionItem(
           update.revenueImpact = data.revenueImpact;
         if (data.marginImpact !== undefined)
           update.marginImpact = data.marginImpact;
+        if (data.projectId !== undefined) update.projectId = data.projectId;
 
         if (Object.keys(update).length === 0) return null; // no-op
 

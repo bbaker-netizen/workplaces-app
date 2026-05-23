@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import { listEngagementGoals } from "@/lib/db/queries/goals";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { ProjectForm } from "@/components/projects/ProjectForm";
 
@@ -18,7 +19,10 @@ export default async function NewProjectPage() {
 
   const engagement = await getCurrentEngagement();
   if (!engagement) redirect("/portal");
-  const members = await listEngagementMembers(engagement.id);
+  const [members, goals] = await Promise.all([
+    listEngagementMembers(engagement.id),
+    listEngagementGoals(engagement.id),
+  ]);
 
   return (
     <main className="max-w-2xl mx-auto px-6 py-12 space-y-8">
@@ -48,8 +52,10 @@ export default async function NewProjectPage() {
           targetDate: "",
           revenueImpact: false,
           marginImpact: false,
+          goalId: null,
         }}
         members={members.map((m) => ({ id: m.id, fullName: m.fullName }))}
+        goals={goals.map((g) => ({ id: g.id, title: g.title }))}
         redirectTo="/portal/projects"
       />
     </main>
