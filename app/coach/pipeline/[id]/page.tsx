@@ -23,6 +23,7 @@ import { listForProspect } from "@/lib/db/queries/client-communications";
 import {
   documentTemplates,
   emailTemplates,
+  orgs as orgsTable,
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -66,6 +67,7 @@ export default async function ProspectDetailPage({
     templates,
     docTemplates,
     me,
+    org,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -110,6 +112,17 @@ export default async function ProspectDetailPage({
         .where(eq(userProfiles.id, profile.userProfileId))
         .limit(1);
       return u ?? null;
+    }),
+    // Org / company info — drives the {{org_*}} variables in the BBA
+    // so the contract preamble auto-fills with Bruce's legal entity,
+    // address, and province instead of being hardcoded.
+    withSystemContext(async (tx) => {
+      const [o] = await tx
+        .select()
+        .from(orgsTable)
+        .where(eq(orgsTable.id, profile.orgId))
+        .limit(1);
+      return o ?? null;
     }),
   ]);
 
@@ -286,6 +299,20 @@ export default async function ProspectDetailPage({
                 monthlyFeeCents: prospect.monthlyFeeCents,
                 expectedStartDate: prospect.expectedStartDate,
               },
+              org: org
+                ? {
+                    name: org.name,
+                    legalName: org.legalName,
+                    address: org.businessAddress,
+                    city: org.businessCity,
+                    province: org.businessProvince,
+                    country: org.businessCountry,
+                    postalCode: org.businessPostalCode,
+                    phone: org.businessPhone,
+                    website: org.businessWebsite,
+                    taxId: org.taxId,
+                  }
+                : null,
               sender: {
                 fullName: me?.fullName ?? "",
                 email: me?.email ?? "",

@@ -297,7 +297,25 @@ export const enrollmentStatusEnum = pgEnum("enrollment_status", [
 export const orgs = pgTable("orgs", {
   id: uuid("id").primaryKey().defaultRandom(),
   clerkOrgId: text("clerk_org_id").notNull().unique(),
+  /** Display name (shown in nav, emails, etc.). For your own master
+   *  org this is "Workplaces". For client orgs this is the client's
+   *  company name. */
   name: text("name").notNull(),
+  /** Legal entity name (e.g. "HR All-In Inc."). Used in contract
+   *  preambles. Falls back to `name` when not set. */
+  legalName: text("legal_name"),
+  /** Street address — single-line, the way it appears on a letter
+   *  or invoice. */
+  businessAddress: text("business_address"),
+  businessCity: text("business_city"),
+  businessProvince: text("business_province"),
+  businessCountry: text("business_country"),
+  businessPostalCode: text("business_postal_code"),
+  businessPhone: text("business_phone"),
+  businessWebsite: text("business_website"),
+  /** Government tax ID — GST/HST in Canada, EIN in the US, VAT in
+   *  the EU. Used on invoices. */
+  taxId: text("tax_id"),
   type: orgTypeEnum("type").notNull().default("client"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

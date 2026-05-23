@@ -40,6 +40,23 @@ export type DocumentVariableContext = {
     fullName: string;
     email: string;
   };
+  /** Your business (the sending party). Drives the BBA preamble
+   *  ("HR All-In Inc., operating as Workplaces, in the Province of
+   *  Alberta…") so a single template works for any province/country
+   *  the coach operates in. All fields optional — missing values
+   *  render as `[placeholder]` so it's obvious what to fill in. */
+  org?: {
+    name?: string | null;
+    legalName?: string | null;
+    address?: string | null;
+    city?: string | null;
+    province?: string | null;
+    country?: string | null;
+    postalCode?: string | null;
+    phone?: string | null;
+    website?: string | null;
+    taxId?: string | null;
+  } | null;
 };
 
 export const DOCUMENT_VARIABLES = [
@@ -118,6 +135,53 @@ export const DOCUMENT_VARIABLES = [
     name: "sender_email",
     label: "Sender email",
     description: "Your email",
+  },
+  /* ----- Your business (org-level) ----- */
+  {
+    name: "org_name",
+    label: "Your business name",
+    description: "Display name (e.g. Workplaces). Set under Settings → Company info.",
+  },
+  {
+    name: "org_legal_name",
+    label: "Your legal entity name",
+    description:
+      "Full registered name (e.g. HR All-In Inc.). Falls back to display name if not set.",
+  },
+  {
+    name: "org_address",
+    label: "Your street address",
+    description: "Street + suite, single line.",
+  },
+  {
+    name: "org_city",
+    label: "Your business city",
+    description: "City (e.g. Edmonton)",
+  },
+  {
+    name: "org_province",
+    label: "Your business province / state",
+    description: "Province or state (e.g. Alberta). Used in contract preambles.",
+  },
+  {
+    name: "org_country",
+    label: "Your business country",
+    description: "Country (e.g. Canada)",
+  },
+  {
+    name: "org_phone",
+    label: "Your business phone",
+    description: "Main business phone",
+  },
+  {
+    name: "org_website",
+    label: "Your business website",
+    description: "URL",
+  },
+  {
+    name: "org_tax_id",
+    label: "Your tax ID",
+    description: "GST/HST/EIN/VAT — required on invoices",
   },
 ] as const;
 
@@ -227,6 +291,17 @@ export function buildVariableMap(
     sender_name: senderFirstName,
     sender_full_name: ctx.sender.fullName,
     sender_email: ctx.sender.email,
+    // Org / sending party. Each variable falls back to a visible
+    // bracket placeholder so missing data is obvious in the PDF.
+    org_name: ctx.org?.name ?? "[your business name]",
+    org_legal_name: ctx.org?.legalName ?? ctx.org?.name ?? "[your legal name]",
+    org_address: ctx.org?.address ?? "[address]",
+    org_city: ctx.org?.city ?? "[city]",
+    org_province: ctx.org?.province ?? "[province]",
+    org_country: ctx.org?.country ?? "[country]",
+    org_phone: ctx.org?.phone ?? "[phone]",
+    org_website: ctx.org?.website ?? "[website]",
+    org_tax_id: ctx.org?.taxId ?? "[tax ID]",
   };
 }
 
