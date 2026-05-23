@@ -7,8 +7,10 @@
  * page lets Bruce edit or extend that grid for his actual rates.
  */
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
+import { ArrowLeft } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { pricingTiers } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -44,8 +46,13 @@ export default async function PricingSettingsPage() {
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12 space-y-8">
-      <header className="space-y-1">
-        <p className="tbb-eyebrow">Settings</p>
+      <header className="space-y-2">
+        <Link
+          href="/coach/settings"
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
+        >
+          <ArrowLeft className="w-3 h-3" aria-hidden /> Settings
+        </Link>
         <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
           Pricing tiers
         </h1>
