@@ -18,6 +18,7 @@ import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { validateProspect } from "@/lib/pipeline/validate-prospect";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -46,8 +47,11 @@ const optionalString = z
   .nullable();
 
 const createSchema = z.object({
-  companyName: z.string().min(1).max(200),
-  contactName: optionalString,
+  companyName: z.string().min(2).max(200),
+  // Contact name is now required (was optional). Quality rule:
+  // every prospect needs a real human contact so follow-up isn't
+  // pointing at thin air.
+  contactName: z.string().min(2).max(200),
   contactEmail: z.string().email().max(254),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -58,6 +62,9 @@ const createSchema = z.object({
   ownerUserProfileId: z.string().uuid().nullable().optional(),
   status: statusEnum.optional(),
   notes: z.string().max(40000).nullable().optional(),
+  /** Client ticked "Yes, this is the legal name" to bypass the
+   *  "company name looks like a person" soft warning. */
+  legalNameConfirmed: z.boolean().optional(),
 });
 
 export async function createProspect(
@@ -77,6 +84,22 @@ export async function createProspect(
     };
   const data = parsed.data;
 
+  // Apply the shared data-quality rules. Server enforces hard
+  // errors even if the client somehow bypassed them.
+  const quality = validateProspect({
+    companyName: data.companyName,
+    contactName: data.contactName,
+    contactEmail: data.contactEmail,
+    phone: data.phone ?? null,
+    legalNameConfirmed: data.legalNameConfirmed ?? false,
+  });
+  if (!quality.ok) {
+    return {
+      ok: false,
+      error: quality.errors[0]?.message ?? "Validation failed.",
+    };
+  }
+
   const inserted = await withSystemContext(async (tx) => {
     const [master] = await tx
       .select({ id: orgs.id })
@@ -88,8 +111,8 @@ export async function createProspect(
       .insert(prospects)
       .values({
         orgId: master.id,
-        companyName: data.companyName,
-        contactName: data.contactName ?? null,
+        companyName: data.companyName.trim(),
+        contactName: data.contactName.trim(),
         contactEmail: data.contactEmail,
         phone: data.phone ?? null,
         companyWebsite: data.companyWebsite ?? null,
@@ -113,8 +136,8 @@ export async function createProspect(
 
 const updateSchema = z.object({
   id: z.string().uuid(),
-  companyName: z.string().min(1).max(200).optional(),
-  contactName: optionalString,
+  companyName: z.string().min(2).max(200).optional(),
+  contactName: z.string().min(2).max(200).optional(),
   contactEmail: z.string().email().max(254).optional(),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -130,6 +153,8 @@ const updateSchema = z.object({
   ownerUserProfileId: z.string().uuid().nullable().optional(),
   status: statusEnum.optional(),
   notes: z.string().max(40000).nullable().optional(),
+  /** Bypass the "company name looks like a person" soft warning. */
+  legalNameConfirmed: z.boolean().optional(),
 });
 
 export async function updateProspect(
@@ -148,6 +173,43 @@ export async function updateProspect(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   const data = parsed.data;
+
+  // Apply data-quality rules to any identity fields the caller is
+  // actually updating. We only validate fields that are being changed
+  // — partial updates that don't touch the name fields skip these
+  // checks. To validate completely we'd need to load the existing row
+  // first; the create-time validation already enforces the same rules,
+  // so this is a meaningful guard against bad edits without slowing
+  // partial-update calls (status changes, next-action-date changes,
+  // etc.) with an extra DB read.
+  if (
+    data.companyName !== undefined ||
+    data.contactName !== undefined ||
+    data.contactEmail !== undefined ||
+    data.phone !== undefined
+  ) {
+    // Only run the full validator when we have all three identity
+    // fields to compare. Otherwise pass-through.
+    if (
+      data.companyName !== undefined &&
+      data.contactName !== undefined &&
+      data.contactEmail !== undefined
+    ) {
+      const quality = validateProspect({
+        companyName: data.companyName,
+        contactName: data.contactName,
+        contactEmail: data.contactEmail,
+        phone: data.phone ?? null,
+        legalNameConfirmed: data.legalNameConfirmed ?? false,
+      });
+      if (!quality.ok) {
+        return {
+          ok: false,
+          error: quality.errors[0]?.message ?? "Validation failed.",
+        };
+      }
+    }
+  }
   try {
     await withSystemContext(async (tx) => {
       const updates: Partial<typeof prospects.$inferInsert> = {};

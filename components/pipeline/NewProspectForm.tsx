@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus } from "lucide-react";
+import { AlertTriangle, Loader2, Plus } from "lucide-react";
 import { createProspect } from "@/lib/actions/prospects";
 import { LEAD_SOURCES, STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
+import {
+  validateProspect,
+  type ValidationIssue,
+} from "@/lib/pipeline/validate-prospect";
 
 export function NewProspectForm() {
   const router = useRouter();
@@ -19,11 +23,54 @@ export function NewProspectForm() {
   const [nextActionNote, setNextActionNote] = useState("");
   const [status, setStatus] = useState<string>("new_lead");
   const [notes, setNotes] = useState("");
+  const [legalNameConfirmed, setLegalNameConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isPending, startTransition] = useTransition();
+
+  // Live validation — runs on every render. Shows soft warnings the
+  // user can confirm + per-field errors that block submit. Only
+  // surface errors on fields the user has touched OR after a submit
+  // attempt, so the form doesn't shout at them while they're typing.
+  const validation = useMemo(
+    () =>
+      validateProspect({
+        companyName: companyName.trim(),
+        contactName: contactName.trim(),
+        contactEmail: contactEmail.trim(),
+        phone: phone.trim() || null,
+        legalNameConfirmed,
+      }),
+    [companyName, contactName, contactEmail, phone, legalNameConfirmed],
+  );
+
+  function issueFor(
+    field: ValidationIssue["field"],
+    showAll = false,
+  ): ValidationIssue | null {
+    if (!showAll && !touched[field]) return null;
+    return (
+      validation.errors.find((i) => i.field === field) ??
+      validation.warnings.find((i) => i.field === field) ??
+      null
+    );
+  }
 
   function submit() {
     setError(null);
+    // Force all fields to show their errors on submit attempt.
+    setTouched({
+      companyName: true,
+      contactName: true,
+      contactEmail: true,
+      phone: true,
+    });
+    if (!validation.ok) {
+      setError(
+        validation.errors[0]?.message ?? "Please fix the highlighted fields.",
+      );
+      return;
+    }
     startTransition(async () => {
       const valueNum = Number(expectedValue);
       const valueCents =
@@ -32,7 +79,7 @@ export function NewProspectForm() {
           : null;
       const r = await createProspect({
         companyName: companyName.trim(),
-        contactName: contactName.trim() || null,
+        contactName: contactName.trim(),
         contactEmail: contactEmail.trim(),
         phone: phone.trim() || null,
         companyWebsite: companyWebsite.trim() || null,
@@ -43,6 +90,7 @@ export function NewProspectForm() {
         // @ts-expect-error status is a narrow string enum at runtime
         status,
         notes: notes.trim() || null,
+        legalNameConfirmed,
       });
       if (!r.ok) {
         setError(r.error);
@@ -61,39 +109,62 @@ export function NewProspectForm() {
       className="space-y-5"
     >
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Company" required>
+        <Field label="Company (legal name)" required issue={issueFor("companyName")}>
           <input
             required
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, companyName: true }))}
             disabled={isPending}
+            placeholder="Acme Construction Ltd."
             className={inputCls}
           />
+          {issueFor("companyName")?.level === "warning" && (
+            <label className="mt-1 flex items-start gap-2 text-[11px] text-tbb-ink-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={legalNameConfirmed}
+                onChange={(e) => setLegalNameConfirmed(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Yes, &quot;{companyName.trim()}&quot; really is the registered
+                business name.
+              </span>
+            </label>
+          )}
         </Field>
-        <Field label="Contact name">
+        <Field label="Contact name" required issue={issueFor("contactName")}>
           <input
+            required
             value={contactName}
             onChange={(e) => setContactName(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, contactName: true }))}
             disabled={isPending}
+            placeholder="Jane Smith"
             className={inputCls}
           />
         </Field>
-        <Field label="Email" required>
+        <Field label="Email" required issue={issueFor("contactEmail")}>
           <input
             required
             type="email"
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, contactEmail: true }))}
             disabled={isPending}
+            placeholder="jane@acmeconstruction.com"
             className={inputCls}
           />
         </Field>
-        <Field label="Phone">
+        <Field label="Phone" issue={issueFor("phone")}>
           <input
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
             disabled={isPending}
+            placeholder="+1 780-555-1234"
             className={inputCls}
           />
         </Field>
@@ -213,11 +284,13 @@ function Field({
   required,
   className,
   children,
+  issue,
 }: {
   label: string;
   required?: boolean;
   className?: string;
   children: React.ReactNode;
+  issue?: ValidationIssue | null;
 }) {
   return (
     <label className={"block space-y-1 " + (className ?? "")}>
@@ -226,6 +299,20 @@ function Field({
         {required && <span className="text-tbb-danger ml-0.5">*</span>}
       </span>
       {children}
+      {issue && (
+        <p
+          role={issue.level === "error" ? "alert" : "status"}
+          className={
+            "flex items-start gap-1.5 text-[11px] leading-snug mt-1 " +
+            (issue.level === "error"
+              ? "text-tbb-danger"
+              : "text-tbb-orange-700")
+          }
+        >
+          <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" aria-hidden />
+          <span>{issue.message}</span>
+        </p>
+      )}
     </label>
   );
 }

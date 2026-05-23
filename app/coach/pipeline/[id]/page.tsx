@@ -155,6 +155,7 @@ export default async function ProspectDetailPage({
               <ProspectInlineEdit
                 prospectId={prospect.id}
                 field="contact"
+                companyName={prospect.companyName}
                 initial={{
                   contactName: prospect.contactName,
                   contactEmail: prospect.contactEmail,
