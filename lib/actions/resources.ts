@@ -12,6 +12,7 @@ import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { resources } from "@/lib/db/schema";
 import { withTenantContext } from "@/lib/db/tenant";
+import { listNetlifySites, isNetlifyConfigured } from "@/lib/integrations/netlify";
 
 const typeEnum = z.enum(["tool", "video", "document", "link"]);
 const audienceEnum = z.enum(["coach_only", "client", "public"]);
@@ -144,3 +145,112 @@ export async function deleteResource(id: string): Promise<ActionResult> {
 // Keep these imports live in case future actions need them.
 void desc;
 void asc;
+
+/**
+ * Pull every site from Bruce's Netlify account and upsert into the
+ * resources library as type='tool' rows. Re-runs are idempotent —
+ * matches on (org_id, source='netlify', source_id=site.id), updates
+ * title + URL + last_synced_at but preserves any description / tags
+ * / audience the user has customised.
+ *
+ * Returns counts so the UI can render an honest summary.
+ */
+export async function syncNetlifyTools(): Promise<
+  ActionResult<{ added: number; updated: number; total: number }>
+> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+
+  if (!isNetlifyConfigured()) {
+    return {
+      ok: false,
+      error:
+        "Netlify isn't connected yet. Add NETLIFY_PERSONAL_ACCESS_TOKEN to your Netlify env vars (get a token at https://app.netlify.com/user/applications#personal-access-tokens), then redeploy and try again.",
+    };
+  }
+
+  let sites: Awaited<ReturnType<typeof listNetlifySites>>;
+  try {
+    sites = await listNetlifySites();
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  let added = 0;
+  let updated = 0;
+  const now = new Date();
+
+  try {
+    await withTenantContext(profile.orgId, async (tx) => {
+      // Load existing netlify-sourced resources so we can decide
+      // upsert vs insert.
+      const existing = await tx
+        .select({
+          id: resources.id,
+          sourceId: resources.sourceId,
+        })
+        .from(resources)
+        .where(
+          and(
+            eq(resources.orgId, profile.orgId),
+            eq(resources.source, "netlify"),
+          ),
+        );
+      const bySourceId = new Map(
+        existing.filter((r) => r.sourceId).map((r) => [r.sourceId!, r.id]),
+      );
+
+      for (const site of sites) {
+        const friendlyTitle = site.name
+          // Netlify names are kebab-case; humanise them.
+          .replace(/-/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        const url = site.sslUrl || site.url;
+        const existingId = bySourceId.get(site.id);
+        if (existingId) {
+          await tx
+            .update(resources)
+            .set({
+              title: friendlyTitle,
+              url,
+              lastSyncedAt: now,
+            })
+            .where(eq(resources.id, existingId));
+          updated += 1;
+        } else {
+          await tx.insert(resources).values({
+            orgId: profile.orgId,
+            title: friendlyTitle,
+            description: site.customDomain
+              ? `Custom domain: ${site.customDomain}`
+              : null,
+            type: "tool",
+            url,
+            tags: ["netlify"],
+            audience: "coach_only",
+            isPublished: true,
+            source: "netlify",
+            sourceId: site.id,
+            lastSyncedAt: now,
+            createdByUserProfileId: profile.userProfileId,
+          });
+          added += 1;
+        }
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  revalidatePath("/coach/library");
+  return {
+    ok: true,
+    data: { added, updated, total: sites.length },
+  };
+}

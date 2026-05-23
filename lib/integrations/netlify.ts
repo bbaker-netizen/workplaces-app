@@ -32,6 +32,11 @@ function token(): string {
   return t;
 }
 
+/** Quick check for UI gating — true if a token is set, false otherwise. */
+export function isNetlifyConfigured(): boolean {
+  return Boolean(process.env.NETLIFY_PERSONAL_ACCESS_TOKEN);
+}
+
 /**
  * List every Netlify site (project) in the authenticated account.
  * Paginates internally. Capped at 200 — anything more would benefit

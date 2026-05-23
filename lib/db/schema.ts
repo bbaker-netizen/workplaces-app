@@ -2485,6 +2485,18 @@ export const resources = pgTable(
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     audience: text("audience").notNull().default("coach_only"),
     isPublished: boolean("is_published").notNull().default(true),
+    /** Where this resource came from. 'netlify' = synced from Bruce's
+     *  Netlify account; null = manually added in the app. Drives the
+     *  "Sync" button's upsert logic so re-runs don't duplicate. */
+    source: text("source"),
+    /** The source platform's stable id for the resource. Netlify
+     *  uses site.id; future integrations use whatever the platform's
+     *  primary key is. Paired with `source` to uniquely identify a
+     *  synced row across re-syncs. */
+    sourceId: text("source_id"),
+    /** Last time this row was touched by an external sync. Null for
+     *  manual entries. Surfaced in the UI as "Synced N min ago". */
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     createdByUserProfileId: uuid("created_by_user_profile_id").references(
       () => userProfiles.id,
       { onDelete: "set null" },

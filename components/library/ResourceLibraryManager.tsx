@@ -24,8 +24,10 @@ import {
 import {
   createResource,
   deleteResource,
+  syncNetlifyTools,
   updateResource,
 } from "@/lib/actions/resources";
+import { RefreshCw } from "lucide-react";
 
 type ResourceType = "tool" | "video" | "document" | "link";
 
@@ -104,9 +106,33 @@ export function ResourceLibraryManager({
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"all" | ResourceType>("all");
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  function syncFromNetlify() {
+    setError(null);
+    setSyncMessage(null);
+    startTransition(async () => {
+      const r = await syncNetlifyTools();
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      const parts: string[] = [];
+      if (r.data.added > 0)
+        parts.push(`${r.data.added} new tool${r.data.added === 1 ? "" : "s"}`);
+      if (r.data.updated > 0)
+        parts.push(`${r.data.updated} updated`);
+      if (parts.length === 0) parts.push("nothing changed");
+      setSyncMessage(
+        `Synced ${r.data.total} site${r.data.total === 1 ? "" : "s"} from Netlify · ${parts.join(", ")}.`,
+      );
+      setTimeout(() => setSyncMessage(null), 6000);
+      router.refresh();
+    });
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -246,6 +272,15 @@ export function ResourceLibraryManager({
         />
         <button
           type="button"
+          onClick={syncFromNetlify}
+          disabled={isPending}
+          title="Pull every site from your connected Netlify account into the Tools tab"
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill border border-tbb-line bg-white text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue disabled:opacity-50"
+        >
+          <RefreshCw className={"w-3.5 h-3.5 " + (isPending ? "animate-spin" : "")} aria-hidden /> Sync from Netlify
+        </button>
+        <button
+          type="button"
           onClick={() => openNew()}
           disabled={isPending}
           className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta disabled:opacity-50"
@@ -253,6 +288,12 @@ export function ResourceLibraryManager({
           <Plus className="w-3.5 h-3.5" aria-hidden /> Add resource
         </button>
       </div>
+
+      {syncMessage && (
+        <p className="text-sm text-tbb-success border border-tbb-success/30 rounded-md px-3 py-2 bg-white">
+          {syncMessage}
+        </p>
+      )}
 
       {error && (
         <p className="text-sm text-tbb-danger border border-tbb-danger rounded-md px-3 py-2 bg-tbb-cream-50">

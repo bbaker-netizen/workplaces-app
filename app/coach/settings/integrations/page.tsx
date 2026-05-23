@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   CircleSlash,
   FileText,
+  Hammer,
   MessageSquare,
   Receipt,
   Sparkles,
@@ -27,6 +28,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { googleCalendarTokens, qboOauthTokens } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
+import { isNetlifyConfigured } from "@/lib/integrations/netlify";
 
 type Status = "connected" | "not_connected" | "env_configured" | "missing";
 
@@ -74,6 +76,7 @@ export default async function IntegrationsHubPage() {
   }
 
   // Load connection state for each integration in parallel.
+  const netlifyOk = isNetlifyConfigured();
   const [googleCount, qboCount, smsOk] = await Promise.all([
     withSystemContext(async (tx) => {
       const rows = await tx
@@ -125,6 +128,19 @@ export default async function IntegrationsHubPage() {
       detail: smsOk
         ? "TWILIO_* env vars detected. Sends go through your configured number."
         : "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER on Netlify to enable SMS.",
+      manageHref: "https://app.netlify.com/projects/workplaces-the-builder/configuration/env",
+      manageLabel: "Netlify env vars ↗",
+    },
+    {
+      key: "netlify",
+      title: "Netlify (deployed apps)",
+      blurb:
+        "Pulls every site in your Netlify account into the Tools & tutorials library. One click in the library syncs your whole catalogue.",
+      icon: Hammer,
+      status: netlifyOk ? "env_configured" : "missing",
+      detail: netlifyOk
+        ? "NETLIFY_PERSONAL_ACCESS_TOKEN detected. Head to Tools & tutorials → Sync from Netlify to import your sites."
+        : "Generate a token at https://app.netlify.com/user/applications#personal-access-tokens, then add NETLIFY_PERSONAL_ACCESS_TOKEN on this site's env vars.",
       manageHref: "https://app.netlify.com/projects/workplaces-the-builder/configuration/env",
       manageLabel: "Netlify env vars ↗",
     },
