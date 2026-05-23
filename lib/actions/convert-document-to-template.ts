@@ -1,72 +1,40 @@
 "use server";
 
 /**
- * Convert an uploaded .docx or .pdf into a Workplaces document
- * template. Same workflow Bruce was doing manually via Claude Code:
+ * Document-import server actions — async background-job flavor.
  *
- *   1. Extract plain text from the file.
- *   2. Send the extracted text to Claude with a system prompt that
- *      knows the supported variable placeholders.
- *   3. Claude returns structured markdown with {{variables}} woven
- *      in plus a suggested template name + category + default
- *      subject.
+ * The synchronous version of this action kept hitting Netlify's
+ * 26-second function timeout. We split the work in two:
  *
- * Caller (the templates UI) takes the result and pre-fills the
- * template editor. Bruce reviews, edits, hits Save.
+ *   1. `startTemplateConversion(formData)` — fast (~1s). Extracts
+ *      text from the uploaded file, inserts a `template_conversions`
+ *      row with status='pending', and returns the conversion ID. The
+ *      client then fires `fetch('/api/templates/convert/<id>')` to
+ *      kick off the slow Claude call without blocking.
  *
- * Authz: master_admin / coach only.
+ *   2. `getTemplateConversionStatus(id)` — fast poll endpoint. The
+ *      browser calls this every few seconds until status !== 'pending'
+ *      then loads the result into the editor.
  *
- * Failure modes: file >5MB → rejected. Unsupported format →
- * rejected. Extraction error → returns error string. Claude
- * failure → returns error string. All best-effort; nothing is
- * written to the DB by this action — the existing
- * createDocumentTemplate action handles the persisted insert
- * after Bruce confirms.
+ *   3. `/api/templates/convert/[id]/route.ts` does the actual Claude
+ *      call with `export const maxDuration = 300` — up to 5 minutes
+ *      on Netlify Pro, so it never times out for normal contracts.
+ *
+ * Authz on every entry point: master_admin / coach only, and the
+ * polling endpoint also confirms the row belongs to the caller's org.
  */
 
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { complete } from "@/lib/ai/anthropic";
+import { templateConversions } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
 import {
   DOCUMENT_TEMPLATE_CATEGORIES,
-  DOCUMENT_VARIABLES,
+  type DocumentTemplateCategory,
 } from "@/lib/signing/document-variables";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB upper bound on uploads
-
-const SYSTEM_PROMPT = `You convert legal / business documents (contracts, NDAs, proposals, renewals, agreements) into Workplaces "document templates" — markdown bodies with {{variable}} placeholders that get auto-filled when the coach sends them for signature.
-
-The supported variables are:
-
-${DOCUMENT_VARIABLES.map((v) => `- {{${v.name}}} — ${v.description}`).join("\n")}
-
-Output requirements:
-
-- Use only the markdown subset the renderer supports:
-  * # / ## / ### headings
-  * **bold** (no italics, no underline, no strike)
-  * paragraphs separated by blank lines
-  * - bullet lists (no numbered lists; convert numbered lists to bullets)
-  * No tables. No images. No links. No HTML. No code fences.
-
-- Wherever the source document has a placeholder for the client's name, company, dates, fees, or other tenant-specific values, REPLACE that placeholder with the matching {{variable}}. If a placeholder doesn't map to a known variable, leave it as a square-bracketed marker like [monthly fee] or [phone number] — those become visible "fill this in" prompts in the rendered PDF.
-
-- Preserve every substantive clause and the document's overall structure. Do not summarise, paraphrase aggressively, or remove legal language. The goal is to make the document reusable, not shorter.
-
-- If the document has an "Accelerator Program" + "Implementer Program" choice (the standard Workplaces BBA pattern), use {{accelerator_checkbox}} and {{implementer_checkbox}} so the marked program renders as [X] and the unmarked as [ ].
-
-- Do NOT include a signature block in the body. The signing flow appends a Certificate of Completion with signatures automatically.
-
-- The sender (Workplaces side) is always referred to via {{sender_full_name}}, {{sender_email}}. The "client" placeholder values use {{client_full_name}}, {{company_name}}, {{contact_email}}.
-
-Output strict JSON only — no prose, no code fences:
-
-{
-  "name": "Short reference name (max 80 chars). Use the document's title or a descriptive label.",
-  "category": "one of: contract, proposal, nda, renewal, other",
-  "default_subject": "What the signer email subject should say (max 100 chars)",
-  "body_markdown": "the full markdown body, properly substituted"
-}`;
 
 const resultSchema = z.object({
   name: z.string().min(1).max(120),
@@ -77,26 +45,33 @@ const resultSchema = z.object({
 
 export type ConvertedTemplate = z.infer<typeof resultSchema>;
 
-export type ConvertResult =
-  | { ok: true; data: ConvertedTemplate }
+export type StartResult =
+  | { ok: true; data: { conversionId: string } }
   | { ok: false; error: string };
 
-export async function convertDocumentToTemplate(
+export type StatusResult =
+  | {
+      ok: true;
+      data:
+        | { status: "pending" | "running" }
+        | { status: "done"; result: ConvertedTemplate }
+        | { status: "error"; error: string };
+    }
+  | { ok: false; error: string };
+
+/**
+ * Step 1 — extract text from the uploaded file, create a pending
+ * `template_conversions` row, return the new conversion ID. Runs
+ * in well under a second so it never times out.
+ */
+export async function startTemplateConversion(
   formData: FormData,
-): Promise<ConvertResult> {
+): Promise<StartResult> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
     return { ok: false, error: "Business Builders only." };
-
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return {
-      ok: false,
-      error:
-        "ANTHROPIC_API_KEY isn't set on the server. Conversion needs Claude.",
-    };
-  }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -118,7 +93,8 @@ export async function convertDocumentToTemplate(
     };
   }
 
-  // 1. Extract text from the file.
+  // Extract text. Both libraries are fast on typical contracts —
+  // pdf-parse handles a 20-page PDF in <500ms.
   let extracted: string;
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -127,13 +103,12 @@ export async function convertDocumentToTemplate(
       const result = await mammoth.extractRawText({ buffer });
       extracted = (result.value ?? "").trim();
     } else {
-      // pdf-parse
       const pdfParse = (await import("pdf-parse")).default;
       const result = await pdfParse(buffer);
       extracted = (result.text ?? "").trim();
     }
   } catch (e) {
-    console.error("[convertDocumentToTemplate] extraction failed", e);
+    console.error("[startTemplateConversion] extraction failed", e);
     return {
       ok: false,
       error: `Couldn't read the file. ${e instanceof Error ? e.message : String(e)}`,
@@ -148,58 +123,83 @@ export async function convertDocumentToTemplate(
     };
   }
 
-  // Cap the input — Netlify serverless functions have hard timeouts
-  // (10-60s depending on plan), so we trim aggressively. Most legal
-  // documents fit in 30k chars (≈8k words); anything larger gets
-  // sliced and the user can paste the rest into the editor manually.
+  // Cap at 30k chars — generous for any contract, keeps Claude latency
+  // predictable. Cheaper too: ~7.5k tokens of input.
   const capped =
     extracted.length > 30_000
-      ? extracted.slice(0, 30_000) + "\n\n[…document truncated for processing speed; paste remainder manually if needed…]"
+      ? extracted.slice(0, 30_000) +
+        "\n\n[…document truncated for processing speed; paste remainder manually if needed…]"
       : extracted;
 
-  // 2. Run Claude to produce the markdown template.
-  //
-  // We use Haiku (the fast Claude variant) here instead of Sonnet —
-  // contract conversion is a mostly mechanical "clean up + substitute
-  // placeholders" task, well within Haiku's capability, and Haiku runs
-  // 3-5x faster (typically 5-12 seconds vs 20-40s for Sonnet). The
-  // latency budget matters: Netlify caps synchronous server actions
-  // at 10s on Free, 26s on Pro, 60s on Enterprise — Sonnet was sitting
-  // right at the edge of the Pro budget.
-  let json: unknown;
-  try {
-    const result = await complete({
-      system: SYSTEM_PROMPT,
-      user: `Source document filename: ${filename}\n\nExtracted text:\n\n${capped}`,
-      model: "claude-haiku-4-5-20251001",
-      // 6000 tokens covers a 4-5 page contract comfortably; lowering
-      // from the previous 8000 ceiling reduces tail latency on
-      // serverless and rarely matters because contracts cap there.
-      maxTokens: 6000,
-      temperature: 0.2,
-    });
-    const cleaned = result.text
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/, "")
-      .trim();
-    json = JSON.parse(cleaned);
-  } catch (e) {
-    console.error("[convertDocumentToTemplate] Claude failed", e);
+  // Create the pending row. The API route picks it up when the client
+  // fires the convert fetch.
+  const conversionId = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .insert(templateConversions)
+      .values({
+        orgId: profile.orgId,
+        userProfileId: profile.userProfileId,
+        filename,
+        sourceText: capped,
+        status: "pending",
+      })
+      .returning({ id: templateConversions.id });
+    return row.id;
+  });
+
+  return { ok: true, data: { conversionId } };
+}
+
+/**
+ * Step 2 — read the conversion row. The browser polls this every few
+ * seconds while waiting on the Claude call. Authz: row must belong to
+ * the caller's org (RLS would catch a cross-tenant read but we double-
+ * check here for a clean error message).
+ */
+export async function getTemplateConversionStatus(
+  conversionId: string,
+): Promise<StatusResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+
+  const row = await withSystemContext(async (tx) => {
+    const [r] = await tx
+      .select()
+      .from(templateConversions)
+      .where(eq(templateConversions.id, conversionId))
+      .limit(1);
+    return r;
+  });
+  if (!row) return { ok: false, error: "Conversion not found." };
+  if (row.orgId !== profile.orgId)
+    return { ok: false, error: "Not authorised." };
+
+  if (row.status === "pending" || row.status === "running") {
+    return { ok: true, data: { status: row.status } };
+  }
+  if (row.status === "error") {
     return {
-      ok: false,
-      error: `Claude couldn't convert the document. ${e instanceof Error ? e.message : String(e)}`,
+      ok: true,
+      data: {
+        status: "error",
+        error: row.errorMessage ?? "Conversion failed.",
+      },
     };
   }
-
-  const parsed = resultSchema.safeParse(json);
+  // status === 'done'
+  const parsed = resultSchema.safeParse(row.resultJson);
   if (!parsed.success) {
     return {
-      ok: false,
-      error: `Claude returned an unexpected shape: ${parsed.error.issues[0]?.message ?? "validation failed"}`,
+      ok: true,
+      data: {
+        status: "error",
+        error: "Result format was unexpected. Try again.",
+      },
     };
   }
-
-  return { ok: true, data: parsed.data };
+  return { ok: true, data: { status: "done", result: parsed.data } };
 }
+
+// Re-export for callers that want to check category at compile time.
+export type { DocumentTemplateCategory };

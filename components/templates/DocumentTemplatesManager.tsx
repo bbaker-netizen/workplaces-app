@@ -33,7 +33,11 @@ import {
   deleteDocumentTemplate,
   updateDocumentTemplate,
 } from "@/lib/actions/document-templates";
-import { convertDocumentToTemplate } from "@/lib/actions/convert-document-to-template";
+import {
+  startTemplateConversion,
+  getTemplateConversionStatus,
+  type ConvertedTemplate,
+} from "@/lib/actions/convert-document-to-template";
 import {
   DOCUMENT_TEMPLATE_CATEGORIES,
   DOCUMENT_VARIABLES,
@@ -132,52 +136,95 @@ export function DocumentTemplatesManager({
     startTransition(async () => {
       const fd = new FormData();
       fd.set("file", file);
-      // Defensive call: if the server action throws (network error)
-      // or the gateway times out (504), the promise rejects or
-      // resolves with undefined. Either way we want a graceful error
-      // UI — never a crashed page.
-      let r: Awaited<ReturnType<typeof convertDocumentToTemplate>> | null = null;
+      // Step 1 — quick kickoff: extract text + create pending row.
+      let started: Awaited<ReturnType<typeof startTemplateConversion>>;
       try {
-        r = await convertDocumentToTemplate(fd);
+        started = await startTemplateConversion(fd);
       } catch (err) {
         setImportingFilename(null);
         setError(
           err instanceof Error
-            ? `Conversion failed: ${err.message}. Try a smaller file, or paste the text directly into a new template.`
-            : "Conversion failed. Try a smaller file, or paste the text directly into a new template.",
+            ? `Couldn't start the conversion: ${err.message}`
+            : "Couldn't start the conversion.",
         );
         return;
+      }
+      if (!started || !started.ok) {
+        setImportingFilename(null);
+        setError(
+          started && !started.ok
+            ? started.error
+            : "Couldn't start the conversion. Try again, or use New document to paste the text in.",
+        );
+        return;
+      }
+      const conversionId = started.data.conversionId;
+
+      // Step 2 — fire the slow work in the background. We don't await
+      // this — it runs separately for up to 5 minutes, updating the
+      // conversion row when done. We just need to KICK IT OFF.
+      void fetch(`/api/templates/convert/${conversionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      }).catch(() => {
+        // The background fetch failing doesn't matter directly — the
+        // poll loop below will surface any error via the row's
+        // status='error' / error_message fields.
+      });
+
+      // Step 3 — poll for the result. Check every 2s up to ~5 minutes.
+      // Pure UI flow — no big blocking operation.
+      const MAX_POLLS = 150; // 150 × 2s = 5 min
+      let pollCount = 0;
+      let finalResult: ConvertedTemplate | null = null;
+      while (pollCount < MAX_POLLS) {
+        pollCount++;
+        await new Promise((r) => setTimeout(r, 2000));
+        const status = await getTemplateConversionStatus(conversionId);
+        if (!status || !status.ok) {
+          setImportingFilename(null);
+          setError(
+            status && !status.ok
+              ? status.error
+              : "Lost track of the conversion. Try again.",
+          );
+          return;
+        }
+        if (status.data.status === "error") {
+          setImportingFilename(null);
+          setError(status.data.error);
+          return;
+        }
+        if (status.data.status === "done") {
+          finalResult = status.data.result;
+          break;
+        }
+        // status is 'pending' or 'running' — keep polling.
       }
       setImportingFilename(null);
-      if (!r) {
+      if (!finalResult) {
         setError(
-          "The conversion took too long and timed out (the server cut us off after ~30 seconds). This happens with very large or complex documents. Try a shorter PDF, or use the New document button and paste the text in.",
+          "The conversion is still running after 5 minutes — something's off. Refresh the page; the result may appear shortly under your templates list.",
         );
-        return;
-      }
-      if (!r.ok) {
-        setError(r.error);
         return;
       }
       // Open the editor pre-filled with the conversion result. Bruce
       // reviews, edits, saves through the normal Create flow. Claude's
-      // convertor returns markdown — the editor will accept it on first
-      // load and then start emitting HTML from that point on.
+      // convertor returns markdown — the editor accepts it on first
+      // load and then starts emitting HTML from that point on.
+      const r = finalResult;
       setDraft({
         id: null,
-        name: r.data.name,
-        category: r.data.category,
-        bodyMarkdown: r.data.body_markdown,
-        defaultSubject: r.data.default_subject ?? "",
+        name: r.name,
+        category: r.category,
+        bodyMarkdown: r.body_markdown,
+        defaultSubject: r.default_subject ?? "",
       });
-      // Force the editor to re-mount with the new content (key on
-      // draft.id || 'new', but here we explicitly push the content in
-      // via the imperative handle once the editor remounts).
       setTimeout(() => {
-        if (looksLikeHtml(r.data.body_markdown)) {
-          editorRef.current?.setHTML(r.data.body_markdown);
+        if (looksLikeHtml(r.body_markdown)) {
+          editorRef.current?.setHTML(r.body_markdown);
         } else {
-          editorRef.current?.setMarkdown(r.data.body_markdown);
+          editorRef.current?.setMarkdown(r.body_markdown);
         }
       }, 0);
     });

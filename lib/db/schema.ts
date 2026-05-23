@@ -2302,6 +2302,61 @@ export type SignatureEnvelope = typeof signatureEnvelopes.$inferSelect;
 export type NewSignatureEnvelope = typeof signatureEnvelopes.$inferInsert;
 export type SignatureSigner = typeof signatureSigners.$inferSelect;
 export type NewSignatureSigner = typeof signatureSigners.$inferInsert;
+
+/**
+ * `template_conversions` — one row per Import-doc background job.
+ *
+ * Decouples the long-running Claude conversion from the client's
+ * server-action call. The server action does the fast bits (extract
+ * text, insert pending row), the API route at /api/templates/convert/[id]
+ * does the slow Claude call with a 5-minute timeout, and the browser
+ * polls /api/templates/convert/[id]/status until done.
+ *
+ * status ladder: pending → running → done | error
+ *
+ * result_json shape when status='done':
+ *   { name, category, default_subject, body_markdown }
+ *
+ * source_text holds the extracted (capped) text; we don't persist
+ * the source file itself.
+ */
+export const templateConversions = pgTable(
+  "template_conversions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id").references(() => userProfiles.id, {
+      onDelete: "set null",
+    }),
+    filename: text("filename"),
+    sourceText: text("source_text").notNull(),
+    status: text("status").notNull().default("pending"),
+    resultJson: jsonb("result_json"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => ({
+    userIdx: index("template_conversions_user_idx").on(
+      t.userProfileId,
+      t.createdAt,
+    ),
+    statusIdx: index("template_conversions_status_idx").on(
+      t.status,
+      t.createdAt,
+    ),
+  }),
+);
+
+export type TemplateConversion = typeof templateConversions.$inferSelect;
+export type NewTemplateConversion = typeof templateConversions.$inferInsert;
 export type QboOauthToken = typeof qboOauthTokens.$inferSelect;
 export type NewQboOauthToken = typeof qboOauthTokens.$inferInsert;
 export type GoogleCalendarToken = typeof googleCalendarTokens.$inferSelect;
