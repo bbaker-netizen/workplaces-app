@@ -65,7 +65,9 @@ const COLUMNS: ColumnDef[] = [
   { key: "contact", label: "Contact", defaultWidth: 160, defaultVisible: true },
   { key: "email", label: "Email", defaultWidth: 220, defaultVisible: true },
   { key: "phone", label: "Phone", defaultWidth: 140, defaultVisible: true },
-  { key: "stage", label: "Stage", defaultWidth: 200, defaultVisible: true },
+  // Stage column has a 164px chip + 32px cell padding = needs 196 to
+  // never clip. 210 gives a tiny bit of breathing room.
+  { key: "stage", label: "Stage", defaultWidth: 210, defaultVisible: true },
   { key: "value", label: "Value", defaultWidth: 110, defaultVisible: true, alignRight: true },
   { key: "next_action", label: "Next action", defaultWidth: 160, defaultVisible: true },
   { key: "owner", label: "Owner", defaultWidth: 140, defaultVisible: true },
@@ -111,7 +113,13 @@ export function ProspectTable({
   });
   const [widths, setWidths] = useState<Record<ColumnKey, number>>(() => {
     const fromPrefs = (initialPrefs?.widths ?? {}) as Record<string, number>;
-    return { ...DEFAULT_WIDTHS, ...fromPrefs };
+    const merged = { ...DEFAULT_WIDTHS, ...fromPrefs } as Record<ColumnKey, number>;
+    // Auto-correct the stage column if a previously-saved width is
+    // narrower than the chip needs. Stops the pill from clipping
+    // when an old user pref shrunk the column before the chip was
+    // fixed-width.
+    if ((merged.stage ?? 0) < 196) merged.stage = 210;
+    return merged;
   });
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
 
@@ -174,9 +182,12 @@ export function ProspectTable({
 
   function startResize(key: ColumnKey, startX: number) {
     const startWidth = widths[key] ?? COLUMN_BY_KEY[key].defaultWidth;
+    // Stage column has a fixed-width chip that overflows below ~196px.
+    // Pin its minimum higher so the user can't drag-clip the pill.
+    const minForCol = key === "stage" ? 196 : MIN_WIDTH;
     function onMove(ev: PointerEvent) {
       const delta = ev.clientX - startX;
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta));
+      const next = Math.min(MAX_WIDTH, Math.max(minForCol, startWidth + delta));
       setWidths((prev) => ({ ...prev, [key]: next }));
     }
     function onUp() {

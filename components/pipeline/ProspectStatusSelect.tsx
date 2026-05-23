@@ -54,16 +54,16 @@ export function ProspectStatusSelect({
 
   return (
     <>
-      <span className="relative inline-flex items-center">
+      <span className="relative inline-block">
         <span
           className={
-            // whitespace-nowrap + justify-center + uniform min/max
-            // width so every pill is the same size regardless of
-            // which label fills it ("Lost" vs "Contract signed"
-            // used to wrap to two lines in narrow columns). max-w
-            // prevents the chip from spilling past its table cell
-            // when the column gets shrunk.
-            "inline-flex items-center justify-center gap-1 px-3 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps whitespace-nowrap w-full max-w-[10.5rem] " +
+            // Every pill renders at the same fixed width regardless
+            // of label length — so "LOST" looks the same size as
+            // "MEETING SCHEDULED". Width chosen so the longest
+            // label ("MEETING SCHEDULED" = ~134pt of text + padding)
+            // fits without truncation. justify-center keeps short
+            // labels centered inside the chip.
+            "flex items-center justify-center gap-1 px-2 py-1 rounded-pill text-[10.5px] font-bold uppercase tracking-tbb-caps whitespace-nowrap w-[164px] " +
             style.chipClass
           }
         >
