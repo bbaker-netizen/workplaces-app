@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { emailTemplates } from "@/lib/db/schema";
+import { emailTemplates, pricingTiers } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementForm } from "./EngagementForm";
 
@@ -13,23 +13,40 @@ export default async function NewEngagementPage() {
   }
 
   // Pull onboarding-category templates so the form can offer them as
-  // "auto-send when the client accepts" options.
-  const onboardingTemplates = await withSystemContext(async (tx) => {
-    return tx
-      .select({
-        id: emailTemplates.id,
-        name: emailTemplates.name,
-        category: emailTemplates.category,
-      })
-      .from(emailTemplates)
-      .where(
-        and(
-          eq(emailTemplates.orgId, profile.orgId),
-          eq(emailTemplates.category, "onboarding"),
-        ),
-      )
-      .orderBy(asc(emailTemplates.name));
-  });
+  // "auto-send when the client accepts" options. Pull pricing tiers
+  // in parallel — they pre-fill the monthly-fee input on the form.
+  const [onboardingTemplates, tiers] = await Promise.all([
+    withSystemContext(async (tx) =>
+      tx
+        .select({
+          id: emailTemplates.id,
+          name: emailTemplates.name,
+          category: emailTemplates.category,
+        })
+        .from(emailTemplates)
+        .where(
+          and(
+            eq(emailTemplates.orgId, profile.orgId),
+            eq(emailTemplates.category, "onboarding"),
+          ),
+        )
+        .orderBy(asc(emailTemplates.name)),
+    ),
+    withSystemContext(async (tx) =>
+      tx
+        .select({
+          id: pricingTiers.id,
+          program: pricingTiers.program,
+          tierKey: pricingTiers.tierKey,
+          label: pricingTiers.label,
+          monthlyFeeCents: pricingTiers.monthlyFeeCents,
+          sortOrder: pricingTiers.sortOrder,
+        })
+        .from(pricingTiers)
+        .where(eq(pricingTiers.orgId, profile.orgId))
+        .orderBy(asc(pricingTiers.program), asc(pricingTiers.sortOrder)),
+    ),
+  ]);
 
   return (
     <main className="min-h-screen bg-background px-6 py-16">
@@ -48,7 +65,10 @@ export default async function NewEngagementPage() {
             time.
           </p>
         </header>
-        <EngagementForm onboardingTemplates={onboardingTemplates} />
+        <EngagementForm
+          onboardingTemplates={onboardingTemplates}
+          pricingTiers={tiers}
+        />
       </div>
     </main>
   );

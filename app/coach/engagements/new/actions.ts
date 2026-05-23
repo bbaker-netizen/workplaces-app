@@ -88,6 +88,24 @@ const schema = z.object({
     .union([z.literal("on"), z.literal("true"), z.literal(""), z.undefined()])
     .transform((v) => v === "on" || v === "true")
     .optional(),
+  // Monthly fee — dollars (input is type="number"). Optional; the
+  // engagement can be created without a fee set and the {{monthly_fee}}
+  // placeholder will render as "[monthly fee]" until set.
+  monthlyFee: z
+    .union([z.literal(""), z.undefined()])
+    .transform(() => undefined)
+    .or(
+      z
+        .string()
+        .regex(/^\d+(\.\d{1,2})?$/, "Fee must be a positive number")
+        .transform((s) => Math.round(parseFloat(s) * 100)),
+    )
+    .optional(),
+  pricingTier: z
+    .string()
+    .max(60)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 });
 
 export type CreateEngagementState =
@@ -123,6 +141,8 @@ export async function createEngagementAction(
     startDate: formData.get("startDate"),
     onboardingTemplateId: formData.get("onboardingTemplateId") ?? undefined,
     seedSoulFile: formData.get("seedSoulFile") ?? undefined,
+    monthlyFee: formData.get("monthlyFee") ?? undefined,
+    pricingTier: formData.get("pricingTier") ?? undefined,
   });
   if (!parsed.success) {
     return {
@@ -137,6 +157,8 @@ export async function createEngagementAction(
     clientLeadFullName,
     startDate,
   } = parsed.data;
+  const monthlyFeeCents = parsed.data.monthlyFee ?? null;
+  const pricingTier = parsed.data.pricingTier ?? null;
 
   // 3. Ensure Bruce has a Business Builderes row (lazy create)
   const callerCoach = await withTenantContext(callerProfile.orgId, async (tx) => {
@@ -207,6 +229,8 @@ export async function createEngagementAction(
         name: engagementName,
         slug: slugify(engagementName, newEngagementId),
         startDate: new Date(startDate),
+        monthlyFeeCents,
+        pricingTier,
       });
     });
   } catch (e) {

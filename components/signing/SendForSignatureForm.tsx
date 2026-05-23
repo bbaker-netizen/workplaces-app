@@ -101,6 +101,19 @@ export function SendForSignatureForm(props: Props) {
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [composedBody, setComposedBody] = useState<string>("");
+  // Compose-time fee override. The variable context's engagement may
+  // not have a fee set yet (sending the BBA from a prospect, before
+  // an engagement exists). Bruce can type the fee here and we splice
+  // it into the variable map so `{{monthly_fee}}` resolves correctly.
+  const initialFeeCents =
+    props.mode === "upload"
+      ? props.variableContext?.engagement?.monthlyFeeCents ?? null
+      : null;
+  const [feeOverrideInput, setFeeOverrideInput] = useState<string>(
+    initialFeeCents !== null && initialFeeCents !== undefined
+      ? (initialFeeCents / 100).toFixed(initialFeeCents % 100 === 0 ? 0 : 2)
+      : "",
+  );
   const bodyEditorRef = useRef<RichTextEditorHandle | null>(null);
   const composeAvailable =
     props.mode === "upload" &&
@@ -119,9 +132,27 @@ export function SendForSignatureForm(props: Props) {
       (t) => t.id === selectedTemplateId,
     );
     if (!tpl) return;
-    const vars = props.variableContext
-      ? buildVariableMap(props.variableContext)
-      : {};
+    // Splice the compose-time fee override into the variable context
+    // if the user has typed one. Lets the BBA render the right fee
+    // even before an engagement record exists.
+    const feeCentsOverride = parseFeeInputToCents(feeOverrideInput);
+    const ctx = props.variableContext
+      ? {
+          ...props.variableContext,
+          engagement: {
+            ...(props.variableContext.engagement ?? {
+              name: null,
+              type: null,
+              startDate: null,
+            }),
+            monthlyFeeCents:
+              feeCentsOverride ??
+              props.variableContext.engagement?.monthlyFeeCents ??
+              null,
+          },
+        }
+      : null;
+    const vars = ctx ? buildVariableMap(ctx) : {};
     const resolved = applyDocumentVariables(tpl.bodyMarkdown ?? "", vars);
     setComposedBody(resolved);
     if (resolved.trim().startsWith("<")) {
@@ -133,7 +164,16 @@ export function SendForSignatureForm(props: Props) {
       setSubject(tpl.defaultSubject);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTemplateId]);
+  }, [selectedTemplateId, feeOverrideInput]);
+
+  /** Parse the dollar-formatted fee input ("2500" / "2500.00") into
+   *  cents. Empty / invalid → null. */
+  function parseFeeInputToCents(s: string): number | null {
+    const trimmed = s.trim();
+    if (!trimmed) return null;
+    if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+    return Math.round(parseFloat(trimmed) * 100);
+  }
 
   function addSigner() {
     if (signers.length >= 4) return;
@@ -327,6 +367,36 @@ export function SendForSignatureForm(props: Props) {
 
           {selectedTemplateId && (
             <>
+              <label className="block">
+                <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                  Monthly fee for this deal
+                </span>
+                <div className="relative mt-1">
+                  <span
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-tbb-ink-3 pointer-events-none"
+                    aria-hidden
+                  >
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    inputMode="decimal"
+                    value={feeOverrideInput}
+                    onChange={(e) => setFeeOverrideInput(e.target.value)}
+                    disabled={isPending}
+                    placeholder="2500"
+                    className="w-full bg-white border border-tbb-line rounded-md pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-tbb-ink-3">
+                  Fills in{" "}
+                  <code className="font-mono">{`{{monthly_fee}}`}</code>{" "}
+                  in the doc as &quot;${(parseFeeInputToCents(feeOverrideInput) ?? 0) / 100}/month&quot;. Leave blank to keep the placeholder.
+                </p>
+              </label>
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">

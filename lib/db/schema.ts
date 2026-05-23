@@ -414,6 +414,15 @@ export const engagements = pgTable(
     stageOfGrowthStage: bigint("stage_of_growth_stage", { mode: "number" }),
     stageAssessedAt: timestamp("stage_assessed_at", { withTimezone: true }),
     slug: text("slug"),
+    /** Monthly fee charged to this client, in cents. Surfaces as
+     *  `{{monthly_fee}}` in document templates (rendered as
+     *  "$2,500/month"). Set at engagement creation, pre-filled from
+     *  the matching `pricing_tiers` row but always overridable. */
+    monthlyFeeCents: bigint("monthly_fee_cents", { mode: "number" }),
+    /** Optional tier key (e.g. 'small'/'mid'/'large') that the fee
+     *  was originally suggested from. Lets us show drift over time
+     *  ("you set this at $1,500 but the tier is now $1,800"). */
+    pricingTier: text("pricing_tier"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -423,6 +432,49 @@ export const engagements = pgTable(
     slugIdx: uniqueIndex("engagements_slug_idx").on(t.slug),
   })
 );
+
+/**
+ * `pricing_tiers` — per-org price grid that pre-fills the monthly fee
+ * when creating an engagement.
+ *
+ * One row per (org, program, tier_key). The engagement creation form
+ * fetches all of an org's rows, groups by program, and shows them as
+ * radio-pill options. Picking one auto-fills the fee, but the field
+ * stays editable for one-off overrides.
+ *
+ * Bruce manages the grid under /coach/settings/pricing.
+ */
+export const pricingTiers = pgTable(
+  "pricing_tiers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    program: text("program").notNull(), // 'accelerator' | 'implementer'
+    tierKey: text("tier_key").notNull(),
+    label: text("label").notNull(),
+    monthlyFeeCents: bigint("monthly_fee_cents", { mode: "number" }).notNull(),
+    sortOrder: bigint("sort_order", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("pricing_tiers_org_idx").on(t.orgId, t.program, t.sortOrder),
+    uniquePerOrg: uniqueIndex("pricing_tiers_unique_per_org").on(
+      t.orgId,
+      t.program,
+      t.tierKey,
+    ),
+  }),
+);
+
+export type PricingTier = typeof pricingTiers.$inferSelect;
+export type NewPricingTier = typeof pricingTiers.$inferInsert;
 
 // ---------- Phase 1.1 tables ----------
 

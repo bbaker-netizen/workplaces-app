@@ -18,6 +18,11 @@ export type DocumentVariableContext = {
     name: string | null;
     type?: "accelerator" | "implementer" | null;
     startDate?: Date | string | null;
+    /** Monthly fee in cents (e.g., 250000 = $2,500/month). Renders as
+     *  "$2,500/month" via the `{{monthly_fee}}` placeholder. When null
+     *  the placeholder renders as "[monthly fee]" so Bruce sees
+     *  immediately that he needs to fill it in. */
+    monthlyFeeCents?: number | null;
   } | null;
   sender: {
     fullName: string;
@@ -72,6 +77,12 @@ export const DOCUMENT_VARIABLES = [
     description: "When the engagement begins",
   },
   {
+    name: "monthly_fee",
+    label: "Monthly fee",
+    description:
+      "Engagement's monthly fee, formatted as $2,500/month. Pulls from the engagement record.",
+  },
+  {
     name: "today",
     label: "Today's date",
     description: "Today, written out as Month D, YYYY",
@@ -103,6 +114,30 @@ export const DOCUMENT_TEMPLATE_CATEGORIES = [
 
 export type DocumentTemplateCategory =
   (typeof DOCUMENT_TEMPLATE_CATEGORIES)[number];
+
+/**
+ * Render a cents amount as a dollar string. Drops the `.00` when the
+ * amount is whole dollars (almost always — fees are typically whole
+ * hundreds), otherwise shows two decimals.
+ *
+ *   250000  → "$2,500"
+ *   299900  → "$2,999"
+ *   250050  → "$2,500.50"
+ */
+function formatCents(cents: number | null | undefined): string {
+  if (cents === null || cents === undefined || Number.isNaN(cents)) {
+    return "[monthly fee]";
+  }
+  const dollars = cents / 100;
+  const isWhole = cents % 100 === 0;
+  const formatted = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: isWhole ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(dollars);
+  return `${formatted}/month`;
+}
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "[start date]";
@@ -155,6 +190,7 @@ export function buildVariableMap(
     implementer_checkbox:
       ctx.engagement?.type === "implementer" ? "[X]" : "[ ]",
     start_date: formatDate(ctx.engagement?.startDate),
+    monthly_fee: formatCents(ctx.engagement?.monthlyFeeCents),
     today,
     sender_name: senderFirstName,
     sender_full_name: ctx.sender.fullName,

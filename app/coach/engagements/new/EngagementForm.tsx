@@ -1,10 +1,25 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import {
   createEngagementAction,
   type CreateEngagementState,
 } from "./actions";
+
+type PricingTierOption = {
+  id: string;
+  program: string;
+  tierKey: string;
+  label: string;
+  monthlyFeeCents: number;
+  sortOrder: number;
+};
+
+function formatCentsForInput(cents: number | null): string {
+  if (cents === null || cents === undefined) return "";
+  return (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
+}
 
 const initial: CreateEngagementState = { kind: "idle" };
 
@@ -35,10 +50,41 @@ function SubmitButton() {
 
 export function EngagementForm({
   onboardingTemplates = [],
+  pricingTiers = [],
 }: {
   onboardingTemplates?: { id: string; name: string; category: string }[];
+  pricingTiers?: PricingTierOption[];
 } = {}) {
   const [state, action] = useFormState(createEngagementAction, initial);
+
+  // Pricing UI state. Selected program drives which tiers show; the
+  // selected tier pre-fills the fee input; the input is editable so
+  // Bruce can override per-deal.
+  const [program, setProgram] = useState<string>("");
+  const [tierKey, setTierKey] = useState<string>("");
+  const [feeInput, setFeeInput] = useState<string>("");
+
+  const tiersForProgram = useMemo(
+    () => pricingTiers.filter((t) => t.program === program),
+    [pricingTiers, program],
+  );
+
+  // When the user picks a tier, pre-fill the fee input. Empty tier
+  // selection means "custom" — leave the input alone.
+  function selectTier(nextTier: string) {
+    setTierKey(nextTier);
+    const found = tiersForProgram.find((t) => t.tierKey === nextTier);
+    if (found) {
+      setFeeInput(formatCentsForInput(found.monthlyFeeCents));
+    }
+  }
+
+  // When the program changes, reset tier + fee.
+  function selectProgram(nextProgram: string) {
+    setProgram(nextProgram);
+    setTierKey("");
+    setFeeInput("");
+  }
 
   if (state.kind === "success") {
     return (
@@ -109,7 +155,8 @@ export function EngagementForm({
           id="engagementType"
           name="engagementType"
           required
-          defaultValue=""
+          value={program}
+          onChange={(e) => selectProgram(e.target.value)}
           className={inputClass}
         >
           <option value="" disabled>
@@ -118,6 +165,101 @@ export function EngagementForm({
           <option value="accelerator">Accelerator</option>
           <option value="implementer">Implementer</option>
         </select>
+      </div>
+
+      {program && (
+        <div className="border border-tbb-line rounded-md bg-white p-4 space-y-3">
+          <div className="space-y-1">
+            <span className={labelClass + " mb-0"}>Pricing tier</span>
+            <p className="text-xs text-muted-foreground">
+              Pick a tier to pre-fill the monthly fee, or leave blank and
+              type a custom amount below.{" "}
+              <a
+                href="/coach/settings/pricing"
+                className="text-tbb-blue underline underline-offset-2"
+              >
+                Edit tiers
+              </a>
+            </p>
+          </div>
+          {tiersForProgram.length === 0 ? (
+            <p className="text-xs text-tbb-ink-3 italic">
+              No tiers configured for {program}. Type the fee in directly
+              below.
+            </p>
+          ) : (
+            <div className="grid sm:grid-cols-3 gap-2">
+              {tiersForProgram.map((t) => {
+                const active = tierKey === t.tierKey;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => selectTier(t.tierKey)}
+                    className={
+                      "text-left px-3 py-2.5 rounded-md border transition-colors " +
+                      (active
+                        ? "border-tbb-blue bg-tbb-blue-100 text-tbb-navy"
+                        : "border-tbb-line bg-white hover:bg-tbb-cream-50")
+                    }
+                    aria-pressed={active}
+                  >
+                    <span className="block font-bold text-sm">
+                      {t.label}
+                    </span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      ${(t.monthlyFeeCents / 100).toLocaleString()}/month
+                    </span>
+                  </button>
+                );
+              })}
+              {tierKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTierKey("");
+                    setFeeInput("");
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 sm:col-span-3 text-left"
+                >
+                  Clear selection
+                </button>
+              )}
+            </div>
+          )}
+          <input type="hidden" name="pricingTier" value={tierKey} />
+        </div>
+      )}
+
+      <div>
+        <label htmlFor="monthlyFee" className={labelClass}>
+          Monthly fee <span className="text-tbb-ink-3 font-normal">(USD)</span>
+        </label>
+        <div className="relative">
+          <span
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-tbb-ink-3 pointer-events-none"
+            aria-hidden
+          >
+            $
+          </span>
+          <input
+            id="monthlyFee"
+            name="monthlyFee"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="50"
+            placeholder="0"
+            value={feeInput}
+            onChange={(e) => setFeeInput(e.target.value)}
+            className={inputClass + " pl-7"}
+          />
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          What this client pays per month. Used to auto-fill the{" "}
+          <span className="font-mono">{`{{monthly_fee}}`}</span> placeholder
+          in contracts. Override the tier suggestion above if needed.
+        </p>
       </div>
 
       <div>
