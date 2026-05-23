@@ -104,33 +104,20 @@ export default async function SettingsHubPage() {
           const locked = c.masterAdminOnly && !isMasterAdmin;
           const Icon = c.icon;
           const isReady = c.status === "ready" && !locked;
-          return (
-            <Link
-              key={c.href + c.title}
-              href={isReady ? c.href : "#"}
-              aria-disabled={!isReady}
-              className={
-                "block p-5 rounded-lg border bg-white space-y-3 transition-shadow " +
-                (isReady
-                  ? "border-tbb-line shadow-tbb-sm hover:shadow-tbb-md hover:border-tbb-blue cursor-pointer"
-                  : "border-tbb-line-soft opacity-60 cursor-not-allowed")
-              }
-              onClick={(e) => {
-                if (!isReady) e.preventDefault();
-              }}
-            >
+          const cardBody = (
+            <>
               <div className="flex items-center gap-2.5">
                 <span
                   className={
                     "grid place-items-center w-9 h-9 rounded-md " +
-                    (isReady ? "bg-tbb-blue-50 text-tbb-blue" : "bg-tbb-cream-50 text-tbb-ink-3")
+                    (isReady
+                      ? "bg-tbb-blue-50 text-tbb-blue"
+                      : "bg-tbb-cream-50 text-tbb-ink-3")
                   }
                 >
                   <Icon className="w-5 h-5" aria-hidden />
                 </span>
-                <h2 className="font-bold text-tbb-navy text-lg">
-                  {c.title}
-                </h2>
+                <h2 className="font-bold text-tbb-navy text-lg">{c.title}</h2>
                 {c.status === "soon" && (
                   <span className="ml-auto text-[9px] font-bold uppercase tracking-tbb-caps text-tbb-orange-700 bg-tbb-cream-50 px-1.5 py-0.5 rounded-pill border border-tbb-cream-200">
                     Soon
@@ -145,7 +132,33 @@ export default async function SettingsHubPage() {
               <p className="text-sm text-tbb-ink-2 leading-snug">
                 {c.description}
               </p>
-            </Link>
+            </>
+          );
+          const sharedClass =
+            "block p-5 rounded-lg border bg-white space-y-3 transition-shadow " +
+            (isReady
+              ? "border-tbb-line shadow-tbb-sm hover:shadow-tbb-md hover:border-tbb-blue cursor-pointer"
+              : "border-tbb-line-soft opacity-60 cursor-not-allowed");
+          if (isReady) {
+            return (
+              <Link
+                key={c.href + c.title}
+                href={c.href}
+                className={sharedClass}
+              >
+                {cardBody}
+              </Link>
+            );
+          }
+          return (
+            <div
+              key={c.href + c.title}
+              aria-disabled
+              tabIndex={-1}
+              className={sharedClass}
+            >
+              {cardBody}
+            </div>
           );
         })}
       </div>
