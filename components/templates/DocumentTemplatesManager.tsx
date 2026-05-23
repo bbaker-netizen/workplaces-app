@@ -134,99 +134,140 @@ export function DocumentTemplatesManager({
     setError(null);
     setImportingFilename(file.name);
     startTransition(async () => {
-      const fd = new FormData();
-      fd.set("file", file);
-      // Step 1 — quick kickoff: extract text + create pending row.
-      let started: Awaited<ReturnType<typeof startTemplateConversion>>;
+      const log = (msg: string, extra?: unknown) => {
+        // Surface progress to the browser console so we can diagnose
+        // when something silently breaks. Each line is prefixed with
+        // [import] so Bruce can filter the console quickly.
+        if (extra !== undefined) {
+          console.log(`[import] ${msg}`, extra);
+        } else {
+          console.log(`[import] ${msg}`);
+        }
+      };
+      const finish = (errMsg: string | null) => {
+        setImportingFilename(null);
+        if (errMsg) {
+          setError(errMsg);
+          log("FAILED: " + errMsg);
+        }
+      };
       try {
-        started = await startTemplateConversion(fd);
-      } catch (err) {
-        setImportingFilename(null);
-        setError(
-          err instanceof Error
-            ? `Couldn't start the conversion: ${err.message}`
-            : "Couldn't start the conversion.",
-        );
-        return;
-      }
-      if (!started || !started.ok) {
-        setImportingFilename(null);
-        setError(
-          started && !started.ok
-            ? started.error
-            : "Couldn't start the conversion. Try again, or use New document to paste the text in.",
-        );
-        return;
-      }
-      const conversionId = started.data.conversionId;
-
-      // Step 2 — fire the slow work in the background. We don't await
-      // this — it runs separately for up to 5 minutes, updating the
-      // conversion row when done. We just need to KICK IT OFF.
-      void fetch(`/api/templates/convert/${conversionId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      }).catch(() => {
-        // The background fetch failing doesn't matter directly — the
-        // poll loop below will surface any error via the row's
-        // status='error' / error_message fields.
-      });
-
-      // Step 3 — poll for the result. Check every 2s up to ~5 minutes.
-      // Pure UI flow — no big blocking operation.
-      const MAX_POLLS = 150; // 150 × 2s = 5 min
-      let pollCount = 0;
-      let finalResult: ConvertedTemplate | null = null;
-      while (pollCount < MAX_POLLS) {
-        pollCount++;
-        await new Promise((r) => setTimeout(r, 2000));
-        const status = await getTemplateConversionStatus(conversionId);
-        if (!status || !status.ok) {
-          setImportingFilename(null);
-          setError(
-            status && !status.ok
-              ? status.error
-              : "Lost track of the conversion. Try again.",
+        log("starting kickoff for " + file.name);
+        const fd = new FormData();
+        fd.set("file", file);
+        const started = await startTemplateConversion(fd);
+        log("kickoff returned", started);
+        if (!started || !started.ok) {
+          finish(
+            started && !started.ok
+              ? started.error
+              : "Couldn't start the conversion. Try again, or use New document to paste the text in.",
           );
           return;
         }
-        if (status.data.status === "error") {
-          setImportingFilename(null);
-          setError(status.data.error);
+        const conversionId = started.data.conversionId;
+        log("conversionId = " + conversionId);
+
+        // Step 2 — fire the slow work in the background. We DO await
+        // here just long enough for the fetch to be sent (a few ms),
+        // then continue. If the fetch hangs or fails we surface it
+        // immediately rather than waiting 5 minutes for a phantom.
+        const fetchPromise = fetch(`/api/templates/convert/${conversionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+        })
+          .then(async (r) => {
+            log(`background fetch returned status=${r.status}`);
+            if (!r.ok && r.status !== 202) {
+              const text = await r.text().catch(() => "");
+              log("background fetch error body", text);
+            }
+            return r;
+          })
+          .catch((err) => {
+            log("background fetch threw", err);
+            return null;
+          });
+        // Don't block on the fetch — just make sure it's been kicked
+        // off. JavaScript's event loop will run it in parallel with
+        // the polling loop below.
+        void fetchPromise;
+
+        // Step 3 — poll for the result.
+        const MAX_POLLS = 150; // 150 × 2s = 5 min
+        let pollCount = 0;
+        let finalResult: ConvertedTemplate | null = null;
+        while (pollCount < MAX_POLLS) {
+          pollCount++;
+          await new Promise((r) => setTimeout(r, 2000));
+          let status: Awaited<
+            ReturnType<typeof getTemplateConversionStatus>
+          > | null = null;
+          try {
+            status = await getTemplateConversionStatus(conversionId);
+          } catch (err) {
+            log(`poll #${pollCount} threw`, err);
+            finish(
+              err instanceof Error
+                ? `Lost connection while waiting for the conversion: ${err.message}`
+                : "Lost connection while waiting for the conversion.",
+            );
+            return;
+          }
+          if (!status || !status.ok) {
+            finish(
+              status && !status.ok
+                ? status.error
+                : `Status check returned nothing (poll #${pollCount}). Try again.`,
+            );
+            return;
+          }
+          if (pollCount === 1 || pollCount % 5 === 0) {
+            log(`poll #${pollCount} status=${status.data.status}`);
+          }
+          if (status.data.status === "error") {
+            finish(status.data.error);
+            return;
+          }
+          if (status.data.status === "done") {
+            finalResult = status.data.result;
+            log("conversion DONE", finalResult);
+            break;
+          }
+          // pending | running — keep polling.
+        }
+        if (!finalResult) {
+          finish(
+            "The conversion is still running after 5 minutes — something's off. Refresh the page; the result may appear shortly under your templates list.",
+          );
           return;
         }
-        if (status.data.status === "done") {
-          finalResult = status.data.result;
-          break;
-        }
-        // status is 'pending' or 'running' — keep polling.
-      }
-      setImportingFilename(null);
-      if (!finalResult) {
-        setError(
-          "The conversion is still running after 5 minutes — something's off. Refresh the page; the result may appear shortly under your templates list.",
+        // Open the editor pre-filled with the conversion result.
+        finish(null);
+        const r = finalResult;
+        setDraft({
+          id: null,
+          name: r.name,
+          category: r.category,
+          bodyMarkdown: r.body_markdown,
+          defaultSubject: r.default_subject ?? "",
+        });
+        setTimeout(() => {
+          if (looksLikeHtml(r.body_markdown)) {
+            editorRef.current?.setHTML(r.body_markdown);
+          } else {
+            editorRef.current?.setMarkdown(r.body_markdown);
+          }
+        }, 0);
+      } catch (err) {
+        log("unexpected throw", err);
+        finish(
+          err instanceof Error
+            ? `Import crashed unexpectedly: ${err.message}`
+            : "Import crashed unexpectedly. Try again, or use New document to paste the text in.",
         );
-        return;
       }
-      // Open the editor pre-filled with the conversion result. Bruce
-      // reviews, edits, saves through the normal Create flow. Claude's
-      // convertor returns markdown — the editor accepts it on first
-      // load and then starts emitting HTML from that point on.
-      const r = finalResult;
-      setDraft({
-        id: null,
-        name: r.name,
-        category: r.category,
-        bodyMarkdown: r.body_markdown,
-        defaultSubject: r.default_subject ?? "",
-      });
-      setTimeout(() => {
-        if (looksLikeHtml(r.body_markdown)) {
-          editorRef.current?.setHTML(r.body_markdown);
-        } else {
-          editorRef.current?.setMarkdown(r.body_markdown);
-        }
-      }, 0);
     });
   }
   function openExisting(t: DocumentTemplate) {
