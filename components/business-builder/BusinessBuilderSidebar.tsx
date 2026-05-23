@@ -21,6 +21,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
   Briefcase,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -101,6 +102,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     items: [
       { href: "/business-builder", label: "My work", icon: CheckSquare, tourId: "Coach-home" },
       { href: "/business-builder/engagements", label: "Engagements (Workspace)", icon: Briefcase },
+      { href: "/business-builder/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/business-builder/action-items", label: "Action items", icon: CheckSquare },
       { href: "/business-builder/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },
       { href: "/business-builder/communication", label: "Communication", icon: MessagesSquare },
