@@ -12,7 +12,7 @@
  *     "last contact" column stays accurate without manual updates)
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -198,6 +198,57 @@ export async function deleteProspect(
     });
     revalidatePath("/coach/pipeline");
     return { ok: true, data: undefined };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/**
+ * Delete a set of prospects in one transaction. Used by the bulk-
+ * select toolbar on the pipeline list. Returns the count actually
+ * deleted so the UI can show a confirmation toast like "3 prospects
+ * deleted".
+ *
+ * Skips any rows that don't belong to the caller's org (the WHERE
+ * clause filters by orgId), so a malicious payload of foreign IDs
+ * can't bleed across tenants.
+ */
+export async function bulkDeleteProspects(
+  ids: string[],
+): Promise<ActionResult<{ deleted: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+  if (!Array.isArray(ids) || ids.length === 0)
+    return { ok: false, error: "Pick at least one prospect to delete." };
+  if (ids.length > 200)
+    return {
+      ok: false,
+      error: "Delete in smaller batches — 200 max at a time.",
+    };
+  // Basic shape check; UUIDs are 36 chars.
+  for (const id of ids) {
+    if (typeof id !== "string" || id.length > 100) {
+      return { ok: false, error: "Invalid prospect id in selection." };
+    }
+  }
+  try {
+    const deleted = await withSystemContext(async (tx) => {
+      const result = await tx
+        .delete(prospects)
+        .where(
+          and(inArray(prospects.id, ids), eq(prospects.orgId, profile.orgId)),
+        )
+        .returning({ id: prospects.id });
+      return result.length;
+    });
+    revalidatePath("/coach/pipeline");
+    return { ok: true, data: { deleted } };
   } catch (e) {
     return {
       ok: false,

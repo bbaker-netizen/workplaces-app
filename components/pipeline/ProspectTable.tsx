@@ -15,9 +15,10 @@
  *   • Filter chips + search stay above the table for fast triage.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Columns3, Search } from "lucide-react";
+import { Columns3, Loader2, Search, Trash2, X } from "lucide-react";
 import { ProspectStatusSelect } from "./ProspectStatusSelect";
 import {
   STAGE_STYLES,
@@ -26,6 +27,11 @@ import {
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
 import { setPipelineColumnPrefs } from "@/lib/actions/user-prefs";
+import { bulkDeleteProspects } from "@/lib/actions/prospects";
+import {
+  hidePendingFeedback,
+  showPendingFeedback,
+} from "@/components/layout/NavLoaderOverlay";
 
 /* ------------------------------ Columns ------------------------------ */
 
@@ -59,7 +65,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "contact", label: "Contact", defaultWidth: 160, defaultVisible: true },
   { key: "email", label: "Email", defaultWidth: 220, defaultVisible: true },
   { key: "phone", label: "Phone", defaultWidth: 140, defaultVisible: true },
-  { key: "stage", label: "Stage", defaultWidth: 160, defaultVisible: true },
+  { key: "stage", label: "Stage", defaultWidth: 200, defaultVisible: true },
   { key: "value", label: "Value", defaultWidth: 110, defaultVisible: true, alignRight: true },
   { key: "next_action", label: "Next action", defaultWidth: 160, defaultVisible: true },
   { key: "owner", label: "Owner", defaultWidth: 140, defaultVisible: true },
@@ -108,6 +114,15 @@ export function ProspectTable({
     return { ...DEFAULT_WIDTHS, ...fromPrefs };
   });
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+
+  // Bulk-select state. `selected` is a Set of prospect IDs the user
+  // has ticked. The "Select all" checkbox at the top toggles every
+  // currently-filtered row in or out. Bulk actions appear as a sticky
+  // toolbar whenever the set is non-empty.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const router = useRouter();
+  const [isBulkPending, startBulkTransition] = useTransition();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -180,6 +195,57 @@ export function ProspectTable({
     setVisible(DEFAULT_VISIBLE);
     setWidths({ ...DEFAULT_WIDTHS });
     persist(DEFAULT_VISIBLE, { ...DEFAULT_WIDTHS });
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllFiltered(check: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (check) {
+        for (const p of filtered) next.add(p.id);
+      } else {
+        for (const p of filtered) next.delete(p.id);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function bulkDelete() {
+    if (selected.size === 0) return;
+    const count = selected.size;
+    if (
+      !window.confirm(
+        `Delete ${count} prospect${count === 1 ? "" : "s"}?\n\n` +
+          `Removes them from the pipeline along with their activity log + ` +
+          `communications. This can't be undone.`,
+      )
+    )
+      return;
+    setBulkError(null);
+    showPendingFeedback(`Deleting ${count} prospect${count === 1 ? "" : "s"}…`);
+    startBulkTransition(async () => {
+      const ids = Array.from(selected);
+      const r = await bulkDeleteProspects(ids);
+      hidePendingFeedback();
+      if (!r.ok) {
+        setBulkError(r.error);
+        return;
+      }
+      setSelected(new Set());
+      router.refresh();
+    });
   }
 
   const visibleColumns = visible
@@ -289,26 +355,88 @@ export function ProspectTable({
         </span>
       </div>
 
+      {/* Bulk-action toolbar — appears whenever any rows are ticked. */}
+      {selected.size > 0 && (
+        <div
+          role="region"
+          aria-label="Bulk actions"
+          className="flex items-center gap-3 flex-wrap px-4 py-2.5 rounded-md border border-tbb-blue bg-tbb-blue-50"
+        >
+          <span className="text-sm font-bold text-tbb-navy">
+            {selected.size} selected
+          </span>
+          <button
+            type="button"
+            onClick={bulkDelete}
+            disabled={isBulkPending}
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-danger text-tbb-danger hover:bg-tbb-danger hover:text-white transition-colors disabled:opacity-50"
+          >
+            {isBulkPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" aria-hidden />
+            )}
+            Delete selected
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            disabled={isBulkPending}
+            className="inline-flex items-center gap-1 text-xs text-tbb-ink-3 hover:text-tbb-navy"
+          >
+            <X className="w-3.5 h-3.5" aria-hidden />
+            Clear selection
+          </button>
+          {bulkError && (
+            <span
+              role="alert"
+              className="text-xs text-tbb-danger border border-tbb-danger rounded px-2 py-1 bg-white"
+            >
+              {bulkError}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="border border-tbb-line rounded-lg bg-white overflow-hidden shadow-tbb-sm">
         <div className="overflow-x-auto">
           <table
             className="text-sm"
             style={{
               tableLayout: "fixed",
-              width: visibleColumns.reduce(
-                (sum, c) => sum + (widths[c.key] ?? c.defaultWidth),
-                0,
-              ),
+              width:
+                40 +
+                visibleColumns.reduce(
+                  (sum, c) => sum + (widths[c.key] ?? c.defaultWidth),
+                  0,
+                ),
               minWidth: "100%",
             }}
           >
             <colgroup>
+              <col style={{ width: 40 }} />
               {visibleColumns.map((c) => (
                 <col key={c.key} style={{ width: widths[c.key] ?? c.defaultWidth }} />
               ))}
             </colgroup>
             <thead className="bg-tbb-bg-soft border-b border-tbb-line-soft">
               <tr className="text-left">
+                <th
+                  scope="col"
+                  className="px-3 py-2.5 select-none"
+                  aria-label="Select all"
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      filtered.length > 0 &&
+                      filtered.every((p) => selected.has(p.id))
+                    }
+                    onChange={(e) => selectAllFiltered(e.target.checked)}
+                    aria-label="Select all visible prospects"
+                    className="w-4 h-4 align-middle"
+                  />
+                </th>
                 {visibleColumns.map((c) => (
                   <th
                     key={c.key}
@@ -339,12 +467,14 @@ export function ProspectTable({
                   key={p.id}
                   prospect={p}
                   columns={visibleColumns}
+                  isSelected={selected.has(p.id)}
+                  onToggleSelected={() => toggleSelected(p.id)}
                 />
               ))}
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={visibleColumns.length}
+                    colSpan={visibleColumns.length + 1}
                     className="px-4 py-8 text-center text-sm text-tbb-ink-3 italic"
                   >
                     No prospects match your filters.
@@ -362,13 +492,32 @@ export function ProspectTable({
 function ProspectRow({
   prospect,
   columns,
+  isSelected,
+  onToggleSelected,
 }: {
   prospect: PipelineProspect;
   columns: ColumnDef[];
+  isSelected: boolean;
+  onToggleSelected: () => void;
 }) {
   const href = `/coach/pipeline/${prospect.id}`;
   return (
-    <tr className="border-b border-tbb-line-soft last:border-b-0 hover:bg-tbb-cream-50 transition-colors duration-tbb-base">
+    <tr
+      className={
+        "border-b border-tbb-line-soft last:border-b-0 transition-colors duration-tbb-base " +
+        (isSelected ? "bg-tbb-blue-50" : "hover:bg-tbb-cream-50")
+      }
+    >
+      <td className="px-3 py-3 align-top">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelected}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Select ${prospect.companyName}`}
+          className="w-4 h-4 align-middle"
+        />
+      </td>
       {columns.map((c) => (
         <CellByKey key={c.key} keyName={c.key} prospect={prospect} href={href} />
       ))}

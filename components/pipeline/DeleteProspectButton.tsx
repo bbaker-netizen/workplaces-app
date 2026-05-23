@@ -11,6 +11,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import { deleteProspect } from "@/lib/actions/prospects";
+import {
+  hidePendingFeedback,
+  showPendingFeedback,
+} from "@/components/layout/NavLoaderOverlay";
 
 export function DeleteProspectButton({
   prospectId,
@@ -35,12 +39,16 @@ export function DeleteProspectButton({
       return;
 
     setError(null);
+    showPendingFeedback("Deleting prospect…");
     startTransition(async () => {
       const r = await deleteProspect(prospectId);
       if (!r.ok) {
+        hidePendingFeedback();
         setError(r.error);
         return;
       }
+      // Leave the overlay up — the upcoming redirect + refresh will
+      // dismiss it automatically when the pathname changes.
       router.push("/coach/pipeline");
       router.refresh();
     });

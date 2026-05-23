@@ -332,7 +332,11 @@ export function CoachSidebar({
             </Link>
             <div>
               <SignOutButton redirectUrl="/">
-                <button className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-white/70 hover:text-tbb-danger transition-colors duration-tbb-base">
+                <button
+                  data-tbb-async="true"
+                  data-tbb-async-label="Signing out…"
+                  className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-white/70 hover:text-tbb-danger transition-colors duration-tbb-base"
+                >
                   <LogOut className="w-3 h-3" aria-hidden />
                   Sign out
                 </button>
@@ -344,6 +348,8 @@ export function CoachSidebar({
           <SignOutButton redirectUrl="/">
             <button
               type="button"
+              data-tbb-async="true"
+              data-tbb-async-label="Signing out…"
               aria-label={`Sign out (${fullName})`}
               title={`Sign out (${fullName})`}
               className="grid place-items-center w-9 h-9 rounded-md text-white/85 hover:bg-tbb-cream/8 hover:text-white transition-colors"
