@@ -58,11 +58,10 @@ export default async function PipelinePage() {
         </div>
       </header>
 
-      {/* Stage summary chips — uniform white pill + colored dot
-          (the dot uses the stage's chipClass background colour for a
-          quick visual cue). Replaces the earlier mixed-colour chip
-          style that blended into the cream page background for the
-          pale-coloured stages. */}
+      {/* Stage summary chips. Uniform white pill + colored dot + count
+          sub-pill. Every chip looks the same regardless of which stage
+          colour it represents — the dot is the colour cue. Inline
+          style on the dot bypasses any Tailwind purge edge cases. */}
       <div className="flex flex-wrap gap-2">
         {STAGE_ORDER.map((s) => {
           const count = counts.get(s) ?? 0;
@@ -71,14 +70,15 @@ export default async function PipelinePage() {
           return (
             <span
               key={s}
-              className="inline-flex items-center gap-2 pl-2 pr-2 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps bg-white border border-tbb-line text-tbb-navy shadow-tbb-sm"
+              className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps bg-white border border-tbb-line text-tbb-navy shadow-tbb-sm"
             >
               <span
                 aria-hidden
-                className={`w-2 h-2 rounded-full ${style.chipClass.split(" ")[0]}`}
+                className="inline-block w-2.5 h-2.5 rounded-full ring-1 ring-tbb-line shrink-0"
+                style={{ backgroundColor: style.dotHex }}
               />
-              {style.label}
-              <span className="bg-tbb-cream-50 border border-tbb-line-soft text-tbb-ink-2 px-1.5 py-0 rounded-pill tabular-nums">
+              <span>{style.label}</span>
+              <span className="inline-flex items-center justify-center min-w-[20px] h-[18px] bg-tbb-cream-50 border border-tbb-line-soft text-tbb-ink-2 px-1.5 rounded-pill tabular-nums text-[10px]">
                 {count}
               </span>
             </span>

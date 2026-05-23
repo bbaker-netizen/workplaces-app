@@ -33,6 +33,10 @@ export type StageStyle = {
   chipClass: string;
   /** Tailwind text colour for inline accents. */
   textClass: string;
+  /** Explicit hex colour for the small status dot on summary chips.
+   *  Used as inline CSS so it can't be purged out of the bundle.
+   *  Lifted from the same heritage palette as chipClass. */
+  dotHex: string;
 };
 
 export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
@@ -41,6 +45,7 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     caption: "Fresh off the truck",
     chipClass: "bg-tbb-blue-light-200 text-tbb-navy",
     textClass: "text-tbb-navy",
+    dotHex: "#9CA3AF", // neutral grey — un-touched lead
   },
   // diagnostic_pending was a stage but is really an action (send the
   // diagnostic from the prospect detail page). Style kept for any
@@ -51,60 +56,70 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     caption: "Ball's in their court",
     chipClass: "bg-tbb-cream-200 text-tbb-navy",
     textClass: "text-tbb-navy",
+    dotHex: "#D89F2F", // warning yellow — waiting on them
   },
   first_contact: {
     label: "First contact",
     caption: "Hello said",
     chipClass: "bg-tbb-blue-light text-white",
     textClass: "text-tbb-blue-light",
+    dotHex: "#E59568", // light orange
   },
   meeting_scheduled: {
     label: "Meeting scheduled",
     caption: "On the books",
     chipClass: "bg-tbb-blue text-white",
     textClass: "text-tbb-blue",
+    dotHex: "#CC6A20", // safety vest orange
   },
   diagnostic_complete: {
     label: "Diagnostic complete",
     caption: "Their cards on the table",
     chipClass: "bg-tbb-blue-100 text-tbb-blue-700",
     textClass: "text-tbb-blue-700",
+    dotHex: "#9C4A0E", // deep orange
   },
   proposal_sent: {
     label: "Proposal sent",
     caption: "Now we wait. Briefly.",
     chipClass: "bg-tbb-navy text-white",
     textClass: "text-tbb-navy",
+    dotHex: "#2E4057", // steel blue
   },
   negotiation: {
     label: "Negotiation",
     caption: "Last yard before the goal line",
     chipClass: "bg-tbb-warning text-white",
     textClass: "text-tbb-warning",
+    dotHex: "#D89F2F", // amber
   },
   contract_sent: {
     label: "Contract sent",
     caption: "Pen's in their hand",
     chipClass: "bg-tbb-warning text-tbb-navy",
     textClass: "text-tbb-warning",
+    dotHex: "#D89F2F", // amber
   },
   contract_signed: {
     label: "Contract signed",
     caption: "Won. Crack one open.",
     chipClass: "bg-tbb-success text-white",
     textClass: "text-tbb-success",
+    dotHex: "#2E8B57", // success green
   },
   onboarded: {
     label: "Onboarded",
     caption: "Live and building",
     chipClass: "bg-tbb-success text-white",
     textClass: "text-tbb-success",
+    dotHex: "#1F6B41", // deeper green
   },
   lost: {
     label: "Lost",
     caption: "Not this time",
     chipClass: "bg-tbb-danger text-white",
     textClass: "text-tbb-danger",
+    dotHex: "#C0392B", // danger red
   },
 };
 
