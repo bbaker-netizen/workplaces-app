@@ -1390,6 +1390,41 @@ export const emailTemplates = pgTable(
 );
 
 /**
+ * Document templates — body content for the native signing flow.
+ * Used when Bruce wants to compose the document (contract, NDA,
+ * proposal, renewal) inside The Builder rather than upload a PDF
+ * from elsewhere. Body is markdown with `{{variable}}` placeholders
+ * resolved at compose time from the prospect / engagement / sender.
+ */
+export const documentTemplates = pgTable(
+  "document_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** contract | proposal | nda | renewal | other */
+    category: text("category").notNull().default("other"),
+    bodyMarkdown: text("body_markdown").notNull().default(""),
+    defaultSubject: text("default_subject"),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("document_templates_org_idx").on(t.orgId),
+    categoryIdx: index("document_templates_category_idx").on(t.orgId, t.category),
+  }),
+);
+
+export type DocumentTemplate = typeof documentTemplates.$inferSelect;
+export type NewDocumentTemplate = typeof documentTemplates.$inferInsert;
+
+/**
  * Per-prospect / per-engagement BCC alias. Bruce BCCs the alias on any
  * outbound email; the inbound webhook resolves it back to the right
  * client record.

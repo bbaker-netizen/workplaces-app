@@ -352,6 +352,156 @@ export async function createEnvelopeFromUpload(
   });
 }
 
+/* --------------------- compose-from-template send path --------------------- */
+
+/**
+ * Render markdown the coach composed in the UI into a PDF, upload
+ * it as a documents row, then run the standard signing envelope
+ * flow. This is the "compose, then send" pipeline — Bruce writes
+ * the actual contract body in The Builder instead of attaching a
+ * finished PDF from elsewhere.
+ */
+export async function createEnvelopeFromComposed(input: {
+  prospectId?: string | null;
+  engagementId?: string | null;
+  subject: string;
+  message?: string | null;
+  signers: Array<{ name: string; email: string; roleLabel?: string | null }>;
+  autoSignAsMe?: boolean;
+  /** Title shown at the top of the rendered PDF (and the source
+   *  document's filename stem). */
+  documentTitle: string;
+  /** Markdown body — variables already resolved on the client side
+   *  by the time it gets here. Server doesn't substitute. */
+  bodyMarkdown: string;
+}): Promise<ActionResult<{ envelopeId: string }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+
+  if (!input.subject.trim()) return { ok: false, error: "Subject is required." };
+  if (!input.documentTitle.trim())
+    return { ok: false, error: "Document title is required." };
+  if (!input.bodyMarkdown.trim() || input.bodyMarkdown.trim().length < 30) {
+    return {
+      ok: false,
+      error:
+        "Document body looks too short — write or paste the actual content before sending.",
+    };
+  }
+  if (!Array.isArray(input.signers) || input.signers.length === 0) {
+    return { ok: false, error: "Add at least one signer." };
+  }
+
+  // Resolve org (same logic as createEnvelopeFromUpload).
+  let orgId: string;
+  let resolvedEngagementId: string | null = null;
+  let headerTitle = "";
+  if (input.engagementId) {
+    const eng = await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          id: engagements.id,
+          orgId: engagements.orgId,
+          name: engagements.name,
+        })
+        .from(engagements)
+        .where(eq(engagements.id, input.engagementId!))
+        .limit(1);
+      return row ?? null;
+    });
+    if (!eng) return { ok: false, error: "Engagement not found." };
+    orgId = eng.orgId;
+    resolvedEngagementId = eng.id;
+    headerTitle = eng.name ?? "";
+  } else if (input.prospectId) {
+    const p = await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          id: prospects.id,
+          orgId: prospects.orgId,
+          companyName: prospects.companyName,
+        })
+        .from(prospects)
+        .where(eq(prospects.id, input.prospectId!))
+        .limit(1);
+      return row ?? null;
+    });
+    if (!p) return { ok: false, error: "Prospect not found." };
+    orgId = p.orgId;
+    headerTitle = p.companyName;
+  } else {
+    return {
+      ok: false,
+      error: "Either prospectId or engagementId is required.",
+    };
+  }
+
+  // Render markdown → PDF bytes.
+  let pdfBytes: Uint8Array;
+  try {
+    const { renderMarkdownToPdf } = await import(
+      "@/lib/signing/markdown-to-pdf"
+    );
+    pdfBytes = await renderMarkdownToPdf({
+      title: input.documentTitle,
+      bodyMarkdown: input.bodyMarkdown,
+      header: { title: headerTitle },
+    });
+  } catch (e) {
+    console.error("[createEnvelopeFromComposed] PDF render failed:", e);
+    return {
+      ok: false,
+      error:
+        "Couldn't render the document into a PDF. Try simpler formatting.",
+    };
+  }
+
+  // Upload via the same blob path as createEnvelopeFromUpload.
+  const filename = `${input.documentTitle.replace(/[^\w\d\- ]+/g, "").slice(0, 80) || "Document"}.pdf`;
+  const pdfBuffer = Buffer.from(pdfBytes);
+  // Construct a File-shaped value so uploadDocumentBlob can hash it.
+  const file = new File([pdfBuffer], filename, { type: "application/pdf" });
+  let upload: Awaited<ReturnType<typeof uploadDocumentBlob>>;
+  try {
+    upload = await uploadDocumentBlob(orgId, file);
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Upload failed.",
+    };
+  }
+
+  const sourceDocumentId = await withSystemContext(async (tx) => {
+    const [doc] = await tx
+      .insert(documents)
+      .values({
+        id: upload.documentId,
+        orgId,
+        engagementId: resolvedEngagementId,
+        blobKey: upload.blobKey,
+        originalFilename: upload.filename,
+        fileType: upload.fileType,
+        sizeBytes: upload.sizeBytes,
+        uploaderUserProfileId: profile.userProfileId,
+      })
+      .returning({ id: documents.id });
+    return doc.id;
+  });
+
+  return createSignatureEnvelope({
+    sourceDocumentId,
+    prospectId: input.prospectId ?? null,
+    engagementId: resolvedEngagementId ?? null,
+    subject: input.subject,
+    message: input.message ?? null,
+    signers: input.signers,
+    autoSignAsMe: input.autoSignAsMe ?? false,
+  });
+}
+
 /* ------------------------- public submit signature ------------------------- */
 
 const submitSchema = z.object({

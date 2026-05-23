@@ -20,7 +20,11 @@ import {
 } from "@/lib/db/queries/prospects";
 import { listEnvelopesForProspect } from "@/lib/db/queries/signatures";
 import { listForProspect } from "@/lib/db/queries/client-communications";
-import { emailTemplates, userProfiles } from "@/lib/db/schema";
+import {
+  documentTemplates,
+  emailTemplates,
+  userProfiles,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect";
@@ -54,30 +58,60 @@ export default async function ProspectDetailPage({
   const prospect = await getProspect(params.id);
   if (!prospect) notFound();
 
-  const [activities, envelopes, hasStoredSig, communications, templates] =
-    await Promise.all([
-      listProspectActivities(prospect.id),
-      listEnvelopesForProspect(prospect.id),
-      withSystemContext(async (tx) => {
-        const [row] = await tx
-          .select({ signatureImageData: userProfiles.signatureImageData })
-          .from(userProfiles)
-          .where(eq(userProfiles.id, profile.userProfileId))
-          .limit(1);
-        return Boolean(row?.signatureImageData);
-      }),
-      listForProspect(prospect.id),
-      withSystemContext(async (tx) => {
-        return tx
-          .select({
-            id: emailTemplates.id,
-            name: emailTemplates.name,
-            category: emailTemplates.category,
-          })
-          .from(emailTemplates)
-          .where(eq(emailTemplates.orgId, profile.orgId));
-      }),
-    ]);
+  const [
+    activities,
+    envelopes,
+    hasStoredSig,
+    communications,
+    templates,
+    docTemplates,
+    me,
+  ] = await Promise.all([
+    listProspectActivities(prospect.id),
+    listEnvelopesForProspect(prospect.id),
+    withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({ signatureImageData: userProfiles.signatureImageData })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, profile.userProfileId))
+        .limit(1);
+      return Boolean(row?.signatureImageData);
+    }),
+    listForProspect(prospect.id),
+    withSystemContext(async (tx) => {
+      return tx
+        .select({
+          id: emailTemplates.id,
+          name: emailTemplates.name,
+          category: emailTemplates.category,
+        })
+        .from(emailTemplates)
+        .where(eq(emailTemplates.orgId, profile.orgId));
+    }),
+    withSystemContext(async (tx) =>
+      tx
+        .select({
+          id: documentTemplates.id,
+          name: documentTemplates.name,
+          category: documentTemplates.category,
+          bodyMarkdown: documentTemplates.bodyMarkdown,
+          defaultSubject: documentTemplates.defaultSubject,
+        })
+        .from(documentTemplates)
+        .where(eq(documentTemplates.orgId, profile.orgId)),
+    ),
+    withSystemContext(async (tx) => {
+      const [u] = await tx
+        .select({
+          fullName: userProfiles.fullName,
+          email: userProfiles.email,
+        })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, profile.userProfileId))
+        .limit(1);
+      return u ?? null;
+    }),
+  ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
 
@@ -236,6 +270,18 @@ export default async function ProspectDetailPage({
               completedAt: e.completedAt,
             }))}
             hasStoredSignature={hasStoredSig}
+            documentTemplates={docTemplates}
+            variableContext={{
+              prospect: {
+                contactName: prospect.contactName,
+                companyName: prospect.companyName,
+                contactEmail: prospect.contactEmail,
+              },
+              sender: {
+                fullName: me?.fullName ?? "",
+                email: me?.email ?? "",
+              },
+            }}
           />
         </div>
 

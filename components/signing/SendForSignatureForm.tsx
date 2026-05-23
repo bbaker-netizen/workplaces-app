@@ -14,19 +14,43 @@
  * redirect to the new envelope's detail page.
  */
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Send, Trash2 } from "lucide-react";
 import {
+  FileSignature,
+  FileUp,
+  Loader2,
+  Plus,
+  Send,
+  Trash2,
+} from "lucide-react";
+import {
+  createEnvelopeFromComposed,
   createEnvelopeFromUpload,
   createSignatureEnvelope,
 } from "@/lib/actions/signatures";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "@/components/communication/RichTextEditor";
+import {
+  applyDocumentVariables,
+  buildVariableMap,
+  DOCUMENT_VARIABLES,
+  type DocumentVariableContext,
+} from "@/lib/signing/document-variables";
+import type { DocumentTemplate } from "@/lib/db/schema";
 
 type SignerDraft = {
   name: string;
   email: string;
   roleLabel: string;
 };
+
+export type SendForSignatureDocumentTemplate = Pick<
+  DocumentTemplate,
+  "id" | "name" | "category" | "bodyMarkdown" | "defaultSubject"
+>;
 
 type Props =
   | {
@@ -37,6 +61,11 @@ type Props =
       defaultSigners?: SignerDraft[];
       hasStoredSignature: boolean;
       onCancel?: () => void;
+      /** Document templates available for "compose" source mode. */
+      documentTemplates?: SendForSignatureDocumentTemplate[];
+      /** Context for resolving {{variable}} placeholders when a
+       *  template is picked. */
+      variableContext?: DocumentVariableContext;
     }
   | {
       mode: "existing-doc";
@@ -62,6 +91,44 @@ export function SendForSignatureForm(props: Props) {
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pickedFileName, setPickedFileName] = useState<string | null>(null);
+
+  // Compose-mode state — only meaningful when props.mode === "upload"
+  // (existing-doc already has a source document picked). Defaults to
+  // "upload" so the file picker is the first thing the user sees, with
+  // the compose path available as a tab.
+  const [sourceMode, setSourceMode] = useState<"upload" | "compose">(
+    "upload",
+  );
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [composedBody, setComposedBody] = useState<string>("");
+  const bodyEditorRef = useRef<RichTextEditorHandle | null>(null);
+  const composeAvailable =
+    props.mode === "upload" &&
+    (props.documentTemplates?.length ?? 0) > 0 &&
+    !!props.variableContext;
+
+  // When the user picks a template, resolve its body with variables,
+  // push to the editor, and seed the subject (if blank) from the
+  // template's default.
+  useEffect(() => {
+    if (sourceMode !== "compose") return;
+    if (props.mode !== "upload") return;
+    if (!selectedTemplateId) return;
+    const tpl = props.documentTemplates?.find(
+      (t) => t.id === selectedTemplateId,
+    );
+    if (!tpl) return;
+    const vars = props.variableContext
+      ? buildVariableMap(props.variableContext)
+      : {};
+    const resolved = applyDocumentVariables(tpl.bodyMarkdown ?? "", vars);
+    setComposedBody(resolved);
+    bodyEditorRef.current?.setMarkdown(resolved);
+    if (!subject.trim() && tpl.defaultSubject) {
+      setSubject(tpl.defaultSubject);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTemplateId]);
 
   function addSigner() {
     if (signers.length >= 4) return;
@@ -105,6 +172,34 @@ export function SendForSignatureForm(props: Props) {
     }));
 
     startTransition(async () => {
+      if (props.mode === "upload" && sourceMode === "compose") {
+        // Compose-from-template path: render markdown to PDF server-
+        // side, then run the standard envelope flow.
+        const liveBody =
+          bodyEditorRef.current?.getMarkdown() ?? composedBody;
+        if (!liveBody.trim() || liveBody.trim().length < 30) {
+          setError(
+            "Write or paste the actual document body before sending.",
+          );
+          return;
+        }
+        const result = await createEnvelopeFromComposed({
+          prospectId: props.prospectId ?? null,
+          engagementId: props.engagementId ?? null,
+          subject: subject.trim(),
+          message: message.trim() || null,
+          signers: cleanSigners,
+          autoSignAsMe,
+          documentTitle: subject.trim(),
+          bodyMarkdown: liveBody,
+        });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        router.push(`/coach/envelopes/${result.data.envelopeId}`);
+        return;
+      }
       if (props.mode === "upload") {
         const file = fileInputRef.current?.files?.[0];
         if (!file) {
@@ -166,14 +261,120 @@ export function SendForSignatureForm(props: Props) {
         />
       </div>
 
-      {props.mode === "upload" && (
+      {props.mode === "upload" && composeAvailable && (
+        <div
+          role="tablist"
+          aria-label="Document source"
+          className="inline-flex bg-tbb-cream-50 border border-tbb-line rounded-pill p-1 gap-1"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sourceMode === "upload"}
+            onClick={() => setSourceMode("upload")}
+            className={
+              "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill transition-colors " +
+              (sourceMode === "upload"
+                ? "bg-white text-tbb-navy shadow-tbb-sm"
+                : "text-tbb-ink-3 hover:text-tbb-navy")
+            }
+          >
+            <FileUp className="w-3.5 h-3.5" aria-hidden /> Upload PDF
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sourceMode === "compose"}
+            onClick={() => setSourceMode("compose")}
+            className={
+              "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill transition-colors " +
+              (sourceMode === "compose"
+                ? "bg-white text-tbb-navy shadow-tbb-sm"
+                : "text-tbb-ink-3 hover:text-tbb-navy")
+            }
+          >
+            <FileSignature className="w-3.5 h-3.5" aria-hidden /> Compose
+            from template
+          </button>
+        </div>
+      )}
+
+      {props.mode === "upload" && sourceMode === "compose" && composeAvailable && (
+        <div className="space-y-3 border border-tbb-line rounded-md bg-white p-4">
+          <label className="block">
+            <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+              Pick a template
+            </span>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+              disabled={isPending}
+              className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+            >
+              <option value="">— Choose a document template —</option>
+              {props.documentTemplates?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selectedTemplateId && (
+            <>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                    Document body — edit anything specific to this deal
+                  </span>
+                  <span className="text-[10px] text-tbb-ink-3">
+                    Insert:
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {DOCUMENT_VARIABLES.slice(0, 7).map((v) => (
+                    <button
+                      key={v.name}
+                      type="button"
+                      onClick={() =>
+                        bodyEditorRef.current?.insertText(`{{${v.name}}}`)
+                      }
+                      title={`Insert {{${v.name}}}`}
+                      className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-tbb-cream-50 text-tbb-blue border border-tbb-line hover:bg-tbb-blue hover:text-white transition-colors"
+                    >
+                      {`{{${v.name}}}`}
+                    </button>
+                  ))}
+                </div>
+                <RichTextEditor
+                  initialMarkdown={composedBody}
+                  placeholder="Document body…"
+                  disabled={isPending}
+                  editorRef={bodyEditorRef}
+                  onChange={setComposedBody}
+                  ariaLabel="Document body"
+                />
+                <p className="mt-2 text-[11px] text-tbb-ink-3">
+                  We&apos;ll render this as a Workplaces-branded PDF when
+                  you send. Variables that still look like{" "}
+                  <code className="font-mono">{`{{name}}`}</code> at send
+                  time are missing data — fill them in or remove them
+                  before clicking send.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {props.mode === "upload" && sourceMode === "upload" && (
         <div className="space-y-1">
           <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             Document <span className="text-tbb-danger">*</span>
           </label>
           <input
             ref={fileInputRef}
-            required
+            required={sourceMode === "upload"}
             type="file"
             accept="application/pdf,image/*"
             onChange={(e) =>

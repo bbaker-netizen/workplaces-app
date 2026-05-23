@@ -12,11 +12,16 @@
 import { redirect } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { emailTemplates, userProfiles } from "@/lib/db/schema";
+import {
+  documentTemplates,
+  emailTemplates,
+  userProfiles,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { TemplatesManager } from "@/components/templates/TemplatesManager";
 import { EmailSignatureEditor } from "@/components/templates/EmailSignatureEditor";
 import { CoachSignatureManager } from "@/components/signing/CoachSignatureManager";
+import { DocumentTemplatesManager } from "@/components/templates/DocumentTemplatesManager";
 
 export default async function TemplatesPage() {
   const profile = await ensureUserProfile();
@@ -25,13 +30,20 @@ export default async function TemplatesPage() {
     redirect("/portal");
   }
 
-  const [templates, me] = await Promise.all([
+  const [templates, docTemplates, me] = await Promise.all([
     withSystemContext(async (tx) =>
       tx
         .select()
         .from(emailTemplates)
         .where(eq(emailTemplates.orgId, profile.orgId))
         .orderBy(desc(emailTemplates.updatedAt)),
+    ),
+    withSystemContext(async (tx) =>
+      tx
+        .select()
+        .from(documentTemplates)
+        .where(eq(documentTemplates.orgId, profile.orgId))
+        .orderBy(desc(documentTemplates.updatedAt)),
     ),
     withSystemContext(async (tx) => {
       const [u] = await tx
@@ -99,6 +111,25 @@ export default async function TemplatesPage() {
           </p>
         </div>
         <TemplatesManager initialTemplates={templates} />
+      </section>
+
+      <section className="space-y-3" id="document-templates">
+        <div>
+          <h2 className="text-xl font-bold text-tbb-navy">
+            Document templates (for signing)
+          </h2>
+          <p className="text-sm text-tbb-ink-3">
+            The actual <strong>body</strong> of every contract, proposal,
+            NDA, and renewal you send for signature. Write it in markdown
+            with variable placeholders. When you hit{" "}
+            <strong>Send for signature</strong> on a prospect or engagement,
+            pick a template, the variables fill in, you edit anything
+            specific to that deal, and we render the result as a
+            Workplaces-branded PDF and route it through signing — no
+            external Word doc / Adobe step in between.
+          </p>
+        </div>
+        <DocumentTemplatesManager initialTemplates={docTemplates} />
       </section>
     </main>
   );
