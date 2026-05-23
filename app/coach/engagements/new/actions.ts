@@ -245,23 +245,80 @@ export async function createEngagementAction(
   const redirectUrl = `${appUrl.replace(/\/+$/, "")}/portal/welcome`;
   let invitationUrl: string | null = null;
   try {
-    const invitation = await clerk.organizations.createOrganizationInvitation({
-      organizationId: newClerkOrg.id,
-      inviterUserId: bruceClerkUserId,
-      emailAddress: clientLeadEmail,
-      role: "org:admin",
-      redirectUrl,
-      publicMetadata: {
-        app_role: "client_lead",
-        client_lead_full_name: clientLeadFullName,
-      },
-    });
-    // Clerk returns the accept URL on the invitation object. We need it
-    // for our branded welcome email (step 9 below) so the recipient can
-    // accept from the Workplaces email instead of waiting for Clerk's
-    // bland default.
-    invitationUrl =
-      (invitation as { url?: string | null }).url ?? null;
+    // First attempt: call the Clerk REST API directly with `notify: false`
+    // in the body. The Clerk Node SDK doesn't type this param on org
+    // invitations (only on user-level invitations), but the underlying
+    // REST endpoint historically accepts it as an undocumented field.
+    // When honored, Clerk skips sending its own bland default email and
+    // we get a clean slate where our branded Workplaces welcome email
+    // is the only email the recipient receives.
+    //
+    // If the REST call fails for any reason (rejected param, network
+    // hiccup, future Clerk change), fall back to the SDK call — the
+    // engagement still works, the recipient just gets Clerk's email
+    // alongside ours, same as before.
+    const clerkSecret = process.env.CLERK_SECRET_KEY;
+    let restSucceeded = false;
+    if (clerkSecret) {
+      try {
+        const resp = await fetch(
+          `https://api.clerk.com/v1/organizations/${encodeURIComponent(newClerkOrg.id)}/invitations`,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${clerkSecret}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              email_address: clientLeadEmail,
+              role: "org:admin",
+              inviter_user_id: bruceClerkUserId,
+              redirect_url: redirectUrl,
+              notify: false, // suppress Clerk's default email
+              public_metadata: {
+                app_role: "client_lead",
+                client_lead_full_name: clientLeadFullName,
+              },
+            }),
+          },
+        );
+        if (resp.ok) {
+          const json = (await resp.json()) as { url?: string | null };
+          invitationUrl = json.url ?? null;
+          restSucceeded = true;
+        } else {
+          const text = await resp.text().catch(() => "");
+          console.warn(
+            `[engagement-create] Clerk REST invitation (notify:false) failed ${resp.status}: ${text.slice(0, 300)} — falling back to SDK (which sends Clerk's email).`,
+          );
+        }
+      } catch (restErr) {
+        console.warn(
+          `[engagement-create] Clerk REST call threw, falling back to SDK: ${
+            restErr instanceof Error ? restErr.message : String(restErr)
+          }`,
+        );
+      }
+    }
+
+    if (!restSucceeded) {
+      // SDK fallback. Sends Clerk's default email but at least the
+      // invitation still gets created and the engagement is usable.
+      const invitation =
+        await clerk.organizations.createOrganizationInvitation({
+          organizationId: newClerkOrg.id,
+          inviterUserId: bruceClerkUserId,
+          emailAddress: clientLeadEmail,
+          role: "org:admin",
+          redirectUrl,
+          publicMetadata: {
+            app_role: "client_lead",
+            client_lead_full_name: clientLeadFullName,
+          },
+        });
+      invitationUrl =
+        (invitation as { url?: string | null }).url ?? null;
+    }
   } catch (e) {
     const msg = clerkErrorMessage(e);
     // Non-fatal: the engagement landed in DB; Bruce is still admin of
