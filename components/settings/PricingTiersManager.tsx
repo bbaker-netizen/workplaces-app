@@ -203,7 +203,7 @@ export function PricingTiersManager({
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-tbb-navy">{t.label}</p>
                       <p className="text-xs text-tbb-ink-3 font-mono">
-                        {t.tierKey} · sort {t.sortOrder}
+                        {t.tierKey}
                       </p>
                     </div>
                     <p className="font-bold text-tbb-navy text-lg">
@@ -269,7 +269,7 @@ function DraftRow({
   isPending: boolean;
 }) {
   return (
-    <div className="grid sm:grid-cols-[1fr_120px_120px_80px_auto] gap-3 items-end">
+    <div className="grid sm:grid-cols-[1fr_120px_140px_auto] gap-3 items-end">
       <label className="block">
         <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
           Label
@@ -317,25 +317,6 @@ function DraftRow({
             className="w-full bg-white border border-tbb-line rounded-md pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </div>
-      </label>
-      <label className="block">
-        <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-          Sort
-        </span>
-        <input
-          type="number"
-          min="0"
-          step="10"
-          value={draft.sortOrder}
-          onChange={(e) =>
-            setDraft({
-              ...draft,
-              sortOrder: parseInt(e.target.value || "0", 10),
-            })
-          }
-          disabled={isPending}
-          className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-        />
       </label>
       <div className="flex items-center gap-1.5">
         <button
