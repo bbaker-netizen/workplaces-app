@@ -158,12 +158,20 @@ export async function convertDocumentToTemplate(
       : extracted;
 
   // 2. Run Claude to produce the markdown template.
+  //
+  // We use Haiku (the fast Claude variant) here instead of Sonnet —
+  // contract conversion is a mostly mechanical "clean up + substitute
+  // placeholders" task, well within Haiku's capability, and Haiku runs
+  // 3-5x faster (typically 5-12 seconds vs 20-40s for Sonnet). The
+  // latency budget matters: Netlify caps synchronous server actions
+  // at 10s on Free, 26s on Pro, 60s on Enterprise — Sonnet was sitting
+  // right at the edge of the Pro budget.
   let json: unknown;
   try {
     const result = await complete({
       system: SYSTEM_PROMPT,
       user: `Source document filename: ${filename}\n\nExtracted text:\n\n${capped}`,
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       // 6000 tokens covers a 4-5 page contract comfortably; lowering
       // from the previous 8000 ceiling reduces tail latency on
       // serverless and rarely matters because contracts cap there.
