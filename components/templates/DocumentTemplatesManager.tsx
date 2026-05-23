@@ -14,12 +14,21 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileSignature, Loader2, Plus, Trash2, X } from "lucide-react";
+import {
+  FileSignature,
+  FileUp,
+  Loader2,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   createDocumentTemplate,
   deleteDocumentTemplate,
   updateDocumentTemplate,
 } from "@/lib/actions/document-templates";
+import { convertDocumentToTemplate } from "@/lib/actions/convert-document-to-template";
 import {
   DOCUMENT_TEMPLATE_CATEGORIES,
   DOCUMENT_VARIABLES,
@@ -81,8 +90,12 @@ export function DocumentTemplatesManager({
 }) {
   const router = useRouter();
   const editorRef = useRef<RichTextEditorHandle | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importingFilename, setImportingFilename] = useState<string | null>(
+    null,
+  );
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -97,6 +110,44 @@ export function DocumentTemplatesManager({
   function openNew() {
     setError(null);
     setDraft({ ...NEW_DRAFT });
+  }
+
+  function triggerImport() {
+    setError(null);
+    importInputRef.current?.click();
+  }
+
+  function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same filename later
+    if (!file) return;
+    setError(null);
+    setImportingFilename(file.name);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("file", file);
+      const r = await convertDocumentToTemplate(fd);
+      setImportingFilename(null);
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      // Open the editor pre-filled with the conversion result. Bruce
+      // reviews, edits, saves through the normal Create flow.
+      setDraft({
+        id: null,
+        name: r.data.name,
+        category: r.data.category,
+        bodyMarkdown: r.data.body_markdown,
+        defaultSubject: r.data.default_subject ?? "",
+      });
+      // Force the editor to re-mount with the new content (key on
+      // draft.id || 'new', but here we explicitly push the markdown
+      // in via the imperative handle once the editor remounts).
+      setTimeout(() => {
+        editorRef.current?.setMarkdown(r.data.body_markdown);
+      }, 0);
+    });
   }
   function openExisting(t: DocumentTemplate) {
     setError(null);
@@ -158,18 +209,56 @@ export function DocumentTemplatesManager({
   return (
     <div className="grid lg:grid-cols-5 gap-6">
       <aside className="lg:col-span-2 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <h3 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
             Your documents
           </h3>
-          <button
-            type="button"
-            onClick={openNew}
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
-          >
-            <Plus className="w-3.5 h-3.5" aria-hidden /> New document
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={onImportFile}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={triggerImport}
+              disabled={isPending}
+              title="Import a .docx or .pdf and let Claude turn it into a template"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line bg-white text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue disabled:opacity-50"
+            >
+              {importingFilename ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+              ) : (
+                <FileUp className="w-3.5 h-3.5" aria-hidden />
+              )}
+              {importingFilename ? "Converting…" : "Import doc"}
+            </button>
+            <button
+              type="button"
+              onClick={openNew}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden /> New document
+            </button>
+          </div>
         </div>
+        {importingFilename && (
+          <div className="border border-tbb-blue/30 bg-tbb-blue/5 rounded-md px-3 py-2 text-xs text-tbb-ink-2 flex items-start gap-2">
+            <Sparkles
+              className="w-3.5 h-3.5 text-tbb-blue mt-0.5 shrink-0"
+              aria-hidden
+            />
+            <span>
+              Reading <strong>{importingFilename}</strong> and asking Claude
+              to convert it. Usually 15–30 seconds for a typical contract.
+              When it lands, the editor on the right will be pre-filled.
+              Review, edit anything off, and hit Save.
+            </span>
+          </div>
+        )}
 
         {initialTemplates.length === 0 && !draft ? (
           <div className="border border-tbb-line rounded-lg bg-white p-6 text-center space-y-2">
