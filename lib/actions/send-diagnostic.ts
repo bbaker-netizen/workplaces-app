@@ -11,7 +11,7 @@
  *   4. Mirror the outbound message into client_communications so the
  *      unified inbox + per-client audit trail picks it up too.
  *
- * Authorization: master_admin / coach only (Business Builder action).
+ * Authorization: master_admin / Coach only (Coach action).
  */
 
 import { eq } from "drizzle-orm";
@@ -149,8 +149,8 @@ export async function sendDiagnosticToProspect(
     // a logging hiccup.
   }
 
-  revalidatePath(`/coach/pipeline/${prospect.id}`);
-  revalidatePath("/coach/pipeline");
-  revalidatePath("/coach/inbox");
+  revalidatePath(`/business-builder/pipeline/${prospect.id}`);
+  revalidatePath("/business-builder/pipeline");
+  revalidatePath("/business-builder/inbox");
   return { ok: true, data: { sent: true } };
 }

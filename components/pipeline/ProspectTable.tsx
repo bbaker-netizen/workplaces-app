@@ -3,7 +3,7 @@
 /**
  * Pipeline table — the CRM list view.
  *
- * Tabular layout with the columns a Business Builder needs at a glance:
+ * Tabular layout with the columns a Coach needs at a glance:
  * company, contact, email + phone, stage, expected value, next action,
  * owner, last contact, created. Each row links to the prospect detail
  * page; the inline status select is the one click target that doesn't
@@ -511,7 +511,7 @@ function ProspectRow({
   isSelected: boolean;
   onToggleSelected: () => void;
 }) {
-  const href = `/coach/pipeline/${prospect.id}`;
+  const href = `/business-builder/pipeline/${prospect.id}`;
   return (
     <tr
       className={

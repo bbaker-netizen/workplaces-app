@@ -5,7 +5,7 @@
  *
  * Phase 3.12. One server action that searches across action items,
  * goals, projects, deliverables, hires, documents, sessions, and
- * messages by ILIKE on the title/body/name field. For coach users,
+ * messages by ILIKE on the title/body/name field. For Coach users,
  * spans every engagement they own; for client users, scoped to
  * their home org via RLS.
  *
@@ -271,7 +271,7 @@ export async function globalSearch(
       // System context — coaches search across every tenant they own.
       hits = await withSystemContext(async (tx) => {
         const all = await runSearch(tx);
-        // Filter to engagements this coach owns. Re-querying is cheap.
+        // Filter to engagements this Coach owns. Re-querying is cheap.
         const engs = await tx
           .select({ id: engagements.id })
           .from(engagements)

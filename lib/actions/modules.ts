@@ -84,7 +84,7 @@ export async function setModuleEnabled(
       },
     );
     revalidatePath("/portal");
-    revalidatePath(`/coach`);
+    revalidatePath(`/business-builder`);
     return { ok: true, data: undefined };
   } catch (e) {
     return {

@@ -4,7 +4,7 @@
  * Client communications — server actions.
  *
  * - logClientCommunication: manually record an email/call/sms the
- *   Business Builder had with a client. The inbound webhook uses the
+ *   Coach had with a client. The inbound webhook uses the
  *   same write path internally so call notes and inbound email both
  *   land in the same table.
  * - deleteClientCommunication: hard delete (no soft delete yet; can
@@ -123,12 +123,12 @@ export async function logClientCommunication(
       return row;
     });
     if (data.prospectId) {
-      revalidatePath(`/coach/pipeline/${data.prospectId}`);
+      revalidatePath(`/business-builder/pipeline/${data.prospectId}`);
     }
     if (data.engagementId) {
-      revalidatePath(`/coach/communication/${data.engagementId}`);
+      revalidatePath(`/business-builder/communication/${data.engagementId}`);
     }
-    revalidatePath("/coach/inbox");
+    revalidatePath("/business-builder/inbox");
     return { ok: true, data: created };
   } catch (e) {
     return {
@@ -152,7 +152,7 @@ export async function deleteClientCommunication(
     await withTenantContext(profile.orgId, async (tx) => {
       await tx.delete(clientCommunications).where(eq(clientCommunications.id, id));
     });
-    revalidatePath("/coach/inbox");
+    revalidatePath("/business-builder/inbox");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -188,7 +188,7 @@ export async function setCommunicationTags(
         .set({ tags: parsed.data.tags, updatedAt: new Date() })
         .where(eq(clientCommunications.id, parsed.data.id));
     });
-    revalidatePath("/coach/inbox");
+    revalidatePath("/business-builder/inbox");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -243,7 +243,7 @@ export async function generateProspectAlias(
     });
     const domain =
       process.env.INBOUND_EMAIL_DOMAIN ?? "inbound.4workplaces.com";
-    revalidatePath(`/coach/pipeline/${prospectId}`);
+    revalidatePath(`/business-builder/pipeline/${prospectId}`);
     return {
       ok: true,
       data: { alias: result, address: `${result}@${domain}` },

@@ -7,13 +7,13 @@
  * WITHOUT formalising the prospect into an engagement first.
  * Useful for the imported Monday clients — he can see the draft
  * Claude would build before deciding whether to give them portal
- * access via /coach/engagements/new.
+ * access via /business-builder/engagements/new.
  *
  * Same engine as the engagement-create-time seeder
  * (lib/soul-files/seed-from-fireflies.ts), just returns the body
  * instead of writing it.
  *
- * Authz: master_admin / coach only.
+ * Authz: master_admin / Coach only.
  */
 
 import { z } from "zod";
@@ -30,7 +30,7 @@ const TRANSCRIPT_CHAR_CAP = 60_000;
 
 // Same prompt as the engagement-create seeder so the previews match
 // what'll be saved when the engagement is later formalised.
-const SOUL_FILE_DRAFT_SYSTEM = `You are drafting a starter "Soul File" for a coaching engagement — a long-form context document that captures the most important things a business coach needs to know about a client.
+const SOUL_FILE_DRAFT_SYSTEM = `You are drafting a starter "Soul File" for a coaching engagement — a long-form context document that captures the most important things a business Coach needs to know about a client.
 
 A Soul File is structured around six sections in this exact order:
 
@@ -52,7 +52,7 @@ Who's at the helm. Names, backgrounds, working styles, what they each own. The p
 # Hard-won learnings
 Things they've already tried that didn't work, things they've learned the hard way, beliefs they hold strongly.
 
-You will receive transcript text from one or more recent meetings between the coach and the client. Your job: synthesize what the transcripts reveal into this six-section structure.
+You will receive transcript text from one or more recent meetings between the Coach and the client. Your job: synthesize what the transcripts reveal into this six-section structure.
 
 Rules:
 - Markdown output only. Use the section headings shown above (single #), nothing else.
@@ -60,9 +60,9 @@ Rules:
 - If a section has no evidence in the transcripts, write "_To be discussed in an upcoming session._" — do not invent.
 - No preamble. No "Here is the Soul File…". Start with the first heading.
 - No closing remarks. End after the last section.
-- First person from the coach's POV is fine ("we talked about", "they want"). Never quote sentences verbatim — paraphrase.
+- First person from the Coach's POV is fine ("we talked about", "they want"). Never quote sentences verbatim — paraphrase.
 - Keep numbers and proper nouns exact as they appear in transcripts.
-- This is a starter draft. The coach will edit it.`;
+- This is a starter draft. The Coach will edit it.`;
 
 const schema = z.object({
   prospectId: z.string().uuid(),

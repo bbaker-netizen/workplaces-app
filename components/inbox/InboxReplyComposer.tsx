@@ -7,7 +7,7 @@
  * `sendClientMessage` server action the prospect/engagement comms
  * panel uses. Means the reply:
  *
- *   - Lands in the recipient's inbox via the coach's connected Gmail
+ *   - Lands in the recipient's inbox via the Coach's connected Gmail
  *     (so it appears in their Sent folder + the conversation lives
  *     under their Gmail thread)
  *   - Gets captured into client_communications so it shows up in

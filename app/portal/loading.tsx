@@ -2,7 +2,7 @@ import { SquiggleSpinner } from "@/components/ui/SquiggleSpinner";
 
 /**
  * Loading state for any /portal route. Same squiggle spinner as
- * the coach side — clients get the same characterful loader.
+ * the Business Builder side — clients get the same characterful loader.
  */
 export default function PortalLoading() {
   return (

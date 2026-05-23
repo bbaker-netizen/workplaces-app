@@ -11,7 +11,7 @@
  * engagement see the same behaviour as before.
  *
  * `listCoachEngagements` is cross-tenant (engagements live in client
- * orgs; coach session is in master org). Uses withSystemContext.
+ * orgs; Coach session is in master org). Uses withSystemContext.
  */
 
 import { eq } from "drizzle-orm";
@@ -76,16 +76,16 @@ export async function listCoachEngagements(): Promise<Engagement[]> {
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
 
   return withSystemContext(async (tx) => {
-    const [coach] = await tx
+    const [Coach] = await tx
       .select({ id: coaches.id })
       .from(coaches)
       .where(eq(coaches.userProfileId, profile.userProfileId))
       .limit(1);
-    if (!coach) return [];
+    if (!Coach) return [];
 
     return tx
       .select()
       .from(engagements)
-      .where(eq(engagements.coachId, coach.id));
+      .where(eq(engagements.coachId, Coach.id));
   });
 }

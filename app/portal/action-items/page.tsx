@@ -23,7 +23,7 @@ export default async function PortalActionItemsPage() {
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
           Your portal isn&apos;t bound to an engagement. If you expect access,
-          contact your Business Builder.
+          contact your Coach.
         </p>
       </main>
     );
@@ -34,7 +34,7 @@ export default async function PortalActionItemsPage() {
   const allItems = await listEngagementActionItems(engagement.id);
   const sorted = sortActionItems(allItems);
 
-  // Hide drafts from non-Business Builder roles.
+  // Hide drafts from non-Coach roles.
   const visibleItems = isCoachLike
     ? sorted
     : sorted.filter((i) => i.status !== "draft");
@@ -43,7 +43,7 @@ export default async function PortalActionItemsPage() {
     ? STATUSES_VISIBLE_TO_COACH
     : STATUSES_VISIBLE_TO_CLIENT;
 
-  // Roles allowed to create from the portal: master_admin, coach,
+  // Roles allowed to create from the portal: master_admin, Coach,
   // client_lead. Lower roles get no New button.
   const canCreate =
     profile.role === "master_admin" ||

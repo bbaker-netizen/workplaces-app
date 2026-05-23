@@ -11,7 +11,7 @@
  * to the same set of people — the wall just has nobody to keep out yet.
  *
  * Three thread types in 1.3:
- *   - "engagement_leadership" — master_admin / coach / client_lead /
+ *   - "engagement_leadership" — master_admin / Coach / client_lead /
  *     client_manager only. Hidden from client_employee.
  *   - "engagement_team"       — everyone in the engagement (incl.
  *     client_employee).

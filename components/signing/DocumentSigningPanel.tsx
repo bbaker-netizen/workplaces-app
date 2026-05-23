@@ -4,8 +4,8 @@
  * Engagement-side "send a document for signature" panel.
  *
  * Shows a select for an existing engagement document, plus the shared
- * SendForSignatureForm in existing-doc mode. Used on coach + portal
- * documents pages so a Business Builder can send any uploaded file without
+ * SendForSignatureForm in existing-doc mode. Used on Coach + portal
+ * documents pages so a Coach can send any uploaded file without
  * re-uploading it.
  */
 
@@ -115,7 +115,7 @@ export function DocumentSigningPanel({
                 className="py-2 flex items-baseline gap-x-3 gap-y-0.5 flex-wrap"
               >
                 <Link
-                  href={`/coach/envelopes/${e.id}`}
+                  href={`/business-builder/envelopes/${e.id}`}
                   className="font-sans text-sm font-bold text-foreground hover:underline underline-offset-4"
                 >
                   {e.subject}

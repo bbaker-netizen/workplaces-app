@@ -1,11 +1,11 @@
 "use server";
 
 /**
- * Prospect actions — coach lifecycle moves through the pipeline.
+ * Prospect actions — Coach lifecycle moves through the pipeline.
  * Phase 5 — full CRM.
  *
  * Surface:
- *   - createProspect (manual, by a Business Builder)
+ *   - createProspect (manual, by a Coach)
  *   - updateProspect (any field)
  *   - deleteProspect
  *   - touchLastContact (called from the activity logger so the
@@ -151,7 +151,7 @@ export async function createProspect(
     return row;
   });
 
-  revalidatePath("/coach/pipeline");
+  revalidatePath("/business-builder/pipeline");
   return { ok: true, data: { id: inserted.id } };
 }
 
@@ -279,8 +279,8 @@ export async function updateProspect(
       if (Object.keys(updates).length === 0) return;
       await tx.update(prospects).set(updates).where(eq(prospects.id, data.id));
     });
-    revalidatePath("/coach/pipeline");
-    revalidatePath(`/coach/pipeline/${data.id}`);
+    revalidatePath("/business-builder/pipeline");
+    revalidatePath(`/business-builder/pipeline/${data.id}`);
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -302,7 +302,7 @@ export async function deleteProspect(
     await withSystemContext(async (tx) => {
       await tx.delete(prospects).where(eq(prospects.id, id));
     });
-    revalidatePath("/coach/pipeline");
+    revalidatePath("/business-builder/pipeline");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -353,7 +353,7 @@ export async function bulkDeleteProspects(
         .returning({ id: prospects.id });
       return result.length;
     });
-    revalidatePath("/coach/pipeline");
+    revalidatePath("/business-builder/pipeline");
     return { ok: true, data: { deleted } };
   } catch (e) {
     return {

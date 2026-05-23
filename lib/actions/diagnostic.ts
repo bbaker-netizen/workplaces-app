@@ -68,7 +68,7 @@ export async function submitDiagnosticIntake(
 
       if (existing) {
         // Append diagnostic notes to anything already there so we don't
-        // overwrite a Business Builder's running notes.
+        // overwrite a Coach's running notes.
         const mergedNotes = [existing.currentNotes, notes]
           .filter((s) => s && s.trim().length > 0)
           .join("\n\n---\n\n");

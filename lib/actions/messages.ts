@@ -12,7 +12,7 @@
  *     the leadership/team/action-item audience check from
  *     `lib/communication/audience.ts`.
  *   - Edit: author only. Delete: author OR a leadership role
- *     (master_admin / coach / client_lead / client_manager) so the
+ *     (master_admin / Coach / client_lead / client_manager) so the
  *     conversation can be cleaned up if a team member misposts. The
  *     row is NOT hard-deleted — body is replaced with a tombstone
  *     marker that the renderer surfaces as "[Message deleted]". Per
@@ -101,11 +101,11 @@ function revalidateForParent(
   // wants a refresh on any change.
   revalidatePath("/portal/communication");
   if (engagementIdForCommunication) {
-    revalidatePath(`/coach/communication/${engagementIdForCommunication}`);
+    revalidatePath(`/business-builder/communication/${engagementIdForCommunication}`);
   }
   if (threadType === THREAD_TYPE.actionItem) {
     revalidatePath(`/portal/action-items/${parentEntityId}`);
-    revalidatePath(`/coach/action-items/${parentEntityId}`);
+    revalidatePath(`/business-builder/action-items/${parentEntityId}`);
   }
 }
 

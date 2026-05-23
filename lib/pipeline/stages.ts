@@ -18,7 +18,7 @@
  *
  * Each stage carries a label, a one-line description, and a TBB-palette
  * colour pair (text/background). Colours echo Bruce's Monday board
- * conventions but adapted to the Business Builder palette.
+ * conventions but adapted to the Coach palette.
  */
 
 import type { prospectStatusEnum } from "@/lib/db/schema";

@@ -9,7 +9,7 @@
  * Used by:
  *   - The action item detail page (threadType="action_item")
  *   - The portal Communication page's Leadership / Team tabs
- *   - The Business Builder Communication page's Leadership / Team tabs
+ *   - The Coach Communication page's Leadership / Team tabs
  */
 
 import {

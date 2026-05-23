@@ -123,7 +123,7 @@ export async function sendGmailMessage(
   const { getValidAccessToken } = await import("./google-calendar");
   const token = await getValidAccessToken(userProfileId);
   if (!token) {
-    throw new Error("Google not connected. Visit /coach/profile/google-calendar.");
+    throw new Error("Google not connected. Visit /business-builder/profile/google-calendar.");
   }
 
   const hasAttachments =

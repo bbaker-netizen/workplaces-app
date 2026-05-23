@@ -19,7 +19,7 @@ export function SessionList({
 }: {
   upcoming: ListedSession[];
   past: ListedSession[];
-  /** e.g. "/portal/sessions" or "/coach/sessions/<engagementId>". */
+  /** e.g. "/portal/sessions" or "/business-builder/sessions/<engagementId>". */
   hrefBase: string;
   emptyHeadline: string;
   emptyDescription: string;

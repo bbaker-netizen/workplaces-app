@@ -33,7 +33,7 @@ export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-const RENEWAL_SYSTEM = `You are an expert Business Builder for Workplaces. You're drafting a renewal proposal for an existing client whose first engagement year is wrapping up.
+const RENEWAL_SYSTEM = `You are an expert Coach for Workplaces. You're drafting a renewal proposal for an existing client whose first engagement year is wrapping up.
 
 Output a markdown proposal with these sections (omit any section that has no content):
 

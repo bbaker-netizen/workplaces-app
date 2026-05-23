@@ -124,7 +124,7 @@ export const firefliesExtract = inngest.createFunction(
     return step.run("extract", async () => {
       // We fetch the session id and let the existing server action do
       // the work. The action requires an authenticated profile, so we
-      // run a system-context shim that reads the Business Builder who created
+      // run a system-context shim that reads the Coach who created
       // the session and performs the extraction directly.
       const session = await withSystemContext(async (tx) => {
         const [row] = await tx

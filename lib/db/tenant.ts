@@ -153,7 +153,7 @@ async function resolveEngagementOrgId(
  * `withEngagementContext` — bind RLS to the org that owns an engagement,
  * not necessarily the caller's home org.
  *
- *   - Coach roles (`master_admin` / `coach`): GUC binds to the
+ *   - Coach roles (`master_admin` / `Coach`): GUC binds to the
  *     engagement's org id, regardless of the caller's home org.
  *     This is what lets Bruce post in a CLIENT engagement from the
  *     master org session.
@@ -216,7 +216,7 @@ export async function withEngagementContext<T>(
  *
  * Returns null if the record doesn't exist. Caller MUST then validate
  * via `withEngagementContext`, which enforces audience rules for both
- * coach and client roles.
+ * Coach and client roles.
  */
 export async function resolveEngagementIdFromRecord(
   table:

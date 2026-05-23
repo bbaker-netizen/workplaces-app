@@ -5,7 +5,7 @@
  *
  * Phase 4.6. Surface:
  *   - `startQboAuthorize()` — generates a CSRF state, sets a cookie,
- *     and returns the Intuit authorize URL the Business Builder should be sent to.
+ *     and returns the Intuit authorize URL the Coach should be sent to.
  *   - `disconnectQbo()` — revoke + drop stored tokens.
  *   - `createQboInvoiceForEngagement(...)` — provider-aware wrapper
  *     in lib/actions/invoices.ts uses this.
@@ -88,6 +88,6 @@ export async function disconnectQbo(): Promise<ActionResult> {
     });
   }
 
-  revalidatePath("/coach/profile/quickbooks");
+  revalidatePath("/business-builder/profile/quickbooks");
   return { ok: true, data: undefined };
 }

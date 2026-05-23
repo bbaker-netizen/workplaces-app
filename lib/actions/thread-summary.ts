@@ -7,7 +7,7 @@
  * recent messages and returns a structured recap (key decisions,
  * open questions, action items implied). Result is returned as
  * markdown — caller decides what to do (display inline, post as a
- * coach-only message, copy to clipboard).
+ * Coach-only message, copy to clipboard).
  */
 
 import { eq, and } from "drizzle-orm";

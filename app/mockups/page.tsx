@@ -137,7 +137,7 @@ export default function MockupsHub() {
           <strong className="text-tbb-navy">Reminder — Option A</strong>{" "}
           (stay heritage + more delight moments) is what you have today
           plus more confetti / Buddy reactions on milestones. The current
-          app at <Link href="/coach" className="text-tbb-blue underline">/coach</Link>{" "}
+          app at <Link href="/business-builder" className="text-tbb-blue underline">/business-builder</Link>{" "}
           is the Option A baseline.
         </p>
         <p>

@@ -98,7 +98,7 @@ export type InboxFilters = {
 /**
  * Cross-client unified inbox. Scoped to the master org (Business
  * Builders see every client's external communications) — this is a
- * coach-side surface.
+ * Coach-side surface.
  */
 export async function listInbox(
   masterOrgId: string,

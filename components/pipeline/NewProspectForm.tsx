@@ -153,7 +153,7 @@ export function NewProspectForm({
         setError(r.error);
         return;
       }
-      router.push(`/coach/pipeline/${r.data.id}`);
+      router.push(`/business-builder/pipeline/${r.data.id}`);
     });
   }
 
@@ -322,7 +322,7 @@ export function NewProspectForm({
             BBA auto-fills from these fields so you don&apos;t have to type
             the numbers into the contract.{" "}
             <a
-              href="/coach/settings/pricing"
+              href="/business-builder/settings/pricing"
               target="_blank"
               rel="noopener noreferrer"
               className="text-tbb-blue underline underline-offset-2"

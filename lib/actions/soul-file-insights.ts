@@ -35,7 +35,7 @@ function client(): Anthropic {
   return cachedClient;
 }
 
-const SYSTEM_PROMPT = `You are reading a Business Builder coaching session transcript or notes between Bruce (the coach) and a client. Your job: pull out 3-6 observations worth adding to the client's long-term Soul File — the document Bruce keeps about who this business is and where it's going.
+const SYSTEM_PROMPT = `You are reading a Coach coaching session transcript or notes between Bruce (the Coach) and a client. Your job: pull out 3-6 observations worth adding to the client's long-term Soul File — the document Bruce keeps about who this business is and where it's going.
 
 What COUNTS as Soul-File-worthy:
 - Founder story or backstory the client revealed
@@ -182,7 +182,7 @@ export async function extractSoulFileInsights(
     }
   });
 
-  revalidatePath(`/coach/soul-file/${parsed.data.engagementId}`);
+  revalidatePath(`/business-builder/soul-file/${parsed.data.engagementId}`);
   return { ok: true, created: bullets.length };
 }
 

@@ -5,7 +5,7 @@
  *
  * Phase 1.14. Two record types in one file because they're tightly
  * coupled and most flows touch both. Authorization: leadership-only
- * (master_admin / coach / client_lead / client_manager).
+ * (master_admin / Coach / client_lead / client_manager).
  */
 
 import { eq, max } from "drizzle-orm";
@@ -77,10 +77,10 @@ export type UpdateProjectInput = z.input<typeof updateProjectSchema>;
 
 function revalidateProjectPaths(projectId?: string) {
   revalidatePath("/portal/projects");
-  revalidatePath("/coach/projects");
+  revalidatePath("/business-builder/projects");
   if (projectId) {
     revalidatePath(`/portal/projects/${projectId}`);
-    revalidatePath(`/coach/projects/${projectId}`);
+    revalidatePath(`/business-builder/projects/${projectId}`);
   }
 }
 

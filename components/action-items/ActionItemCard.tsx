@@ -1,8 +1,8 @@
 /**
  * ActionItemCard — server-rendered card display.
  *
- * Used by both portal and coach views. The optional `engagementName`
- * surfaces the engagement label only on coach-view cards (where items
+ * Used by both portal and Coach views. The optional `engagementName`
+ * surfaces the engagement label only on Coach-view cards (where items
  * span engagements).
  */
 
@@ -81,7 +81,7 @@ export function ActionItemCard({
         </Link>
 
         {/* Optional description excerpt — rendered through the shared
-            markdown renderer (Phase 1.3) so coach-authored descriptions
+            markdown renderer (Phase 1.3) so Coach-authored descriptions
             with **bold**, lists, links, etc., display correctly. The
             line-clamp keeps cards compact in the list view. */}
         {item.description && (

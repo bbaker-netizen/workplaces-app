@@ -96,7 +96,7 @@ export function ProspectEnvelopeSection({
                 className="py-2 flex items-baseline gap-x-3 gap-y-0.5 flex-wrap"
               >
                 <Link
-                  href={`/coach/envelopes/${e.id}`}
+                  href={`/business-builder/envelopes/${e.id}`}
                   className="font-sans text-sm font-bold text-foreground hover:underline underline-offset-4"
                 >
                   {e.subject}

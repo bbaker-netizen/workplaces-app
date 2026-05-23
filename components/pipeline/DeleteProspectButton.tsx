@@ -4,7 +4,7 @@
  * DeleteProspectButton — destructive action on the prospect detail
  * page. Requires confirm() so accidental clicks don't trash records.
  *
- * On success, redirects back to /coach/pipeline.
+ * On success, redirects back to /business-builder/pipeline.
  */
 
 import { useState, useTransition } from "react";
@@ -49,7 +49,7 @@ export function DeleteProspectButton({
       }
       // Leave the overlay up — the upcoming redirect + refresh will
       // dismiss it automatically when the pathname changes.
-      router.push("/coach/pipeline");
+      router.push("/business-builder/pipeline");
       router.refresh();
     });
   }

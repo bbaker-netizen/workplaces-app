@@ -49,12 +49,12 @@ export async function GET(req: Request): Promise<Response> {
 
   if (errorParam) {
     return NextResponse.redirect(
-      `${appUrl()}/coach/profile/google-calendar?error=${encodeURIComponent(errorParam)}`,
+      `${appUrl()}/business-builder/profile/google-calendar?error=${encodeURIComponent(errorParam)}`,
     );
   }
   if (!code || !state) {
     return NextResponse.redirect(
-      `${appUrl()}/coach/profile/google-calendar?error=missing_params`,
+      `${appUrl()}/business-builder/profile/google-calendar?error=missing_params`,
     );
   }
 
@@ -68,7 +68,7 @@ export async function GET(req: Request): Promise<Response> {
 
   if (!verifyState(state, profile.userProfileId)) {
     return NextResponse.redirect(
-      `${appUrl()}/coach/profile/google-calendar?error=state_mismatch`,
+      `${appUrl()}/business-builder/profile/google-calendar?error=state_mismatch`,
     );
   }
 
@@ -85,12 +85,12 @@ export async function GET(req: Request): Promise<Response> {
       googleEmail: email,
     });
     return NextResponse.redirect(
-      `${appUrl()}/coach/profile/google-calendar?connected=1`,
+      `${appUrl()}/business-builder/profile/google-calendar?connected=1`,
     );
   } catch (e) {
     console.error("[google-calendar] callback failed:", e);
     return NextResponse.redirect(
-      `${appUrl()}/coach/profile/google-calendar?error=${encodeURIComponent(
+      `${appUrl()}/business-builder/profile/google-calendar?error=${encodeURIComponent(
         e instanceof Error ? e.message : "exchange_failed",
       )}`,
     );

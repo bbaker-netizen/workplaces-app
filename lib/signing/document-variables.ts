@@ -43,7 +43,7 @@ export type DocumentVariableContext = {
   /** Your business (the sending party). Drives the BBA preamble
    *  ("HR All-In Inc., operating as Workplaces, in the Province of
    *  Alberta…") so a single template works for any province/country
-   *  the coach operates in. All fields optional — missing values
+   *  the Coach operates in. All fields optional — missing values
    *  render as `[placeholder]` so it's obvious what to fill in. */
   org?: {
     name?: string | null;

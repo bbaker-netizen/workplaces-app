@@ -64,7 +64,7 @@ export async function createSubscriptionProduct(
         .returning({ id: subscriptionProducts.id });
       return created;
     });
-    revalidatePath("/coach/subscriptions");
+    revalidatePath("/business-builder/subscriptions");
     return { ok: true, id: row.id };
   } catch (e) {
     return {
@@ -103,7 +103,7 @@ export async function updateSubscriptionProduct(
         })
         .where(eq(subscriptionProducts.id, id));
     });
-    revalidatePath("/coach/subscriptions");
+    revalidatePath("/business-builder/subscriptions");
     return { ok: true };
   } catch (e) {
     return {
@@ -122,7 +122,7 @@ export async function deleteSubscriptionProduct(
     await withTenantContext(profile.orgId, async (tx) => {
       await tx.delete(subscriptionProducts).where(eq(subscriptionProducts.id, id));
     });
-    revalidatePath("/coach/subscriptions");
+    revalidatePath("/business-builder/subscriptions");
     return { ok: true };
   } catch (e) {
     return {
@@ -192,7 +192,7 @@ export async function assignProductToEngagement(
         .returning({ id: subscriptionAssets.id });
       return created;
     });
-    revalidatePath("/coach/subscriptions");
+    revalidatePath("/business-builder/subscriptions");
     return { ok: true, id: row.id };
   } catch (e) {
     return {

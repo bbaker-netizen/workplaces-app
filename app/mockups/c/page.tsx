@@ -4,7 +4,7 @@
  * Option C mockup — real brand pivot.
  * Drops heritage entirely. Animated gradient mesh, glass cards,
  * electric coral accent, bold display type, motion on every surface.
- * Reads like Linear / Cursor / modern AI coach apps.
+ * Reads like Linear / Cursor / modern AI Coach apps.
  */
 
 import Link from "next/link";

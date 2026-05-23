@@ -90,7 +90,7 @@ export async function linkEngagementDriveFolder(
           .where(eq(engagements.id, parsed.data.engagementId));
       },
     );
-    revalidatePath(`/coach/documents/${parsed.data.engagementId}`);
+    revalidatePath(`/business-builder/documents/${parsed.data.engagementId}`);
     return { ok: true, folderName: meta.name, folderId: meta.id };
   } catch (e) {
     return {
@@ -126,7 +126,7 @@ export async function unlinkEngagementDriveFolder(
           .where(eq(engagements.id, engagementId));
       },
     );
-    revalidatePath(`/coach/documents/${engagementId}`);
+    revalidatePath(`/business-builder/documents/${engagementId}`);
     return { ok: true };
   } catch (e) {
     return {

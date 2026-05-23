@@ -5,7 +5,7 @@
  *
  * Every mutation lands on the caller's own `user_profiles` row, scoped
  * by `clerk_user_id`. RLS is respected (we bind to the caller's tenant)
- * but the WHERE clause also pins to the Clerk user id so a coach editing
+ * but the WHERE clause also pins to the Clerk user id so a Coach editing
  * their own prefs can't bleed into anyone else's row.
  */
 
@@ -131,7 +131,7 @@ export async function setEmailSignature(
           .where(eq(userProfiles.id, userProfileId));
       });
     });
-    revalidatePath("/coach/templates");
+    revalidatePath("/business-builder/templates");
     return { ok: true };
   } catch (e) {
     return {

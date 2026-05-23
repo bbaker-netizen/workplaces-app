@@ -2,7 +2,7 @@
 
 /**
  * Document templates — CRUD for the markdown bodies used by the
- * native signing compose flow. Master-admin and coach only.
+ * native signing compose flow. Master-admin and Coach only.
  */
 
 import { eq, and } from "drizzle-orm";
@@ -55,7 +55,7 @@ export async function createDocumentTemplate(
         })
         .returning({ id: documentTemplates.id }),
     );
-    revalidatePath("/coach/templates");
+    revalidatePath("/business-builder/templates");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
     return {
@@ -98,7 +98,7 @@ export async function updateDocumentTemplate(
           ),
         );
     });
-    revalidatePath("/coach/templates");
+    revalidatePath("/business-builder/templates");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -127,7 +127,7 @@ export async function deleteDocumentTemplate(
           ),
         );
     });
-    revalidatePath("/coach/templates");
+    revalidatePath("/business-builder/templates");
     return { ok: true, data: undefined };
   } catch (e) {
     return {

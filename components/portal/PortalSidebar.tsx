@@ -272,7 +272,7 @@ export function PortalSidebar({
               <div className="flex gap-3 mt-0.5">
                 {isCoach && (
                   <Link
-                    href="/coach"
+                    href="/business-builder"
                     className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base"
                   >
                     Console

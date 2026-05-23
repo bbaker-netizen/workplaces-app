@@ -207,7 +207,7 @@ export async function extractActionItemsFromFireflies(
 
   revalidatePath(`/portal/sessions/${sessionId}`);
   revalidatePath("/portal/action-items");
-  revalidatePath("/coach/action-items");
+  revalidatePath("/business-builder/action-items");
   return { ok: true, data: { created } };
 }
 

@@ -66,8 +66,8 @@ const createSchema = z.object({
   subject: z.string().min(1).max(300),
   message: z.string().max(8000).nullable().optional(),
   signers: z.array(signerInputSchema).min(1).max(4),
-  /** Whether to insert the Business Builder's stored signature as the first
-   *  pre-signed signer. When true, the Business Builder is added at order 0
+  /** Whether to insert the Coach's stored signature as the first
+   *  pre-signed signer. When true, the Coach is added at order 0
    *  with status=signed using their `signature_image_data`. */
   autoSignAsMe: z.boolean().default(false),
 });
@@ -127,7 +127,7 @@ export async function createSignatureEnvelope(
 
   const orgId = data.engagementId ? docCtx.orgId : prospectOrgId ?? docCtx.orgId;
 
-  // Look up the Business Builder's stored signature if auto-sign-as-me was requested.
+  // Look up the Coach's stored signature if auto-sign-as-me was requested.
   let coachSignatureImage: string | null = null;
   if (data.autoSignAsMe) {
     const [me] = await withSystemContext(async (tx) =>
@@ -145,7 +145,7 @@ export async function createSignatureEnvelope(
       return {
         ok: false,
         error:
-          "You haven't uploaded a signature image yet. Upload one at /coach/profile/signature first, or uncheck 'sign as me'.",
+          "You haven't uploaded a signature image yet. Upload one at /business-builder/profile/signature first, or uncheck 'sign as me'.",
       };
     }
     coachSignatureImage = me.signatureImageData;
@@ -220,9 +220,9 @@ export async function createSignatureEnvelope(
   // Email the next pending signer.
   await emailNextPendingSigner(result.id, profile.fullName);
 
-  revalidatePath("/coach/pipeline");
+  revalidatePath("/business-builder/pipeline");
   if (data.engagementId)
-    revalidatePath(`/coach/documents/${data.engagementId}`);
+    revalidatePath(`/business-builder/documents/${data.engagementId}`);
   return { ok: true, data: { envelopeId: result.id } };
 }
 
@@ -355,7 +355,7 @@ export async function createEnvelopeFromUpload(
 /* --------------------- compose-from-template send path --------------------- */
 
 /**
- * Render markdown the coach composed in the UI into a PDF, upload
+ * Render markdown the Coach composed in the UI into a PDF, upload
  * it as a documents row, then run the standard signing envelope
  * flow. This is the "compose, then send" pipeline — Bruce writes
  * the actual contract body in The Builder instead of attaching a
@@ -714,11 +714,11 @@ export async function voidSignatureEnvelope(
       .where(eq(signatureEnvelopes.id, envelopeId));
   });
 
-  revalidatePath(`/coach/envelopes/${envelopeId}`);
+  revalidatePath(`/business-builder/envelopes/${envelopeId}`);
   return { ok: true, data: undefined };
 }
 
-/* ------------------------- coach: stored signature ------------------------- */
+/* ------------------------- Coach: stored signature ------------------------- */
 
 const uploadSignatureSchema = z.object({
   signatureImageData: z
@@ -750,7 +750,7 @@ export async function uploadMySignatureImage(
       .set({ signatureImageData: parsed.data.signatureImageData })
       .where(eq(userProfiles.id, profile.userProfileId));
   });
-  revalidatePath("/coach/profile/signature");
+  revalidatePath("/business-builder/profile/signature");
   return { ok: true, data: undefined };
 }
 
@@ -764,7 +764,7 @@ export async function clearMySignatureImage(): Promise<ActionResult> {
       .set({ signatureImageData: null })
       .where(eq(userProfiles.id, profile.userProfileId));
   });
-  revalidatePath("/coach/profile/signature");
+  revalidatePath("/business-builder/profile/signature");
   return { ok: true, data: undefined };
 }
 
@@ -1036,7 +1036,7 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
         recipientName,
         envelopeSubject: ctx.env.subject,
         envelopeUrl: isSender
-          ? `/coach/envelopes/${ctx.env.id}`
+          ? `/business-builder/envelopes/${ctx.env.id}`
           : `/sign/done/${signedDocId}`,
         isSender,
       }),
@@ -1053,11 +1053,11 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
 
   // Pick the engagement to revalidate, if linked.
   if (ctx.env.engagementId) {
-    revalidatePath(`/coach/documents/${ctx.env.engagementId}`);
+    revalidatePath(`/business-builder/documents/${ctx.env.engagementId}`);
     revalidatePath(`/portal/documents`);
   }
-  revalidatePath(`/coach/envelopes/${ctx.env.id}`);
-  revalidatePath(`/coach/pipeline`);
+  revalidatePath(`/business-builder/envelopes/${ctx.env.id}`);
+  revalidatePath(`/business-builder/pipeline`);
 }
 
 // Suppress unused-import warning for resolveEngagementIdFromRecord —

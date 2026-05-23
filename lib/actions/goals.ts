@@ -7,7 +7,7 @@
  * Gate). Surface: create, update, delete, plus a status-only fast
  * path mirroring action items.
  *
- * Authorization: leadership-only writes (master_admin / coach /
+ * Authorization: leadership-only writes (master_admin / Coach /
  * client_lead / client_manager). client_employee / prospect can VIEW
  * but not edit.
  */
@@ -70,7 +70,7 @@ export type ActionResult<T = void> =
 
 function revalidateGoalPaths() {
   revalidatePath("/portal/goals");
-  revalidatePath("/coach/goals");
+  revalidatePath("/business-builder/goals");
 }
 
 export async function createGoal(

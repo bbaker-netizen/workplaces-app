@@ -4,7 +4,7 @@
  * Invoices — provider-aware creation.
  *
  * Phase 4.6. Bruce uses QBO + QBO Payments as the primary billing
- * system; Stripe is kept available for the rare cases. The Business Builder
+ * system; Stripe is kept available for the rare cases. The Coach
  * picks `provider: "qbo" | "stripe"` per invoice; QBO is the default.
  *
  * Both flows produce a row in our `invoices` table with the relevant
@@ -90,7 +90,7 @@ async function createViaQbo(
     return {
       ok: false,
       error:
-        "QuickBooks isn't connected yet. Open /coach/profile/quickbooks and click Connect.",
+        "QuickBooks isn't connected yet. Open /business-builder/profile/quickbooks and click Connect.",
     };
   }
 
@@ -223,7 +223,7 @@ async function createViaQbo(
   });
 
   revalidatePath("/portal/invoices");
-  revalidatePath(`/coach/documents/${ctx.eng.id}`);
+  revalidatePath(`/business-builder/documents/${ctx.eng.id}`);
   return {
     ok: true,
     data: { invoiceId: inserted.id, hostedInvoiceUrl: hostedUrl },

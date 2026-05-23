@@ -20,7 +20,7 @@
  *      call with `export const maxDuration = 300` — up to 5 minutes
  *      on Netlify Pro, so it never times out for normal contracts.
  *
- * Authz on every entry point: master_admin / coach only, and the
+ * Authz on every entry point: master_admin / Coach only, and the
  * polling endpoint also confirms the row belongs to the caller's org.
  */
 

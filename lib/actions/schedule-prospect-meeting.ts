@@ -187,10 +187,10 @@ export async function scheduleProspectMeeting(
       lower.includes("invalid_grant") ||
       lower.includes("401")
     ) {
-      return "Google isn't connected, or the connection expired. Reconnect at /coach/profile/google-calendar and try again.";
+      return "Google isn't connected, or the connection expired. Reconnect at /business-builder/profile/google-calendar and try again.";
     }
     if (lower.includes("insufficient") || lower.includes("scope")) {
-      return "Your Google connection is missing the calendar permission. Reconnect at /coach/profile/google-calendar and accept the new scopes.";
+      return "Your Google connection is missing the calendar permission. Reconnect at /business-builder/profile/google-calendar and accept the new scopes.";
     }
     if (lower.includes("quota") || lower.includes("rate")) {
       return "Google Calendar's rate-limited you for a minute. Wait 60 seconds and try again.";
@@ -199,7 +199,7 @@ export async function scheduleProspectMeeting(
       return "Google refused this request. Common cause: the prospect's email domain blocks external calendar invites. Send a meeting link manually instead.";
     }
     if (lower.includes("notfound") || lower.includes("404")) {
-      return "Couldn't find your primary calendar. Reconnect Google at /coach/profile/google-calendar.";
+      return "Couldn't find your primary calendar. Reconnect Google at /business-builder/profile/google-calendar.";
     }
     if (lower.includes("400")) {
       return `Google rejected the meeting details. Often means the date/time landed in the past. (${raw})`;
@@ -305,8 +305,8 @@ export async function scheduleProspectMeeting(
     // Calendar event was created; logging hiccup isn't user-fatal.
   }
 
-  revalidatePath(`/coach/pipeline/${prospect.id}`);
-  revalidatePath("/coach/pipeline");
-  revalidatePath("/coach/inbox");
+  revalidatePath(`/business-builder/pipeline/${prospect.id}`);
+  revalidatePath("/business-builder/pipeline");
+  revalidatePath("/business-builder/inbox");
   return { ok: true, data: calendarResult };
 }

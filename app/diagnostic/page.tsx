@@ -1,6 +1,6 @@
 /**
  * Public diagnostic intake — Phase 4. Anonymous prospects fill this
- * out; submission creates a Prospect record visible in the Coach
+ * out; submission creates a Prospect record visible in the Business Builder
  * Pipeline. No authentication.
  */
 

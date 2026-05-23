@@ -15,10 +15,10 @@
  *       so client_employee never sees leadership-thread snippets in the
  *       feed.
  *
- * Coach cross-org gap: same one documented in 1.2 — when a coach views a
+ * Coach cross-org gap: same one documented in 1.2 — when a Coach views a
  * thread that lives in a CLIENT org, the tenant GUC won't match. Phase
  * 1.3 testing happens entirely in the master org's "Bruce Test"
- * engagement; Phase 1.7 will add a coach-aware tenant helper.
+ * engagement; Phase 1.7 will add a Coach-aware tenant helper.
  */
 
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -51,7 +51,7 @@ export async function listMessagesForEntity(
   if (profile.status !== "ok") return [];
   if (!canViewThread(threadType, profile.role)) return [];
 
-  // Resolve the engagement id so Business Builder roles bind to the right org.
+  // Resolve the engagement id so Coach roles bind to the right org.
   // For action-item threads, parentEntityId is the action item's id.
   // For engagement-level threads, parentEntityId IS the engagement id.
   let engagementId: string | null;

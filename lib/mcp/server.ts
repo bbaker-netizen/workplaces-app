@@ -10,9 +10,9 @@
  * Netlify Function (`/api/mcp`) verifies it before opening the
  * transport.
  *
- * Tenant binding: every tool resolves the Business Builder's profile via
+ * Tenant binding: every tool resolves the Coach's profile via
  * `mcp_user_profile_id` (a column on `user_profiles` would be cleaner
- * — for now we identify the Business Builder by their `clerk_user_id` baked into
+ * — for now we identify the Coach by their `clerk_user_id` baked into
  * the bearer token's payload). System-context reads only — Cowork is
  * authoritatively the master org, so we read across all client orgs.
  *
@@ -56,16 +56,16 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   /* ----------------------------- list engagements ----------------------------- */
   server.tool(
     "list_engagements",
-    "List every engagement this coach owns. Returns id, name, type, status, started_at.",
+    "List every engagement this Coach owns. Returns id, name, type, status, started_at.",
     {},
     async () => {
       const rows = await withSystemContext(async (tx) => {
-        const [coach] = await tx
+        const [Coach] = await tx
           .select({ id: coaches.id })
           .from(coaches)
           .where(eq(coaches.userProfileId, auth.coachUserProfileId))
           .limit(1);
-        if (!coach) return [];
+        if (!Coach) return [];
         return tx
           .select({
             id: engagements.id,
@@ -76,7 +76,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
             startDate: engagements.startDate,
           })
           .from(engagements)
-          .where(eq(engagements.coachId, coach.id));
+          .where(eq(engagements.coachId, Coach.id));
       });
       return {
         content: [
@@ -89,7 +89,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   /* ----------------------------- list my action items ----------------------------- */
   server.tool(
     "list_my_work",
-    "List every action item assigned to the Business Builder across all engagements (the My Work Live Artifact). Sorted overdue first.",
+    "List every action item assigned to the Coach across all engagements (the My Work Live Artifact). Sorted overdue first.",
     {},
     async () => {
       const rows = await withSystemContext(async (tx) => {
@@ -131,16 +131,16 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   /* ----------------------------- upcoming sessions ----------------------------- */
   server.tool(
     "list_upcoming_sessions",
-    "List upcoming BBS sessions across all engagements this coach owns (Coach Dashboard).",
+    "List upcoming BBS sessions across all engagements this Coach owns (Coach Dashboard).",
     {},
     async () => {
       const rows = await withSystemContext(async (tx) => {
-        const [coach] = await tx
+        const [Coach] = await tx
           .select({ id: coaches.id })
           .from(coaches)
           .where(eq(coaches.userProfileId, auth.coachUserProfileId))
           .limit(1);
-        if (!coach) return [];
+        if (!Coach) return [];
         const now = new Date();
         return tx
           .select({
@@ -158,7 +158,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           )
           .where(
             and(
-              eq(engagements.coachId, coach.id),
+              eq(engagements.coachId, Coach.id),
               gt(bbsSessions.scheduledAt, now),
               eq(bbsSessions.status, "scheduled"),
             ),
@@ -180,12 +180,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {},
     async () => {
       const rows = await withSystemContext(async (tx) => {
-        const [coach] = await tx
+        const [Coach] = await tx
           .select({ id: coaches.id })
           .from(coaches)
           .where(eq(coaches.userProfileId, auth.coachUserProfileId))
           .limit(1);
-        if (!coach) return [];
+        if (!Coach) return [];
         return tx
           .select({
             id: hires.id,
@@ -197,7 +197,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           })
           .from(hires)
           .innerJoin(engagements, eq(engagements.id, hires.engagementId))
-          .where(eq(engagements.coachId, coach.id))
+          .where(eq(engagements.coachId, Coach.id))
           .orderBy(desc(hires.updatedAt));
       });
       return {
@@ -215,12 +215,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {},
     async () => {
       const rows = await withSystemContext(async (tx) => {
-        const [coach] = await tx
+        const [Coach] = await tx
           .select({ id: coaches.id })
           .from(coaches)
           .where(eq(coaches.userProfileId, auth.coachUserProfileId))
           .limit(1);
-        if (!coach) return [];
+        if (!Coach) return [];
         return tx
           .select({
             id: projects.id,
@@ -232,7 +232,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           })
           .from(projects)
           .innerJoin(engagements, eq(engagements.id, projects.engagementId))
-          .where(eq(engagements.coachId, coach.id))
+          .where(eq(engagements.coachId, Coach.id))
           .orderBy(desc(projects.updatedAt));
       });
       return {
@@ -250,12 +250,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {},
     async () => {
       const rows = await withSystemContext(async (tx) => {
-        const [coach] = await tx
+        const [Coach] = await tx
           .select({ id: coaches.id })
           .from(coaches)
           .where(eq(coaches.userProfileId, auth.coachUserProfileId))
           .limit(1);
-        if (!coach) return [];
+        if (!Coach) return [];
         return tx
           .select({
             id: subscriptionAssets.id,
@@ -275,7 +275,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
             engagements,
             eq(engagements.id, subscriptionAssets.engagementId),
           )
-          .where(eq(engagements.coachId, coach.id));
+          .where(eq(engagements.coachId, Coach.id));
       });
       return {
         content: [
@@ -355,7 +355,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
 
   server.tool(
     "create_action_item",
-    "Create a published action item on an engagement. Assignee defaults to the calling coach if omitted. Returns the new id.",
+    "Create a published action item on an engagement. Assignee defaults to the calling Coach if omitted. Returns the new id.",
     {
       engagementId: z.string().uuid(),
       title: z.string().min(1).max(500),
@@ -502,7 +502,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
 
   server.tool(
     "complete_action_item",
-    "Mark an action item as done. Use when the Business Builder reports completion via Cowork.",
+    "Mark an action item as done. Use when the Coach reports completion via Cowork.",
     { actionItemId: z.string().uuid() },
     async ({ actionItemId }) => {
       await withSystemContext(async (tx) => {
@@ -520,16 +520,16 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   /* ----------------------------- recent activity ----------------------------- */
   server.tool(
     "list_recent_activity",
-    "Latest N messages across every engagement this coach owns (Coach Dashboard feed).",
+    "Latest N messages across every engagement this Coach owns (Coach Dashboard feed).",
     { limit: z.number().int().min(1).max(50).default(10) },
     async ({ limit }) => {
       const rows = await withSystemContext(async (tx) => {
-        const [coach] = await tx
+        const [Coach] = await tx
           .select({ id: coaches.id })
           .from(coaches)
           .where(eq(coaches.userProfileId, auth.coachUserProfileId))
           .limit(1);
-        if (!coach) return [];
+        if (!Coach) return [];
         return tx
           .select({
             id: messages.id,
@@ -547,7 +547,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
             userProfiles,
             eq(userProfiles.id, messages.authorUserProfileId),
           )
-          .where(eq(engagements.coachId, coach.id))
+          .where(eq(engagements.coachId, Coach.id))
           .orderBy(desc(messages.createdAt))
           .limit(limit);
       });

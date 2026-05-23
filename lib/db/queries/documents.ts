@@ -164,7 +164,7 @@ export async function listAttachmentsForMessages(
   if (profile.status !== "ok") return result;
 
   // Coach cross-org safety: if engagementId is provided, bind RLS to
-  // that engagement's org so master_admin / coach in their home org
+  // that engagement's org so master_admin / Coach in their home org
   // can read attachments on a client engagement's messages. If absent,
   // fall back to the caller's home org (works only for client roles).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

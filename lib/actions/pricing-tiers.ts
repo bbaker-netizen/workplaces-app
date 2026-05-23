@@ -8,8 +8,8 @@
  * The engagement creation form reads these as radio options; picking
  * one auto-fills the fee but the field remains editable.
  *
- * Authz: master_admin / coach. Bruce manages this under
- * /coach/settings/pricing.
+ * Authz: master_admin / Coach. Bruce manages this under
+ * /business-builder/settings/pricing.
  */
 
 import { and, asc, eq } from "drizzle-orm";
@@ -110,7 +110,7 @@ export async function createPricingTier(
         })
         .returning({ id: pricingTiers.id }),
     );
-    revalidatePath("/coach/settings/pricing");
+    revalidatePath("/business-builder/settings/pricing");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
     return {
@@ -158,7 +158,7 @@ export async function updatePricingTier(
           ),
         );
     });
-    revalidatePath("/coach/settings/pricing");
+    revalidatePath("/business-builder/settings/pricing");
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -182,7 +182,7 @@ export async function deletePricingTier(id: string): Promise<ActionResult> {
           ),
         );
     });
-    revalidatePath("/coach/settings/pricing");
+    revalidatePath("/business-builder/settings/pricing");
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

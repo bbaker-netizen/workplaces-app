@@ -58,10 +58,10 @@ function revalidateForParent(
   engagementId: string,
 ) {
   revalidatePath("/portal/communication");
-  revalidatePath(`/coach/communication/${engagementId}`);
+  revalidatePath(`/business-builder/communication/${engagementId}`);
   if (threadType === THREAD_TYPE.actionItem) {
     revalidatePath(`/portal/action-items/${parentEntityId}`);
-    revalidatePath(`/coach/action-items/${parentEntityId}`);
+    revalidatePath(`/business-builder/action-items/${parentEntityId}`);
   }
 }
 
@@ -70,7 +70,7 @@ async function loadParentMessage(
   messageId: string,
 ) {
   // Resolve engagement first so we can bind to the correct org —
-  // important for Business Builder roles posting in client engagements.
+  // important for Coach roles posting in client engagements.
   const engagementId = await resolveEngagementIdFromRecord(
     "messages",
     messageId,

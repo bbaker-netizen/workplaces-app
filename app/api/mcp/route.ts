@@ -3,7 +3,7 @@
  *
  * POST /api/mcp — accepts an MCP JSON-RPC payload, runs it through the
  * server, returns the response. Bearer-authenticated via
- * `MCP_BEARER_TOKEN` env var; the bearer encodes the calling coach's
+ * `MCP_BEARER_TOKEN` env var; the bearer encodes the calling Coach's
  * `clerk_user_id` so we can resolve their `user_profiles.id` and
  * scope tool results by `coachId`.
  *
@@ -12,7 +12,7 @@
  *
  * The colon split is the auth contract. The shared secret confirms
  * the caller is Cowork (or another authorized client); the
- * clerk_user_id identifies which Business Builder is making the call. Phase 2
+ * clerk_user_id identifies which Coach is making the call. Phase 2
  * upgrades this to a signed JWT.
  */
 

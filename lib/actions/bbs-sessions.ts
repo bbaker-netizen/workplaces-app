@@ -13,7 +13,7 @@
  *   - `deleteSession`    — hard delete. Action items linked via
  *                          `action_items.bbs_session_id` get null'd by FK.
  *
- * Authorization: leadership roles only (master_admin / coach /
+ * Authorization: leadership roles only (master_admin / Coach /
  * client_lead / client_manager). Lower roles can VIEW but not
  * schedule.
  */
@@ -89,10 +89,10 @@ export type ActionResult<T = void> =
 
 function revalidateSessionPaths(engagementId: string, sessionId?: string) {
   revalidatePath("/portal/sessions");
-  revalidatePath(`/coach/sessions/${engagementId}`);
+  revalidatePath(`/business-builder/sessions/${engagementId}`);
   if (sessionId) {
     revalidatePath(`/portal/sessions/${sessionId}`);
-    revalidatePath(`/coach/sessions/${engagementId}/${sessionId}`);
+    revalidatePath(`/business-builder/sessions/${engagementId}/${sessionId}`);
   }
 }
 

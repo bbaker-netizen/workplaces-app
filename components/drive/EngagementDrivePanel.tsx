@@ -89,7 +89,7 @@ export function EngagementDrivePanel({
           engagement.
         </p>
         <a
-          href="/coach/profile/google-calendar"
+          href="/business-builder/profile/google-calendar"
           className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta w-fit"
         >
           Connect Google

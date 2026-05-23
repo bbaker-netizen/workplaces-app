@@ -5,7 +5,7 @@
  * land in 1.4 with Resend. Tenant-scoped — `notifications.org_id`
  * matches the user's home org for events local to that org.
  *
- * Cross-org coach aggregation (Bruce mentioned in a client engagement
+ * Cross-org Coach aggregation (Bruce mentioned in a client engagement
  * while signed in to master) is a Phase 1.7+ concern; for now Bruce's
  * notifications are scoped to whichever org his session is active in.
  */

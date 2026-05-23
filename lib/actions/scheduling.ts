@@ -3,7 +3,7 @@
 /**
  * Scheduling — Calendly-style booking.
  *
- * Phase 3.8 minimum: coach-defines availability windows on a
+ * Phase 3.8 minimum: Coach-defines availability windows on a
  * scheduling_link, public visitor browses available slots, picks
  * one, books. Booking creates either a prospect (`discovery` link)
  * or a bbs_session (`bbs` link) depending on the link's meeting type.
@@ -11,7 +11,7 @@
  * Out of scope for 3.8 (Phase 4):
  * - Google / Outlook calendar sync (free/busy ingest)
  * - Buffer between meetings
- * - Multi-coach / round-robin booking
+ * - Multi-Coach / round-robin booking
  * - AI auto-scheduling (Motion-style)
  * - Time-zone conversion for the booker (assumes Mountain Time
  *   matches Bruce's working window)
@@ -100,7 +100,7 @@ export async function createSchedulingLink(
         .returning({ id: schedulingLinks.id, slug: schedulingLinks.slug });
       return row;
     });
-    revalidatePath("/coach/scheduling");
+    revalidatePath("/business-builder/scheduling");
     return { ok: true, data: created };
   } catch (e) {
     return {
@@ -122,7 +122,7 @@ export async function deleteSchedulingLink(
     await withSystemContext(async (tx) => {
       await tx.delete(schedulingLinks).where(eq(schedulingLinks.id, id));
     });
-    revalidatePath("/coach/scheduling");
+    revalidatePath("/business-builder/scheduling");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -275,7 +275,7 @@ export async function createBooking(
 
       if (link.meetingType === "bbs") {
         // BBS bookings don't auto-create until we know which engagement.
-        // The Business Builder manually creates the engagement ahead of time and
+        // The Coach manually creates the engagement ahead of time and
         // shares the link in context. Phase 4 will allow per-engagement
         // booking links.
       } else if (link.meetingType === "discovery") {
@@ -310,7 +310,7 @@ export async function createBooking(
         .returning({ id: bookings.id });
       return row;
     });
-    revalidatePath("/coach/scheduling");
+    revalidatePath("/business-builder/scheduling");
     return { ok: true, data: { bookingId: created.id } };
   } catch (e) {
     return {

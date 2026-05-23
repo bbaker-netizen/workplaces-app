@@ -104,7 +104,7 @@ async function processInvoiceEvent(
   invoiceId: string,
   operation: string,
 ): Promise<void> {
-  // Find which coach owns this realm so we can refresh their token.
+  // Find which Coach owns this realm so we can refresh their token.
   const tokenRow = await withSystemContext(async (tx) => {
     const [row] = await tx
       .select()

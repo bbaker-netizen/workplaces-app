@@ -3,7 +3,7 @@
  *
  * `listEngagementMembers` powers the assignee picker on the new action
  * item form. Two modes:
- *   - Coach (master_admin / coach): cross-tenant read via system context
+ *   - Coach (master_admin / Coach): cross-tenant read via system context
  *     (we may need members of any client engagement).
  *   - Client roles: tenant-scoped — RLS already scopes to their own org.
  */

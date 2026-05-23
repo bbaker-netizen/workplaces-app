@@ -242,7 +242,7 @@ export function SendForSignatureForm(props: Props) {
           setError(result.error);
           return;
         }
-        router.push(`/coach/envelopes/${result.data.envelopeId}`);
+        router.push(`/business-builder/envelopes/${result.data.envelopeId}`);
         return;
       }
       if (props.mode === "upload") {
@@ -264,7 +264,7 @@ export function SendForSignatureForm(props: Props) {
           setError(result.error);
           return;
         }
-        router.push(`/coach/envelopes/${result.data.envelopeId}`);
+        router.push(`/business-builder/envelopes/${result.data.envelopeId}`);
       } else {
         const result = await createSignatureEnvelope({
           sourceDocumentId: props.sourceDocumentId,
@@ -278,7 +278,7 @@ export function SendForSignatureForm(props: Props) {
           setError(result.error);
           return;
         }
-        router.push(`/coach/envelopes/${result.data.envelopeId}`);
+        router.push(`/business-builder/envelopes/${result.data.envelopeId}`);
       }
     });
   }
@@ -577,7 +577,7 @@ export function SendForSignatureForm(props: Props) {
           Auto-sign as me first
           {!props.hasStoredSignature && (
             <span className="block font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground mt-0.5">
-              Upload a signature image at /coach/profile/signature to enable.
+              Upload a signature image at /business-builder/profile/signature to enable.
             </span>
           )}
         </span>

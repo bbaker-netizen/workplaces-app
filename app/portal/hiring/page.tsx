@@ -92,7 +92,7 @@ export default async function HiringPipelinePage() {
           <p className="font-sans text-sm text-muted-foreground">
             {canCreate
               ? "Add your first candidate above."
-              : "Your Business Builder will track candidates here."}
+              : "Your Coach will track candidates here."}
           </p>
         </div>
       ) : (

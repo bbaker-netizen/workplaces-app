@@ -42,7 +42,7 @@ export default async function PortalCommunicationPage({
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
           No engagement is associated with your account yet. Once your
-          coach activates one, conversations will live here.
+          Coach activates one, conversations will live here.
         </p>
       </main>
     );
@@ -86,7 +86,7 @@ export default async function PortalCommunicationPage({
           External communications
         </h2>
         <p className="text-xs text-muted-foreground">
-          Emails, texts, and call notes between your Business Builder and your
+          Emails, texts, and call notes between your Coach and your
           team — a running audit trail. Reply with your normal email; your
           response will appear here automatically.
         </p>
@@ -136,7 +136,7 @@ export default async function PortalCommunicationPage({
         {tab === "leadership" && showLeadership ? (
           <div className="pt-2">
             <p className="font-sans text-xs text-muted-foreground italic mb-4">
-              Private thread — visible to coach, owner, and managers only.
+              Private thread — visible to Coach, owner, and managers only.
             </p>
             <MessageThread
               engagementId={engagement.id}

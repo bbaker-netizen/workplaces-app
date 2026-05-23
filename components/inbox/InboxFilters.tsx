@@ -50,7 +50,7 @@ export function InboxFilters({
       const params = new URLSearchParams(sp.toString());
       if (q) params.set("q", q);
       else params.delete("q");
-      router.push(`/coach/inbox?${params.toString()}`);
+      router.push(`/business-builder/inbox?${params.toString()}`);
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,7 +60,7 @@ export function InboxFilters({
     const params = new URLSearchParams(sp.toString());
     if (value && value !== "all" && value.length > 0) params.set(key, value);
     else params.delete(key);
-    router.push(`/coach/inbox?${params.toString()}`);
+    router.push(`/business-builder/inbox?${params.toString()}`);
   }
 
   return (

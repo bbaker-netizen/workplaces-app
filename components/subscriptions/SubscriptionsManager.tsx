@@ -221,7 +221,7 @@ export function SubscriptionsManager({
           <p className="font-sans text-sm text-muted-foreground">
             {canEdit
               ? "Track every external service you maintain for this engagement so transfer is painless when the time comes."
-              : "Your Business Builder will list services maintained on your behalf here."}
+              : "Your Coach will list services maintained on your behalf here."}
           </p>
         </div>
       ) : (

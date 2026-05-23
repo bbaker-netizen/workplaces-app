@@ -2,7 +2,7 @@
 
 /**
  * Triggers Clerk's hosted profile modal. Lives in its own client
- * component so the surrounding /coach/settings/profile page can stay
+ * component so the surrounding /business-builder/settings/profile page can stay
  * a Server Component.
  */
 

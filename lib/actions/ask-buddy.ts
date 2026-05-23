@@ -1,9 +1,9 @@
 "use server";
 
 /**
- * Builder Buddy AI chat — Business Builder's in-app assistant.
+ * Builder Buddy AI chat — Coach's in-app assistant.
  *
- * Bruce (or any future Business Builder) asks a question; Claude
+ * Bruce (or any future Coach) asks a question; Claude
  * answers with grounded context about the app, the methodology, and
  * the page they're currently on.
  *
@@ -49,38 +49,38 @@ Your job:
 THE APP STRUCTURE (memorize this):
 
 The app has TWO sides:
-1. **Business Builder Console** (/coach) — Bruce's side, the practice operations
+1. **Business Builder Console** (/business-builder) — Bruce's side, the practice operations
 2. **Client Portal** (/portal) — what clients see when they log in
 
 The Business Builder Console sidebar groups work by lifecycle phase:
 
 **01 Pipeline — bring new prospects in**
-- Prospects (/coach/pipeline) — the CRM. Every prospect with their stage, contact info, deal value, next action. Stages: New lead → First contact → Meeting scheduled → Diagnostic complete → Proposal sent → Negotiation → Contract sent → Contract signed → Onboarded → Lost. "Diagnostic sent" is shown as a status when Bruce sends the diagnostic form to a prospect.
+- Prospects (/business-builder/pipeline) — the CRM. Every prospect with their stage, contact info, deal value, next action. Stages: New lead → First contact → Meeting scheduled → Diagnostic complete → Proposal sent → Negotiation → Contract sent → Contract signed → Onboarded → Lost. "Diagnostic sent" is shown as a status when Bruce sends the diagnostic form to a prospect.
 - Public diagnostic (/diagnostic) — a public form anyone can fill out. Creates a prospect record automatically.
 
 **02 Engage — run the rhythm**
-- My work (/coach) — the home dashboard. Customizable cards.
-- Action items (/coach/action-items) — small commitments measured in hours/days. AI-drafted from Fireflies transcripts of BBS sessions OR created manually. Edit, assign, set due date, hit Publish.
-- Inbox (/coach/inbox) — every external email/SMS/call note across every client. Synced from Gmail.
-- Communication (/coach/communication) — in-app threads with the client (Leadership-private and Team-public).
+- My work (/business-builder) — the home dashboard. Customizable cards.
+- Action items (/business-builder/action-items) — small commitments measured in hours/days. AI-drafted from Fireflies transcripts of BBS sessions OR created manually. Edit, assign, set due date, hit Publish.
+- Inbox (/business-builder/inbox) — every external email/SMS/call note across every client. Synced from Gmail.
+- Communication (/business-builder/communication) — in-app threads with the client (Leadership-private and Team-public).
 
 **03 Deliver — ship the deep work**
-- Deliverables (/coach/deliverables) — the 9 BIG artifacts produced for clients over weeks. SOPs, Org Charts, Job Profiles & Interview Guides, Financial Dashboards, App Onboarding Guides, Client Operations Setup Guides, Business Plans, Marketing Plans, Stages of Growth Assessments. Lifecycle: Not started → In progress → Review → Done.
-- Projects (/coach/projects) — bigger initiatives within an engagement that span weeks/months. "Build Acme's hiring system." Holds tasks + milestones. Deliverables are the OUTPUTS of a project.
-- Goals (/coach/goals) — SMART measurement targets clients are aiming at. "Hit $2M revenue by EOY." "Get turnover under 10%." Different from action items (commitments), deliverables (artifacts), and projects (initiatives). Goals are the DESTINATION; everything else is the journey.
-- Soul File search (/coach/soul-search) — search across every client's Soul File using AI.
+- Deliverables (/business-builder/deliverables) — the 9 BIG artifacts produced for clients over weeks. SOPs, Org Charts, Job Profiles & Interview Guides, Financial Dashboards, App Onboarding Guides, Client Operations Setup Guides, Business Plans, Marketing Plans, Stages of Growth Assessments. Lifecycle: Not started → In progress → Review → Done.
+- Projects (/business-builder/projects) — bigger initiatives within an engagement that span weeks/months. "Build Acme's hiring system." Holds tasks + milestones. Deliverables are the OUTPUTS of a project.
+- Goals (/business-builder/goals) — SMART measurement targets clients are aiming at. "Hit $2M revenue by EOY." "Get turnover under 10%." Different from action items (commitments), deliverables (artifacts), and projects (initiatives). Goals are the DESTINATION; everything else is the journey.
+- Soul File search (/business-builder/soul-search) — search across every client's Soul File using AI.
 
 **04 Bill**
-- Create invoice (/coach/invoices/new) — billing through QuickBooks Online primarily.
-- Subscriptions (/coach/subscriptions) — every external service Bruce maintains on behalf of clients (Netlify apps, Make.com, custom domains). Model C = Bruce keeps these running indefinitely; client pays a small monthly retainer.
+- Create invoice (/business-builder/invoices/new) — billing through QuickBooks Online primarily.
+- Subscriptions (/business-builder/subscriptions) — every external service Bruce maintains on behalf of clients (Netlify apps, Make.com, custom domains). Model C = Bruce keeps these running indefinitely; client pays a small monthly retainer.
 
 **05 Practice — your tools and connections**
-- New engagement (/coach/engagements/new) — turn a signed prospect into a client. Sets up their private workspace.
-- My signature (/coach/profile/signature) — e-signature image for contract sending.
-- Google Workspace (/coach/profile/google-calendar) — connects Bruce's Google account. Three integrations roll on the one connection: two-way calendar sync, Gmail capture into the Inbox, and Drive folder mirroring (per-engagement Drive folders show their files inside the documents page).
-- QuickBooks (/coach/profile/quickbooks) — accounting + invoicing integration.
-- Business Builder guide (/coach/welcome) — workflow walkthrough.
-- Module reference (/coach/welcome/modules) — full module cheat sheet.
+- New engagement (/business-builder/engagements/new) — turn a signed prospect into a client. Sets up their private workspace.
+- My signature (/business-builder/profile/signature) — e-signature image for contract sending.
+- Google Workspace (/business-builder/profile/google-calendar) — connects Bruce's Google account. Three integrations roll on the one connection: two-way calendar sync, Gmail capture into the Inbox, and Drive folder mirroring (per-engagement Drive folders show their files inside the documents page).
+- QuickBooks (/business-builder/profile/quickbooks) — accounting + invoicing integration.
+- Business Builder guide (/business-builder/welcome) — workflow walkthrough.
+- Module reference (/business-builder/welcome/modules) — full module cheat sheet.
 
 OTHER KEY CONCEPTS:
 
@@ -113,7 +113,7 @@ export async function askBuddy(
     return { ok: false, error: "Sign in first to talk to Buddy." };
   }
   if (profile.role !== "master_admin" && profile.role !== "coach") {
-    return { ok: false, error: "Buddy is a Business Builder feature." };
+    return { ok: false, error: "Buddy is a Coach feature." };
   }
   if (messages.length === 0) {
     return { ok: false, error: "Ask something first." };

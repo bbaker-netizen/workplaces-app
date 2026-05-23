@@ -39,7 +39,7 @@ export default async function PortalDashboard({
     !isPreview &&
     (profile.role === "master_admin" || profile.role === "coach")
   ) {
-    redirect("/coach");
+    redirect("/business-builder");
   }
 
   const engagement = await getCurrentEngagement();
@@ -51,7 +51,7 @@ export default async function PortalDashboard({
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
           Your portal isn&apos;t bound to an engagement. If you expect access,
-          contact your Business Builder.
+          contact your Coach.
         </p>
       </main>
     );
@@ -67,7 +67,7 @@ export default async function PortalDashboard({
       getSoulFileForEngagement(engagement.id),
     ]);
 
-  // Coach roles were redirected to /coach above, so by this point the
+  // Coach roles were redirected to /business-builder above, so by this point the
   // viewer is always a client-side role and "draft" items stay hidden.
   const now = new Date();
   const myOpen = allItems
@@ -101,7 +101,7 @@ export default async function PortalDashboard({
             You&apos;re viewing the client portal as a client would see it.
           </span>
           <Link
-            href="/coach"
+            href="/business-builder"
             className="ml-auto text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
           >
             ← Back to Business Builder Console

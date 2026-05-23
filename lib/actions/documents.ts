@@ -85,7 +85,7 @@ export async function uploadDocument(
           .slice(0, 12)
       : [];
 
-  // Resolve the engagement's org id once (works cross-org for coach
+  // Resolve the engagement's org id once (works cross-org for Coach
   // roles) and re-use it for both the blob path and the row insert.
   let boundOrgId: string;
   try {
@@ -160,7 +160,7 @@ export async function uploadDocument(
     );
 
     revalidatePath("/portal/documents");
-    revalidatePath(`/coach/documents/${engagementId}`);
+    revalidatePath(`/business-builder/documents/${engagementId}`);
     return {
       ok: true,
       data: {
@@ -220,7 +220,7 @@ export async function deleteDocument(id: string): Promise<ActionResult> {
           .limit(1);
         if (!existing) throw new Error("Document not found.");
 
-        // Authorization: uploader, master_admin / coach, or
+        // Authorization: uploader, master_admin / Coach, or
         // client_lead / client_manager. Phase 2 may tighten this.
         const isUploader =
           existing.uploaderId === profile.userProfileId;
@@ -250,7 +250,7 @@ export async function deleteDocument(id: string): Promise<ActionResult> {
     }
 
     revalidatePath("/portal/documents");
-    revalidatePath(`/coach/documents/${blobKey.engagementId}`);
+    revalidatePath(`/business-builder/documents/${blobKey.engagementId}`);
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -326,7 +326,7 @@ export async function setDocumentTags(
     );
 
     revalidatePath("/portal/documents");
-    revalidatePath(`/coach/documents/${engagementId}`);
+    revalidatePath(`/business-builder/documents/${engagementId}`);
     return { ok: true, data: undefined };
   } catch (e) {
     return {

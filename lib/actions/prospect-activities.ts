@@ -82,8 +82,8 @@ export async function logProspectActivity(
     await touchLastContact(data.prospectId);
   }
 
-  revalidatePath(`/coach/pipeline/${data.prospectId}`);
-  revalidatePath("/coach/pipeline");
+  revalidatePath(`/business-builder/pipeline/${data.prospectId}`);
+  revalidatePath("/business-builder/pipeline");
   return { ok: true, data: { id: inserted.id } };
 }
 
@@ -115,7 +115,7 @@ export async function deleteProspectActivity(
     return row.prospectId;
   });
   if (prospectId) {
-    revalidatePath(`/coach/pipeline/${prospectId}`);
+    revalidatePath(`/business-builder/pipeline/${prospectId}`);
   }
   return { ok: true, data: undefined };
 }

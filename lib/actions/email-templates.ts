@@ -61,7 +61,7 @@ export async function createEmailTemplate(
         .returning({ id: emailTemplates.id });
       return created;
     });
-    revalidatePath("/coach/templates");
+    revalidatePath("/business-builder/templates");
     return { ok: true, id: row.id };
   } catch (e) {
     return {
@@ -97,7 +97,7 @@ export async function updateEmailTemplate(
         })
         .where(eq(emailTemplates.id, id));
     });
-    revalidatePath("/coach/templates");
+    revalidatePath("/business-builder/templates");
     return { ok: true };
   } catch (e) {
     return {
@@ -116,7 +116,7 @@ export async function deleteEmailTemplate(
     await withTenantContext(profile.orgId, async (tx) => {
       await tx.delete(emailTemplates).where(eq(emailTemplates.id, id));
     });
-    revalidatePath("/coach/templates");
+    revalidatePath("/business-builder/templates");
     return { ok: true };
   } catch (e) {
     return {

@@ -12,7 +12,7 @@ The methodology is grounded in: Stages of Growth, Quality Gate (every action mus
 You will be given:
 - The deliverable type to produce
 - The engagement's Soul File (deep context about the business)
-- Optional notes / extra inputs from the Business Builder
+- Optional notes / extra inputs from the Coach
 
 Produce the deliverable in markdown. The format and depth depend on the type:`;
 

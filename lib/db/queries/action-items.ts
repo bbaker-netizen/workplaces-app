@@ -8,10 +8,10 @@
  *   - Tenant-scoped reads (`listEngagementActionItems`) for the client
  *     portal: the user's active Clerk Org → app org_id → RLS scopes to
  *     just their engagement's items.
- *   - Cross-tenant read (`listCoachActionItems`) for the Business Builder view:
- *     items live in client orgs, the Business Builder's session is in the master
+ *   - Cross-tenant read (`listCoachActionItems`) for the Coach view:
+ *     items live in client orgs, the Coach's session is in the master
  *     org, so RLS would filter to nothing. Application layer scopes by
- *     the Business Builder's owned engagements via withSystemContext.
+ *     the Coach's owned engagements via withSystemContext.
  */
 
 import { eq } from "drizzle-orm";
@@ -76,7 +76,7 @@ export async function getActionItem(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
 
-  // For Business Builder roles, items can live in any client org — use system context.
+  // For Coach roles, items can live in any client org — use system context.
   if (profile.role === "master_admin" || profile.role === "coach") {
     return withSystemContext(async (tx) => {
       const rows = await tx
@@ -123,12 +123,12 @@ export async function listCoachActionItems(): Promise<
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
 
   return withSystemContext(async (tx) => {
-    const [coach] = await tx
+    const [Coach] = await tx
       .select({ id: coaches.id })
       .from(coaches)
       .where(eq(coaches.userProfileId, profile.userProfileId))
       .limit(1);
-    if (!coach) return [];
+    if (!Coach) return [];
 
     const rows = await tx
       .select({
@@ -144,7 +144,7 @@ export async function listCoachActionItems(): Promise<
         userProfiles,
         eq(userProfiles.id, actionItems.assigneeUserProfileId),
       )
-      .where(eq(engagements.coachId, coach.id));
+      .where(eq(engagements.coachId, Coach.id));
 
     return rows.map((r) => ({
       ...r.item,

@@ -36,7 +36,7 @@ import { z } from "zod";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-const SYSTEM_PROMPT = `You convert legal / business documents (contracts, NDAs, proposals, renewals, agreements) into Workplaces "document templates" — markdown bodies with {{variable}} placeholders that get auto-filled when the coach sends them for signature.
+const SYSTEM_PROMPT = `You convert legal / business documents (contracts, NDAs, proposals, renewals, agreements) into Workplaces "document templates" — markdown bodies with {{variable}} placeholders that get auto-filled when the Coach sends them for signature.
 
 The supported variables are:
 

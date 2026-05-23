@@ -22,7 +22,7 @@ export async function disconnectGoogleCalendar(): Promise<
   }
   try {
     await disconnectUserTokens(profile.orgId, profile.userProfileId);
-    revalidatePath("/coach/profile/google-calendar");
+    revalidatePath("/business-builder/profile/google-calendar");
     return { ok: true };
   } catch (e) {
     return {
@@ -44,8 +44,8 @@ export async function syncMyGmailNow(): Promise<
     return { ok: false, error: "Not authenticated." };
   }
   const summary = await syncOneUser(profile.userProfileId);
-  revalidatePath("/coach/profile/google-calendar");
-  revalidatePath("/coach/inbox");
+  revalidatePath("/business-builder/profile/google-calendar");
+  revalidatePath("/business-builder/inbox");
   if (!summary.ok) {
     return { ok: false, error: summary.error ?? "Sync failed." };
   }
@@ -69,7 +69,7 @@ export async function setGmailSyncEnabled(
         .set({ gmailSyncEnabled: enabled, updatedAt: new Date() })
         .where(eq(googleCalendarTokens.userProfileId, profile.userProfileId));
     });
-    revalidatePath("/coach/profile/google-calendar");
+    revalidatePath("/business-builder/profile/google-calendar");
     return { ok: true };
   } catch (e) {
     return {

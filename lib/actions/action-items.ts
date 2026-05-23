@@ -9,7 +9,7 @@
  * Resend).
  *
  * Role-based authorization (per CLAUDE.md role enum):
- *   - master_admin / coach / client_lead: full edit on items in their
+ *   - master_admin / Coach / client_lead: full edit on items in their
  *     engagements (create, update any field, delete).
  *   - client_manager / client_employee: status-only updates, and only on
  *     items where they are the assignee.
@@ -92,7 +92,7 @@ export type ActionResult<T = void> =
 
 function revalidateActionItemPaths() {
   revalidatePath("/portal/action-items");
-  revalidatePath("/coach/action-items");
+  revalidatePath("/business-builder/action-items");
 }
 
 export async function createActionItem(

@@ -460,7 +460,7 @@ export function ClientCommunicationsPanel({
           </p>
           <p className="text-sm text-tbb-ink-3 max-w-md mx-auto">
             {readOnly
-              ? "Once your Business Builder reaches out (or you reply), every message lands here. Audit trail you can actually trust."
+              ? "Once your Coach reaches out (or you reply), every message lands here. Audit trail you can actually trust."
               : "Send a quick email above, or log the call you just had from the activity panel. Inbound emails sync from Gmail every 10 minutes."}
           </p>
         </div>

@@ -1,16 +1,16 @@
 /**
  * QBO OAuth callback.
  *
- * Phase 4.6. Intuit redirects here after the Business Builder approves the
+ * Phase 4.6. Intuit redirects here after the Coach approves the
  * connection. Query string contains `code`, `state`, and `realmId`.
  *
  * We:
  *   1. Verify the state matches the one we set in a cookie at
  *      authorize-start time (CSRF protection).
  *   2. Exchange the code for an access + refresh token.
- *   3. Look up which coach this is via the user_profile referenced
+ *   3. Look up which Coach this is via the user_profile referenced
  *      in the state, and persist the tokens in qbo_oauth_tokens.
- *   4. Redirect back to /coach/profile/quickbooks.
+ *   4. Redirect back to /business-builder/profile/quickbooks.
  */
 
 import { eq } from "drizzle-orm";
@@ -112,6 +112,6 @@ function redirectToProfile(query: string): Response {
   const base =
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   return NextResponse.redirect(
-    `${base}/coach/profile/quickbooks?${query}`,
+    `${base}/business-builder/profile/quickbooks?${query}`,
   );
 }

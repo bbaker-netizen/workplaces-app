@@ -40,7 +40,7 @@ function hrefFor(
   if (parentEntityType === THREAD_TYPE.actionItem) {
     return scope === "portal"
       ? `/portal/action-items/${parentEntityId}`
-      : `/coach/action-items/${parentEntityId}`;
+      : `/business-builder/action-items/${parentEntityId}`;
   }
   // Both engagement-level threads land on the Communication page —
   // the page itself decides which tab to open via a query param.
@@ -50,7 +50,7 @@ function hrefFor(
       : "team";
   return scope === "portal"
     ? `/portal/communication?tab=${tab}`
-    : `/coach/communication/${engagementId}?tab=${tab}`;
+    : `/business-builder/communication/${engagementId}?tab=${tab}`;
 }
 
 export async function RecentActivity({

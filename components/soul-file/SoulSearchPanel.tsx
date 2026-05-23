@@ -83,7 +83,7 @@ export function SoulSearchPanel() {
                 <li key={r.engagementId} className="py-3 space-y-1">
                   <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
                     <Link
-                      href={`/coach/soul-file/${r.engagementId}`}
+                      href={`/business-builder/soul-file/${r.engagementId}`}
                       className="font-bold text-foreground text-base tracking-tight hover:underline underline-offset-4"
                     >
                       {r.engagementName ?? "Engagement"}

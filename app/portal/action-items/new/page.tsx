@@ -14,7 +14,7 @@ import type { UserProfile } from "@/lib/db/schema";
 /**
  * Pick the sensible default assignee per Q1 (b):
  *   1. The engagement's client_lead.
- *   2. Else any non-coach member.
+ *   2. Else any non-Coach member.
  *   3. Else fall back to the current user.
  */
 function pickDefaultAssignee(

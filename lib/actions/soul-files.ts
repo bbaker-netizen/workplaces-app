@@ -16,9 +16,9 @@
  *
  * Surface:
  *   - `upsertSoulFileBody(engagementId, body)` — write the markdown.
- *     Leadership-only (master_admin / coach / client_lead /
+ *     Leadership-only (master_admin / Coach / client_lead /
  *     client_manager).
- *   - `searchSoulFiles(query, limit?)` — coach-only cross-engagement
+ *   - `searchSoulFiles(query, limit?)` — Coach-only cross-engagement
  *     semantic search via Claude.
  *
  * Reads live in `lib/db/queries/soul-files.ts`.
@@ -123,7 +123,7 @@ export async function upsertSoulFileBody(
     );
 
     revalidatePath("/portal/soul-file");
-    revalidatePath(`/coach/soul-file/${data.engagementId}`);
+    revalidatePath(`/business-builder/soul-file/${data.engagementId}`);
     return { ok: true, data: { id } };
   } catch (e) {
     return {
@@ -135,14 +135,14 @@ export async function upsertSoulFileBody(
 
 /* ----------------------------- search ----------------------------- */
 
-const SEARCH_SYSTEM = `You are a search engine over a coach's "Soul Files" — long-form context documents written about each of their client engagements. Each Soul File belongs to one engagement and contains:
+const SEARCH_SYSTEM = `You are a search engine over a Coach's "Soul Files" — long-form context documents written about each of their client engagements. Each Soul File belongs to one engagement and contains:
 
 - Why the engagement exists
 - Where the business is today
 - Where it wants to be in 12 months
 - Strategic backdrop, founders, hard-won learnings
 
-Your job: given a coach's natural-language query and a list of candidate Soul Files (each with its engagement id, name, and body), return the top results most relevant to the query.
+Your job: given a Coach's natural-language query and a list of candidate Soul Files (each with its engagement id, name, and body), return the top results most relevant to the query.
 
 Output strict JSON, no prose, no code fences. The shape:
 
@@ -202,19 +202,19 @@ export async function searchSoulFiles(
     return { ok: false, error: "Business Builders only." };
   if (!query.trim()) return { ok: true, data: [] };
 
-  // Load every Soul File for engagements this coach owns.
+  // Load every Soul File for engagements this Coach owns.
   type Candidate = {
     engagementId: string;
     engagementName: string | null;
     body: string;
   };
   const candidates: Candidate[] = await withSystemContext(async (tx) => {
-    const [coach] = await tx
+    const [Coach] = await tx
       .select({ id: coaches.id })
       .from(coaches)
       .where(eq(coaches.userProfileId, profile.userProfileId))
       .limit(1);
-    if (!coach) return [];
+    if (!Coach) return [];
     const rows = await tx
       .select({
         engagementId: soulFiles.engagementId,
@@ -225,7 +225,7 @@ export async function searchSoulFiles(
       .from(soulFiles)
       .innerJoin(engagements, eq(engagements.id, soulFiles.engagementId));
     return rows
-      .filter((r) => r.coachId === coach.id && r.body.trim().length > 0)
+      .filter((r) => r.coachId === Coach.id && r.body.trim().length > 0)
       .map((r) => ({
         engagementId: r.engagementId,
         engagementName: r.engagementName,

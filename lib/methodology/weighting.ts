@@ -51,7 +51,7 @@ export function weightedFitScore(scores: CategoryScores): number | null {
 /**
  * Rescaled fit when one category is missing. Less common — used when
  * a candidate has only completed two of the three TTI sections and
- * the Business Builder still wants a directional read. Tagged "partial" so the
+ * the Coach still wants a directional read. Tagged "partial" so the
  * caller can label it appropriately.
  */
 export function partialWeightedFitScore(

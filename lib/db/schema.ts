@@ -11,7 +11,7 @@
  * Row-Level Security policies referencing `auth.org_id()` are added in
  * separate migrations (0001 for Phase 0 tables, 0003 for Phase 1.1
  * tables). All RLS predicates are `org_id = auth.org_id()`; cross-org
- * coach visibility (Coach My Work) is a Phase 2+ concern handled via a
+ * Coach visibility (Coach My Work) is a Phase 2+ concern handled via a
  * future engagement_membership junction.
  */
 
@@ -460,7 +460,7 @@ export const engagements = pgTable(
  * radio-pill options. Picking one auto-fills the fee, but the field
  * stays editable for one-off overrides.
  *
- * Bruce manages the grid under /coach/settings/pricing.
+ * Bruce manages the grid under /business-builder/settings/pricing.
  */
 export const pricingTiers = pgTable(
   "pricing_tiers",
@@ -820,7 +820,7 @@ export const bbsSessions = pgTable(
 /**
  * `action_items` — owned, dated commitments per engagement.
  *
- * Created either by a coach manually (status=open) or by Claude from a
+ * Created either by a Coach manually (status=open) or by Claude from a
  * Fireflies transcript (status=draft, confidence_flag set, fireflies_
  * transcript_id populated). Drafts are visible only to coaches;
  * publishing a draft transitions status from draft → open and surfaces
@@ -1269,10 +1269,10 @@ export const invoices = pgTable(
 );
 
 /**
- * `qbo_oauth_tokens` — per-coach OAuth refresh tokens for QuickBooks
+ * `qbo_oauth_tokens` — per-Coach OAuth refresh tokens for QuickBooks
  * Online. Same shape as the (now-removed) adobe_sign_oauth_tokens
  * table. `realm_id` is QBO's identifier for the company file (Bruce's
- * company file vs. a partner coach's, in the multi-coach future).
+ * company file vs. a partner Coach's, in the multi-Coach future).
  */
 export const qboOauthTokens = pgTable(
   "qbo_oauth_tokens",
@@ -2048,7 +2048,7 @@ export const personProfiles = pgTable(
 
 /**
  * `scheduling_links` — Calendly-style booking links. Each row defines
- * a per-coach link with a slug, meeting duration, availability rules,
+ * a per-Coach link with a slug, meeting duration, availability rules,
  * and a target meeting type (discovery → creates a prospect; bbs →
  * creates a bbs_session row).
  *
@@ -2196,7 +2196,7 @@ export const signatureEnvelopes = pgTable(
  * `public_token` is the URL-safe id used in /sign/[token] links.
  * `signature_image_data` holds the captured (or pre-applied) signature
  * as a data: URL — base64 PNG. `signature_method` is one of
- * "typed" / "drawn" / "uploaded" (the latter when a stored coach
+ * "typed" / "drawn" / "uploaded" (the latter when a stored Coach
  * signature is auto-applied).
  *
  * Status ladder: pending → viewed → signed | declined.

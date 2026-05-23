@@ -79,7 +79,7 @@ export async function updateOrgSettings(
         })
         .where(eq(orgs.id, profile.orgId));
     });
-    revalidatePath("/coach/settings/company");
+    revalidatePath("/business-builder/settings/company");
     revalidatePath("/", "layout"); // sidebar shows org name
     return { ok: true, data: undefined };
   } catch (e) {

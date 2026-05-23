@@ -340,7 +340,7 @@ export type SignatureCompletedEmailInput = {
   to: string;
   recipientName: string;
   envelopeSubject: string;
-  envelopeUrl: string; // /coach/envelopes/<id> (for sender) or shared link
+  envelopeUrl: string; // /business-builder/envelopes/<id> (for sender) or shared link
   isSender: boolean;
 };
 
@@ -355,7 +355,7 @@ export type DiagnosticInviteEmailInput = {
 };
 
 /**
- * Diagnostic invitation — Business Builder sending the public intake
+ * Diagnostic invitation — Coach sending the public intake
  * form to a prospect they're already in conversation with. Friendly,
  * short, gives them an out if the timing isn't right.
  */
@@ -421,12 +421,12 @@ export type NewLeadEmailInput = {
   phone: string | null;
   leadSource: string;
   message: string | null;
-  prospectUrl: string; // /coach/pipeline/<id>
+  prospectUrl: string; // /business-builder/pipeline/<id>
 };
 
 /**
  * New lead intake email — fires when someone fills out the public web
- * form and we want every master_admin / coach to know within minutes.
+ * form and we want every master_admin / Coach to know within minutes.
  * Single Safety Vest Orange accent (per the brand guide) because a new
  * lead deserves the same visual urgency as an overdue action item.
  */
@@ -451,7 +451,7 @@ export function newLeadEmail(input: NewLeadEmailInput): EmailEnvelope {
     heading: "New lead just landed",
     accent: "#E87722", // Safety Vest Orange — urgency accent
     bodyHtml: `
-      <p style="margin:0 0 12px 0;">A new lead just came in through <strong>${escapeHtml(input.leadSource)}</strong>. First Business Builder to claim it owns the follow-up.</p>
+      <p style="margin:0 0 12px 0;">A new lead just came in through <strong>${escapeHtml(input.leadSource)}</strong>. First Coach to claim it owns the follow-up.</p>
       <div style="margin:16px 0;padding:12px 14px;background:#F5F1E8;border:1px solid #E8ECF1;border-radius:8px;font-size:14px;line-height:1.7;">
         <div><strong>Company:</strong> ${escapeHtml(input.companyName)}</div>
         <div><strong>Contact:</strong> ${contactLine}</div>

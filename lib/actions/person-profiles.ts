@@ -8,7 +8,7 @@
  * gap report PDF. Internal scores stay internal (IP exposure rules);
  * the summary text is what surfaces.
  *
- * Authorization: leadership-only (master_admin / coach / client_lead /
+ * Authorization: leadership-only (master_admin / Coach / client_lead /
  * client_manager). client_employee CAN view their OWN profile but
  * not others — gating happens at the page level via user_profile_id
  * match.

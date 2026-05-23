@@ -2,7 +2,7 @@
 
 /**
  * Resource library CRUD — Bruce + Jen's catalogue of apps, videos,
- * and tutorials. Master_admin / coach only. RLS scopes everything
+ * and tutorials. Master_admin / Coach only. RLS scopes everything
  * by org, but we double-check the orgId on every mutation.
  */
 
@@ -78,7 +78,7 @@ export async function createResource(
         })
         .returning({ id: resources.id }),
     );
-    revalidatePath("/coach/library");
+    revalidatePath("/business-builder/library");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -116,7 +116,7 @@ export async function updateResource(
         })
         .where(and(eq(resources.id, id), eq(resources.orgId, profile.orgId)));
     });
-    revalidatePath("/coach/library");
+    revalidatePath("/business-builder/library");
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -135,7 +135,7 @@ export async function deleteResource(id: string): Promise<ActionResult> {
         .delete(resources)
         .where(and(eq(resources.id, id), eq(resources.orgId, profile.orgId)));
     });
-    revalidatePath("/coach/library");
+    revalidatePath("/business-builder/library");
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -248,7 +248,7 @@ export async function syncNetlifyTools(): Promise<
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
-  revalidatePath("/coach/library");
+  revalidatePath("/business-builder/library");
   return {
     ok: true,
     data: { added, updated, total: sites.length },

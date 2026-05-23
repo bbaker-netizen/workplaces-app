@@ -185,11 +185,11 @@ export async function sendClientMessage(
     return row;
   });
 
-  if (data.prospectId) revalidatePath(`/coach/pipeline/${data.prospectId}`);
+  if (data.prospectId) revalidatePath(`/business-builder/pipeline/${data.prospectId}`);
   if (data.engagementId) {
-    revalidatePath(`/coach/communication/${data.engagementId}`);
+    revalidatePath(`/business-builder/communication/${data.engagementId}`);
   }
-  revalidatePath("/coach/inbox");
+  revalidatePath("/business-builder/inbox");
 
   return { ok: true, data: { id: inserted.id, externalId } };
 }

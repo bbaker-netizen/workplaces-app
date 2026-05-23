@@ -4,7 +4,7 @@
  * Phase 5. The endpoint your external web form (or any third-party
  * tool) posts new leads to. Creates a Prospect row in the Pipeline
  * with status "new_lead" and emails every Workplaces master_admin /
- * coach so the lead doesn't sit unread.
+ * Coach so the lead doesn't sit unread.
  *
  * Auth: optional API key. If `LEADS_INTAKE_API_KEY` is set in env,
  * the request must include `x-api-key` matching it. If unset, the
@@ -150,7 +150,7 @@ export async function POST(req: Request): Promise<Response> {
         body: data.message ?? null,
       });
 
-      // Notify every master_admin + coach in the master org so the
+      // Notify every master_admin + Coach in the master org so the
       // first one to see it can claim and follow up.
       const recipients = await tx
         .select({ email: userProfiles.email })
@@ -188,7 +188,7 @@ export async function POST(req: Request): Promise<Response> {
         phone: data.phone ?? null,
         leadSource: data.leadSource ?? "Web form",
         message: data.message ?? null,
-        prospectUrl: `/coach/pipeline/${prospectId}`,
+        prospectUrl: `/business-builder/pipeline/${prospectId}`,
       }),
       bypassWorkingHours: true,
     });

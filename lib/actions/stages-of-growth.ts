@@ -79,7 +79,7 @@ export async function setEngagementStage(
           .where(eq(engagements.id, data.engagementId));
       },
     );
-    revalidatePath("/coach");
+    revalidatePath("/business-builder");
     revalidatePath("/portal");
     return { ok: true, data: undefined };
   } catch (e) {

@@ -3,7 +3,7 @@
 /**
  * DocumentUploadForm — single-file upload control with optional tags.
  *
- * Used on `/portal/documents` and `/coach/documents/[engagementId]`.
+ * Used on `/portal/documents` and `/business-builder/documents/[engagementId]`.
  * The composer paperclip uses a different control (the inline
  * `ComposerAttachmentPicker`) because its UX is different — auto-upload
  * on file pick, no tag step, with abandon-on-cancel.
