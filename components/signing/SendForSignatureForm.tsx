@@ -161,7 +161,7 @@ export function SendForSignatureForm(props: Props) {
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           disabled={isPending}
-          placeholder="Coaching engagement agreement"
+          placeholder="Business building agreement"
           className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         />
       </div>

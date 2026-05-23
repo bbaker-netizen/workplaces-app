@@ -75,7 +75,8 @@ function shell({
   const safeHeading = escapeHtml(heading);
   const safeButtonLabel = escapeHtml(buttonLabel);
   const safeButtonHref = escapeHtml(buttonHref);
-  const ruleColor = accent ?? "#2C6CB0";
+  const ruleColor = accent ?? "#2E4057";
+  const logoUrl = `${appUrl()}/brand/logo-blue.png`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -83,36 +84,48 @@ function shell({
   <meta name="viewport" content="width=device-width" />
   <title>${safeHeading}</title>
 </head>
-<body style="margin:0;padding:0;background:#F4F6F9;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#14181D;">
+<body style="margin:0;padding:0;background:#EADFC7;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#1A1A1A;">
   <span style="display:none;font-size:0;line-height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;">${safePreheader}</span>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F6F9;padding:32px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EADFC7;padding:48px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#FFFFFF;border:1px solid #D6DDE5;border-radius:16px;">
+        <table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" style="max-width:680px;width:100%;background:#FFFFFF;border:1px solid #CCCCCC;border-radius:16px;">
           <tr>
-            <td style="padding:24px 24px 16px 24px;border-bottom:1px solid #E8ECF1;">
-              <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#5A6470;font-weight:700;">
-                Business Builder Portal · By Workplaces
+            <td style="padding:36px 40px 24px 40px;border-bottom:1px solid #E5E5E5;text-align:center;">
+              <a href="${escapeHtml(appUrl())}" style="display:inline-block;text-decoration:none;" aria-label="The Builder · By Workplaces">
+                <img
+                  src="${escapeHtml(logoUrl)}"
+                  alt="Workplaces"
+                  width="180"
+                  style="display:block;margin:0 auto 16px auto;width:180px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;"
+                />
+              </a>
+              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#666666;font-weight:700;text-align:center;">
+                The Builder · By Workplaces
               </div>
-              <div style="margin-top:8px;font-size:22px;font-weight:700;color:#14385B;line-height:1.3;border-left:3px solid ${ruleColor};padding-left:10px;">
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 40px 8px 40px;text-align:center;">
+              <div style="font-size:26px;font-weight:700;color:#2E4057;line-height:1.25;letter-spacing:-0.01em;border-left:4px solid ${ruleColor};padding-left:14px;display:inline-block;text-align:left;">
                 ${safeHeading}
               </div>
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 24px;font-size:15px;line-height:1.55;color:#14181D;">
+            <td style="padding:24px 40px 32px 40px;font-size:16px;line-height:1.65;color:#1A1A1A;">
               ${bodyHtml}
-              <div style="margin-top:24px;">
-                <a href="${safeButtonHref}" style="display:inline-block;background:#2C6CB0;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:14px;padding:12px 24px;border-radius:9999px;">
+              <div style="margin-top:32px;text-align:center;">
+                <a href="${safeButtonHref}" style="display:inline-block;background:#2E4057;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:9999px;letter-spacing:0.04em;">
                   ${safeButtonLabel}
                 </a>
               </div>
             </td>
           </tr>
           <tr>
-            <td style="padding:16px 24px;border-top:1px solid #E8ECF1;font-size:11px;color:#5A6470;line-height:1.5;">
+            <td style="padding:20px 40px 24px 40px;border-top:1px solid #E5E5E5;font-size:12px;color:#666666;line-height:1.6;text-align:center;">
               You're receiving this because you're a member of an engagement on the Business Builder Portal.<br>
-              Build what compounds.
+              <span style="color:#2E4057;font-weight:700;letter-spacing:0.04em;">Build what compounds.</span>
             </td>
           </tr>
         </table>
@@ -284,16 +297,16 @@ export function signatureRequestEmail(
   const firstName =
     input.signerName.split(" ")[0] ?? input.signerName;
   const messageBlock = input.message
-    ? `<p style="margin:0 0 12px 0;padding:12px;background:#F5F1E8;border-left:3px solid #2E4057;font-style:italic;">${escapeHtml(input.message)}</p>`
+    ? `<p style="margin:0 0 20px 0;padding:16px 18px;background:#F5F1E8;border-left:3px solid #2E4057;font-style:italic;line-height:1.6;">${escapeHtml(input.message)}</p>`
     : "";
 
   const html = shell({
     preheader: `${input.senderName} sent you a document to sign.`,
     heading: "You have a document to sign",
     bodyHtml: `
-      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
-      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.senderName)}</strong> sent you the following document to review and sign:</p>
-      <p style="margin:0 0 12px 0;font-size:17px;font-weight:700;color:#1A1A1A;">${escapeHtml(input.envelopeSubject)}</p>
+      <p style="margin:0 0 18px 0;">Hi ${escapeHtml(firstName)},</p>
+      <p style="margin:0 0 18px 0;"><strong>${escapeHtml(input.senderName)}</strong> sent you the following document to review and sign:</p>
+      <p style="margin:0 0 20px 0;padding:14px 18px;background:#F5F1E8;border-left:4px solid #E87722;font-size:18px;font-weight:700;color:#1A1A1A;line-height:1.4;">${escapeHtml(input.envelopeSubject)}</p>
       ${messageBlock}
       <p style="margin:0 0 12px 0;">The link below opens the document and a signature panel — type or draw your signature, then click Sign. No account required.</p>
     `,

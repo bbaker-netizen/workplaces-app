@@ -56,7 +56,7 @@ export function ProspectEnvelopeSection({
           <SendForSignatureForm
             mode="upload"
             prospectId={prospectId}
-            defaultSubject="Coaching engagement agreement"
+            defaultSubject="Business building agreement"
             defaultSigners={
               defaultSignerEmail
                 ? [
