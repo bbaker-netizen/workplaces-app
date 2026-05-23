@@ -150,9 +150,10 @@ export function PortalTour({
       locale={{
         back: "Back",
         close: "Close",
-        last: "Get started",
+        last: "Got it — take me in",
         next: "Next",
-        skip: "Skip",
+        nextWithProgress: "Next ({current}/{total})",
+        skip: "Skip the tour",
       }}
       options={{
         arrowColor: "#FFFFFF",
@@ -161,6 +162,13 @@ export function PortalTour({
         primaryColor: "#2C6CB0",
         textColor: "#14181D",
         zIndex: 9999,
+        // Show the Skip button in every step's footer so the walkthrough
+        // never feels like a hostage situation. The X in the corner also
+        // exits the whole tour (closeButtonAction: 'skip'). Esc and the
+        // overlay are already 'close' actions by default.
+        buttons: ["skip", "back", "primary"],
+        closeButtonAction: "skip",
+        showProgress: true,
       }}
       styles={{
         tooltip: {
