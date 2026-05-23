@@ -13,6 +13,11 @@ export type DocumentVariableContext = {
     contactName: string | null;
     companyName: string;
     contactEmail: string;
+    /** Phone is now required on every prospect (see
+     *  lib/pipeline/validate-prospect.ts) so the contract can include
+     *  it. Stays nullable here for historical rows that pre-date the
+     *  rule — `{{client_phone}}` falls back to "[phone]" in that case. */
+    phone?: string | null;
   } | null;
   engagement?: {
     name: string | null;
@@ -50,6 +55,11 @@ export const DOCUMENT_VARIABLES = [
     name: "contact_email",
     label: "Client email",
     description: "Their email address",
+  },
+  {
+    name: "client_phone",
+    label: "Client phone",
+    description: "Their phone number (required on every prospect)",
   },
   {
     name: "engagement_name",
@@ -172,6 +182,7 @@ export function buildVariableMap(
     company_name:
       ctx.prospect?.companyName ?? ctx.engagement?.name ?? "[company]",
     contact_email: ctx.prospect?.contactEmail ?? "[client email]",
+    client_phone: ctx.prospect?.phone ?? "[phone]",
     engagement_name:
       ctx.engagement?.name ?? ctx.prospect?.companyName ?? "[engagement]",
     engagement_type:

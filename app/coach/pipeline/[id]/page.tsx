@@ -277,6 +277,7 @@ export default async function ProspectDetailPage({
                 contactName: prospect.contactName,
                 companyName: prospect.companyName,
                 contactEmail: prospect.contactEmail,
+                phone: prospect.phone,
               },
               sender: {
                 fullName: me?.fullName ?? "",

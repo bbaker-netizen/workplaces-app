@@ -10,17 +10,15 @@
  *     - contactName: required, min 2 chars, must contain a space
  *       (first + last name)
  *     - contactEmail: required, valid email
+ *     - phone: required, must contain at least 7 digits — contracts
+ *       and emergency outreach need a phone on file
  *     - contactName must NOT equal companyName (case-insensitive)
+ *     - contactName must NOT have a company entity suffix
  *
  *   SOFT rules (warn but allow submit if the user confirms):
  *     - companyName has no obvious entity suffix (Inc/LLC/Ltd/Corp/etc)
  *       and looks like a person's name (two words, both capitalized).
  *       The user has to tick "Yes, this is the legal name" to bypass.
- *
- *   PHONE validation:
- *     - Optional. When present must contain at least 7 digits so we
- *       don't store obvious garbage. Doesn't enforce a specific
- *       country format — clients may be Canadian, US, or international.
  *
  * The `validateProspect` function returns a structured result so the
  * UI can render per-field errors and warnings, and so the server
@@ -158,8 +156,20 @@ export function validateProspect(input: ProspectInput): ValidationResult {
     });
   }
 
-  /* ---------- Phone (optional) ---------- */
-  if (phone.length > 0 && countDigits(phone) < 7) {
+  /* ---------- Phone (required) ----------
+   * Phone is required because the contract preamble + emergency
+   * outreach + Twilio SMS all need a number on file. We don't
+   * enforce a specific country format — clients can be Canadian,
+   * US, or international — but the value has to contain at least
+   * 7 digits so we know it's a real number, not "TBD" or "n/a". */
+  if (phone.length === 0) {
+    errors.push({
+      field: "phone",
+      level: "error",
+      message:
+        "Phone number is required — the contract and any urgent outreach need this on file.",
+    });
+  } else if (countDigits(phone) < 7) {
     errors.push({
       field: "phone",
       level: "error",

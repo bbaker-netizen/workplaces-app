@@ -157,8 +157,9 @@ export function NewProspectForm() {
             className={inputCls}
           />
         </Field>
-        <Field label="Phone" issue={issueFor("phone")}>
+        <Field label="Phone" required issue={issueFor("phone")}>
           <input
+            required
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
