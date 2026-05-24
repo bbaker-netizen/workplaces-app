@@ -13,7 +13,7 @@
  * engagement); the component only handles UI state.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDownLeft,
@@ -85,6 +85,36 @@ export function ClientCommunicationsPanel({
   const [error, setError] = useState<string | null>(null);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Composer ref + auto-scroll. The composer renders at the TOP of
+  // the timeline; if Bruce hits Reply on a row that's already scrolled
+  // down the page, the composer opens out of sight. Scroll it into
+  // view as soon as it mounts so the cursor lands where his eye does.
+  //
+  // Effect runs on every OPEN/CLOSE event, not on every keystroke —
+  // we key off whether the composer is open + which row (if any) it's
+  // replying to.
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  const composerOpenKey = composing
+    ? `${composing.channel}:${composing.replyTo?.id ?? "new"}`
+    : "closed";
+  useEffect(() => {
+    if (composerOpenKey === "closed") return;
+    // Defer to next frame so the composer DOM is in place before we
+    // measure its position.
+    const handle = window.requestAnimationFrame(() => {
+      composerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      // Focus the body so the user can start typing immediately.
+      const editable = composerRef.current?.querySelector<HTMLElement>(
+        "textarea, [contenteditable='true']",
+      );
+      editable?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, [composerOpenKey]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return rows;
@@ -259,7 +289,10 @@ export function ClientCommunicationsPanel({
       )}
 
       {composing && (
-        <div className="px-5 py-4 border-b border-tbb-line-soft bg-tbb-cream-50 space-y-2">
+        <div
+          ref={composerRef}
+          className="px-5 py-4 border-b-2 border-tbb-blue/50 bg-tbb-cream-50 space-y-2 ring-2 ring-tbb-blue/20 ring-offset-0 scroll-mt-4"
+        >
           <div className="flex items-center gap-2">
             <ChannelIcon channel={composing.channel} />
             <p className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
