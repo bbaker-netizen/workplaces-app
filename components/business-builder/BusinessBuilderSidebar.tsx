@@ -20,6 +20,7 @@ import { useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
+  AlertTriangle,
   Briefcase,
   CalendarDays,
   ChevronDown,
@@ -38,6 +39,7 @@ import {
   Link as LinkIcon,
   LogOut,
   MessagesSquare,
+  PenLine,
   Rocket,
   Search,
   Settings,
@@ -657,7 +659,8 @@ function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
         href="/business-builder/calendar"
         className="block px-2.5 py-2 rounded-md bg-tbb-cream/5 hover:bg-tbb-cream/12 transition-colors group"
       >
-        <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-white/55 group-hover:text-white/70">
+        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-white/55 group-hover:text-white/70">
+          <CalendarDays className="w-3 h-3" aria-hidden />
           Next session
         </p>
         {next ? (
@@ -687,10 +690,11 @@ function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
       >
         <p
           className={
-            "text-[10px] font-bold uppercase tracking-tbb-caps " +
+            "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps " +
             (overdue > 0 ? "text-tbb-orange" : "text-white/55 group-hover:text-white/70")
           }
         >
+          <AlertTriangle className="w-3 h-3" aria-hidden />
           Overdue
         </p>
         <p className="text-[13px] font-bold text-white">
@@ -711,10 +715,11 @@ function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
       >
         <p
           className={
-            "text-[10px] font-bold uppercase tracking-tbb-caps " +
+            "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps " +
             (awaiting > 0 ? "text-tbb-blue-light" : "text-white/55 group-hover:text-white/70")
           }
         >
+          <PenLine className="w-3 h-3" aria-hidden />
           Awaiting signature
         </p>
         <p className="text-[13px] font-bold text-white">
