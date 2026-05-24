@@ -1,24 +1,42 @@
 /**
  * /business-builder/engagements/[id]/gantt — visual timeline of every
- * project on the engagement, with action items nested under each.
+ * project on the engagement, with action items + deliverables overlaid
+ * as live markers.
  *
- * Pure HTML/CSS Gantt — no chart library, no client-side render. Each
- * row is a project; each bar's left/width is computed from start_date
- * and target_date relative to the visible date range. Action items
- * appear as small dots on the project's row at their due_date.
+ * Phase additions in this rev:
+ *   • Deliverables render as a dedicated "Milestones" row at the top
+ *     of the chart — diamond markers at each deliverable's target /
+ *     delivered date. Click a diamond to open the deliverable's
+ *     portal page.
+ *   • Action item dots are now real <Link>s to their detail page.
+ *   • Project bars are <Link>s to the project detail (was the name
+ *     only). Plus an inline "Resize timeline" popover beside each
+ *     project that updates start + target dates in-place.
+ *
+ * Pure HTML/CSS chart — no chart library, no drag-resize. The
+ * popover-driven date edit gives the same outcome (move/resize) with
+ * full keyboard + touch accessibility and no drag-state state-machine.
  */
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
-import { ArrowLeft, Workflow, CheckCircle2, Circle } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Circle,
+  Diamond,
+  Workflow,
+} from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
+  deliverables,
   engagements,
   projects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { InlineProjectDateEdit } from "@/components/projects/InlineProjectDateEdit";
 
 function dayMs(): number {
   return 24 * 60 * 60 * 1000;
@@ -51,7 +69,7 @@ export default async function ProjectGanttPage({
       .where(eq(engagements.id, id))
       .limit(1);
     if (!eng) return null;
-    const [projectRows, actionRows] = await Promise.all([
+    const [projectRows, actionRows, deliverableRows] = await Promise.all([
       tx
         .select()
         .from(projects)
@@ -61,17 +79,31 @@ export default async function ProjectGanttPage({
         .select()
         .from(actionItems)
         .where(eq(actionItems.engagementId, id)),
+      tx
+        .select({
+          id: deliverables.id,
+          title: deliverables.title,
+          type: deliverables.type,
+          status: deliverables.status,
+          targetDate: deliverables.targetDate,
+          deliveredAt: deliverables.deliveredAt,
+        })
+        .from(deliverables)
+        .where(eq(deliverables.engagementId, id)),
     ]);
-    return { eng, projects: projectRows, actions: actionRows };
+    return {
+      eng,
+      projects: projectRows,
+      actions: actionRows,
+      deliverables: deliverableRows,
+    };
   });
 
   if (!data) notFound();
 
-  // Compute the visible date range. We start at the earliest project
-  // start date (or today, whichever is earlier minus a 7-day buffer)
-  // and end at the latest target date (or today + 90 days, whichever
-  // is later plus a 7-day buffer). Capped at ~12 months total so the
-  // bars stay readable.
+  // Compute the visible date range. Pull in every date we'll plot
+  // (projects, action items, deliverables) so nothing falls off the
+  // edge of the chart silently.
   const now = startOfDay(new Date());
   const allDates: Date[] = [];
   for (const p of data.projects) {
@@ -81,6 +113,10 @@ export default async function ProjectGanttPage({
   for (const a of data.actions) {
     if (a.dueDate) allDates.push(startOfDay(new Date(a.dueDate)));
   }
+  for (const d of data.deliverables) {
+    const date = d.deliveredAt ?? d.targetDate;
+    if (date) allDates.push(startOfDay(new Date(date)));
+  }
   const minDate =
     allDates.length > 0
       ? new Date(Math.min(now.getTime() - 7 * dayMs(), ...allDates.map((d) => d.getTime())))
@@ -89,11 +125,9 @@ export default async function ProjectGanttPage({
     allDates.length > 0
       ? new Date(Math.max(now.getTime() + 90 * dayMs(), ...allDates.map((d) => d.getTime())))
       : new Date(now.getTime() + 90 * dayMs());
-  // Cap at 365 days so the chart stays readable.
   const totalDays = Math.min(365, Math.max(30, diffDays(minDate, maxDate) + 7));
   const effectiveMax = new Date(minDate.getTime() + totalDays * dayMs());
 
-  // Build month-tick header positions so the chart shows month labels.
   const months: Array<{ label: string; offsetPct: number }> = [];
   const cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
   while (cursor < effectiveMax) {
@@ -114,13 +148,17 @@ export default async function ProjectGanttPage({
     ((startOfDay(now).getTime() - minDate.getTime()) / dayMs() / totalDays) *
     100;
 
-  // Action items grouped by project, for the dot overlay.
   const actionsByProject = new Map<string, typeof data.actions>();
   for (const a of data.actions) {
     if (!a.projectId) continue;
     if (!actionsByProject.has(a.projectId)) actionsByProject.set(a.projectId, []);
     actionsByProject.get(a.projectId)!.push(a);
   }
+
+  // Deliverables to plot: anything with a deliveredAt OR a targetDate.
+  const milestoneDeliverables = data.deliverables.filter(
+    (d) => d.deliveredAt || d.targetDate,
+  );
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-12 space-y-6">
@@ -134,22 +172,25 @@ export default async function ProjectGanttPage({
         <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
           {data.eng.name ?? "Engagement"} — Gantt
         </h1>
-        <p className="text-sm text-tbb-ink-3 max-w-2xl">
-          Every project on the timeline. Bars = project duration
-          (start → target). Dots = action items, plotted at their due
-          date. Vertical orange line = today.
+        <p className="text-sm text-tbb-ink-3 max-w-3xl">
+          Bars = project duration (start → target). Diamonds = deliverable
+          milestones (delivered date if shipped, otherwise target). Dots = action
+          items, plotted at their due date. Vertical orange line = today.
+          Click any marker to open the underlying record. Hit
+          <span className="font-bold"> Edit dates</span> on a project to resize
+          its bar in-place.
         </p>
       </header>
 
-      {data.projects.length === 0 ? (
+      {data.projects.length === 0 && milestoneDeliverables.length === 0 ? (
         <div className="border border-dashed border-tbb-line rounded-lg bg-white p-10 text-center space-y-3">
           <Workflow className="w-8 h-8 text-tbb-blue mx-auto" aria-hidden />
           <p className="font-bold text-tbb-navy">
-            No projects to chart yet.
+            No projects or deliverables to chart yet.
           </p>
           <p className="text-sm text-tbb-ink-3">
-            Create a project (with a start + target date) and it&apos;ll
-            show up here as a bar.
+            Create a project (with a start + target date) or a deliverable
+            (with a target date) and it&apos;ll show up here.
           </p>
           <Link
             href={`/business-builder/projects/new?engagement=${id}`}
@@ -162,7 +203,7 @@ export default async function ProjectGanttPage({
         <div className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
           {/* Month header */}
           <div className="relative h-9 border-b border-tbb-line-soft bg-tbb-bg-soft">
-            <div className="absolute inset-y-0 left-[200px] right-0">
+            <div className="absolute inset-y-0 left-[220px] right-0">
               {months.map((m, i) => (
                 <div
                   key={i}
@@ -172,7 +213,6 @@ export default async function ProjectGanttPage({
                   {m.label}
                 </div>
               ))}
-              {/* Today line in the header */}
               {todayOffsetPct >= 0 && todayOffsetPct <= 100 && (
                 <div
                   className="absolute top-0 bottom-0 w-px bg-tbb-orange"
@@ -183,15 +223,66 @@ export default async function ProjectGanttPage({
             </div>
           </div>
 
+          {/* Milestones row — deliverables across the top */}
+          {milestoneDeliverables.length > 0 && (
+            <div className="grid grid-cols-[220px_1fr] min-h-[52px] border-b border-tbb-line-soft bg-tbb-cream-50/60">
+              <div className="px-3 py-2.5 border-r border-tbb-line-soft flex items-center gap-1.5">
+                <Diamond className="w-3.5 h-3.5 text-tbb-blue" aria-hidden />
+                <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Deliverables
+                </span>
+                <span className="text-[10px] text-tbb-ink-3 ml-auto">
+                  {milestoneDeliverables.length}
+                </span>
+              </div>
+              <div className="relative px-2">
+                {todayOffsetPct >= 0 && todayOffsetPct <= 100 && (
+                  <div
+                    className="absolute top-0 bottom-0 w-px bg-tbb-orange/70"
+                    style={{ left: `${todayOffsetPct}%` }}
+                  />
+                )}
+                {milestoneDeliverables.map((d) => {
+                  const date = startOfDay(
+                    new Date(d.deliveredAt ?? d.targetDate!),
+                  );
+                  const offsetPct =
+                    (diffDays(minDate, date) / totalDays) * 100;
+                  if (offsetPct < 0 || offsetPct > 100) return null;
+                  const delivered = Boolean(d.deliveredAt);
+                  return (
+                    <Link
+                      key={d.id}
+                      href={`/portal/deliverables`}
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 group"
+                      style={{ left: `${offsetPct}%` }}
+                      title={`${d.title} — ${d.type.replace(/_/g, " ")} — ${
+                        delivered
+                          ? "delivered " + date.toLocaleDateString()
+                          : "target " + date.toLocaleDateString()
+                      }`}
+                    >
+                      <span
+                        className={
+                          "block w-3.5 h-3.5 rotate-45 border-2 transition-transform group-hover:scale-125 " +
+                          (delivered
+                            ? "bg-tbb-success border-tbb-success"
+                            : "bg-white border-tbb-blue")
+                        }
+                      />
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* One row per project */}
           <ul className="divide-y divide-tbb-line-soft">
             {data.projects.map((p) => {
               const start = p.startDate ? startOfDay(new Date(p.startDate)) : null;
               const end = p.targetDate ? startOfDay(new Date(p.targetDate)) : null;
               const acts = actionsByProject.get(p.id) ?? [];
-
-              // Compute bar geometry. If only one of start/end is set,
-              // we render the bar as a short hatched mark at that date.
               const leftPct = start
                 ? Math.max(0, (diffDays(minDate, start) / totalDays) * 100)
                 : null;
@@ -205,36 +296,43 @@ export default async function ProjectGanttPage({
 
               return (
                 <li key={p.id} className="relative">
-                  <div className="grid grid-cols-[200px_1fr] min-h-[64px]">
-                    {/* Left rail: project name + status */}
-                    <div className="px-3 py-2.5 border-r border-tbb-line-soft bg-tbb-cream-50/30">
+                  <div className="grid grid-cols-[220px_1fr] min-h-[64px]">
+                    {/* Left rail: project name + status + inline date editor */}
+                    <div className="px-3 py-2.5 border-r border-tbb-line-soft bg-tbb-cream-50/30 space-y-1">
                       <Link
-                        href={`/portal/projects/${p.id}`}
+                        href={`/business-builder/projects/${p.id}`}
                         className="block font-bold text-sm text-tbb-navy hover:underline truncate"
                       >
                         {p.name}
                       </Link>
-                      <span className="block text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mt-0.5">
-                        {p.status.replace(/_/g, " ")}
-                      </span>
-                      <span className="block text-[10px] text-tbb-ink-3 mt-0.5">
-                        {acts.length} action{acts.length === 1 ? "" : "s"}
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                          {p.status.replace(/_/g, " ")}
+                        </span>
+                        <span className="text-[10px] text-tbb-ink-3">
+                          · {acts.length} action{acts.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <InlineProjectDateEdit
+                        projectId={p.id}
+                        initialStart={start}
+                        initialTarget={end}
+                      />
                     </div>
                     {/* Right rail: timeline lane */}
                     <div className="relative px-2 py-3">
-                      {/* Today line */}
                       {todayOffsetPct >= 0 && todayOffsetPct <= 100 && (
                         <div
                           className="absolute top-0 bottom-0 w-px bg-tbb-orange/70 z-10"
                           style={{ left: `${todayOffsetPct}%` }}
                         />
                       )}
-                      {/* Project bar */}
+                      {/* Project bar — now a Link */}
                       {leftPct !== null && widthPct !== null && (
-                        <div
+                        <Link
+                          href={`/business-builder/projects/${p.id}`}
                           className={
-                            "absolute top-1/2 -translate-y-1/2 h-6 rounded-md flex items-center px-2 text-[10px] font-bold text-white overflow-hidden " +
+                            "absolute top-1/2 -translate-y-1/2 h-6 rounded-md flex items-center px-2 text-[10px] font-bold text-white overflow-hidden hover:opacity-90 transition-opacity " +
                             (p.status === "completed"
                               ? "bg-tbb-success"
                               : p.status === "blocked"
@@ -247,19 +345,20 @@ export default async function ProjectGanttPage({
                             left: `${leftPct}%`,
                             width: `${Math.max(2, widthPct)}%`,
                           }}
-                          title={`${start?.toLocaleDateString()} → ${end?.toLocaleDateString()}`}
+                          title={`${p.name} — ${start?.toLocaleDateString()} → ${end?.toLocaleDateString()}`}
                         >
                           <span className="truncate">{p.name}</span>
-                        </div>
+                        </Link>
                       )}
                       {leftPct !== null && widthPct === null && (
-                        <div
-                          className="absolute top-1/2 -translate-y-1/2 h-6 w-2 rounded bg-tbb-navy"
+                        <Link
+                          href={`/business-builder/projects/${p.id}`}
+                          className="absolute top-1/2 -translate-y-1/2 h-6 w-2 rounded bg-tbb-navy hover:opacity-90"
                           style={{ left: `${leftPct}%` }}
-                          title={`Start ${start?.toLocaleDateString()}`}
+                          title={`${p.name} — start ${start?.toLocaleDateString()}`}
                         />
                       )}
-                      {/* Action item dots */}
+                      {/* Action item dots — now Links */}
                       {acts.map((a) => {
                         if (!a.dueDate) return null;
                         const due = startOfDay(new Date(a.dueDate));
@@ -268,23 +367,25 @@ export default async function ProjectGanttPage({
                         if (dueOffsetPct < 0 || dueOffsetPct > 100) return null;
                         const done = a.status === "done";
                         return (
-                          <div
+                          <Link
                             key={a.id}
-                            className="absolute top-1 -translate-x-1/2"
+                            href={`/business-builder/action-items/${a.id}`}
+                            className="absolute top-1 -translate-x-1/2 hover:scale-125 transition-transform"
                             style={{ left: `${dueOffsetPct}%` }}
-                            title={`${a.title} — due ${due.toLocaleDateString()}`}
+                            title={`${a.title} — due ${due.toLocaleDateString()}${done ? " (done)" : ""}`}
                           >
                             {done ? (
-                              <CheckCircle2 className="w-3 h-3 text-tbb-success" aria-hidden />
+                              <CheckCircle2 className="w-3.5 h-3.5 text-tbb-success" aria-hidden />
                             ) : (
-                              <Circle className="w-3 h-3 text-tbb-blue" aria-hidden />
+                              <Circle className="w-3.5 h-3.5 text-tbb-blue" aria-hidden />
                             )}
-                          </div>
+                          </Link>
                         );
                       })}
                       {leftPct === null && (
                         <p className="text-[11px] text-tbb-ink-3 italic">
-                          Set a start + target date on this project to chart it.
+                          Set a start + target date to chart this project — use
+                          &quot;Edit dates&quot; on the left.
                         </p>
                       )}
                     </div>
@@ -296,10 +397,24 @@ export default async function ProjectGanttPage({
         </div>
       )}
 
-      <p className="text-[11px] text-tbb-ink-3">
-        Legend: ● open action item · ✓ done action item · vertical orange
-        line = today. Click a project name to open its detail page.
-      </p>
+      <div className="text-[11px] text-tbb-ink-3 space-y-1">
+        <p>
+          <span className="inline-block w-3 h-3 rotate-45 border-2 border-tbb-blue bg-white align-middle mr-1" />
+          Deliverable target
+          <span className="ml-3 inline-block w-3 h-3 rotate-45 border-2 border-tbb-success bg-tbb-success align-middle mr-1" />
+          Deliverable shipped
+          <span className="mx-3">·</span>
+          ● open action item
+          <span className="mx-3">·</span>
+          ✓ done action item
+          <span className="mx-3">·</span>
+          vertical orange line = today
+        </p>
+        <p>
+          Every marker is clickable. Hit <span className="font-bold">Edit dates</span> on
+          any project to nudge its bar without leaving this page.
+        </p>
+      </div>
     </main>
   );
 }

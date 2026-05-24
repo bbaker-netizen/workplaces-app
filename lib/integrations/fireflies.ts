@@ -105,6 +105,86 @@ export type FirefliesTranscriptSummary = {
 };
 
 /**
+ * Rich meeting record used by the engagement Meetings sync. Includes
+ * Fireflies' generated summary (overview / bullets / keywords) but
+ * intentionally omits sentences and action items — we capture
+ * meetings here for review, the action-item pipeline runs separately.
+ */
+export type FirefliesMeetingDetail = {
+  id: string;
+  title: string;
+  date: number;
+  duration: number;
+  organizer_email: string | null;
+  transcript_url: string | null;
+  meeting_attendees: Array<{
+    email: string | null;
+    displayName: string | null;
+  }>;
+  summary: {
+    overview: string | null;
+    shorthand_bullet: string | null;
+    keywords: string[] | null;
+  } | null;
+};
+
+/**
+ * Fetch a single transcript's metadata + Fireflies-generated summary
+ * (no sentences). Lighter payload than fetchTranscript — used by the
+ * engagement-meetings sync, which doesn't need the full transcript
+ * body.
+ */
+export async function fetchMeetingDetail(
+  transcriptId: string,
+): Promise<FirefliesMeetingDetail | null> {
+  const query = /* GraphQL */ `
+    query MeetingDetail($id: String!) {
+      transcript(id: $id) {
+        id
+        title
+        date
+        duration
+        organizer_email
+        transcript_url
+        meeting_attendees {
+          email
+          displayName
+        }
+        summary {
+          overview
+          shorthand_bullet
+          keywords
+        }
+      }
+    }
+  `;
+  const resp = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables: { id: transcriptId } }),
+    cache: "no-store",
+  });
+  if (!resp.ok) {
+    throw new Error(
+      `Fireflies meeting fetch failed (${resp.status}): ${await resp.text()}`,
+    );
+  }
+  const json = (await resp.json()) as {
+    data?: { transcript: FirefliesMeetingDetail | null };
+    errors?: Array<{ message: string }>;
+  };
+  if (json.errors?.length) {
+    throw new Error(
+      `Fireflies: ${json.errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+  return json.data?.transcript ?? null;
+}
+
+/**
  * Search Fireflies for recent transcripts that include the given
  * email address as an attendee. Used by the Soul-File auto-seed on
  * engagement creation — we want the last N sessions Bruce ran with

@@ -24,17 +24,21 @@ import {
   ArrowLeft,
   CheckCircle2,
   Circle,
+  Diamond,
+  FileText,
   Flag,
   Workflow,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
+  deliverables,
   engagements,
   goals,
   projects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { QuickAddDeliverableButton } from "@/components/deliverables/QuickAddDeliverableButton";
 
 export default async function EngagementDetailPage({
   params,
@@ -57,24 +61,43 @@ export default async function EngagementDetailPage({
       .limit(1);
     if (!eng) return null;
 
-    const [goalRows, projectRows, actionRows] = await Promise.all([
-      tx
-        .select()
-        .from(goals)
-        .where(eq(goals.engagementId, id))
-        .orderBy(asc(goals.targetDate), asc(goals.createdAt)),
-      tx
-        .select()
-        .from(projects)
-        .where(eq(projects.engagementId, id))
-        .orderBy(asc(projects.targetDate), asc(projects.createdAt)),
-      tx
-        .select()
-        .from(actionItems)
-        .where(eq(actionItems.engagementId, id))
-        .orderBy(asc(actionItems.dueDate), asc(actionItems.createdAt)),
-    ]);
-    return { eng, goals: goalRows, projects: projectRows, actions: actionRows };
+    const [goalRows, projectRows, actionRows, deliverableRows] =
+      await Promise.all([
+        tx
+          .select()
+          .from(goals)
+          .where(eq(goals.engagementId, id))
+          .orderBy(asc(goals.targetDate), asc(goals.createdAt)),
+        tx
+          .select()
+          .from(projects)
+          .where(eq(projects.engagementId, id))
+          .orderBy(asc(projects.targetDate), asc(projects.createdAt)),
+        tx
+          .select()
+          .from(actionItems)
+          .where(eq(actionItems.engagementId, id))
+          .orderBy(asc(actionItems.dueDate), asc(actionItems.createdAt)),
+        tx
+          .select({
+            id: deliverables.id,
+            type: deliverables.type,
+            title: deliverables.title,
+            status: deliverables.status,
+            targetDate: deliverables.targetDate,
+            deliveredAt: deliverables.deliveredAt,
+          })
+          .from(deliverables)
+          .where(eq(deliverables.engagementId, id))
+          .orderBy(asc(deliverables.targetDate), asc(deliverables.createdAt)),
+      ]);
+    return {
+      eng,
+      goals: goalRows,
+      projects: projectRows,
+      actions: actionRows,
+      deliverables: deliverableRows,
+    };
   });
 
   if (!data) notFound();
@@ -130,9 +153,20 @@ export default async function EngagementDetailPage({
             {data.actions.length} action item
             {data.actions.length === 1 ? "" : "s"}
           </span>
+          <span className="inline-flex items-center gap-1.5 text-tbb-ink-3">
+            <Diamond className="w-3.5 h-3.5" aria-hidden />
+            {data.deliverables.length} deliverable
+            {data.deliverables.length === 1 ? "" : "s"}
+          </span>
+          <Link
+            href={`/business-builder/engagements/${id}/meetings`}
+            className="ml-auto inline-flex items-center gap-1 text-tbb-blue hover:underline font-bold"
+          >
+            Meetings (Fireflies) →
+          </Link>
           <Link
             href={`/business-builder/engagements/${id}/gantt`}
-            className="ml-auto inline-flex items-center gap-1 text-tbb-blue hover:underline font-bold"
+            className="inline-flex items-center gap-1 text-tbb-blue hover:underline font-bold"
           >
             View Gantt chart →
           </Link>
@@ -185,6 +219,69 @@ export default async function EngagementDetailPage({
           </div>
         </section>
       )}
+
+      {/* Deliverables — methodology-typed work products. */}
+      <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
+        <header className="px-5 py-3 border-b border-tbb-line bg-tbb-cream-50 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-tbb-blue" aria-hidden />
+            <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Deliverables
+            </p>
+            <span className="text-[10px] text-tbb-ink-3">
+              {data.deliverables.length}
+            </span>
+          </div>
+          <QuickAddDeliverableButton engagementId={id} />
+        </header>
+        {data.deliverables.length === 0 ? (
+          <p className="text-xs text-tbb-ink-3 italic px-5 py-4">
+            No deliverables yet. Click <span className="font-bold">+ Add deliverable</span> above
+            to queue one — pick the methodology type (SOP, org chart, business plan, etc.) and
+            give it a title.
+          </p>
+        ) : (
+          <ul className="divide-y divide-tbb-line-soft">
+            {data.deliverables.map((d) => (
+              <li key={d.id} className="px-5 py-3 flex items-baseline justify-between gap-3 flex-wrap">
+                <span className="flex items-baseline gap-2">
+                  <Diamond
+                    className={
+                      "w-3 h-3 mt-0.5 " +
+                      (d.deliveredAt ? "text-tbb-success" : "text-tbb-blue")
+                    }
+                    aria-hidden
+                  />
+                  <Link
+                    href="/portal/deliverables"
+                    className="font-bold text-tbb-navy hover:underline"
+                  >
+                    {d.title}
+                  </Link>
+                  <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                    {d.type.replace(/_/g, " ")}
+                  </span>
+                </span>
+                <span className="flex items-baseline gap-3">
+                  {d.targetDate && !d.deliveredAt && (
+                    <span className="text-[11px] text-tbb-ink-3">
+                      Target {new Date(d.targetDate).toLocaleDateString()}
+                    </span>
+                  )}
+                  {d.deliveredAt && (
+                    <span className="text-[11px] text-tbb-success font-bold">
+                      Delivered {new Date(d.deliveredAt).toLocaleDateString()}
+                    </span>
+                  )}
+                  <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 bg-tbb-cream-50 px-1.5 py-0.5 rounded-pill">
+                    {d.status.replace(/_/g, " ")}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Orphan action items (no project) */}
       {orphanActions.length > 0 && (

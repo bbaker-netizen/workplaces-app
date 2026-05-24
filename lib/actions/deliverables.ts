@@ -50,6 +50,13 @@ const createSchema = z.object({
   description: z.string().max(20000).nullable().optional(),
   status: statusEnum.default("not_started"),
   documentId: z.string().uuid().nullable().optional(),
+  /** Planning target — when this deliverable should ship. Optional;
+   *  used by the engagement Gantt to plot the milestone diamond. */
+  targetDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
+    .nullable()
+    .optional(),
   revenueImpact: z.boolean().default(false),
   marginImpact: z.boolean().default(false),
 });
@@ -87,6 +94,9 @@ export async function createDeliverable(
             description: data.description ?? null,
             status: data.status,
             documentId: data.documentId ?? null,
+            targetDate: data.targetDate ? new Date(data.targetDate) : null,
+            revenueImpact: data.revenueImpact,
+            marginImpact: data.marginImpact,
           })
           .returning({ id: deliverables.id });
         return row;
@@ -140,6 +150,12 @@ export async function updateDeliverable(
         }
         if (data.documentId !== undefined)
           update.documentId = data.documentId;
+        if (data.targetDate !== undefined)
+          update.targetDate = data.targetDate ? new Date(data.targetDate) : null;
+        if (data.revenueImpact !== undefined)
+          update.revenueImpact = data.revenueImpact;
+        if (data.marginImpact !== undefined)
+          update.marginImpact = data.marginImpact;
         if (Object.keys(update).length === 0) return;
         await tx
           .update(deliverables)

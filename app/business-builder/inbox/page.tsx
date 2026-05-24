@@ -18,7 +18,6 @@ import {
   Phone,
   StickyNote,
   Smartphone,
-  PenSquare,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { orgs } from "@/lib/db/schema";
@@ -28,8 +27,10 @@ import {
   listKnownTags,
   type CommunicationRow,
 } from "@/lib/db/queries/client-communications";
+import { listComposeContacts } from "@/lib/db/queries/contact-search";
 import { InboxFilters } from "@/components/inbox/InboxFilters";
 import { InboxReplyButton } from "@/components/inbox/InboxReplyComposer";
+import { InboxComposeNewButton } from "@/components/inbox/InboxComposeNewButton";
 
 export default async function CoachInboxPage({
   searchParams,
@@ -72,9 +73,10 @@ export default async function CoachInboxPage({
     tag: sp.tag && sp.tag.length > 0 ? sp.tag : null,
   };
 
-  const [rows, knownTags] = await Promise.all([
+  const [rows, knownTags, contacts] = await Promise.all([
     listInbox(masterOrgId, filters),
     listKnownTags(masterOrgId),
+    listComposeContacts(),
   ]);
 
   return (
@@ -91,13 +93,7 @@ export default async function CoachInboxPage({
             and replyable through your connected Gmail.
           </p>
         </div>
-        <Link
-          href="/business-builder/pipeline"
-          title="Pick a prospect, then compose from their page"
-          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
-        >
-          <PenSquare className="w-3.5 h-3.5" aria-hidden /> Compose new
-        </Link>
+        <InboxComposeNewButton contacts={contacts} />
       </header>
 
       <InboxFilters knownTags={knownTags} currentFilters={filters} />

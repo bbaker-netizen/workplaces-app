@@ -20,6 +20,7 @@ import {
   bigint,
   boolean,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -1213,6 +1214,12 @@ export const deliverables = pgTable(
     documentId: uuid("document_id").references(() => documents.id, {
       onDelete: "set null",
     }),
+    /** Planning target for when this deliverable should ship. Optional
+     *  — set when the deliverable is queued. Used by the engagement
+     *  Gantt to plot the deliverable as a milestone diamond ahead of
+     *  delivery. Once delivered_at is set, that timestamp is preferred
+     *  for the milestone position. */
+    targetDate: timestamp("target_date", { withTimezone: true }),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     revenueImpact: boolean("revenue_impact").notNull().default(false),
     marginImpact: boolean("margin_impact").notNull().default(false),
@@ -1224,6 +1231,7 @@ export const deliverables = pgTable(
     engagementIdx: index("deliverables_engagement_idx").on(t.engagementId),
     typeIdx: index("deliverables_type_idx").on(t.type),
     statusIdx: index("deliverables_status_idx").on(t.status),
+    targetDateIdx: index("deliverables_target_date_idx").on(t.targetDate),
   }),
 );
 
@@ -2322,6 +2330,61 @@ export const auditLog = pgTable(
     actorIdx: index("audit_log_actor_idx").on(t.actorUserProfileId),
     entityIdx: index("audit_log_entity_idx").on(t.entityType, t.entityId),
     createdAtIdx: index("audit_log_created_at_idx").on(t.createdAt),
+  }),
+);
+
+/**
+ * `engagement_meetings` — Fireflies-synced meeting records per
+ * engagement. One row per Fireflies transcript that includes at least
+ * one attendee from the engagement's org. Sync upserts on
+ * (engagement_id, fireflies_transcript_id) so re-runs don't dupe.
+ *
+ * Stores Fireflies' generated summary (overview + bullets + keywords)
+ * but explicitly NOT the action items — the existing extraction
+ * pipeline handles those separately and Bruce wants to keep it
+ * manual.
+ */
+export const engagementMeetings = pgTable(
+  "engagement_meetings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    firefliesTranscriptId: text("fireflies_transcript_id").notNull(),
+    title: text("title").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    durationMin: integer("duration_min"),
+    organizerEmail: text("organizer_email"),
+    attendees: jsonb("attendees").notNull().default([]),
+    summaryOverview: text("summary_overview"),
+    summaryBullets: text("summary_bullets"),
+    summaryKeywords: text("summary_keywords"),
+    transcriptUrl: text("transcript_url"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("engagement_meetings_org_idx").on(t.orgId),
+    engagementIdx: index("engagement_meetings_engagement_idx").on(
+      t.engagementId,
+    ),
+    occurredAtIdx: index("engagement_meetings_occurred_at_idx").on(
+      t.occurredAt,
+    ),
+    transcriptUnique: uniqueIndex(
+      "engagement_meetings_engagement_transcript_unique",
+    ).on(t.engagementId, t.firefliesTranscriptId),
   }),
 );
 
