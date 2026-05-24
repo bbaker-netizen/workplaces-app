@@ -231,6 +231,7 @@ function InboxComposerModal({
                 placeholder="Write your reply…"
                 disabled={isPending}
                 ariaLabel="Reply body"
+                autoFocus
               />
             </div>
           </label>

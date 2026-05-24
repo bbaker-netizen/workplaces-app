@@ -62,8 +62,11 @@ function ComposeModal({
 }) {
   const router = useRouter();
   const editorRef = useRef<RichTextEditorHandle | null>(null);
+  const bodyWrapRef = useRef<HTMLDivElement | null>(null);
   const [picked, setPicked] = useState<ComposeContact | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // Open the recipient picker on first mount so the user can start
+  // typing immediately — no extra click before they're searching.
+  const [pickerOpen, setPickerOpen] = useState(true);
   const [pickerSearch, setPickerSearch] = useState("");
   const [toOverride, setToOverride] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
@@ -98,6 +101,15 @@ function ComposeModal({
     setPickerOpen(false);
     setPickerSearch("");
     setToOverride(null);
+    // Focus the message body so the user can keep typing without
+    // tabbing through subject first. Defer to next frame so the
+    // editor DOM is mounted before we look for it.
+    window.requestAnimationFrame(() => {
+      const editable = bodyWrapRef.current?.querySelector<HTMLElement>(
+        "[contenteditable='true'], textarea",
+      );
+      editable?.focus({ preventScroll: true });
+    });
   }
 
   function submit() {
@@ -272,7 +284,7 @@ function ComposeModal({
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Message
             </span>
-            <div className="mt-1 border border-tbb-line rounded-md">
+            <div ref={bodyWrapRef} className="mt-1 border border-tbb-line rounded-md">
               <RichTextEditor
                 editorRef={editorRef}
                 initialMarkdown={body}
