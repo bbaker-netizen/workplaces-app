@@ -43,7 +43,6 @@ import {
   Settings,
   Sparkles,
   Star,
-  Target,
   Workflow,
 } from "lucide-react";
 import {
@@ -119,7 +118,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     items: [
       { href: "/business-builder/deliverables", label: "Deliverables", icon: FileText, tourId: "Coach-deliverables" },
       { href: "/business-builder/projects", label: "Projects", icon: Briefcase },
-      { href: "/business-builder/goals", label: "Goals", icon: Target },
+      // Goals removed per Bruce — was redundant with Projects in practice.
       { href: "/business-builder/soul-search", label: "Soul File search", icon: Search },
     ],
   },

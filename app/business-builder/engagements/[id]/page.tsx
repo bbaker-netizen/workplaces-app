@@ -25,7 +25,6 @@ import {
   CheckCircle2,
   Circle,
   Flag,
-  Target,
   Workflow,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -97,7 +96,10 @@ export default async function EngagementDetailPage({
     actionsByProject.get(key)!.push(a);
   }
 
-  const orphanProjects = projectsByGoal.get("unassigned") ?? [];
+  // projectsByGoal kept for back-compat with the schema; goals layer
+  // is no longer surfaced in the UI per Bruce. orphanActions = action
+  // items not tied to any project.
+  void projectsByGoal;
   const orphanActions = actionsByProject.get("unassigned") ?? [];
 
   return (
@@ -113,16 +115,11 @@ export default async function EngagementDetailPage({
           {data.eng.name ?? "Engagement"}
         </h1>
         <p className="text-sm text-tbb-ink-3 max-w-2xl">
-          The Workspace: every goal, project, and action item for this
-          client, nested the way they relate to each other. Goals at
-          the top, the bodies of work under them, the specific
-          commitments under those.
+          The Workspace: every project and action item for this client,
+          nested the way they relate to each other. Projects at the top,
+          the specific commitments under each one.
         </p>
         <div className="flex items-center gap-3 flex-wrap text-xs">
-          <span className="inline-flex items-center gap-1.5 text-tbb-ink-3">
-            <Target className="w-3.5 h-3.5" aria-hidden />
-            {data.goals.length} goal{data.goals.length === 1 ? "" : "s"}
-          </span>
           <span className="inline-flex items-center gap-1.5 text-tbb-ink-3">
             <Workflow className="w-3.5 h-3.5" aria-hidden />
             {data.projects.length} project
@@ -133,96 +130,52 @@ export default async function EngagementDetailPage({
             {data.actions.length} action item
             {data.actions.length === 1 ? "" : "s"}
           </span>
+          <Link
+            href={`/business-builder/engagements/${id}/gantt`}
+            className="ml-auto inline-flex items-center gap-1 text-tbb-blue hover:underline font-bold"
+          >
+            View Gantt chart →
+          </Link>
         </div>
       </header>
 
-      {data.goals.length === 0 && data.projects.length === 0 && data.actions.length === 0 && (
+      {data.projects.length === 0 && data.actions.length === 0 && (
         <div className="border border-dashed border-tbb-line rounded-lg bg-white p-10 text-center space-y-2">
-          <Target className="w-8 h-8 text-tbb-blue mx-auto" aria-hidden />
+          <Workflow className="w-8 h-8 text-tbb-blue mx-auto" aria-hidden />
           <p className="font-bold text-tbb-navy">No work captured yet.</p>
           <p className="text-sm text-tbb-ink-3 max-w-md mx-auto">
-            Start with one goal — &quot;What does winning look like 12 months
-            out?&quot; — then build projects under it, then capture action
-            items inside each project as you go through sessions.
+            Start with one project — a body of work that ships
+            something — then capture the action items inside it as you
+            go through sessions.
           </p>
           <div className="flex items-center justify-center gap-2 pt-2">
             <Link
-              href={`/business-builder/goals/new?engagement=${id}`}
+              href={`/business-builder/projects/new?engagement=${id}`}
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
             >
-              <Target className="w-3.5 h-3.5" aria-hidden /> Add first goal
+              <Workflow className="w-3.5 h-3.5" aria-hidden /> Add first project
             </Link>
           </div>
         </div>
       )}
 
-      {/* Goals + their projects + action items */}
-      {data.goals.map((g) => {
-        const goalProjects = projectsByGoal.get(g.id) ?? [];
-        return (
-          <section
-            key={g.id}
-            className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden"
-          >
-            <header className="px-5 py-4 border-b border-tbb-line bg-tbb-cream-50 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Target className="w-4 h-4 text-tbb-orange" aria-hidden />
-                <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-orange-700">
-                  Goal
-                </p>
-                <StatusPill status={g.status} />
-              </div>
-              <h2 className="font-bold text-tbb-navy text-lg leading-tight">
-                {g.title}
-              </h2>
-              {g.description && (
-                <p className="text-sm text-tbb-ink-2">{g.description}</p>
-              )}
-              <p className="text-xs text-tbb-ink-3">
-                {g.targetMetric && (
-                  <>
-                    Target: <strong>{g.targetValue ?? "—"}</strong> {g.targetMetric}
-                    {" · "}
-                  </>
-                )}
-                {g.targetDate
-                  ? `by ${new Date(g.targetDate).toLocaleDateString()}`
-                  : "No deadline"}
-              </p>
-            </header>
-            {goalProjects.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-tbb-ink-3 italic">
-                No projects supporting this goal yet.
-              </p>
-            ) : (
-              <div className="divide-y divide-tbb-line-soft">
-                {goalProjects.map((p) => (
-                  <ProjectBlock
-                    key={p.id}
-                    project={p}
-                    actions={actionsByProject.get(p.id) ?? []}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        );
-      })}
-
-      {/* Orphan projects (not tied to a goal) */}
-      {orphanProjects.length > 0 && (
+      {/* All projects + their action items — Goals layer removed
+          per Bruce. Projects roll up directly to the engagement. */}
+      {data.projects.length > 0 && (
         <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
-          <header className="px-5 py-3 border-b border-tbb-line bg-tbb-cream-50">
+          <header className="px-5 py-3 border-b border-tbb-line bg-tbb-cream-50 flex items-center justify-between gap-3 flex-wrap">
             <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-              Projects not tied to a goal
+              Projects
             </p>
-            <p className="text-xs text-tbb-ink-3">
-              Useful work, but consider rolling these up under a goal so
-              you can measure their impact.
-            </p>
+            <Link
+              href={`/business-builder/projects/new?engagement=${id}`}
+              className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              + Add project
+            </Link>
           </header>
           <div className="divide-y divide-tbb-line-soft">
-            {orphanProjects.map((p) => (
+            {data.projects.map((p) => (
               <ProjectBlock
                 key={p.id}
                 project={p}

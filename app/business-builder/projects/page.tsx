@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listCoachProjects } from "@/lib/db/queries/business-builder-cross-engagement";
 
@@ -13,18 +14,26 @@ export default async function CoachProjectsCrossPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
-      <header className="space-y-2">
-        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-          Business Builder Console
-        </p>
-        <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
-          Projects · cross-client
-        </h1>
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="space-y-2">
+          <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
+            Business Builder Console
+          </p>
+          <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
+            Projects · cross-client
+          </h1>
+          <Link
+            href="/business-builder"
+            className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
+          >
+            ← Console
+          </Link>
+        </div>
         <Link
-          href="/business-builder"
-          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
+          href="/business-builder/projects/new"
+          className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
         >
-          ← Console
+          <Plus className="w-4 h-4" aria-hidden /> New project
         </Link>
       </header>
 
