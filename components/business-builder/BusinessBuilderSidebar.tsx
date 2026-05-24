@@ -49,6 +49,7 @@ import {
   setSidebarCollapsed,
   toggleNavPin,
 } from "@/lib/actions/user-prefs";
+import type { BusinessBuilderPulse } from "@/lib/db/queries/business-builder-pulse";
 
 // Per-phase open/closed state lives in localStorage so it persists
 // across reloads without a DB round-trip. Closed-by-default keeps
@@ -161,11 +162,13 @@ export function BusinessBuilderSidebar({
   unreadCount,
   pinnedNavItems,
   collapsedInitial,
+  pulse,
 }: {
   fullName: string;
   unreadCount?: number;
   pinnedNavItems: string[];
   collapsedInitial: boolean;
+  pulse?: BusinessBuilderPulse;
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
@@ -469,6 +472,12 @@ export function BusinessBuilderSidebar({
         })}
       </nav>
 
+      {/* Today's pulse — fills the space below the section list with
+          the three numbers Bruce reads at-a-glance every time he
+          opens the app. Hidden in collapsed mode where there's no
+          room for it. */}
+      {!collapsed && pulse && <TodayPulse pulse={pulse} />}
+
       {/* Footer */}
       <div
         className={
@@ -614,6 +623,106 @@ function NavItemRow({
           fill={isPinned ? "currentColor" : "none"}
         />
       </button>
+    </div>
+  );
+}
+
+/**
+ * Today's pulse — small stat panel that fills the empty space between
+ * the nav list and the sign-out footer. Three rows, each a Link to
+ * the page that lets you act on the stat.
+ */
+function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
+  const overdue = pulse.overdueActionsCount;
+  const awaiting = pulse.awaitingSignatureCount;
+  const next = pulse.nextSession;
+  const nextTimeLabel = next
+    ? new Date(next.scheduledAt).toLocaleString("en-CA", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: "America/Edmonton",
+      })
+    : null;
+
+  return (
+    <div className="border-t border-tbb-cream/15 px-3 py-3 space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-white/55">
+        Today
+      </p>
+      {/* Next session */}
+      <Link
+        href="/business-builder/calendar"
+        className="block px-2.5 py-2 rounded-md bg-tbb-cream/5 hover:bg-tbb-cream/12 transition-colors group"
+      >
+        <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-white/55 group-hover:text-white/70">
+          Next session
+        </p>
+        {next ? (
+          <>
+            <p className="text-[11px] font-bold text-white truncate">
+              {nextTimeLabel}
+            </p>
+            <p className="text-[10px] text-white/65 truncate">
+              {next.engagementName ?? "Engagement"} · {next.type.replace(/_/g, " ")}
+            </p>
+          </>
+        ) : (
+          <p className="text-[11px] text-white/65 italic">
+            Nothing scheduled
+          </p>
+        )}
+      </Link>
+      {/* Overdue action items */}
+      <Link
+        href="/business-builder/action-items"
+        className={
+          "block px-2.5 py-2 rounded-md transition-colors group " +
+          (overdue > 0
+            ? "bg-tbb-orange/20 hover:bg-tbb-orange/30 border border-tbb-orange/40"
+            : "bg-tbb-cream/5 hover:bg-tbb-cream/12")
+        }
+      >
+        <p
+          className={
+            "text-[10px] font-bold uppercase tracking-tbb-caps " +
+            (overdue > 0 ? "text-tbb-orange" : "text-white/55 group-hover:text-white/70")
+          }
+        >
+          Overdue
+        </p>
+        <p className="text-[13px] font-bold text-white">
+          {overdue === 0
+            ? "All clear"
+            : `${overdue} action item${overdue === 1 ? "" : "s"}`}
+        </p>
+      </Link>
+      {/* Signatures awaiting */}
+      <Link
+        href="/business-builder/templates"
+        className={
+          "block px-2.5 py-2 rounded-md transition-colors group " +
+          (awaiting > 0
+            ? "bg-tbb-blue/15 hover:bg-tbb-blue/25 border border-tbb-blue/40"
+            : "bg-tbb-cream/5 hover:bg-tbb-cream/12")
+        }
+      >
+        <p
+          className={
+            "text-[10px] font-bold uppercase tracking-tbb-caps " +
+            (awaiting > 0 ? "text-tbb-blue-light" : "text-white/55 group-hover:text-white/70")
+          }
+        >
+          Awaiting signature
+        </p>
+        <p className="text-[13px] font-bold text-white">
+          {awaiting === 0
+            ? "Nothing out"
+            : `${awaiting} envelope${awaiting === 1 ? "" : "s"}`}
+        </p>
+      </Link>
     </div>
   );
 }

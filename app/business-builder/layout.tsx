@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
+import { getBusinessBuilderPulse } from "@/lib/db/queries/business-builder-pulse";
 import { BusinessBuilderSidebar } from "@/components/business-builder/BusinessBuilderSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { BusinessBuilderTour } from "@/components/business-builder/BusinessBuilderTour";
@@ -23,7 +24,10 @@ export default async function BusinessBuilderLayout({
     redirect("/portal");
   }
 
-  const prefs = await getCurrentUserPrefs();
+  const [prefs, pulse] = await Promise.all([
+    getCurrentUserPrefs(),
+    getBusinessBuilderPulse(),
+  ]);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -31,6 +35,7 @@ export default async function BusinessBuilderLayout({
         fullName={result.fullName}
         pinnedNavItems={prefs.pinnedNavItems}
         collapsedInitial={prefs.sidebarCollapsed}
+        pulse={pulse}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <main className="flex-1">{children}</main>
