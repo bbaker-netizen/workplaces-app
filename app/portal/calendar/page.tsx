@@ -1,16 +1,17 @@
 /**
- * /business-builder/calendar — every dated item across every client
- * engagement on one screen.
+ * /portal/calendar — client-facing calendar for the current engagement.
  *
- * Three event types now:
+ * Mirrors the business-builder calendar but scoped to ONE engagement
+ * (the viewer's home engagement or the one selected via the slug
+ * cookie). Three event types:
+ *
  *   1. Coaching sessions (bbs_sessions.scheduled_at)
  *   2. Action item deadlines (action_items.due_date)
- *   3. Project target dates (projects.target_date) — rendered as a
- *      single-day milestone diamond
+ *   3. Project target dates (projects.target_date)
  *
- * Filter chips at the top let Bruce toggle each type on/off, and a
- * client (engagement) picker scopes everything to one client. State
- * lives in URL search params so links share cleanly.
+ * Filter chips toggle types. No client picker — only one client
+ * (theirs). Optional "mine only" filter for action items so a
+ * client_employee can hide everyone else's commitments.
  */
 
 import Link from "next/link";
@@ -20,7 +21,6 @@ import {
   asc,
   eq,
   gte,
-  inArray,
   isNotNull,
   lte,
 } from "drizzle-orm";
@@ -34,15 +34,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import {
   actionItems,
   bbsSessions,
   engagements,
-  orgs,
   projects,
 } from "@/lib/db/schema";
-import { withSystemContext } from "@/lib/db/tenant";
-import { SuggestSlotsPanel } from "./SuggestSlotsPanel";
+import { withEngagementContext } from "@/lib/db/tenant";
 
 type ViewMode = "week" | "month";
 type EventType = "session" | "action" | "project";
@@ -52,10 +51,9 @@ type CalendarEvent = {
   type: EventType;
   date: Date;
   title: string;
-  engagementId: string;
-  engagementName: string | null;
   status: string;
   href: string;
+  mine: boolean;
 };
 
 function startOfDay(d: Date): Date {
@@ -93,20 +91,32 @@ function parseTypes(raw: string | undefined): Set<EventType> {
     : new Set<EventType>(defaults);
 }
 
-export default async function CalendarPage({
+export default async function PortalCalendarPage({
   searchParams,
 }: {
   searchParams: Promise<{
     view?: string;
     date?: string;
     types?: string;
-    engagement?: string;
+    scope?: string;
   }>;
 }) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin" && profile.role !== "coach") {
-    redirect("/portal");
+
+  const engagement = await getCurrentEngagement();
+  if (!engagement) {
+    return (
+      <main className="max-w-3xl mx-auto px-6 py-16">
+        <h1 className="font-bold text-tbb-navy text-3xl tracking-tight">
+          No engagement yet
+        </h1>
+        <p className="mt-4 text-sm text-tbb-ink-3">
+          Your portal isn&apos;t bound to an engagement yet. If you expect
+          access, contact your Business Builder.
+        </p>
+      </main>
+    );
   }
 
   const sp = await searchParams;
@@ -115,119 +125,98 @@ export default async function CalendarPage({
     ? new Date(sp.date + "T12:00:00")
     : new Date();
   const typeFilter = parseTypes(sp.types);
-  const engagementFilter = sp.engagement && sp.engagement !== "all" ? sp.engagement : null;
+  const mineOnly = sp.scope === "mine";
 
   const rangeStart =
     view === "month" ? startOfMonth(anchorDate) : startOfWeek(anchorDate);
   const rangeEnd =
     view === "month" ? endOfMonth(anchorDate) : addDays(rangeStart, 7);
 
-  // Load each event source in parallel. Each is scoped to the
-  // visible range + (optionally) the engagement filter.
-  const engagementClause = engagementFilter
-    ? eq(bbsSessions.engagementId, engagementFilter)
-    : undefined;
-  const actionEngagementClause = engagementFilter
-    ? eq(actionItems.engagementId, engagementFilter)
-    : undefined;
-  const projectEngagementClause = engagementFilter
-    ? eq(projects.engagementId, engagementFilter)
-    : undefined;
-
-  const [sessionRows, actionRows, projectRows, allEngagements] =
-    await Promise.all([
-      typeFilter.has("session")
-        ? withSystemContext(async (tx) =>
+  // All three reads use withEngagementContext to honour the coach
+  // cross-org case (a coach viewing a client engagement). Client roles
+  // are auto-gated to their own org by the same helper.
+  const [sessionRows, actionRows, projectRows] = await Promise.all([
+    typeFilter.has("session")
+      ? withEngagementContext(
+          profile.orgId,
+          profile.role,
+          engagement.id,
+          async (tx) =>
             tx
               .select({
                 id: bbsSessions.id,
                 scheduledAt: bbsSessions.scheduledAt,
                 type: bbsSessions.type,
                 status: bbsSessions.status,
-                engagementId: bbsSessions.engagementId,
                 engagementName: engagements.name,
-                orgName: orgs.name,
               })
               .from(bbsSessions)
               .leftJoin(
                 engagements,
                 eq(engagements.id, bbsSessions.engagementId),
               )
-              .leftJoin(orgs, eq(orgs.id, bbsSessions.orgId))
               .where(
                 and(
+                  eq(bbsSessions.engagementId, engagement.id),
                   gte(bbsSessions.scheduledAt, rangeStart),
                   lte(bbsSessions.scheduledAt, rangeEnd),
-                  engagementClause,
                 ),
               )
               .orderBy(asc(bbsSessions.scheduledAt)),
-          )
-        : Promise.resolve([]),
-      typeFilter.has("action")
-        ? withSystemContext(async (tx) =>
+        )
+      : Promise.resolve([]),
+    typeFilter.has("action")
+      ? withEngagementContext(
+          profile.orgId,
+          profile.role,
+          engagement.id,
+          async (tx) =>
             tx
               .select({
                 id: actionItems.id,
                 title: actionItems.title,
                 dueDate: actionItems.dueDate,
                 status: actionItems.status,
-                engagementId: actionItems.engagementId,
-                engagementName: engagements.name,
+                assigneeUserProfileId: actionItems.assigneeUserProfileId,
               })
               .from(actionItems)
-              .leftJoin(
-                engagements,
-                eq(engagements.id, actionItems.engagementId),
-              )
               .where(
                 and(
+                  eq(actionItems.engagementId, engagement.id),
                   isNotNull(actionItems.dueDate),
                   gte(actionItems.dueDate, rangeStart),
                   lte(actionItems.dueDate, rangeEnd),
-                  actionEngagementClause,
                 ),
               )
               .orderBy(asc(actionItems.dueDate)),
-          )
-        : Promise.resolve([]),
-      typeFilter.has("project")
-        ? withSystemContext(async (tx) =>
+        )
+      : Promise.resolve([]),
+    typeFilter.has("project")
+      ? withEngagementContext(
+          profile.orgId,
+          profile.role,
+          engagement.id,
+          async (tx) =>
             tx
               .select({
                 id: projects.id,
                 name: projects.name,
                 targetDate: projects.targetDate,
                 status: projects.status,
-                engagementId: projects.engagementId,
-                engagementName: engagements.name,
               })
               .from(projects)
-              .leftJoin(
-                engagements,
-                eq(engagements.id, projects.engagementId),
-              )
               .where(
                 and(
+                  eq(projects.engagementId, engagement.id),
                   isNotNull(projects.targetDate),
                   gte(projects.targetDate, rangeStart),
                   lte(projects.targetDate, rangeEnd),
-                  projectEngagementClause,
                 ),
               )
               .orderBy(asc(projects.targetDate)),
-          )
-        : Promise.resolve([]),
-      withSystemContext(async (tx) =>
-        tx
-          .select({
-            id: engagements.id,
-            name: engagements.name,
-          })
-          .from(engagements)
-          .orderBy(asc(engagements.name)),
-      ),
-    ]);
+        )
+      : Promise.resolve([]),
+  ]);
 
   // Merge into a unified event list.
   const events: CalendarEvent[] = [
@@ -235,31 +224,32 @@ export default async function CalendarPage({
       id: `s-${s.id}`,
       type: "session" as const,
       date: s.scheduledAt,
-      title: s.engagementName ?? s.orgName ?? "Session",
-      engagementId: s.engagementId,
-      engagementName: s.engagementName,
+      title: s.engagementName ?? "Session",
       status: s.status,
-      href: `/business-builder/sessions/${s.engagementId}`,
+      href: `/portal/sessions/${s.id}`,
+      mine: true,
     })),
-    ...actionRows.map((a) => ({
-      id: `a-${a.id}`,
-      type: "action" as const,
-      date: a.dueDate!,
-      title: a.title,
-      engagementId: a.engagementId,
-      engagementName: a.engagementName,
-      status: a.status,
-      href: `/business-builder/action-items/${a.id}`,
-    })),
+    ...actionRows
+      .filter((a) =>
+        mineOnly ? a.assigneeUserProfileId === profile.userProfileId : true,
+      )
+      .map((a) => ({
+        id: `a-${a.id}`,
+        type: "action" as const,
+        date: a.dueDate!,
+        title: a.title,
+        status: a.status,
+        href: `/portal/action-items/${a.id}`,
+        mine: a.assigneeUserProfileId === profile.userProfileId,
+      })),
     ...projectRows.map((p) => ({
       id: `p-${p.id}`,
       type: "project" as const,
       date: p.targetDate!,
       title: p.name,
-      engagementId: p.engagementId,
-      engagementName: p.engagementName,
       status: p.status,
       href: `/portal/projects/${p.id}`,
+      mine: true,
     })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
@@ -282,12 +272,11 @@ export default async function CalendarPage({
       : addDays(rangeStart, 7);
 
   const fmtIso = (d: Date) => d.toISOString().slice(0, 10);
-  // Build a URL keeping all current filters intact.
   function buildHref(opts: {
     view?: ViewMode;
     date?: Date;
     types?: string;
-    engagement?: string;
+    scope?: string;
   }): string {
     const params = new URLSearchParams();
     params.set("view", opts.view ?? view);
@@ -297,13 +286,12 @@ export default async function CalendarPage({
     } else if (sp.types) {
       params.set("types", sp.types);
     }
-    if (opts.engagement !== undefined) {
-      if (opts.engagement && opts.engagement !== "all")
-        params.set("engagement", opts.engagement);
-    } else if (engagementFilter) {
-      params.set("engagement", engagementFilter);
+    if (opts.scope !== undefined) {
+      if (opts.scope) params.set("scope", opts.scope);
+    } else if (mineOnly) {
+      params.set("scope", "mine");
     }
-    return `/business-builder/calendar?${params.toString()}`;
+    return `/portal/calendar?${params.toString()}`;
   }
 
   const rangeLabel =
@@ -341,28 +329,27 @@ export default async function CalendarPage({
   }
   const today = startOfDay(new Date()).getTime();
 
-  // Helper to toggle a type in the current filter and produce a new URL.
   function urlWithToggledType(t: EventType): string {
     const next = new Set(typeFilter);
     if (next.has(t)) next.delete(t);
     else next.add(t);
-    if (next.size === 0) next.add(t); // never zero — empty calendar is useless
+    if (next.size === 0) next.add(t);
     return buildHref({ types: Array.from(next).join(",") });
   }
-  void inArray;
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-12 space-y-6">
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div className="space-y-1">
-          <p className="tbb-eyebrow">Schedule</p>
+          <p className="font-mono text-xs uppercase tracking-tbb-caps text-tbb-ink-3">
+            {engagement.name ?? "Engagement"}
+          </p>
           <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight flex items-center gap-2">
             <CalendarIcon className="w-7 h-7" aria-hidden /> Calendar
           </h1>
           <p className="text-sm text-tbb-ink-3 max-w-2xl">
-            Coaching sessions, action item deadlines, and project target
-            dates across every client — one screen. Toggle types or
-            scope to a single client to focus.
+            Your sessions, action item due dates, and project deadlines
+            on one screen. Toggle a chip to focus.
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -416,7 +403,7 @@ export default async function CalendarPage({
         </div>
       </header>
 
-      {/* Filters: event type chips + client picker */}
+      {/* Filter chips */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
           Show:
@@ -439,24 +426,18 @@ export default async function CalendarPage({
         >
           <Briefcase className="w-3 h-3" aria-hidden /> Project deadlines
         </Link>
-        <span className="ml-auto flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-            Client:
-          </span>
-          <ClientFilter
-            engagements={allEngagements.map((e) => ({
-              id: e.id,
-              name: e.name ?? "(unnamed)",
-            }))}
-            currentEngagementId={engagementFilter}
-            view={view}
-            anchorDate={fmtIso(anchorDate)}
-            types={sp.types}
-          />
-        </span>
+        <Link
+          href={buildHref({ scope: mineOnly ? "" : "mine" })}
+          className={
+            "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border ml-2 " +
+            (mineOnly
+              ? "bg-tbb-orange text-white border-tbb-orange"
+              : "bg-white text-tbb-ink-3 border-tbb-line hover:border-tbb-orange")
+          }
+        >
+          {mineOnly ? "Mine only" : "Everyone"}
+        </Link>
       </div>
-
-      <SuggestSlotsPanel />
 
       <div className="border border-tbb-line rounded-lg bg-white overflow-hidden shadow-tbb-sm">
         <div className="grid grid-cols-7 border-b border-tbb-line-soft bg-tbb-bg-soft">
@@ -555,9 +536,9 @@ export default async function CalendarPage({
                     </span>
                     <TypePill type={e.type} />
                     <span className="font-bold text-tbb-navy">{e.title}</span>
-                    {e.engagementName && (
-                      <span className="text-xs text-tbb-ink-3">
-                        · {e.engagementName}
+                    {e.type === "action" && e.mine && (
+                      <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-orange">
+                        Yours
                       </span>
                     )}
                   </span>
@@ -601,7 +582,7 @@ function EventChip({ event }: { event: CalendarEvent }) {
             ? "bg-tbb-cream-50 border-tbb-orange text-tbb-navy"
             : "bg-tbb-navy/10 border-tbb-navy text-tbb-navy")
       }
-      title={`${event.title}${event.engagementName ? " — " + event.engagementName : ""}`}
+      title={event.title}
     >
       <span className="font-bold tabular-nums">
         {isSession
@@ -636,52 +617,5 @@ function TypePill({ type }: { type: EventType }) {
       <I className="w-2.5 h-2.5" aria-hidden />
       {meta.label}
     </span>
-  );
-}
-
-// Tiny client component for the engagement (client) filter dropdown.
-function ClientFilter({
-  engagements,
-  currentEngagementId,
-  view,
-  anchorDate,
-  types,
-}: {
-  engagements: Array<{ id: string; name: string }>;
-  currentEngagementId: string | null;
-  view: ViewMode;
-  anchorDate: string;
-  types: string | undefined;
-}) {
-  // Render as a form GET so we don't need a client component. The
-  // submit handler is the URL itself.
-  return (
-    <form
-      action="/business-builder/calendar"
-      method="get"
-      className="inline-flex items-center gap-1"
-    >
-      <input type="hidden" name="view" value={view} />
-      <input type="hidden" name="date" value={anchorDate} />
-      {types && <input type="hidden" name="types" value={types} />}
-      <select
-        name="engagement"
-        defaultValue={currentEngagementId ?? "all"}
-        className="bg-white border border-tbb-line rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-      >
-        <option value="all">All clients</option>
-        {engagements.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.name}
-          </option>
-        ))}
-      </select>
-      <button
-        type="submit"
-        className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue px-2 py-1 hover:underline"
-      >
-        Apply
-      </button>
-    </form>
   );
 }

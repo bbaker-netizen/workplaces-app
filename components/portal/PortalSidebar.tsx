@@ -20,6 +20,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
   Briefcase,
+  Calendar,
   CalendarClock,
   CheckSquare,
   ChevronLeft,
@@ -54,6 +55,7 @@ import {
 
 const ICON_FOR_MODULE: Record<PortalModuleKey, React.ComponentType<{ className?: string }>> = {
   action_items: CheckSquare,
+  calendar: Calendar,
   sessions: CalendarClock,
   communication: MessagesSquare,
   documents: Folder,

@@ -175,21 +175,42 @@ export function BusinessBuilderSidebar({
 
   // Per-phase open/closed state. Defaults to ALL CLOSED so the sidebar
   // is quiet until you click into a section. Persists in localStorage
-  // so the choice survives reloads.
-  const [openPhases, setOpenPhases] = useState<Set<string>>(() => new Set());
+  // so the choice survives reloads / navigations.
+  //
+  // Lazy initializer reads localStorage on the very first render
+  // (client-side only). Server-side renders all-closed, then client
+  // hydration applies the saved state immediately — no flash on
+  // navigation between sub-pages.
+  const [openPhases, setOpenPhases] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem(PHASES_STORAGE_KEY);
+      const stored: string[] = raw ? JSON.parse(raw) : [];
+      return new Set<string>(stored);
+    } catch {
+      return new Set();
+    }
+  });
 
-  // On mount, hydrate from localStorage. Everything stays closed
-  // unless the user has explicitly opened it in a previous session
-  // (we don't auto-open the section containing the current page —
-  // Bruce was clear: closed by default means closed by default).
+  // Also re-read on mount as a belt-and-suspenders in case the lazy
+  // initializer ran before localStorage was ready (rare).
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const raw = window.localStorage.getItem(PHASES_STORAGE_KEY);
       const stored: string[] = raw ? JSON.parse(raw) : [];
-      setOpenPhases(new Set<string>(stored));
+      setOpenPhases((prev) => {
+        const next = new Set<string>(stored);
+        if (
+          prev.size === next.size &&
+          Array.from(prev).every((k) => next.has(k))
+        ) {
+          return prev; // no change, avoid re-render
+        }
+        return next;
+      });
     } catch {
-      // localStorage unavailable / corrupted → leave defaults (all closed).
+      // ignore
     }
   }, []);
 
@@ -369,9 +390,12 @@ export function BusinessBuilderSidebar({
               </section>
             );
           }
-          // Expanded mode: bigger section header that's a real click
-          // target. Defaults to closed so the sidebar shows just five
-          // tidy section rows; clicking any expands it.
+          // Expanded mode: open state is *only* the user's explicit
+          // choice (persisted in localStorage). No auto-open from
+          // the URL — Bruce's rule: closed by default, opens only
+          // when the user clicks the header. hasActiveChild still
+          // colours the icon tile so the user can see "I'm currently
+          // inside this section" even when it's collapsed.
           return (
             <section
               key={phase.key}
@@ -385,14 +409,14 @@ export function BusinessBuilderSidebar({
                 aria-controls={`phase-items-${phase.key}`}
                 className={
                   "w-full flex items-center gap-3 px-2.5 py-2 rounded-md transition-colors group " +
-                  (isOpen || hasActiveChild
+                  (isOpen
                     ? "bg-tbb-cream/8 text-white"
                     : "text-white/90 hover:bg-tbb-cream/5 hover:text-white")
                 }
               >
                 <span
                   className={
-                    "grid place-items-center w-8 h-8 rounded-md shrink-0 transition-colors " +
+                    "grid place-items-center w-8 h-8 rounded-md shrink-0 transition-colors relative " +
                     (hasActiveChild
                       ? "bg-tbb-blue text-white"
                       : "bg-tbb-cream/10 text-tbb-blue-light group-hover:bg-tbb-cream/15")
@@ -400,6 +424,12 @@ export function BusinessBuilderSidebar({
                   aria-hidden
                 >
                   <PhaseIcon className="w-4 h-4" />
+                  {hasActiveChild && !isOpen && (
+                    <span
+                      className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-tbb-orange border border-tbb-navy"
+                      title="Current page is in here"
+                    />
+                  )}
                 </span>
                 <span className="flex-1 min-w-0 text-left">
                   <span className="block text-sm font-bold text-white tracking-tight">

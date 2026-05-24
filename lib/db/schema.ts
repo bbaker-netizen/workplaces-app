@@ -123,6 +123,7 @@ export const goalStatusEnum = pgEnum("goal_status", [
 
 export const portalModuleEnum = pgEnum("portal_module", [
   "action_items",
+  "calendar",
   "goals",
   "projects",
   "sessions",
