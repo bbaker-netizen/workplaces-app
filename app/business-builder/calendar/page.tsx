@@ -38,10 +38,13 @@ import {
   actionItems,
   bbsSessions,
   engagements,
+  googleCalendarEventMappings,
   orgs,
   projects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { listExternalEvents } from "@/lib/integrations/google-calendar";
+import { ImportFromCalendarPanel } from "@/components/calendar/ImportFromCalendarPanel";
 import { SuggestSlotsPanel } from "./SuggestSlotsPanel";
 
 type ViewMode = "week" | "month";
@@ -228,6 +231,52 @@ export default async function CalendarPage({
           .orderBy(asc(engagements.name)),
       ),
     ]);
+
+  // #5: upcoming Google Calendar events the Business Builder can import
+  // as sessions. Best-effort — if Google isn't connected or the API
+  // hiccups, we just skip the import panel rather than break the page.
+  let importableEvents: {
+    id: string;
+    summary: string;
+    startIso: string;
+    startLabel: string;
+  }[] = [];
+  try {
+    const now = new Date();
+    const horizon = addDays(now, 45);
+    const [external, importedMappings] = await Promise.all([
+      listExternalEvents(profile.userProfileId, now, horizon),
+      withSystemContext(async (tx) =>
+        tx
+          .select({ googleEventId: googleCalendarEventMappings.googleEventId })
+          .from(googleCalendarEventMappings)
+          .where(
+            eq(
+              googleCalendarEventMappings.userProfileId,
+              profile.userProfileId,
+            ),
+          ),
+      ),
+    ]);
+    const importedIds = new Set(importedMappings.map((m) => m.googleEventId));
+    importableEvents = external
+      .filter((e) => !importedIds.has(e.id))
+      .map((e) => ({
+        id: e.id,
+        summary: e.summary,
+        startIso: e.start.toISOString(),
+        startLabel: e.start.toLocaleString("en-CA", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: "America/Edmonton",
+        }),
+      }));
+  } catch {
+    // Google not connected / transient API error — skip the panel.
+  }
 
   // Merge into a unified event list.
   const events: CalendarEvent[] = [
@@ -455,6 +504,14 @@ export default async function CalendarPage({
           />
         </span>
       </div>
+
+      <ImportFromCalendarPanel
+        events={importableEvents}
+        engagements={allEngagements.map((e) => ({
+          id: e.id,
+          name: e.name ?? "(unnamed)",
+        }))}
+      />
 
       <SuggestSlotsPanel />
 
