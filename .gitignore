@@ -44,3 +44,6 @@ next-env.d.ts
 # phones, notes about businesses). Keep the builder script in git
 # (transform logic, no PII), but never commit the generated SQL.
 scripts/import-monday-*.sql
+
+# Local Netlify folder
+.netlify

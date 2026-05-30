@@ -8,7 +8,16 @@
 import Link from "next/link";
 import { Bell } from "lucide-react";
 
-export function NotificationBell({ unreadCount }: { unreadCount: number }) {
+export function NotificationBell({
+  unreadCount,
+  onDark = false,
+}: {
+  unreadCount: number;
+  /** When the bell sits on the dark navy sidebar, render it white so
+   *  it's clearly visible. Defaults to the dark-ink treatment for the
+   *  light top-nav. */
+  onDark?: boolean;
+}) {
   return (
     <Link
       href="/portal/notifications"
@@ -17,7 +26,12 @@ export function NotificationBell({ unreadCount }: { unreadCount: number }) {
           ? `Notifications (${unreadCount} unread)`
           : "Notifications"
       }
-      className="relative inline-flex items-center justify-center w-9 h-9 rounded-md text-foreground hover:bg-[#E5E0D2] transition-colors"
+      className={
+        "relative inline-flex items-center justify-center w-9 h-9 rounded-md transition-colors " +
+        (onDark
+          ? "text-white hover:bg-tbb-cream/10"
+          : "text-foreground hover:bg-[#E5E0D2]")
+      }
     >
       <Bell className="w-5 h-5" strokeWidth={1.75} />
       {unreadCount > 0 && (

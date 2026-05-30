@@ -281,16 +281,20 @@ export function PortalSidebar({
                   </Link>
                 )}
                 <SignOutButton redirectUrl="/">
-                  <button className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base">
+                  <button
+                    data-tbb-async="true"
+                    data-tbb-async-label="Signing out…"
+                    className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base"
+                  >
                     Sign out
                   </button>
                 </SignOutButton>
               </div>
             </div>
-            <NotificationBell unreadCount={unreadCount} />
+            <NotificationBell unreadCount={unreadCount} onDark />
           </>
         ) : (
-          <NotificationBell unreadCount={unreadCount} />
+          <NotificationBell unreadCount={unreadCount} onDark />
         )}
       </div>
     </aside>

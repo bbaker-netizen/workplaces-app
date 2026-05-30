@@ -72,7 +72,7 @@ export const PORTAL_PHASES: ReadonlyArray<{
   { key: "today",         label: "Today",         caption: "What's on the plate" },
   { key: "conversations", label: "Conversations", caption: "Stay in touch between sessions" },
   { key: "files",         label: "Files",         caption: "Every document for this engagement" },
-  { key: "plan",          label: "The plan",      caption: "Goals, projects, deliverables, methodology" },
+  { key: "plan",          label: "The plan",      caption: "Projects, deliverables, methodology" },
   { key: "people",        label: "People",        caption: "Team and assessments" },
   { key: "billing",       label: "Billing",       caption: "Invoices and subscription assets" },
 ];
@@ -107,7 +107,7 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
 
   // The plan — methodology, deep work, soul file, growth track.
   { key: "soul_file",    label: "Soul File",    href: "/portal/soul-file",    visibleTo: ALL_ROLES, sortOrder: 40, phase: "plan" },
-  { key: "goals",        label: "Goals",        href: "/portal/goals",        visibleTo: ALL_ROLES, sortOrder: 50, phase: "plan" },
+  // Goals removed per Bruce — redundant with Projects in practice.
   { key: "projects",     label: "Projects",     href: "/portal/projects",     visibleTo: ALL_ROLES, sortOrder: 60, phase: "plan" },
   { key: "deliverables", label: "Deliverables", href: "/portal/deliverables", visibleTo: ALL_ROLES, sortOrder: 70, phase: "plan" },
   { key: "methodology",  label: "Methodology",  href: "/portal/methodology",  visibleTo: ALL_ROLES, sortOrder: 80, phase: "plan" },
