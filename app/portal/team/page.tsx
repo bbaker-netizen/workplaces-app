@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
+import { InviteTeammateForm } from "@/components/team/InviteTeammateForm";
 
 const ROLE_LABEL: Record<string, string> = {
   master_admin: "Business Builder",
@@ -95,9 +96,15 @@ export default async function PortalTeamPage() {
         ))}
       </ul>
 
-      <p className="font-sans text-xs text-muted-foreground italic">
-        To add a teammate, ask your Business Builder to send them an invite — they&apos;ll get an email to join this engagement.
-      </p>
+      {profile.role === "client_lead" ? (
+        <InviteTeammateForm />
+      ) : (
+        <p className="font-sans text-xs text-muted-foreground italic">
+          To add a teammate, ask your engagement lead or your Business Builder
+          to send them an invite — they&apos;ll get an email to join this
+          engagement.
+        </p>
+      )}
     </main>
   );
 }
