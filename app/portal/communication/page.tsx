@@ -57,11 +57,16 @@ export default async function PortalCommunicationPage({
     ? "leadership"
     : "team";
 
-  // External communications captured for this engagement — emails / SMS
-  // / WhatsApp / call notes between Bruce and the client team. Read-only
-  // on the portal side; clients reply through their own email/phone and
-  // those replies sync back via Gmail / Twilio webhooks.
-  const externalComms = await listForEngagement(engagement.id);
+  // Email / text history between the Business Builder and the client
+  // team. Read-only on the portal side; clients reply through their own
+  // email and those replies sync back via Gmail. Only real messages
+  // (email / SMS / WhatsApp) are shown — phone-call logs and internal
+  // meeting notes are a Business-Builder-side thing and don't belong in
+  // the client's view.
+  const CLIENT_VISIBLE_CHANNELS = ["email", "sms", "whatsapp"];
+  const externalComms = (await listForEngagement(engagement.id)).filter((r) =>
+    CLIENT_VISIBLE_CHANNELS.includes(r.channel),
+  );
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-10">
@@ -83,12 +88,13 @@ export default async function PortalCommunicationPage({
 
       <section className="space-y-3">
         <h2 className="font-bold text-foreground text-xl tracking-tight">
-          External communications
+          Email &amp; text history
         </h2>
         <p className="text-xs text-muted-foreground">
-          Emails, texts, and call notes between your Business Builder and your
-          team — a running audit trail. Reply with your normal email; your
-          response will appear here automatically.
+          Every email and text between you and your Business Builder, in one
+          place. Reply from your normal email and it shows up here
+          automatically. To send a message right now, use the conversation
+          below.
         </p>
         <ClientCommunicationsPanel
           engagementId={engagement.id}
