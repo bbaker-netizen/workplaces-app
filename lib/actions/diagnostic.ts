@@ -28,6 +28,14 @@ const intakeSchema = z.object({
   topChallenge: z.string().min(10).max(4000),
   revenueRange: z.string().max(80).nullable().optional(),
   timing: z.string().max(120).nullable().optional(),
+  // Stages-of-growth diagnostic additions (stored in notes — no schema
+  // change). The computed stage + the answers that drive the close.
+  phone: z.string().max(50).nullable().optional(),
+  stageName: z.string().max(120).nullable().optional(),
+  whatsStuck: z.string().max(2000).nullable().optional(),
+  monthlyCost: z.string().max(500).nullable().optional(),
+  twelveMonthGoal: z.string().max(2000).nullable().optional(),
+  ifNothingChanges: z.string().max(2000).nullable().optional(),
 });
 
 export async function submitDiagnosticIntake(
@@ -116,13 +124,27 @@ export async function submitDiagnosticIntake(
 
 function formatNotes(d: z.infer<typeof intakeSchema>): string {
   const lines: string[] = [];
+  if (d.stageName) lines.push(`**Stage of growth:** ${d.stageName}`);
   if (d.companyWebsite) lines.push(`**Website:** ${d.companyWebsite}`);
   if (d.industry) lines.push(`**Industry:** ${d.industry}`);
   if (d.teamSize) lines.push(`**Team size:** ${d.teamSize}`);
   if (d.revenueRange) lines.push(`**Revenue range:** ${d.revenueRange}`);
+  if (d.phone) lines.push(`**Phone:** ${d.phone}`);
   if (d.timing) lines.push(`**Timing:** ${d.timing}`);
   lines.push("");
-  lines.push("**Top challenge:**");
+  lines.push("**Biggest frustration:**");
   lines.push(d.topChallenge.trim());
+  if (d.whatsStuck) {
+    lines.push("", "**What's most stuck:**", d.whatsStuck.trim());
+  }
+  if (d.monthlyCost) {
+    lines.push("", "**What it's costing per month:**", d.monthlyCost.trim());
+  }
+  if (d.twelveMonthGoal) {
+    lines.push("", "**Where they want to be in 12 months:**", d.twelveMonthGoal.trim());
+  }
+  if (d.ifNothingChanges) {
+    lines.push("", "**What happens if nothing changes:**", d.ifNothingChanges.trim());
+  }
   return lines.join("\n");
 }

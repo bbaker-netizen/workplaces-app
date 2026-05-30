@@ -5,12 +5,12 @@
  */
 
 import type { Metadata } from "next";
-import { DiagnosticForm } from "@/components/diagnostic/DiagnosticForm";
+import { StagesAssessment } from "@/components/diagnostic/StagesAssessment";
 
 export const metadata: Metadata = {
-  title: "Business diagnostic — The Builder",
+  title: "What stage is your business in? — The Builder",
   description:
-    "Tell us where your business is today. We'll review and reach out within two business days.",
+    "A 2-minute assessment that places your business on its stage of growth and shows what to build next.",
 };
 
 export default function DiagnosticPage() {
@@ -19,19 +19,20 @@ export default function DiagnosticPage() {
       <div className="max-w-2xl mx-auto space-y-8">
         <header className="space-y-3">
           <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-            Business Builder Portal · By Workplaces
+            Stages of Growth · By Workplaces
           </p>
           <h1 className="font-bold text-foreground text-4xl sm:text-5xl tracking-tight leading-none">
-            Business diagnostic.
+            What stage is your business in?
           </h1>
           <p className="font-sans text-base text-foreground">
-            A short intake to help us understand where your business is
-            today and what would move it forward. We&apos;ll review and
-            be in touch within two business days.
+            Every business moves through stages as it grows — and what got
+            you here usually isn&apos;t what gets you to the next stage.
+            Answer a few questions and we&apos;ll show you where you are,
+            what tends to break next, and what to build to move forward.
           </p>
         </header>
 
-        <DiagnosticForm />
+        <StagesAssessment />
 
         <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Build what compounds.
