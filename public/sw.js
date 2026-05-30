@@ -15,7 +15,7 @@
  * are purged on `activate`.
  */
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `the-builder-static-${CACHE_VERSION}`;
 const PAGE_CACHE = `the-builder-pages-${CACHE_VERSION}`;
 const OFFLINE_FALLBACK = "/offline";
