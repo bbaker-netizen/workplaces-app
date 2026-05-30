@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { SELECTED_ENGAGEMENT_COOKIE } from "@/lib/db/queries/engagements";
+import {
+  PORTAL_PREVIEW_COOKIE,
+  SELECTED_ENGAGEMENT_COOKIE,
+} from "@/lib/db/queries/engagements";
 
 /**
  * /home — post-sign-in dispatcher.
@@ -40,8 +43,11 @@ export default async function HomeDispatch() {
   }
 
   if (profile.role === "master_admin" || profile.role === "coach") {
-    // Leaving any client's context — reset to your own.
+    // Leaving any client's context — reset to your own. Clear both the
+    // selected-engagement cookie and the portal-preview cookie so the
+    // coach lands cleanly in their console.
     cookies().delete(SELECTED_ENGAGEMENT_COOKIE);
+    cookies().delete(PORTAL_PREVIEW_COOKIE);
     redirect("/business-builder");
   }
 

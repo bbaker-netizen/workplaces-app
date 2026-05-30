@@ -1,7 +1,11 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getUnreadNotificationCount } from "@/lib/db/queries/notifications";
-import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import {
+  getCurrentEngagement,
+  PORTAL_PREVIEW_COOKIE,
+} from "@/lib/db/queries/engagements";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { ALL_MODULES, getEnabledModules } from "@/lib/modules";
 import { PortalSidebar } from "@/components/portal/PortalSidebar";
@@ -21,6 +25,19 @@ export default async function PortalLayout({
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") {
     redirect("/no-invitation");
+  }
+
+  // Coaches belong in their own console, not the client portal. They only
+  // land here deliberately via the "Client Portal View" preview button,
+  // which sets the preview cookie. Without it, bounce them back to the
+  // console — on EVERY portal page, so a stray link or stale bookmark
+  // can't strand a coach inside the client portal (#7).
+  const isCoachRole =
+    profile.role === "master_admin" || profile.role === "coach";
+  const inPreview =
+    cookies().get(PORTAL_PREVIEW_COOKIE)?.value === "1";
+  if (isCoachRole && !inPreview) {
+    redirect("/business-builder");
   }
 
   const [unreadCount, engagement, prefs] = await Promise.all([

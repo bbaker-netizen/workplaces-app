@@ -493,7 +493,7 @@ export function BusinessBuilderSidebar({
             {/* Client Portal View — pill-styled preview action, visually
                 distinct from the destructive Sign Out below. */}
             <Link
-              href="/portal?preview=1"
+              href="/portal/preview"
               title="Preview the client portal as your client would see it"
               className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill bg-tbb-cream/10 text-white/90 hover:bg-tbb-cream/20 hover:text-white transition-colors duration-tbb-base border border-tbb-cream/15"
             >

@@ -7,10 +7,14 @@
  */
 
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { CheckCircle2, MessageSquare, Calendar, FileText, Sparkles } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { getCurrentEngagement } from "@/lib/db/queries/engagements";
+import {
+  getCurrentEngagement,
+  PORTAL_PREVIEW_COOKIE,
+} from "@/lib/db/queries/engagements";
 import { listEngagementActionItems } from "@/lib/db/queries/action-items";
 import { getNextSession } from "@/lib/db/queries/bbs-sessions";
 import { listEngagementRecentActivity } from "@/lib/db/queries/messages";
@@ -22,25 +26,15 @@ import {
   SESSION_TYPE_LABEL,
 } from "@/components/sessions/utils";
 
-export default async function PortalDashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ preview?: string }>;
-}) {
+export default async function PortalDashboard() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
 
-  // Business Builders should land on their console by default. But the
-  // "Portal view" link in the console passes ?preview=1 so coaches can
-  // peek at what a client would see without getting redirected away.
-  const sp = await searchParams;
-  const isPreview = sp.preview === "1";
-  if (
-    !isPreview &&
-    (profile.role === "master_admin" || profile.role === "coach")
-  ) {
-    redirect("/business-builder");
-  }
+  // The portal layout already bounces coaches to their console unless
+  // they entered preview mode (the preview cookie). So a coach reaching
+  // this page is previewing — we read the cookie only to show the
+  // "you're viewing as a client" banner below.
+  const isPreview = cookies().get(PORTAL_PREVIEW_COOKIE)?.value === "1";
 
   const engagement = await getCurrentEngagement();
   if (!engagement) {

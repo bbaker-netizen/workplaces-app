@@ -22,6 +22,15 @@ import { ensureUserProfile } from "../provisioning";
 
 export const SELECTED_ENGAGEMENT_COOKIE = "selected_engagement_slug";
 
+/**
+ * Set when a coach deliberately opens the client portal in "preview"
+ * mode (via /portal/preview). The portal layout uses it to decide
+ * whether a coach is allowed to be in the client portal at all — without
+ * it, coaches are bounced straight back to their console on every portal
+ * page. Cleared on return to the console (/home).
+ */
+export const PORTAL_PREVIEW_COOKIE = "portal_preview";
+
 export async function getCurrentEngagement(): Promise<Engagement | null> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return null;
