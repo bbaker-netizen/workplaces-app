@@ -24,7 +24,7 @@
 
 import { randomUUID } from "node:crypto";
 import { cache } from "react";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { orgs, userProfiles } from "./schema";
 import type { UserProfile } from "./schema";
@@ -100,7 +100,12 @@ async function _ensureUserProfile(): Promise<ProvisionResult> {
     );
   }
 
-  // Existing user_profile? Look up by clerk_user_id.
+  // Existing user_profile for THIS active org. Scoping to orgRow.id (the
+  // org of the active Clerk session) matters: a user can have profiles in
+  // more than one org, and a clerk_user_id-only lookup would return an
+  // arbitrary one — which is exactly how the owner ended up reading as a
+  // client_employee of a client org. Always read the profile for the org
+  // the session is actually in.
   const existing = await withSystemContext(async (tx) => {
     const rows = await tx
       .select({
@@ -111,7 +116,12 @@ async function _ensureUserProfile(): Promise<ProvisionResult> {
         fullName: userProfiles.fullName,
       })
       .from(userProfiles)
-      .where(eq(userProfiles.clerkUserId, userId))
+      .where(
+        and(
+          eq(userProfiles.clerkUserId, userId),
+          eq(userProfiles.orgId, orgRow.id),
+        ),
+      )
       .limit(1);
     return rows[0] ?? null;
   });
