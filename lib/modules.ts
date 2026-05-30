@@ -116,7 +116,7 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
 
   // People.
   { key: "team",   label: "My Team", href: "/portal/team",   visibleTo: ALL_ROLES, sortOrder: 110, phase: "people" },
-  { key: "hiring", label: "Hiring", href: "/portal/hiring", visibleTo: LEADERSHIP, sortOrder: 120, phase: "people" },
+  // Hiring removed per Bruce — it's gone from the Business Builder side too.
 
   // Billing.
   { key: "invoices",      label: "Invoices",      href: "/portal/invoices",      visibleTo: LEADERSHIP, sortOrder: 130, phase: "billing" },

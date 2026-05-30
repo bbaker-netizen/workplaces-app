@@ -20,11 +20,11 @@ export function NotificationBell({
 }) {
   return (
     <Link
-      href="/portal/notifications"
+      href="/portal/communication"
       aria-label={
         unreadCount > 0
-          ? `Notifications (${unreadCount} unread)`
-          : "Notifications"
+          ? `Notifications (${unreadCount} unread) — open Communication`
+          : "Notifications — open Communication"
       }
       className={
         "relative inline-flex items-center justify-center w-9 h-9 rounded-md transition-colors " +

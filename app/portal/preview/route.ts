@@ -5,9 +5,16 @@
  * sets a cookie.
  */
 
+import { cookies } from "next/headers";
+import { desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { PORTAL_PREVIEW_COOKIE } from "@/lib/db/queries/engagements";
+import {
+  PORTAL_PREVIEW_COOKIE,
+  SELECTED_ENGAGEMENT_COOKIE,
+} from "@/lib/db/queries/engagements";
+import { engagements } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +35,30 @@ export async function GET(req: Request) {
       path: "/",
       maxAge: 60 * 60 * 6,
     });
+
+    // If no client is selected yet, default to the most recent engagement
+    // so the preview shows a real client portal instead of "No engagement
+    // yet". (Use the per-client "View portal" button to pick a specific
+    // one.)
+    const alreadySelected = cookies().get(SELECTED_ENGAGEMENT_COOKIE)?.value;
+    if (!alreadySelected) {
+      const [latest] = await withSystemContext(async (tx) =>
+        tx
+          .select({ slug: engagements.slug })
+          .from(engagements)
+          .orderBy(desc(engagements.createdAt))
+          .limit(1),
+      );
+      if (latest?.slug) {
+        res.cookies.set(SELECTED_ENGAGEMENT_COOKIE, latest.slug, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          path: "/",
+          maxAge: 60 * 60 * 24 * 30,
+        });
+      }
+    }
   }
   return res;
 }
