@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   getEngagementBySlug,
+  PORTAL_PREVIEW_COOKIE,
   SELECTED_ENGAGEMENT_COOKIE,
 } from "@/lib/db/queries/engagements";
 
@@ -46,5 +47,17 @@ export async function GET(
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });
+  // Coaches viewing a specific client's portal are entering preview mode
+  // deliberately — set the preview cookie so the portal layout lets them
+  // in (otherwise the coach-gate would bounce them straight back).
+  if (isCoach) {
+    res.cookies.set(PORTAL_PREVIEW_COOKIE, "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 6,
+    });
+  }
   return res;
 }

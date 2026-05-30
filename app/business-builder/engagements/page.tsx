@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, inArray } from "drizzle-orm";
-import { ArrowRight, Briefcase, Plus } from "lucide-react";
+import { ArrowRight, Briefcase, Eye, Plus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -26,6 +26,7 @@ export default async function EngagementsListPage() {
       .select({
         id: engagements.id,
         name: engagements.name,
+        slug: engagements.slug,
         type: engagements.type,
         status: engagements.status,
         startDate: engagements.startDate,
@@ -94,10 +95,10 @@ export default async function EngagementsListPage() {
       ) : (
         <ul className="border border-tbb-line rounded-lg bg-white divide-y divide-tbb-line-soft overflow-hidden shadow-tbb-sm">
           {rows.map((e) => (
-            <li key={e.id}>
+            <li key={e.id} className="flex items-center gap-2 px-5 py-4 hover:bg-tbb-cream-50 transition-colors">
               <Link
                 href={`/business-builder/engagements/${e.id}`}
-                className="flex items-center gap-3 px-5 py-4 hover:bg-tbb-cream-50 transition-colors"
+                className="flex items-center gap-3 flex-1 min-w-0"
               >
                 <span className="flex-1 min-w-0">
                   <span className="block font-bold text-tbb-navy">
@@ -111,8 +112,17 @@ export default async function EngagementsListPage() {
                     )}
                   </span>
                 </span>
-                <ArrowRight className="w-4 h-4 text-tbb-ink-3" aria-hidden />
+                <ArrowRight className="w-4 h-4 text-tbb-ink-3 shrink-0" aria-hidden />
               </Link>
+              {e.slug && (
+                <Link
+                  href={`/portal/e/${e.slug}`}
+                  title="See this client's portal exactly as they see it"
+                  className="shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill border border-tbb-line text-tbb-blue hover:border-tbb-blue hover:bg-white transition-colors"
+                >
+                  <Eye className="w-3 h-3" aria-hidden /> View portal
+                </Link>
+              )}
             </li>
           ))}
         </ul>
