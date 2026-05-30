@@ -40,10 +40,10 @@ export default async function MethodologyPage() {
         title="The Quality Gate"
       >
         <p>
-          Every commitment, every deliverable, every project, every goal —
+          Every commitment, every deliverable, every project —
           if it doesn&apos;t move <strong>top-line revenue</strong> or
           protect <strong>margin</strong>, it doesn&apos;t belong here. That&apos;s
-          why action items and goals carry an explicit revenue / margin
+          why action items carry an explicit revenue / margin
           flag. Tagging neither is a signal to question whether the work
           should happen at all.
         </p>
@@ -55,8 +55,8 @@ export default async function MethodologyPage() {
       >
         <p>
           Twice a month, two hours, with each client — one in-person,
-          one virtual. The session is where the work gets shaped: goals
-          set, projects scoped, action items captured, blockers cleared.
+          one virtual. The session is where the work gets shaped:
+          projects scoped, action items captured, blockers cleared.
           Sessions are scheduled in the <em>Sessions</em> module; notes
           stay attached to the session so the rhythm of the engagement
           is always visible.
@@ -120,7 +120,7 @@ export default async function MethodologyPage() {
         <p>
           Every commitment lives as an action item — owned, dated,
           flagged for revenue or margin impact. Drafts come from BBS
-          recordings (auto-extracted; Coach reviews and publishes).
+          recordings (auto-extracted; Business Builder reviews and publishes).
           Manual ones come straight from the Business Builder or you. The status
           pill on the card is the fast path: tap and update.
         </p>

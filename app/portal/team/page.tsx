@@ -4,8 +4,8 @@ import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 
 const ROLE_LABEL: Record<string, string> = {
-  master_admin: "Master Admin",
-  Coach: "coach",
+  master_admin: "Business Builder",
+  coach: "Business Builder",
   client_lead: "Client Lead",
   client_manager: "Client Manager",
   client_employee: "Client Employee",
@@ -14,7 +14,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 const ROLE_ORDER: Record<string, number> = {
   master_admin: 0,
-  Coach: 1,
+  coach: 1,
   client_lead: 2,
   client_manager: 3,
   client_employee: 4,
@@ -59,7 +59,7 @@ export default async function PortalTeamPage() {
           {engagement.name ?? "Engagement"}
         </p>
         <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
-          Team
+          My Team
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
           Everyone with access to this engagement.
@@ -96,7 +96,7 @@ export default async function PortalTeamPage() {
       </ul>
 
       <p className="font-sans text-xs text-muted-foreground italic">
-        To invite someone new, your Coach creates a fresh engagement or sends an invitation through Clerk. Per-engagement invite UI lands in a later phase.
+        To add a teammate, ask your Business Builder to send them an invite — they&apos;ll get an email to join this engagement.
       </p>
     </main>
   );

@@ -115,7 +115,7 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   { key: "forms",        label: "Forms",        href: "/portal/forms",        visibleTo: ALL_ROLES, sortOrder: 100, phase: "plan" },
 
   // People.
-  { key: "team",   label: "Team",   href: "/portal/team",   visibleTo: ALL_ROLES, sortOrder: 110, phase: "people" },
+  { key: "team",   label: "My Team", href: "/portal/team",   visibleTo: ALL_ROLES, sortOrder: 110, phase: "people" },
   { key: "hiring", label: "Hiring", href: "/portal/hiring", visibleTo: LEADERSHIP, sortOrder: 120, phase: "people" },
 
   // Billing.

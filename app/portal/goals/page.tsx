@@ -76,7 +76,7 @@ export default async function PortalGoalsPage() {
           <p className="font-sans text-sm text-muted-foreground">
             {canCreate
               ? "Set the first SMART goal for this engagement above."
-              : "Your Coach will set goals here as they come into focus."}
+              : "Your Business Builder will set goals here as they come into focus."}
           </p>
         </div>
       ) : (

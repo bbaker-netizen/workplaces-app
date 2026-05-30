@@ -55,7 +55,7 @@ export default async function PortalFormsPage() {
           <p className="font-sans text-sm text-muted-foreground italic">
             {canCreate
               ? "No forms yet. Build the first one above."
-              : "Your Coach hasn't published any forms yet."}
+              : "Your Business Builder hasn't published any forms yet."}
           </p>
         </div>
       ) : (

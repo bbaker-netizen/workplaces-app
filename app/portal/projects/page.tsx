@@ -82,7 +82,7 @@ export default async function PortalProjectsPage() {
           <p className="font-sans text-sm text-muted-foreground">
             {canCreate
               ? "A project is the bigger thing you're building — a hiring system, a new website, a sales playbook. Kick off the first one above."
-              : "Your Coach will spin up projects here once one's ready to start."}
+              : "Your Business Builder will spin up projects here once one's ready to start."}
           </p>
         </div>
       ) : (

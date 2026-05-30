@@ -17,7 +17,7 @@ export default async function PortalSoulFilePage() {
         </h1>
         <p className="mt-4 font-sans text-muted-foreground">
           Your portal isn&apos;t bound to an engagement. If you expect access,
-          contact your Coach.
+          contact your Business Builder.
         </p>
       </main>
     );
