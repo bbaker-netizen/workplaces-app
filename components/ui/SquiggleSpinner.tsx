@@ -1,59 +1,88 @@
 /**
- * SquiggleSpinner — characterful page-load animation. A hand-drawn-
- * looking outer ring (path with wobble + dashed stroke) rotates one
- * way while an inner dashed circle rotates the other. The outer
- * stroke draws on and off so it looks like someone is sketching the
- * circle in real time.
+ * BuilderLoader — Buddy laying bricks (#18).
  *
- * Pure CSS animation — no client JS, no deps. Server-renders fine.
+ * Replaces the old spinning-wheel loader with an on-brand "building a
+ * brick-and-mortar business" animation: a little hard-hat (Buddy) bobs
+ * along the top while a brick wall lays itself up, course by course,
+ * then resets and builds again. Pure CSS — no client JS, SSR-safe.
+ *
+ * Exported as `SquiggleSpinner` too (backwards-compat alias) so every
+ * existing loader call site picks up the new look with no other changes.
  */
 
-export function SquiggleSpinner({
+const LOADER_CSS = `
+@keyframes tbb-brick-lay {
+  0%   { opacity: 0; transform: translateY(-9px) scaleY(0.6); }
+  12%  { opacity: 1; transform: translateY(0) scaleY(1); }
+  80%  { opacity: 1; transform: translateY(0) scaleY(1); }
+  92%  { opacity: 0; transform: translateY(0) scaleY(1); }
+  100% { opacity: 0; }
+}
+@keyframes tbb-buddy-bob {
+  0%, 100% { transform: translateX(-22px) translateY(0); }
+  25%      { transform: translateX(-9px)  translateY(-3px); }
+  50%      { transform: translateX(7px)   translateY(0); }
+  75%      { transform: translateX(20px)  translateY(-3px); }
+}
+.tbb-bl-wall { position: relative; width: 60px; height: 44px; transform-origin: center; }
+.tbb-bl-brick {
+  position: absolute; height: 10px; border-radius: 2px;
+  background: var(--tbb-orange, #E87722);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14);
+  animation: tbb-brick-lay 2.4s ease-in-out infinite;
+}
+.tbb-bl-hat {
+  position: absolute; top: -3px; left: 23px; width: 14px; height: 8px;
+  border-radius: 7px 7px 0 0; background: var(--tbb-steel, #2E4057);
+  animation: tbb-buddy-bob 2.4s ease-in-out infinite;
+}
+.tbb-bl-hat::after {
+  content: ""; position: absolute; bottom: -2px; left: -3px; right: -3px;
+  height: 2px; border-radius: 1px; background: var(--tbb-steel, #2E4057);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tbb-bl-brick, .tbb-bl-hat { animation-duration: 0s; }
+  .tbb-bl-brick { opacity: 1; }
+}
+`;
+
+// Brick layout: three courses in a running bond, laid bottom-up.
+const BRICKS: Array<{ left: number; top: number; delay: string }> = [
+  { left: 0, top: 32, delay: "0s" },
+  { left: 21, top: 32, delay: "0.2s" },
+  { left: 42, top: 32, delay: "0.4s" },
+  { left: 10, top: 20, delay: "0.6s" },
+  { left: 31, top: 20, delay: "0.8s" },
+  { left: 0, top: 8, delay: "1.0s" },
+  { left: 21, top: 8, delay: "1.2s" },
+  { left: 42, top: 8, delay: "1.4s" },
+];
+
+export function BuilderLoader({
   size = 64,
   label = "Building…",
 }: {
   size?: number;
   label?: string | null;
 }) {
+  const scale = size / 64;
   return (
-    <div className="flex flex-col items-center gap-3" role="status" aria-label={label ?? "Loading"}>
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 100 100"
-        fill="none"
-        className="app-squiggle-wrap"
-        aria-hidden
-      >
-        {/* Outer hand-drawn-looking ring — wobbly cubic path that
-            traces a not-quite-circle so it reads as sketched. */}
-        <path
-          d="M 50 12
-             C 70 12, 86 28, 88 50
-             C 90 70, 72 86, 50 88
-             C 28 88, 12 72, 12 50
-             C 12 30, 30 12, 50 12 Z"
-          stroke="var(--tbb-orange)"
-          strokeWidth="4"
-          strokeLinecap="round"
-          className="app-squiggle-path"
-        />
-
-        {/* Inner dashed ring spinning the other way — adds depth and
-            keeps the eye engaged when the outer is mid-erase. */}
-        <g className="app-squiggle-inner">
-          <circle
-            cx="50"
-            cy="50"
-            r="24"
-            stroke="var(--tbb-steel)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeDasharray="4 8"
-            opacity="0.7"
+    <div
+      className="flex flex-col items-center gap-3"
+      role="status"
+      aria-label={label ?? "Loading"}
+    >
+      <style dangerouslySetInnerHTML={{ __html: LOADER_CSS }} />
+      <div className="tbb-bl-wall" style={{ transform: `scale(${scale})` }} aria-hidden>
+        {BRICKS.map((b, i) => (
+          <span
+            key={i}
+            className="tbb-bl-brick"
+            style={{ width: 18, left: b.left, top: b.top, animationDelay: b.delay }}
           />
-        </g>
-      </svg>
+        ))}
+        <span className="tbb-bl-hat" />
+      </div>
       {label && (
         <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-ink-3">
           {label}
@@ -62,3 +91,6 @@ export function SquiggleSpinner({
     </div>
   );
 }
+
+/** Backwards-compat alias — existing call sites import SquiggleSpinner. */
+export const SquiggleSpinner = BuilderLoader;
