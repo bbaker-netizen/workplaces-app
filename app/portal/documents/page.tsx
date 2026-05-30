@@ -1,8 +1,16 @@
+import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementDocuments } from "@/lib/db/queries/documents";
+import { coaches } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
+import {
+  listFolderFiles,
+  type DriveFile,
+} from "@/lib/integrations/google-drive";
 import { DocumentUploadForm } from "@/components/documents/DocumentUploadForm";
+import { SharedDriveFolder } from "@/components/documents/SharedDriveFolder";
 import {
   DocumentList,
   type DocumentRow,
@@ -33,6 +41,33 @@ export default async function PortalDocumentsPage() {
     profile.role === "client_lead" ||
     profile.role === "client_manager";
 
+  // #8: if a Google Drive folder is linked to this engagement, show its
+  // contents to the client. The client has no Google connection, so we
+  // list the folder with the engagement's Business Builder's token.
+  const driveFolderId = engagement.googleDriveFolderId;
+  const driveFolderName = engagement.googleDriveFolderName;
+  let driveFiles: DriveFile[] = [];
+  let driveUnavailable = false;
+  if (driveFolderId) {
+    try {
+      const coachUserProfileId = await withSystemContext(async (tx) => {
+        const [c] = await tx
+          .select({ upid: coaches.userProfileId })
+          .from(coaches)
+          .where(eq(coaches.id, engagement.coachId))
+          .limit(1);
+        return c?.upid ?? null;
+      });
+      if (coachUserProfileId) {
+        driveFiles = await listFolderFiles(coachUserProfileId, driveFolderId);
+      } else {
+        driveUnavailable = true;
+      }
+    } catch {
+      driveUnavailable = true;
+    }
+  }
+
   const docs = await listEngagementDocuments(engagement.id);
   const rows: DocumentRow[] = docs.map((d) => ({
     id: d.id,
@@ -61,6 +96,13 @@ export default async function PortalDocumentsPage() {
       </header>
 
       <div className="space-y-8">
+        {driveFolderId && (
+          <SharedDriveFolder
+            folderName={driveFolderName}
+            files={driveFiles}
+            unavailable={driveUnavailable}
+          />
+        )}
         <DocumentUploadForm engagementId={engagement.id} />
         <section className="space-y-3">
           <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
