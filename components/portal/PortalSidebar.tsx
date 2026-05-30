@@ -19,6 +19,7 @@ import { useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
+  ArrowLeft,
   Briefcase,
   Calendar,
   CalendarClock,
@@ -271,15 +272,17 @@ export function PortalSidebar({
               <p className="text-[11px] font-bold text-tbb-cream truncate">
                 {fullName}
               </p>
-              <div className="flex gap-3 mt-0.5">
-                {isCoach && (
-                  <Link
-                    href="/business-builder"
-                    className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-cream/55 hover:text-tbb-cream transition-colors duration-tbb-base"
-                  >
-                    Console
-                  </Link>
-                )}
+              {isCoach && (
+                <Link
+                  href="/home"
+                  title="Leave this client's portal and return to your Business Builder console"
+                  className="inline-flex items-center gap-1.5 mt-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base"
+                >
+                  <ArrowLeft className="w-3 h-3" aria-hidden />
+                  My console
+                </Link>
+              )}
+              <div className="flex gap-3 mt-1">
                 <SignOutButton redirectUrl="/">
                   <button
                     data-tbb-async="true"
@@ -294,7 +297,19 @@ export function PortalSidebar({
             <NotificationBell unreadCount={unreadCount} onDark />
           </>
         ) : (
-          <NotificationBell unreadCount={unreadCount} onDark />
+          <>
+            {isCoach && (
+              <Link
+                href="/home"
+                title="Back to my Business Builder console"
+                aria-label="Back to my Business Builder console"
+                className="grid place-items-center w-9 h-9 rounded-md bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" aria-hidden />
+              </Link>
+            )}
+            <NotificationBell unreadCount={unreadCount} onDark />
+          </>
         )}
       </div>
     </aside>
