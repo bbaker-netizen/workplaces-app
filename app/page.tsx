@@ -33,7 +33,7 @@ export default function Home() {
         </p>
         <div className="flex flex-wrap items-center gap-3 pt-4">
           <Link
-            href="/portal"
+            href="/home"
             className="inline-flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-tbb-caps px-6 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base shadow-tbb-cta"
           >
             Sign in

@@ -23,6 +23,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { orgs, userProfiles } from "./schema";
@@ -57,7 +58,15 @@ export type ProvisionResult =
       fullName: string;
     };
 
-export async function ensureUserProfile(): Promise<ProvisionResult> {
+// Wrapped in React's `cache()` so the work is deduplicated within a
+// single request. A page render calls this from BOTH the layout and the
+// page component; without caching that's two full provisioning passes
+// (each = several DB round-trips + a Clerk lookup) on every load. With
+// it, the first call does the work and the second returns the memoized
+// result. The memo lives for one request only, so it can't go stale.
+export const ensureUserProfile = cache(_ensureUserProfile);
+
+async function _ensureUserProfile(): Promise<ProvisionResult> {
   const { userId, orgId: clerkOrgId } = await auth();
 
   // Middleware blocks unauthenticated requests, but handle defensively.

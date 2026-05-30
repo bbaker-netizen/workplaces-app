@@ -1,7 +1,11 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const isProtectedRoute = createRouteMatcher(["/portal(.*)", "/business-builder(.*)"]);
+const isProtectedRoute = createRouteMatcher([
+  "/portal(.*)",
+  "/business-builder(.*)",
+  "/home(.*)",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   // Legacy /coach/* URLs (bookmarks, old emails, search-engine
