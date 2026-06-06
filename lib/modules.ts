@@ -82,13 +82,6 @@ const ALL_ROLES: ReadonlyArray<UserProfile["role"]> = [
   "prospect",
 ];
 
-const LEADERSHIP: ReadonlyArray<UserProfile["role"]> = [
-  "master_admin",
-  "coach",
-  "client_lead",
-  "client_manager",
-];
-
 export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   // Today — the week-by-week rhythm.
   { key: "action_items", label: "Action items", href: "/portal/action-items", visibleTo: ALL_ROLES, sortOrder: 0,  phase: "today" },
