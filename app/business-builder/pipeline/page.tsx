@@ -40,10 +40,10 @@ export default async function PipelinePage() {
         <div className="space-y-1">
           <p className="tbb-eyebrow">Pipeline</p>
           <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-            Your prospects
+            Prospects &amp; clients
           </h1>
           <p className="text-sm text-tbb-ink-3">
-            {prospects.length} prospect{prospects.length === 1 ? "" : "s"} across
+            {prospects.length} record{prospects.length === 1 ? "" : "s"} across
             all stages.
           </p>
         </div>

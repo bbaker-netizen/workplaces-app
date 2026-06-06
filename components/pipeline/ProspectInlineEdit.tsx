@@ -33,8 +33,9 @@ export function ProspectInlineEdit({
         companyWebsite: string | null;
       }
     | { notes: string | null };
-  /** Existing company name for the "contact ≠ company" validation
-   *  rule. Only used in field="contact" mode. */
+  /** Current company name. In field="contact" mode it's both the
+   *  editable Company field and the value the "contact ≠ company"
+   *  validation rule compares against. */
   companyName?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -83,6 +84,7 @@ function ContactEdit({
   companyName: string;
   onDone: () => void;
 }) {
+  const [company, setCompany] = useState(companyName);
   const [contactName, setContactName] = useState(initial.contactName ?? "");
   const [contactEmail, setContactEmail] = useState(initial.contactEmail);
   const [phone, setPhone] = useState(initial.phone ?? "");
@@ -97,15 +99,15 @@ function ContactEdit({
   const validation = useMemo(
     () =>
       validateProspect({
-        companyName: companyName,
+        companyName: company.trim(),
         contactName: contactName.trim(),
         contactEmail: contactEmail.trim(),
         phone: phone.trim() || null,
-        // Existing company name is already saved; we don't ask the
-        // user to re-confirm legal name on an edit.
+        // On an edit we don't nag about the "looks like a person"
+        // soft warning — the coach is deliberately setting the name.
         legalNameConfirmed: true,
       }),
-    [companyName, contactName, contactEmail, phone],
+    [company, contactName, contactEmail, phone],
   );
 
   function save() {
@@ -119,6 +121,7 @@ function ContactEdit({
     startTransition(async () => {
       const r = await updateProspect({
         id: prospectId,
+        companyName: company.trim(),
         contactName: contactName.trim(),
         contactEmail: contactEmail.trim(),
         phone: phone.trim() || null,
@@ -129,12 +132,21 @@ function ContactEdit({
     });
   }
 
+  const companyIssue = validation.errors.find((i) => i.field === "companyName");
   const contactIssue = validation.errors.find((i) => i.field === "contactName");
   const emailIssue = validation.errors.find((i) => i.field === "contactEmail");
   const phoneIssue = validation.errors.find((i) => i.field === "phone");
 
   return (
     <div className="w-full space-y-2">
+      <input
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+        placeholder="Company (legal name)"
+        disabled={isPending}
+        className={inputCls}
+      />
+      {companyIssue && <InlineIssue message={companyIssue.message} />}
       <input
         value={contactName}
         onChange={(e) => setContactName(e.target.value)}
