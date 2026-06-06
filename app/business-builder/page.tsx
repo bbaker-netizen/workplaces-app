@@ -17,7 +17,6 @@ import {
   Briefcase,
   Calendar,
   CheckSquare,
-  CreditCard,
   FileText,
   Filter,
   Plus,
@@ -34,7 +33,6 @@ import {
   listCoachGoals,
   listCoachHires,
   listCoachProjects,
-  listCoachSubscriptions,
   listCoachUpcomingSessions,
 } from "@/lib/db/queries/business-builder-cross-engagement";
 import { listProspects } from "@/lib/db/queries/prospects";
@@ -60,7 +58,6 @@ export default async function CoachConsole() {
     hires,
     deliverables,
     goals,
-    subscriptions,
     prospects,
     prefs,
   ] = await Promise.all([
@@ -71,7 +68,6 @@ export default async function CoachConsole() {
     listCoachHires(),
     listCoachDeliverables(),
     listCoachGoals(),
-    listCoachSubscriptions(),
     listProspects(),
     getCurrentUserPrefs(),
   ]);
@@ -131,11 +127,6 @@ export default async function CoachConsole() {
       g.status !== "achieved" &&
       g.status !== "abandoned",
   );
-  const subsRunRate = subscriptions.reduce(
-    (s, x) => s + Number(x.monthlyCostCents),
-    0,
-  );
-
   /**
    * Unified Commitments stream — action items, deliverables, and goals
    * collapsed into one ranked list. Bruce's complaint: "action items
@@ -614,28 +605,6 @@ export default async function CoachConsole() {
               ))}
             </ul>
           )}
-        </CardShell>
-      ),
-    },
-    {
-      type: "subscriptions",
-      label: "Subscription run rate",
-      defaultSize: "small",
-      node: (
-        <CardShell
-          icon={<CreditCard className="w-4 h-4" aria-hidden />}
-          title="Subscriptions"
-          href="/business-builder/subscriptions"
-          cta="Open"
-        >
-          <p className="font-bold text-foreground text-2xl tracking-tight">
-            ${(subsRunRate / 100).toFixed(2)}
-            <span className="text-xs text-muted-foreground"> / mo</span>
-          </p>
-          <p className="mt-1 text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-            {subscriptions.length} services across {engagements.length} engagement
-            {engagements.length === 1 ? "" : "s"}
-          </p>
         </CardShell>
       ),
     },

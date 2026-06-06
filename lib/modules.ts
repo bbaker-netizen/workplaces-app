@@ -28,10 +28,8 @@ export type PortalModuleKey =
   | "courses"
   | "forms"
   | "team"
-  | "invoices"
   | "methodology"
   | "embedded_apps"
-  | "subscriptions"
   | "hiring";
 
 /**
@@ -44,8 +42,7 @@ export type PortalPhase =
   | "conversations" // How we talk
   | "files"        // Where things live
   | "plan"         // The plan being built
-  | "people"       // Who's on the team
-  | "billing";     // Money in and out
+  | "people";      // Who's on the team
 
 export type PortalModule = {
   key: PortalModuleKey;
@@ -74,7 +71,6 @@ export const PORTAL_PHASES: ReadonlyArray<{
   { key: "files",         label: "Files",         caption: "Every document for this engagement" },
   { key: "plan",          label: "The plan",      caption: "Projects, deliverables, methodology" },
   { key: "people",        label: "People",        caption: "Team and assessments" },
-  { key: "billing",       label: "Billing",       caption: "Invoices and subscription assets" },
 ];
 
 const ALL_ROLES: ReadonlyArray<UserProfile["role"]> = [
@@ -117,10 +113,8 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   // People.
   { key: "team",   label: "My Team", href: "/portal/team",   visibleTo: ALL_ROLES, sortOrder: 110, phase: "people" },
   // Hiring removed per Bruce — it's gone from the Business Builder side too.
-
-  // Billing.
-  { key: "invoices",      label: "Invoices",      href: "/portal/invoices",      visibleTo: LEADERSHIP, sortOrder: 130, phase: "billing" },
-  { key: "subscriptions", label: "Subscriptions", href: "/portal/subscriptions", visibleTo: LEADERSHIP, sortOrder: 140, phase: "billing" },
+  // Billing (invoices + subscriptions) removed per Bruce — billing is
+  // done directly in QuickBooks. The Builder only reads QBO payments.
 
   // Plan (continued — embedded apps).
   { key: "embedded_apps", label: "Apps", href: "/portal/apps", visibleTo: ALL_ROLES, sortOrder: 150, phase: "plan" },

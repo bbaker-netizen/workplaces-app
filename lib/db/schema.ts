@@ -239,25 +239,6 @@ export const deliverableStatusEnum = pgEnum("deliverable_status", [
   "archived",
 ]);
 
-export const invoiceStatusEnum = pgEnum("invoice_status", [
-  "draft",
-  "sent",
-  "paid",
-  "overdue",
-  "void",
-]);
-
-export const subscriptionAssetModelEnum = pgEnum("subscription_asset_model", [
-  "model_a", // transferred at end
-  "model_b", // client-owned from day one
-  "model_c", // Bruce-maintained (default)
-]);
-
-export const subscriptionTransferStatusEnum = pgEnum(
-  "subscription_transfer_status",
-  ["retained", "pending_transfer", "transferred"],
-);
-
 export const embeddedAppAuthModeEnum = pgEnum("embedded_app_auth_mode", [
   "public",
   "token_passthrough",
@@ -418,8 +399,6 @@ export const engagements = pgTable(
     startDate: timestamp("start_date", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     endDate: timestamp("end_date", { withTimezone: true }),
-    stripeCustomerId: text("stripe_customer_id"),
-    stripeSubscriptionId: text("stripe_subscription_id"),
     qboCustomerId: text("qbo_customer_id"),
     qboRealmId: text("qbo_realm_id"),
     /** Lifetime payments received from this client via QuickBooks, in
@@ -1247,46 +1226,6 @@ export const deliverables = pgTable(
 // ---------- Phase 1.18: Invoices + Subscriptions + Embedded Apps ----------
 
 /**
- * `invoices` — Stripe-driven subscription billing for the Model C
- * retainer plus ad-hoc invoices. Stripe is the source of truth;
- * this table mirrors what the portal needs to show. `stripe_invoice_id`
- * is the bridge.
- */
-export const invoices = pgTable(
-  "invoices",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    engagementId: uuid("engagement_id")
-      .notNull()
-      .references(() => engagements.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull().default("stripe"),
-    stripeInvoiceId: text("stripe_invoice_id").unique(),
-    qboInvoiceId: text("qbo_invoice_id"),
-    qboRealmId: text("qbo_realm_id"),
-    number: text("number"),
-    description: text("description"),
-    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
-    currency: text("currency").notNull().default("CAD"),
-    status: invoiceStatusEnum("status").notNull().default("draft"),
-    issuedAt: timestamp("issued_at", { withTimezone: true }),
-    dueAt: timestamp("due_at", { withTimezone: true }),
-    paidAt: timestamp("paid_at", { withTimezone: true }),
-    hostedInvoiceUrl: text("hosted_invoice_url"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    orgIdx: index("invoices_org_idx").on(t.orgId),
-    engagementIdx: index("invoices_engagement_idx").on(t.engagementId),
-    statusIdx: index("invoices_status_idx").on(t.status),
-    qboIdx: uniqueIndex("invoices_qbo_id_idx").on(t.qboInvoiceId),
-  }),
-);
-
-/**
  * `qbo_oauth_tokens` — per-Coach OAuth refresh tokens for QuickBooks
  * Online. Same shape as the (now-removed) adobe_sign_oauth_tokens
  * table. `realm_id` is QBO's identifier for the company file (Bruce's
@@ -1559,103 +1498,6 @@ export const communicationAliases = pgTable(
     engagementIdx: index("communication_aliases_engagement_idx").on(
       t.engagementId,
     ),
-  }),
-);
-
-/**
- * `subscription_assets` — itemized inventory of every external
- * service Bruce maintains under his accounts on the client's behalf
- * (Netlify, Make.com, Resend, Clerk, custom domains). Per the
- * Model C default, Bruce maintains these indefinitely; Models A & B
- * are graduation paths.
- */
-/**
- * Subscription product catalogue — the things Bruce sells as recurring
- * services (Netlify-hosted apps, automation builds, retainers, etc.).
- * Master-org-level; a product can be assigned to many engagements as
- * subscription_assets rows.
- */
-export const subscriptionProducts = pgTable(
-  "subscription_products",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    vendor: text("vendor").notNull().default("Workplaces"),
-    description: text("description"),
-    defaultMonthlyCents: bigint("default_monthly_cents", { mode: "number" })
-      .notNull()
-      .default(0),
-    currency: text("currency").notNull().default("CAD"),
-    category: text("category"),
-    active: boolean("active").notNull().default(true),
-    /** Optional Stripe Price id to use as the default when this product is
-     *  assigned to an engagement and Bruce wants to bill it through Stripe. */
-    defaultStripePriceId: text("default_stripe_price_id"),
-    /** Optional QuickBooks Online Item id (the product/service the
-     *  recurring invoice line points at). */
-    defaultQboItemId: text("default_qbo_item_id"),
-    createdByUserProfileId: uuid("created_by_user_profile_id").references(
-      () => userProfiles.id,
-      { onDelete: "set null" },
-    ),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    orgIdx: index("subscription_products_org_idx").on(t.orgId),
-  }),
-);
-
-export const subscriptionAssets = pgTable(
-  "subscription_assets",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    engagementId: uuid("engagement_id")
-      .notNull()
-      .references(() => engagements.id, { onDelete: "cascade" }),
-    productId: uuid("product_id").references(
-      (): AnyPgColumn => subscriptionProducts.id,
-      { onDelete: "set null" },
-    ),
-    name: text("name").notNull(),
-    vendor: text("vendor").notNull(),
-    monthlyCostCents: bigint("monthly_cost_cents", { mode: "number" })
-      .notNull()
-      .default(0),
-    currency: text("currency").notNull().default("CAD"),
-    paidBy: text("paid_by").notNull().default("workplaces"),
-    model: subscriptionAssetModelEnum("model").notNull().default("model_c"),
-    transferStatus: subscriptionTransferStatusEnum("transfer_status")
-      .notNull()
-      .default("retained"),
-    notes: text("notes"),
-    renewalDate: timestamp("renewal_date", { withTimezone: true }),
-    /** Which billing system, if any, generates the recurring charge for
-     *  this asset. NULL = not billed (e.g. asset Bruce eats internally). */
-    billingProvider: text("billing_provider"),
-    /** QuickBooks Online identifiers when billingProvider='qbo'. */
-    qboInvoiceId: text("qbo_invoice_id"),
-    qboCustomerId: text("qbo_customer_id"),
-    /** Stripe identifiers when billingProvider='stripe'. */
-    stripeSubscriptionId: text("stripe_subscription_id"),
-    stripePriceId: text("stripe_price_id"),
-    /** Free-form URL to the source-of-truth record in the billing system
-     *  (the QBO recurring invoice page, the Stripe subscription page) so
-     *  Bruce can click straight through. */
-    billingExternalUrl: text("billing_external_url"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    orgIdx: index("subscription_assets_org_idx").on(t.orgId),
-    engagementIdx: index("subscription_assets_engagement_idx").on(t.engagementId),
-    transferIdx: index("subscription_assets_transfer_idx").on(t.transferStatus),
   }),
 );
 
@@ -2442,12 +2284,6 @@ export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type NewFormSubmission = typeof formSubmissions.$inferInsert;
 export type Deliverable = typeof deliverables.$inferSelect;
 export type NewDeliverable = typeof deliverables.$inferInsert;
-export type Invoice = typeof invoices.$inferSelect;
-export type NewInvoice = typeof invoices.$inferInsert;
-export type SubscriptionAsset = typeof subscriptionAssets.$inferSelect;
-export type NewSubscriptionAsset = typeof subscriptionAssets.$inferInsert;
-export type SubscriptionProduct = typeof subscriptionProducts.$inferSelect;
-export type NewSubscriptionProduct = typeof subscriptionProducts.$inferInsert;
 export type EmbeddedApp = typeof embeddedApps.$inferSelect;
 export type NewEmbeddedApp = typeof embeddedApps.$inferInsert;
 export type Course = typeof courses.$inferSelect;

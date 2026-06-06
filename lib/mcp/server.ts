@@ -32,7 +32,6 @@ import {
   hires,
   messages,
   projects,
-  subscriptionAssets,
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -234,48 +233,6 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .innerJoin(engagements, eq(engagements.id, projects.engagementId))
           .where(eq(engagements.coachId, Coach.id))
           .orderBy(desc(projects.updatedAt));
-      });
-      return {
-        content: [
-          { type: "text", text: JSON.stringify(rows, null, 2) },
-        ],
-      };
-    },
-  );
-
-  /* ----------------------------- subscriptions inventory ----------------------------- */
-  server.tool(
-    "list_subscription_inventory",
-    "Every subscription/asset Bruce maintains across all engagements (Subscriptions Inventory Live Artifact).",
-    {},
-    async () => {
-      const rows = await withSystemContext(async (tx) => {
-        const [Coach] = await tx
-          .select({ id: coaches.id })
-          .from(coaches)
-          .where(eq(coaches.userProfileId, auth.coachUserProfileId))
-          .limit(1);
-        if (!Coach) return [];
-        return tx
-          .select({
-            id: subscriptionAssets.id,
-            name: subscriptionAssets.name,
-            vendor: subscriptionAssets.vendor,
-            monthlyCostCents: subscriptionAssets.monthlyCostCents,
-            currency: subscriptionAssets.currency,
-            paidBy: subscriptionAssets.paidBy,
-            model: subscriptionAssets.model,
-            transferStatus: subscriptionAssets.transferStatus,
-            renewalDate: subscriptionAssets.renewalDate,
-            engagementId: subscriptionAssets.engagementId,
-            engagementName: engagements.name,
-          })
-          .from(subscriptionAssets)
-          .innerJoin(
-            engagements,
-            eq(engagements.id, subscriptionAssets.engagementId),
-          )
-          .where(eq(engagements.coachId, Coach.id));
       });
       return {
         content: [

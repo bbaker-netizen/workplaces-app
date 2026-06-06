@@ -64,9 +64,9 @@ export default async function QboProfilePage({
           QuickBooks Online
         </h1>
         <p className="font-sans text-sm text-foreground">
-          Connect your QBO company file once. After that, every invoice
-          you create in The Builder defaults to QBO and syncs back here
-          for status updates.
+          Connect your QBO company file once. You bill clients directly in
+          QuickBooks; The Builder reads each client&apos;s payments back
+          and shows them as the &ldquo;Value&rdquo; on your pipeline.
         </p>
         <Link
           href="/business-builder"
@@ -157,12 +157,12 @@ export default async function QboProfilePage({
             it lapses, just reconnect — no data is lost.
           </li>
           <li>
-            For the rare invoices you&apos;d rather run through Stripe, the
-            invoice form has a provider toggle. QBO is the default.
+            The Builder reads from QuickBooks only — it never creates or
+            edits anything in your books. All invoicing stays in QBO.
           </li>
           <li>
-            Status changes you make in QBO (mark paid, void, etc.)
-            mirror back here automatically via webhook.
+            Client values refresh automatically every night, or use
+            &ldquo;Sync now&rdquo; above to update immediately.
           </li>
         </ul>
       </section>
