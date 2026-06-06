@@ -422,6 +422,15 @@ export const engagements = pgTable(
     stripeSubscriptionId: text("stripe_subscription_id"),
     qboCustomerId: text("qbo_customer_id"),
     qboRealmId: text("qbo_realm_id"),
+    /** Lifetime payments received from this client via QuickBooks, in
+     *  cents. Cached by the qbo-value-sync job (nightly + manual button);
+     *  null until first sync or when QBO isn't connected. Drives the
+     *  Pipeline "Value" column for clients — prospects without a QBO
+     *  customer fall back to expected_value_cents. */
+    qboLifetimePaymentsCents: bigint("qbo_lifetime_payments_cents", {
+      mode: "number",
+    }),
+    qboValueSyncedAt: timestamp("qbo_value_synced_at", { withTimezone: true }),
     // Linked Google Drive folder for this engagement (read-only mirror).
     googleDriveFolderId: text("google_drive_folder_id"),
     googleDriveFolderName: text("google_drive_folder_name"),

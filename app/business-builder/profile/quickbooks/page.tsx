@@ -13,6 +13,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { qboOauthTokens } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { QuickBooksConnectButton } from "@/components/qbo/QuickBooksConnectButton";
+import { QuickBooksSyncValuesButton } from "@/components/qbo/QuickBooksSyncValuesButton";
 
 const ERROR_LABELS: Record<string, string> = {
   state_mismatch:
@@ -130,6 +131,21 @@ export default async function QboProfilePage({
           </div>
         )}
       </section>
+
+      {stored && (
+        <section className="border border-tbb-line rounded-md bg-white p-5 space-y-3">
+          <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+            Client value sync
+          </h2>
+          <p className="font-sans text-sm text-foreground">
+            The Pipeline &ldquo;Value&rdquo; column shows each client&apos;s
+            lifetime payments received from QuickBooks. It refreshes
+            automatically every night — or sync it now to update
+            immediately.
+          </p>
+          <QuickBooksSyncValuesButton />
+        </section>
+      )}
 
       <section className="border border-tbb-line rounded-md bg-white p-4 space-y-2">
         <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">

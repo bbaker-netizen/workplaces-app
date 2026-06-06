@@ -603,21 +603,43 @@ function CellByKey({
           />
         </Td>
       );
-    case "value":
+    case "value": {
+      // Prefer the client's actual lifetime payments from QuickBooks;
+      // fall back to the manually-entered expected value for prospects
+      // that aren't QBO customers yet.
+      const hasQbo =
+        prospect.qboLifetimePaymentsCents !== null &&
+        prospect.qboLifetimePaymentsCents !== undefined;
+      const cents = hasQbo
+        ? prospect.qboLifetimePaymentsCents
+        : prospect.expectedValueCents;
       return (
         <Td alignRight>
-          {prospect.expectedValueCents ? (
-            <span className="tabular-nums font-bold text-tbb-navy whitespace-nowrap">
-              ${(prospect.expectedValueCents / 100).toLocaleString("en-CA", {
+          {cents ? (
+            <span
+              className="tabular-nums font-bold text-tbb-navy whitespace-nowrap"
+              title={
+                hasQbo
+                  ? "Lifetime payments received (from QuickBooks)"
+                  : "Expected value (estimate)"
+              }
+            >
+              ${(cents / 100).toLocaleString("en-CA", {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0,
               })}
+              {hasQbo && (
+                <span className="ml-1 align-middle text-[9px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
+                  QB
+                </span>
+              )}
             </span>
           ) : (
             <Dash />
           )}
         </Td>
       );
+    }
     case "next_action":
       return (
         <Td>
