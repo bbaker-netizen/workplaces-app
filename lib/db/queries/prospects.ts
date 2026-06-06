@@ -5,6 +5,7 @@
 
 import { desc, eq } from "drizzle-orm";
 import {
+  engagements,
   orgs,
   prospectActivities,
   prospects,
@@ -16,6 +17,11 @@ import { withSystemContext } from "@/lib/db/tenant";
 
 export type PipelineProspect = Prospect & {
   ownerName: string | null;
+  /** Lifetime payments received (cents) from the converted client's
+   *  QuickBooks customer, when this prospect has become an engagement.
+   *  Null for prospects not yet linked to a QBO customer — the UI falls
+   *  back to expected_value_cents in that case. */
+  qboLifetimePaymentsCents: number | null;
 };
 
 export async function listProspects(): Promise<PipelineProspect[]> {
@@ -32,15 +38,24 @@ export async function listProspects(): Promise<PipelineProspect[]> {
       .select({
         prospect: prospects,
         ownerName: userProfiles.fullName,
+        qboLifetimePaymentsCents: engagements.qboLifetimePaymentsCents,
       })
       .from(prospects)
       .leftJoin(
         userProfiles,
         eq(userProfiles.id, prospects.ownerUserProfileId),
       )
+      .leftJoin(
+        engagements,
+        eq(engagements.id, prospects.convertedEngagementId),
+      )
       .where(eq(prospects.orgId, master.id))
       .orderBy(desc(prospects.updatedAt));
-    return rows.map((r) => ({ ...r.prospect, ownerName: r.ownerName }));
+    return rows.map((r) => ({
+      ...r.prospect,
+      ownerName: r.ownerName,
+      qboLifetimePaymentsCents: r.qboLifetimePaymentsCents,
+    }));
   });
 }
 
@@ -50,16 +65,25 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
       .select({
         prospect: prospects,
         ownerName: userProfiles.fullName,
+        qboLifetimePaymentsCents: engagements.qboLifetimePaymentsCents,
       })
       .from(prospects)
       .leftJoin(
         userProfiles,
         eq(userProfiles.id, prospects.ownerUserProfileId),
       )
+      .leftJoin(
+        engagements,
+        eq(engagements.id, prospects.convertedEngagementId),
+      )
       .where(eq(prospects.id, id))
       .limit(1);
     if (!row) return null;
-    return { ...row.prospect, ownerName: row.ownerName };
+    return {
+      ...row.prospect,
+      ownerName: row.ownerName,
+      qboLifetimePaymentsCents: row.qboLifetimePaymentsCents,
+    };
   });
 }
 

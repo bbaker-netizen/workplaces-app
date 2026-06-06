@@ -286,6 +286,50 @@ export async function createCustomer(
   return data.Customer;
 }
 
+/**
+ * Sum of all payments QuickBooks has recorded against a customer, in
+ * cents — money actually received. Reads the Payment entity (available
+ * under the accounting scope; no Payments-API scope needed), paging
+ * through results and summing TotalAmt. Returns 0 when the customer has
+ * no payments on file.
+ */
+export async function getCustomerTotalPaymentsCents(
+  accessToken: string,
+  realmId: string,
+  customerId: string,
+): Promise<number> {
+  const safe = customerId.replace(/'/g, "''");
+  const pageSize = 100;
+  let start = 1;
+  let totalCents = 0;
+  for (;;) {
+    const query =
+      `select * from Payment where CustomerRef = '${safe}' ` +
+      `startposition ${start} maxresults ${pageSize}`;
+    const resp = await qboFetch(
+      accessToken,
+      realmId,
+      `/query?query=${encodeURIComponent(query)}`,
+    );
+    if (!resp.ok) {
+      throw new Error(
+        `QBO payment query failed (${resp.status}): ${await resp.text()}`,
+      );
+    }
+    const data = (await resp.json()) as {
+      QueryResponse: { Payment?: Array<{ TotalAmt?: number }> };
+    };
+    const payments = data.QueryResponse.Payment ?? [];
+    for (const p of payments) {
+      // Round each payment to cents before summing to avoid float drift.
+      totalCents += Math.round((p.TotalAmt ?? 0) * 100);
+    }
+    if (payments.length < pageSize) break;
+    start += pageSize;
+  }
+  return totalCents;
+}
+
 export type QboInvoiceLine = {
   description: string;
   amount: number; // dollars (not cents)
