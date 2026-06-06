@@ -139,48 +139,63 @@ function ContactEdit({
 
   return (
     <div className="w-full space-y-2">
-      <input
-        value={company}
-        onChange={(e) => setCompany(e.target.value)}
-        placeholder="Company (legal name)"
-        disabled={isPending}
-        className={inputCls}
-      />
+      <label className="block space-y-1">
+        <span className={labelCls}>Company (legal name)</span>
+        <input
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          placeholder="Acme Construction Ltd."
+          disabled={isPending}
+          className={inputCls}
+        />
+      </label>
       {companyIssue && <InlineIssue message={companyIssue.message} />}
-      <input
-        value={contactName}
-        onChange={(e) => setContactName(e.target.value)}
-        placeholder="Contact name (first + last)"
-        disabled={isPending}
-        className={inputCls}
-      />
+      <label className="block space-y-1">
+        <span className={labelCls}>Contact name</span>
+        <input
+          value={contactName}
+          onChange={(e) => setContactName(e.target.value)}
+          placeholder="Jane Smith"
+          disabled={isPending}
+          className={inputCls}
+        />
+      </label>
       {contactIssue && <InlineIssue message={contactIssue.message} />}
-      <input
-        type="email"
-        value={contactEmail}
-        onChange={(e) => setContactEmail(e.target.value)}
-        placeholder="Email"
-        disabled={isPending}
-        className={inputCls}
-      />
+      <label className="block space-y-1">
+        <span className={labelCls}>Email</span>
+        <input
+          type="email"
+          value={contactEmail}
+          onChange={(e) => setContactEmail(e.target.value)}
+          placeholder="jane@acmeconstruction.com"
+          disabled={isPending}
+          className={inputCls}
+        />
+      </label>
       {emailIssue && <InlineIssue message={emailIssue.message} />}
-      <input
-        type="tel"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        placeholder="Phone"
-        disabled={isPending}
-        className={inputCls}
-      />
+      <label className="block space-y-1">
+        <span className={labelCls}>Phone</span>
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+1 780-555-1234"
+          disabled={isPending}
+          className={inputCls}
+        />
+      </label>
       {phoneIssue && <InlineIssue message={phoneIssue.message} />}
-      <input
-        type="url"
-        value={companyWebsite}
-        onChange={(e) => setCompanyWebsite(e.target.value)}
-        placeholder="https://"
-        disabled={isPending}
-        className={inputCls}
-      />
+      <label className="block space-y-1">
+        <span className={labelCls}>Website</span>
+        <input
+          type="url"
+          value={companyWebsite}
+          onChange={(e) => setCompanyWebsite(e.target.value)}
+          placeholder="https://"
+          disabled={isPending}
+          className={inputCls}
+        />
+      </label>
       {error && <p className="text-sm text-tbb-danger">{error}</p>}
       <div className="flex items-center gap-2">
         <button
@@ -264,6 +279,9 @@ function NotesEdit({
 
 const inputCls =
   "w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue";
+
+const labelCls =
+  "text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3";
 
 function InlineIssue({ message }: { message: string }) {
   return (
