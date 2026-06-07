@@ -1,25 +1,25 @@
 /**
  * QuickBooks lifetime-value sync.
  *
- * For every engagement linked to a QBO customer, pull that customer's
- * total payments received and cache it on
- * `engagements.qbo_lifetime_payments_cents`. This is what the Pipeline
- * "Value" column shows for clients (prospects without a QBO customer fall
- * back to their manually-entered expected value).
+ * For every record linked to a QBO customer — a pipeline prospect/client
+ * (the usual path, since billing is done directly in QuickBooks) or an
+ * engagement — pull that customer's total payments received and cache it.
+ * This is what the Pipeline "Value" column shows (records without a QBO
+ * customer fall back to their manually-entered expected value).
  *
  * Runs as a cross-tenant system batch from two callers:
  *   - the nightly cron (`/api/cron/qbo-value-sync`)
  *   - the manual "Sync now" button on the QuickBooks settings page
  *
  * Multi-coach aware: QBO tokens are per coach (`qbo_oauth_tokens`), each
- * tied to a realm (company file). We match each engagement's
- * `qbo_realm_id` to the coach that owns that realm's credentials. When an
- * engagement has a customer id but no realm recorded, and exactly one
- * coach is connected, we fall back to that coach.
+ * tied to a realm (company file). We match each record's `qbo_realm_id`
+ * to the coach that owns that realm's credentials. When a record has a
+ * customer id but no realm recorded, and exactly one coach is connected,
+ * we fall back to that coach.
  */
 
 import { eq, isNotNull } from "drizzle-orm";
-import { engagements, qboOauthTokens } from "@/lib/db/schema";
+import { engagements, prospects, qboOauthTokens } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
   getCustomerTotalPaymentsCents,
@@ -27,11 +27,11 @@ import {
 } from "@/lib/integrations/qbo";
 
 export type QboValueSyncResult = {
-  /** Engagements whose cached value was refreshed. */
+  /** Records whose cached value was refreshed. */
   updated: number;
-  /** Engagements skipped (no usable QBO credentials for their realm). */
+  /** Records skipped (no usable QBO credentials for their realm). */
   skipped: number;
-  /** Engagements that errored mid-fetch (logged, non-fatal). */
+  /** Records that errored mid-fetch (logged, non-fatal). */
   errors: number;
 };
 
@@ -55,13 +55,100 @@ export async function syncQboLifetimeValues(): Promise<QboValueSyncResult> {
       realmToCoach.set(t.realmId, t.coachUserProfileId);
     }
   }
-  // Fallback coach when an engagement has a customer id but no realm and
-  // there's only one connected company file.
+  // Fallback coach when a record has a customer id but no realm recorded
+  // and there's only one connected company file.
   const soleCoach =
     tokenRows.length === 1 ? tokenRows[0].coachUserProfileId : null;
 
-  // 2. Engagements linked to a QBO customer.
-  const linked = await withSystemContext(async (tx) =>
+  // Cache resolved credentials per coach so we refresh each token once.
+  const credsCache = new Map<
+    string,
+    { accessToken: string; realmId: string } | null
+  >();
+  async function credsForRealm(realmId: string | null) {
+    const coach = (realmId && realmToCoach.get(realmId)) || soleCoach;
+    if (!coach) return null;
+    if (!credsCache.has(coach)) {
+      credsCache.set(coach, await getValidQboCredentials(coach));
+    }
+    return credsCache.get(coach) ?? null;
+  }
+
+  const totals = { updated: 0, skipped: 0, errors: 0 };
+
+  // Generic record processor: resolve creds, fetch the customer's total
+  // payments, and write it back via the supplied updater.
+  async function process(
+    records: Array<{
+      id: string;
+      qboCustomerId: string | null;
+      qboRealmId: string | null;
+    }>,
+    write: (id: string, cents: number) => Promise<void>,
+    label: string,
+  ) {
+    for (const rec of records) {
+      if (!rec.qboCustomerId) {
+        totals.skipped++;
+        continue;
+      }
+      const creds = await credsForRealm(rec.qboRealmId);
+      if (!creds) {
+        totals.skipped++;
+        continue;
+      }
+      // A customer id only means something within its own company file.
+      if (rec.qboRealmId && creds.realmId !== rec.qboRealmId) {
+        totals.skipped++;
+        continue;
+      }
+      try {
+        const cents = await getCustomerTotalPaymentsCents(
+          creds.accessToken,
+          creds.realmId,
+          rec.qboCustomerId,
+        );
+        await write(rec.id, cents);
+        totals.updated++;
+      } catch (e) {
+        console.error(
+          `[qbo-value-sync] ${label} ${rec.id} failed:`,
+          e instanceof Error ? e.message : e,
+        );
+        totals.errors++;
+      }
+    }
+  }
+
+  // Prospects/clients linked to a QBO customer (the primary path).
+  const linkedProspects = await withSystemContext(async (tx) =>
+    tx
+      .select({
+        id: prospects.id,
+        qboCustomerId: prospects.qboCustomerId,
+        qboRealmId: prospects.qboRealmId,
+      })
+      .from(prospects)
+      .where(isNotNull(prospects.qboCustomerId)),
+  );
+  await process(
+    linkedProspects,
+    async (id, cents) => {
+      await withSystemContext(async (tx) => {
+        await tx
+          .update(prospects)
+          .set({
+            qboLifetimePaymentsCents: cents,
+            qboValueSyncedAt: new Date(),
+          })
+          .where(eq(prospects.id, id));
+      });
+    },
+    "prospect",
+  );
+
+  // Engagements linked to a QBO customer (legacy path, still supported).
+  const linkedEngagements = await withSystemContext(async (tx) =>
     tx
       .select({
         id: engagements.id,
@@ -71,48 +158,9 @@ export async function syncQboLifetimeValues(): Promise<QboValueSyncResult> {
       .from(engagements)
       .where(isNotNull(engagements.qboCustomerId)),
   );
-
-  // 3. Cache resolved credentials per coach so we refresh each token once.
-  const credsCache = new Map<
-    string,
-    { accessToken: string; realmId: string } | null
-  >();
-  async function credsForEngagement(realmId: string | null) {
-    const coach = (realmId && realmToCoach.get(realmId)) || soleCoach;
-    if (!coach) return null;
-    if (!credsCache.has(coach)) {
-      credsCache.set(coach, await getValidQboCredentials(coach));
-    }
-    return credsCache.get(coach) ?? null;
-  }
-
-  let updated = 0;
-  let skipped = 0;
-  let errors = 0;
-
-  for (const eng of linked) {
-    if (!eng.qboCustomerId) {
-      skipped++;
-      continue;
-    }
-    const creds = await credsForEngagement(eng.qboRealmId);
-    if (!creds) {
-      skipped++;
-      continue;
-    }
-    // A customer id only means something within its own company file.
-    // If the engagement names a realm that doesn't match the credentials
-    // we resolved, skip rather than query the wrong books.
-    if (eng.qboRealmId && creds.realmId !== eng.qboRealmId) {
-      skipped++;
-      continue;
-    }
-    try {
-      const cents = await getCustomerTotalPaymentsCents(
-        creds.accessToken,
-        creds.realmId,
-        eng.qboCustomerId,
-      );
+  await process(
+    linkedEngagements,
+    async (id, cents) => {
       await withSystemContext(async (tx) => {
         await tx
           .update(engagements)
@@ -120,17 +168,11 @@ export async function syncQboLifetimeValues(): Promise<QboValueSyncResult> {
             qboLifetimePaymentsCents: cents,
             qboValueSyncedAt: new Date(),
           })
-          .where(eq(engagements.id, eng.id));
+          .where(eq(engagements.id, id));
       });
-      updated++;
-    } catch (e) {
-      console.error(
-        `[qbo-value-sync] engagement ${eng.id} failed:`,
-        e instanceof Error ? e.message : e,
-      );
-      errors++;
-    }
-  }
+    },
+    "engagement",
+  );
 
-  return { updated, skipped, errors };
+  return totals;
 }

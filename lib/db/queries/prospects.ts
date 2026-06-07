@@ -17,11 +17,11 @@ import { withSystemContext } from "@/lib/db/tenant";
 
 export type PipelineProspect = Prospect & {
   ownerName: string | null;
-  /** Lifetime payments received (cents) from the converted client's
-   *  QuickBooks customer, when this prospect has become an engagement.
-   *  Null for prospects not yet linked to a QBO customer — the UI falls
-   *  back to expected_value_cents in that case. */
-  qboLifetimePaymentsCents: number | null;
+  /** Lifetime payments (cents) from the converted engagement's QBO
+   *  customer, if any. The prospect's own `qboLifetimePaymentsCents`
+   *  (a direct link) takes precedence; this is the fallback for clients
+   *  linked via an engagement instead. */
+  engagementQboLifetimePaymentsCents: number | null;
 };
 
 export async function listProspects(): Promise<PipelineProspect[]> {
@@ -38,7 +38,8 @@ export async function listProspects(): Promise<PipelineProspect[]> {
       .select({
         prospect: prospects,
         ownerName: userProfiles.fullName,
-        qboLifetimePaymentsCents: engagements.qboLifetimePaymentsCents,
+        engagementQboLifetimePaymentsCents:
+          engagements.qboLifetimePaymentsCents,
       })
       .from(prospects)
       .leftJoin(
@@ -54,7 +55,7 @@ export async function listProspects(): Promise<PipelineProspect[]> {
     return rows.map((r) => ({
       ...r.prospect,
       ownerName: r.ownerName,
-      qboLifetimePaymentsCents: r.qboLifetimePaymentsCents,
+      engagementQboLifetimePaymentsCents: r.engagementQboLifetimePaymentsCents,
     }));
   });
 }
@@ -65,7 +66,8 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
       .select({
         prospect: prospects,
         ownerName: userProfiles.fullName,
-        qboLifetimePaymentsCents: engagements.qboLifetimePaymentsCents,
+        engagementQboLifetimePaymentsCents:
+          engagements.qboLifetimePaymentsCents,
       })
       .from(prospects)
       .leftJoin(
@@ -82,7 +84,8 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
     return {
       ...row.prospect,
       ownerName: row.ownerName,
-      qboLifetimePaymentsCents: row.qboLifetimePaymentsCents,
+      engagementQboLifetimePaymentsCents:
+        row.engagementQboLifetimePaymentsCents,
     };
   });
 }

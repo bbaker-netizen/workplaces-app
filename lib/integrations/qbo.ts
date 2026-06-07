@@ -264,6 +264,42 @@ export async function findCustomerByEmail(
 }
 
 /**
+ * List active QuickBooks customers (id, display name, email) for the
+ * "Link QuickBooks customer" picker. Paged; returns all active customers.
+ */
+export async function listCustomers(
+  accessToken: string,
+  realmId: string,
+): Promise<QboCustomer[]> {
+  const pageSize = 100;
+  let start = 1;
+  const out: QboCustomer[] = [];
+  for (;;) {
+    const query =
+      `select Id, DisplayName, PrimaryEmailAddr from Customer ` +
+      `where Active = true startposition ${start} maxresults ${pageSize}`;
+    const resp = await qboFetch(
+      accessToken,
+      realmId,
+      `/query?query=${encodeURIComponent(query)}`,
+    );
+    if (!resp.ok) {
+      throw new Error(
+        `QBO customer list failed (${resp.status}): ${await resp.text()}`,
+      );
+    }
+    const data = (await resp.json()) as {
+      QueryResponse: { Customer?: QboCustomer[] };
+    };
+    const batch = data.QueryResponse.Customer ?? [];
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+    start += pageSize;
+  }
+  return out;
+}
+
+/**
  * Sum of all payments QuickBooks has recorded against a customer, in
  * cents — money actually received. Reads the Payment entity (available
  * under the accounting scope; no Payments-API scope needed), paging
