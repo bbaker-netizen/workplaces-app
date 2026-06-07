@@ -604,15 +604,15 @@ function CellByKey({
         </Td>
       );
     case "value": {
-      // Prefer the client's actual lifetime payments from QuickBooks;
-      // fall back to the manually-entered expected value for prospects
-      // that aren't QBO customers yet.
-      const hasQbo =
-        prospect.qboLifetimePaymentsCents !== null &&
-        prospect.qboLifetimePaymentsCents !== undefined;
-      const cents = hasQbo
-        ? prospect.qboLifetimePaymentsCents
-        : prospect.expectedValueCents;
+      // Prefer the client's actual lifetime payments from QuickBooks —
+      // a direct customer link on the prospect, else a link via the
+      // converted engagement — and fall back to the manually-entered
+      // expected value for prospects not yet linked to a QBO customer.
+      const qboCents =
+        prospect.qboLifetimePaymentsCents ??
+        prospect.engagementQboLifetimePaymentsCents;
+      const hasQbo = qboCents !== null && qboCents !== undefined;
+      const cents = hasQbo ? qboCents : prospect.expectedValueCents;
       return (
         <Td alignRight>
           {cents ? (

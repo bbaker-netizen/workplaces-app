@@ -1814,6 +1814,17 @@ export const prospects = pgTable(
       { onDelete: "set null" },
     ),
     notes: text("notes"),
+    /** Link to this client's QuickBooks customer, set via the "Link
+     *  QuickBooks customer" picker on the prospect detail page. Drives
+     *  the pipeline "Value" column — qbo_lifetime_payments_cents is the
+     *  cached total payments received, refreshed by qbo-value-sync. */
+    qboCustomerId: text("qbo_customer_id"),
+    qboCustomerName: text("qbo_customer_name"),
+    qboRealmId: text("qbo_realm_id"),
+    qboLifetimePaymentsCents: bigint("qbo_lifetime_payments_cents", {
+      mode: "number",
+    }),
+    qboValueSyncedAt: timestamp("qbo_value_synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

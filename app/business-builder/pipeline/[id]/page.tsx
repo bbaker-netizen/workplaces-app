@@ -33,6 +33,7 @@ import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
+import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
 import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
 import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButton";
@@ -284,6 +285,15 @@ export default async function ProspectDetailPage({
             nextActionDate={prospect.nextActionDate}
             nextActionNote={prospect.nextActionNote}
             lastContactAt={prospect.lastContactAt}
+          />
+
+          {/* QuickBooks customer link — drives the pipeline Value */}
+          <ProspectQboCustomerPicker
+            prospectId={prospect.id}
+            customerId={prospect.qboCustomerId}
+            customerName={prospect.qboCustomerName}
+            lifetimePaymentsCents={prospect.qboLifetimePaymentsCents}
+            syncedAt={prospect.qboValueSyncedAt?.toISOString() ?? null}
           />
 
           {/* Notes */}
