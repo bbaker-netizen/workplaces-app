@@ -244,7 +244,9 @@ export default async function ProspectDetailPage({
                 is signed (or whenever Bruce wants to formalise). Carries
                 program type, pricing tier, monthly fee, and start date
                 across so the engagement form is pre-filled. */}
-            {!prospect.convertedEngagementId && (
+            {!prospect.convertedEngagementId &&
+              prospect.status !== "onboarded" &&
+              prospect.status !== "lost" && (
               <div className="border-t border-tbb-line-soft pt-4 space-y-2">
                 <p className="text-xs text-tbb-ink-3">
                   Ready to formalise this prospect into a paying
