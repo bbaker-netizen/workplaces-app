@@ -71,8 +71,7 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 - Soul File search (/business-builder/soul-search) — search across every client's Soul File using AI.
 
 **04 Bill**
-- Create invoice (/business-builder/invoices/new) — billing through QuickBooks Online primarily.
-- Subscriptions (/business-builder/subscriptions) — every external service Bruce maintains on behalf of clients (Netlify apps, Make.com, custom domains). Model C = Bruce keeps these running indefinitely; client pays a small monthly retainer.
+- Billing happens directly in QuickBooks Online, not in The Builder. Connect QBO at /business-builder/profile/quickbooks. The Builder reads each client's lifetime payments from QuickBooks and shows them as the "Value" on the pipeline; it does not create invoices or track subscriptions itself.
 
 **05 Practice — your tools and connections**
 - New engagement (/business-builder/engagements/new) — turn a signed prospect into a client. Sets up their private workspace.

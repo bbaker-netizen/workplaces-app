@@ -68,8 +68,8 @@ const PHASES: Phase[] = [
   {
     number: "05",
     label: "Bill & renew",
-    blurb: "Invoice. Subscription run-rate. Renewal proposal at year-end.",
-    href: "/business-builder/subscriptions",
+    blurb: "Billing runs in QuickBooks. Renewal proposal at year-end.",
+    href: "/business-builder/profile/quickbooks",
     icon: <RefreshCw className="w-5 h-5" aria-hidden />,
     accent: "text-tbb-navy",
   },

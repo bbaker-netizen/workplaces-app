@@ -15,12 +15,10 @@ import {
   CalendarClock,
   CheckSquare,
   Compass,
-  CreditCard,
   FileText,
   Filter,
   Folder,
   GraduationCap,
-  HeartPulse,
   LineChart,
   MessagesSquare,
   PenSquare,
@@ -162,26 +160,6 @@ export default async function ModulesGuidePage() {
         replaces={`Drive folders with TTI reports + interview transcripts + notes scattered across Monday. The Builder rolls candidate + assessment + interview + offer into a single per-candidate record.`}
         link="/business-builder/hiring"
         linkLabel="All hires in flight"
-      />
-
-      <ModuleCard
-        icon={<CreditCard />}
-        name="Invoices"
-        what="Every invoice you've sent the client, mirrored from QuickBooks Online (primary) or Stripe (occasional). The portal creates the invoice in QBO, QBO handles payment processing, the webhook reflects paid status back here."
-        when="When billing the client — monthly retainer (Model C) or one-off project fee."
-        replaces={`Creating invoices directly in QBO. You still can — but creating them from the portal links them to the engagement and surfaces paid status to the client automatically.`}
-        link="/business-builder/invoices/new"
-        linkLabel="Create a new invoice"
-      />
-
-      <ModuleCard
-        icon={<HeartPulse />}
-        name="Subscriptions"
-        what="The inventory of external services you maintain on the client's behalf (Netlify apps, Make.com scenarios, Resend, Clerk, custom domains). Each item: name, vendor, monthly cost, who pays, payment model (Model A / B / C), transfer status."
-        when="When onboarding a client on Model C. When a graduation conversation surfaces (Model A or B transfer). When renewal is approaching and you need the run-rate of services."
-        replaces={`The mental inventory you currently carry. Now itemized, costed, and visible to the client.`}
-        link="/business-builder/subscriptions"
-        linkLabel="All subscription assets"
       />
 
       <ModuleCard

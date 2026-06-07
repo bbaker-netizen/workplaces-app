@@ -27,13 +27,10 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckSquare,
-  CreditCard,
-  DollarSign,
   Eye,
   FileText,
   Filter,
   HelpCircle,
-  HeartPulse,
   Hammer,
   Inbox,
   Link as LinkIcon,
@@ -123,16 +120,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       { href: "/business-builder/projects", label: "Projects", icon: Briefcase },
       // Goals removed per Bruce — was redundant with Projects in practice.
       { href: "/business-builder/soul-search", label: "Soul File search", icon: Search },
-    ],
-  },
-  {
-    key: "bill",
-    label: "Bill",
-    caption: "Invoice and protect margin",
-    icon: DollarSign,
-    items: [
-      { href: "/business-builder/invoices/new", label: "Create invoice", icon: CreditCard, tourId: "Coach-invoice" },
-      { href: "/business-builder/subscriptions", label: "Subscriptions", icon: HeartPulse },
     ],
   },
   {

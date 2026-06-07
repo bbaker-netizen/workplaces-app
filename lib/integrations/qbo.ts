@@ -263,29 +263,6 @@ export async function findCustomerByEmail(
   return data.QueryResponse.Customer?.[0] ?? null;
 }
 
-export async function createCustomer(
-  accessToken: string,
-  realmId: string,
-  input: { displayName: string; email?: string | null; companyName?: string | null },
-): Promise<QboCustomer> {
-  const body = {
-    DisplayName: input.displayName,
-    CompanyName: input.companyName ?? input.displayName,
-    PrimaryEmailAddr: input.email ? { Address: input.email } : undefined,
-  };
-  const resp = await qboFetch(accessToken, realmId, "/customer", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok) {
-    throw new Error(
-      `QBO customer create failed (${resp.status}): ${await resp.text()}`,
-    );
-  }
-  const data = (await resp.json()) as { Customer: QboCustomer };
-  return data.Customer;
-}
-
 /**
  * Sum of all payments QuickBooks has recorded against a customer, in
  * cents — money actually received. Reads the Payment entity (available
@@ -328,96 +305,6 @@ export async function getCustomerTotalPaymentsCents(
     start += pageSize;
   }
   return totalCents;
-}
-
-export type QboInvoiceLine = {
-  description: string;
-  amount: number; // dollars (not cents)
-  // Reference to a QBO Item (service / product). Required by QBO.
-  itemRef?: string;
-};
-
-export type QboInvoiceCreateInput = {
-  customerId: string;
-  lines: QboInvoiceLine[];
-  dueDate?: string; // ISO date YYYY-MM-DD
-  customerMemo?: string;
-};
-
-export type QboInvoiceResult = {
-  Id: string;
-  DocNumber?: string;
-  TxnDate: string;
-  TotalAmt: number;
-  Balance: number;
-  DueDate?: string;
-  InvoiceLink?: string;
-};
-
-/**
- * Create an invoice. The line itemRef defaults to QBO's universal
- * "Services" item if the caller doesn't provide one — Bruce can
- * customize later via the Items tab in QBO.
- */
-export async function createInvoice(
-  accessToken: string,
-  realmId: string,
-  input: QboInvoiceCreateInput,
-): Promise<QboInvoiceResult> {
-  const body = {
-    CustomerRef: { value: input.customerId },
-    Line: input.lines.map((line) => ({
-      Amount: line.amount,
-      DetailType: "SalesItemLineDetail",
-      Description: line.description,
-      SalesItemLineDetail: {
-        ItemRef: { value: line.itemRef ?? "1" },
-      },
-    })),
-    ...(input.dueDate ? { DueDate: input.dueDate } : {}),
-    ...(input.customerMemo
-      ? { CustomerMemo: { value: input.customerMemo } }
-      : {}),
-  };
-
-  const resp = await qboFetch(accessToken, realmId, "/invoice", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok) {
-    throw new Error(
-      `QBO invoice create failed (${resp.status}): ${await resp.text()}`,
-    );
-  }
-  const data = (await resp.json()) as { Invoice: QboInvoiceResult };
-  return data.Invoice;
-}
-
-export async function getInvoice(
-  accessToken: string,
-  realmId: string,
-  invoiceId: string,
-): Promise<QboInvoiceResult> {
-  const resp = await qboFetch(accessToken, realmId, `/invoice/${invoiceId}`);
-  if (!resp.ok) {
-    throw new Error(
-      `QBO invoice fetch failed (${resp.status}): ${await resp.text()}`,
-    );
-  }
-  const data = (await resp.json()) as { Invoice: QboInvoiceResult };
-  return data.Invoice;
-}
-
-/**
- * Build the public-facing payment link for a QBO invoice. QBO doesn't
- * return one in the API; you construct it from the realm + invoice id.
- */
-export function qboInvoicePaymentLink(
-  realmId: string,
-  invoiceId: string,
-): string {
-  const env = process.env.QBO_ENVIRONMENT === "sandbox" ? "sandbox" : "qbo";
-  return `https://${env}.intuit.com/Account/${realmId}/SendInvoice?txnId=${invoiceId}`;
 }
 
 /* ----------------------------- helpers ----------------------------- */

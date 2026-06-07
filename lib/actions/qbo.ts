@@ -7,8 +7,9 @@
  *   - `startQboAuthorize()` — generates a CSRF state, sets a cookie,
  *     and returns the Intuit authorize URL the Coach should be sent to.
  *   - `disconnectQbo()` — revoke + drop stored tokens.
- *   - `createQboInvoiceForEngagement(...)` — provider-aware wrapper
- *     in lib/actions/invoices.ts uses this.
+ *
+ * Billing creation was removed — The Builder reads QBO payments only
+ * (see lib/qbo/value-sync.ts). It never writes to QuickBooks.
  */
 
 import { randomBytes } from "node:crypto";

@@ -26,11 +26,9 @@ import {
   CheckSquare,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
   FileText,
   Folder,
   GraduationCap,
-  HeartPulse,
   LineChart,
   MessagesSquare,
   PenSquare,
@@ -69,8 +67,6 @@ const ICON_FOR_MODULE: Record<PortalModuleKey, React.ComponentType<{ className?:
   forms: PenSquare,
   team: Users,
   hiring: UserCheck,
-  invoices: CreditCard,
-  subscriptions: HeartPulse,
   embedded_apps: Puzzle,
 };
 

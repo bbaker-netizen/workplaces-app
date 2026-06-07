@@ -23,7 +23,6 @@ import {
   FileText,
   Filter,
   Folder,
-  HeartPulse,
   MessagesSquare,
   PenSquare,
   Sparkles,
@@ -411,65 +410,27 @@ export default async function CoachWelcomePage() {
         </Step>
       </Phase>
 
-      <Phase number="06" label="Bill" caption="Invoice through QuickBooks Online">
+      <Phase number="06" label="Bill" caption="Billing lives in QuickBooks">
         <Step
           icon={<CreditCard className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Create QBO invoices from the portal"
-          href="/business-builder/invoices/new"
-          hrefLabel="Create an invoice"
+          title="Bill in QuickBooks; The Builder reads it back"
+          href="/business-builder/profile/quickbooks"
+          hrefLabel="Connect QuickBooks"
         >
           <p>
-            Connect QuickBooks once at{" "}
+            Billing happens directly in QuickBooks Online — you invoice
+            clients there as you always have. Connect QBO once at{" "}
             <Link href="/business-builder/profile/quickbooks" className="text-tbb-blue underline">
               /business-builder/profile/quickbooks
-            </Link>
-            . After that, every invoice you create in the portal posts
-            to your QBO company file — QBO does the heavy lifting on
-            tax, payment processing, reminders, and accounting entries.
-          </p>
-          <p className="mt-2">
-            Each invoice form has a provider toggle: QBO by default, or
-            Stripe for the rare cases. Webhook events from QBO mirror
-            paid / voided status back into the client portal
-            automatically.
-          </p>
-        </Step>
-
-        <Step
-          icon={<HeartPulse className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Track subscriptions and link them to billing"
-          href="/business-builder/subscriptions"
-          hrefLabel="Open Subscriptions"
-        >
-          <p>
-            The Workplaces default billing model is Model C — Productized
-            Retention. You maintain client-facing infrastructure
-            (Netlify apps, Make.com, Resend, Clerk, custom domains)
-            under your accounts indefinitely, even after the coaching
-            engagement ends.
-          </p>
-          <p className="mt-2">
-            Subscriptions inventories each external service per
-            engagement, who pays for it, what it costs per month, and
-            the transfer status if/when the client takes ownership. The
-            cross-client view is at{" "}
-            <Link href="/business-builder/subscriptions" className="text-tbb-blue underline">
-              /business-builder/subscriptions
-            </Link>
-            ; the product catalogue (the things you sell as a subscription
-            — apps, retainers, automation builds) is at{" "}
-            <Link href="/business-builder/subscriptions/catalogue" className="text-tbb-blue underline">
-              /business-builder/subscriptions/catalogue
             </Link>
             .
           </p>
           <p className="mt-2">
-            On each subscription row, hit the link icon to point it at
-            the source-of-truth charge — QuickBooks (recurring invoice id
-            + customer id) or Stripe (subscription id + price id), plus a
-            direct URL. A &quot;Billed · QuickBooks&quot; or &quot;Billed
-            · Stripe&quot; pill appears with a click-through to the
-            invoice / subscription page.
+            The Builder doesn&apos;t create invoices. Instead it reads each
+            client&apos;s lifetime payments from QuickBooks and shows them
+            as the &quot;Value&quot; on your pipeline — refreshed nightly,
+            or on demand via &quot;Sync now&quot; on the QuickBooks
+            settings page.
           </p>
         </Step>
       </Phase>
@@ -522,16 +483,6 @@ export default async function CoachWelcomePage() {
             icon={<FileText className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
-            href="/business-builder/invoices/new"
-            label="Invoices — QBO billing"
-            icon={<CreditCard className="w-4 h-4 text-tbb-blue" aria-hidden />}
-          />
-          <CheatSheetItem
-            href="/business-builder/subscriptions"
-            label="Subscriptions — Model C inventory"
-            icon={<HeartPulse className="w-4 h-4 text-tbb-blue" aria-hidden />}
-          />
-          <CheatSheetItem
             href="/business-builder/templates"
             label="Templates & signatures — emails, contract sig, email sig"
             icon={<PenSquare className="w-4 h-4 text-tbb-blue" aria-hidden />}
@@ -582,8 +533,8 @@ export default async function CoachWelcomePage() {
           </li>
           <li>
             <strong className="text-tbb-navy">QuickBooks Online</strong>{" "}
-            — accounting, tax, and payment processing. We post invoices
-            to QBO; QBO does the rest.
+            — you invoice clients directly in QBO. The Builder reads each
+            client&apos;s payments back and shows them as pipeline Value.
           </li>
         </ul>
       </section>
