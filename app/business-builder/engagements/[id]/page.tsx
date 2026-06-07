@@ -19,7 +19,7 @@
 
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -34,10 +34,12 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
   deliverables,
+  embeddedApps,
   engagements,
   goals,
   portalModuleAssignments,
   projects,
+  resources,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ALL_MODULES } from "@/lib/modules";
@@ -46,6 +48,11 @@ import {
   PortalModuleManager,
   type ModuleState,
 } from "@/components/business-builder/PortalModuleManager";
+import {
+  EmbeddedAppManager,
+  type EngagementApp,
+  type NetlifyProjectOption,
+} from "@/components/business-builder/EmbeddedAppManager";
 
 export default async function EngagementDetailPage({
   params,
@@ -68,8 +75,15 @@ export default async function EngagementDetailPage({
       .limit(1);
     if (!eng) return null;
 
-    const [goalRows, projectRows, actionRows, deliverableRows, moduleRows] =
-      await Promise.all([
+    const [
+      goalRows,
+      projectRows,
+      actionRows,
+      deliverableRows,
+      moduleRows,
+      appRows,
+      netlifyRows,
+    ] = await Promise.all([
         tx
           .select()
           .from(goals)
@@ -104,6 +118,28 @@ export default async function EngagementDetailPage({
           })
           .from(portalModuleAssignments)
           .where(eq(portalModuleAssignments.engagementId, id)),
+        tx
+          .select({
+            id: embeddedApps.id,
+            displayName: embeddedApps.displayName,
+            appUrl: embeddedApps.appUrl,
+            authMode: embeddedApps.authMode,
+          })
+          .from(embeddedApps)
+          .where(eq(embeddedApps.engagementId, id)),
+        tx
+          .select({
+            sourceId: resources.sourceId,
+            title: resources.title,
+            url: resources.url,
+          })
+          .from(resources)
+          .where(
+            and(
+              eq(resources.orgId, profile.orgId),
+              eq(resources.source, "netlify"),
+            ),
+          ),
       ]);
     return {
       eng,
@@ -112,6 +148,8 @@ export default async function EngagementDetailPage({
       actions: actionRows,
       deliverables: deliverableRows,
       moduleAssignments: moduleRows,
+      apps: appRows,
+      netlifyResources: netlifyRows,
     };
   });
 
@@ -151,6 +189,16 @@ export default async function EngagementDetailPage({
     label: m.label,
     enabled: moduleEnabled.get(m.key) ?? true,
   }));
+
+  const apps: EngagementApp[] = data.apps.map((a) => ({
+    id: a.id,
+    displayName: a.displayName,
+    appUrl: a.appUrl,
+    authMode: a.authMode,
+  }));
+  const netlifyProjects: NetlifyProjectOption[] = data.netlifyResources
+    .filter((r) => r.sourceId && r.url)
+    .map((r) => ({ id: r.sourceId!, name: r.title, url: r.url! }));
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
@@ -214,6 +262,28 @@ export default async function EngagementDetailPage({
             is on by default; turn off anything they don&apos;t need.
           </p>
           <PortalModuleManager engagementId={id} modules={moduleStates} />
+
+          <div className="border-t border-tbb-line-soft pt-4 space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Apps in this client&apos;s portal
+            </p>
+            <p className="text-xs text-tbb-ink-3 max-w-2xl">
+              Surface one of your Netlify projects as an embedded widget in
+              this client&apos;s portal. Sync projects first under{" "}
+              <Link
+                href="/business-builder/library"
+                className="text-tbb-blue underline underline-offset-2"
+              >
+                Tools &amp; tutorials
+              </Link>
+              .
+            </p>
+            <EmbeddedAppManager
+              engagementId={id}
+              apps={apps}
+              netlifyProjects={netlifyProjects}
+            />
+          </div>
         </div>
       </section>
 

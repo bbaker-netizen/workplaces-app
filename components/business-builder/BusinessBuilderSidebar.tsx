@@ -130,7 +130,8 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     items: [
       // QBO + Google Calendar links live in Settings → Integrations
       // now — Bruce flagged the duplication, removed from here.
-      { href: "/business-builder/engagements/new", label: "New engagement", icon: Sparkles, tourId: "Coach-new-engagement" },
+      // "New engagement" link removed — you start a client from their
+      // prospect's "Convert to engagement" button (one obvious path).
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
       { href: "/business-builder/library", label: "Tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
