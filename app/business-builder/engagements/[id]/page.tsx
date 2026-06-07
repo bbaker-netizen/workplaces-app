@@ -27,6 +27,7 @@ import {
   Diamond,
   FileText,
   Flag,
+  LayoutGrid,
   Workflow,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -35,10 +36,16 @@ import {
   deliverables,
   engagements,
   goals,
+  portalModuleAssignments,
   projects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { ALL_MODULES } from "@/lib/modules";
 import { QuickAddDeliverableButton } from "@/components/deliverables/QuickAddDeliverableButton";
+import {
+  PortalModuleManager,
+  type ModuleState,
+} from "@/components/business-builder/PortalModuleManager";
 
 export default async function EngagementDetailPage({
   params,
@@ -61,7 +68,7 @@ export default async function EngagementDetailPage({
       .limit(1);
     if (!eng) return null;
 
-    const [goalRows, projectRows, actionRows, deliverableRows] =
+    const [goalRows, projectRows, actionRows, deliverableRows, moduleRows] =
       await Promise.all([
         tx
           .select()
@@ -90,6 +97,13 @@ export default async function EngagementDetailPage({
           .from(deliverables)
           .where(eq(deliverables.engagementId, id))
           .orderBy(asc(deliverables.targetDate), asc(deliverables.createdAt)),
+        tx
+          .select({
+            module: portalModuleAssignments.module,
+            isEnabled: portalModuleAssignments.isEnabled,
+          })
+          .from(portalModuleAssignments)
+          .where(eq(portalModuleAssignments.engagementId, id)),
       ]);
     return {
       eng,
@@ -97,6 +111,7 @@ export default async function EngagementDetailPage({
       projects: projectRows,
       actions: actionRows,
       deliverables: deliverableRows,
+      moduleAssignments: moduleRows,
     };
   });
 
@@ -124,6 +139,18 @@ export default async function EngagementDetailPage({
   // items not tied to any project.
   void projectsByGoal;
   const orphanActions = actionsByProject.get("unassigned") ?? [];
+
+  // Client-portal module states: each module is ON by default; an
+  // assignment row is what turns one off. Drives the manager below.
+  const moduleEnabled = new Map<string, boolean>();
+  for (const a of data.moduleAssignments) {
+    moduleEnabled.set(a.module, a.isEnabled);
+  }
+  const moduleStates: ModuleState[] = ALL_MODULES.map((m) => ({
+    key: m.key,
+    label: m.label,
+    enabled: moduleEnabled.get(m.key) ?? true,
+  }));
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
@@ -172,6 +199,23 @@ export default async function EngagementDetailPage({
           </Link>
         </div>
       </header>
+
+      {/* Client portal manager — which modules this client sees. */}
+      <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
+        <header className="px-5 py-3 border-b border-tbb-line bg-tbb-cream-50 flex items-center gap-2">
+          <LayoutGrid className="w-4 h-4 text-tbb-blue" aria-hidden />
+          <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            Client portal — what this client sees
+          </p>
+        </header>
+        <div className="p-5 space-y-3">
+          <p className="text-xs text-tbb-ink-3 max-w-2xl">
+            Toggle which modules appear in this client&apos;s portal. Everything
+            is on by default; turn off anything they don&apos;t need.
+          </p>
+          <PortalModuleManager engagementId={id} modules={moduleStates} />
+        </div>
+      </section>
 
       {data.projects.length === 0 && data.actions.length === 0 && (
         <div className="border border-dashed border-tbb-line rounded-lg bg-white p-10 text-center space-y-2">
