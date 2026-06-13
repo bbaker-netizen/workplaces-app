@@ -108,7 +108,7 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     dotHex: "#2E8B57", // success green
   },
   onboarded: {
-    label: "Onboarded",
+    label: "Active engagement",
     caption: "Live and building",
     chipClass: "bg-tbb-success text-white",
     textClass: "text-tbb-success",

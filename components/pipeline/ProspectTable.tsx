@@ -309,7 +309,7 @@ export function ProspectTable({
           className="bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         >
           <option value="prospects">Prospects (default)</option>
-          <option value="clients">Active clients</option>
+          <option value="clients">Active engagements</option>
           <option value="all">All stages</option>
           {Object.entries(STAGE_STYLES).map(([k, v]) => (
             <option key={k} value={k}>
