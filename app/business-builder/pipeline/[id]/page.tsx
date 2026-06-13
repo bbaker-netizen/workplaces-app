@@ -34,6 +34,7 @@ import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivity
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
+import { ActivateEngagementButton } from "@/components/pipeline/ActivateEngagementButton";
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
 import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
 import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButton";
@@ -250,17 +251,12 @@ export default async function ProspectDetailPage({
               <div className="border-t border-tbb-line-soft pt-4 space-y-2">
                 <p className="text-xs text-tbb-ink-3">
                   Ready to formalise this prospect into a paying
-                  engagement? We&apos;ll carry every field you&apos;ve
-                  captured — contact, program, tier, fee, start date —
-                  into the engagement form so you confirm rather than
-                  retype.
+                  engagement? We&apos;ll create their engagement + portal
+                  so you can prepare it now. No email is sent — you invite
+                  the client to their portal separately when you&apos;re
+                  ready.
                 </p>
-                <a
-                  href={`/business-builder/engagements/new?prospectId=${prospect.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
-                >
-                  Convert to active engagement →
-                </a>
+                <ActivateEngagementButton prospectId={prospect.id} />
               </div>
             )}
             {prospect.convertedEngagementId && (
