@@ -35,6 +35,7 @@ import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeS
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
 import { ActivateEngagementButton } from "@/components/pipeline/ActivateEngagementButton";
+import { ResetEngagementButton } from "@/components/pipeline/ResetEngagementButton";
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
 import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
 import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButton";
@@ -270,6 +271,7 @@ export default async function ProspectDetailPage({
                 >
                   Open engagement workspace →
                 </a>
+                <ResetEngagementButton prospectId={prospect.id} />
               </div>
             )}
           </section>

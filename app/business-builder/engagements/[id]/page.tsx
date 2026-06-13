@@ -37,8 +37,10 @@ import {
   embeddedApps,
   engagements,
   goals,
+  orgs,
   portalModuleAssignments,
   projects,
+  prospects,
   resources,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -53,6 +55,7 @@ import {
   type EngagementApp,
   type NetlifyProjectOption,
 } from "@/components/business-builder/EmbeddedAppManager";
+import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 
 export default async function EngagementDetailPage({
   params,
@@ -83,6 +86,8 @@ export default async function EngagementDetailPage({
       moduleRows,
       appRows,
       netlifyRows,
+      orgRow,
+      prospectRow,
     ] = await Promise.all([
         tx
           .select()
@@ -140,6 +145,16 @@ export default async function EngagementDetailPage({
               eq(resources.source, "netlify"),
             ),
           ),
+        tx
+          .select({ clerkOrgId: orgs.clerkOrgId })
+          .from(orgs)
+          .where(eq(orgs.id, eng.orgId))
+          .limit(1),
+        tx
+          .select({ contactEmail: prospects.contactEmail })
+          .from(prospects)
+          .where(eq(prospects.convertedEngagementId, id))
+          .limit(1),
       ]);
     return {
       eng,
@@ -150,6 +165,8 @@ export default async function EngagementDetailPage({
       moduleAssignments: moduleRows,
       apps: appRows,
       netlifyResources: netlifyRows,
+      clerkOrgId: orgRow[0]?.clerkOrgId ?? null,
+      clientEmail: prospectRow[0]?.contactEmail ?? null,
     };
   });
 
@@ -199,6 +216,12 @@ export default async function EngagementDetailPage({
   const netlifyProjects: NetlifyProjectOption[] = data.netlifyResources
     .filter((r) => r.sourceId && r.url)
     .map((r) => ({ id: r.sourceId!, name: r.title, url: r.url! }));
+
+  // The client has a real Clerk org (been invited) unless the placeholder
+  // is still in place. Null org is treated as "already invited" (hide).
+  const clientInvited = data.clerkOrgId
+    ? !data.clerkOrgId.startsWith("pending:")
+    : true;
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
@@ -256,7 +279,22 @@ export default async function EngagementDetailPage({
             Client portal — what this client sees
           </p>
         </header>
-        <div className="p-5 space-y-3">
+        <div className="p-5 space-y-4">
+          <div className="border border-tbb-line-soft rounded-md bg-tbb-cream-50 p-3 space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Client access
+            </p>
+            <p className="text-xs text-tbb-ink-3 max-w-2xl">
+              {clientInvited
+                ? "This client has been invited and can log into their portal."
+                : "Prepare the portal below, then invite the client when you're ready — this creates their login and emails them."}
+            </p>
+            <InviteClientButton
+              engagementId={id}
+              invited={clientInvited}
+              clientEmail={data.clientEmail}
+            />
+          </div>
           <p className="text-xs text-tbb-ink-3 max-w-2xl">
             Toggle which modules appear in this client&apos;s portal. Everything
             is on by default; turn off anything they don&apos;t need.
