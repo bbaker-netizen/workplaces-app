@@ -178,3 +178,66 @@ export async function activateAllSignedProspects(): Promise<
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/**
+ * Reset a prospect's engagement link — for clients set up before the
+ * Clerk Production cutover (e.g. Amardeep) whose portal is broken.
+ * Clears the converted link, sends the prospect back to "Contract signed"
+ * so the Convert button reappears, and removes the orphaned engagement +
+ * its client org so a clean re-activation has nothing to collide with.
+ * DESTRUCTIVE: deletes the old engagement's workspace data.
+ */
+export async function resetProspectEngagement(
+  prospectId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      const [p] = await tx
+        .select({
+          id: prospects.id,
+          convertedEngagementId: prospects.convertedEngagementId,
+        })
+        .from(prospects)
+        .where(eq(prospects.id, prospectId))
+        .limit(1);
+      if (!p) throw new Error("Prospect not found.");
+      await tx
+        .update(prospects)
+        .set({ convertedEngagementId: null, status: "contract_signed" })
+        .where(eq(prospects.id, prospectId));
+      const engId = p.convertedEngagementId;
+      if (!engId) return;
+      const [eng] = await tx
+        .select({ orgId: engagements.orgId })
+        .from(engagements)
+        .where(eq(engagements.id, engId))
+        .limit(1);
+      // Deleting the engagement cascades its workspace rows.
+      await tx.delete(engagements).where(eq(engagements.id, engId));
+      if (eng) {
+        const remaining = await tx
+          .select({ id: engagements.id })
+          .from(engagements)
+          .where(eq(engagements.orgId, eng.orgId))
+          .limit(1);
+        // Drop the now-empty client org (never the master).
+        if (remaining.length === 0) {
+          await tx
+            .delete(orgs)
+            .where(and(eq(orgs.id, eng.orgId), eq(orgs.type, "client")));
+        }
+      }
+    });
+    revalidatePath("/business-builder/pipeline");
+    revalidatePath(`/business-builder/pipeline/${prospectId}`);
+    revalidatePath("/business-builder/engagements");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
