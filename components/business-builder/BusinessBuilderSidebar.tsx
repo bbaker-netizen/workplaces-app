@@ -103,7 +103,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     icon: Rocket,
     items: [
       { href: "/business-builder", label: "My work", icon: CheckSquare, tourId: "Coach-home" },
-      { href: "/business-builder/engagements", label: "Engagements (Workspace)", icon: Briefcase },
+      { href: "/business-builder/engagements", label: "Client Portal", icon: Briefcase },
       { href: "/business-builder/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/business-builder/action-items", label: "Action items", icon: CheckSquare },
       { href: "/business-builder/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },
@@ -582,7 +582,7 @@ function NavItemRow({
         aria-current={isActive ? "page" : undefined}
         {...linkExtras}
         className={
-          "flex-1 flex items-center gap-2.5 pl-3 pr-2.5 py-2 rounded-md text-sm font-bold transition-colors duration-tbb-base " +
+          "flex-1 flex items-center gap-2.5 pl-3 pr-9 py-2 rounded-md text-sm font-bold transition-colors duration-tbb-base " +
           (isActive
             ? "bg-white/15 text-white"
             : "text-white/95 hover:bg-tbb-cream/8 hover:text-white")

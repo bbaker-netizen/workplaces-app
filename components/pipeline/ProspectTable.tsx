@@ -142,7 +142,15 @@ export function ProspectTable({
     const q = query.trim().toLowerCase();
     return prospects.filter((p) => {
       if (stageFilter === "prospects") {
-        if (p.status === "onboarded" || p.status === "lost") return false;
+        // The active funnel you're still working to win — hide signed
+        // deals, active engagements (onboarded), and lost.
+        if (
+          p.status === "contract_signed" ||
+          p.status === "onboarded" ||
+          p.status === "lost"
+        ) {
+          return false;
+        }
       } else if (stageFilter === "clients") {
         if (p.status !== "onboarded") return false;
       } else if (stageFilter !== "all" && p.status !== stageFilter) {
