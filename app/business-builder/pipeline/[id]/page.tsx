@@ -259,14 +259,14 @@ export default async function ProspectDetailPage({
                   href={`/business-builder/engagements/new?prospectId=${prospect.id}`}
                   className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
                 >
-                  Convert to engagement →
+                  Convert to active engagement →
                 </a>
               </div>
             )}
             {prospect.convertedEngagementId && (
               <div className="border-t border-tbb-line-soft pt-4 space-y-2">
                 <p className="text-xs text-tbb-success font-bold">
-                  ✓ Converted to engagement
+                  ✓ Active engagement
                 </p>
                 <a
                   href={`/business-builder/engagements/${prospect.convertedEngagementId}`}
