@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, inArray } from "drizzle-orm";
-import { ArrowRight, Briefcase, Eye, Plus } from "lucide-react";
+import { ArrowRight, Briefcase, Eye } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -63,24 +63,17 @@ export default async function EngagementsListPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
-      <header className="space-y-2 flex items-baseline justify-between gap-3 flex-wrap">
-        <div className="space-y-1">
-          <p className="tbb-eyebrow">Clients</p>
-          <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-            Engagements
-          </h1>
-          <p className="text-sm text-tbb-ink-3 max-w-2xl">
-            Each active client engagement. Click in for the
-            Workspace view — goals, projects, and action items in one
-            place.
-          </p>
-        </div>
-        <Link
-          href="/business-builder/engagements/new"
-          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 shadow-tbb-cta"
-        >
-          <Plus className="w-3.5 h-3.5" aria-hidden /> New engagement
-        </Link>
+      <header className="space-y-1">
+        <p className="tbb-eyebrow">Clients</p>
+        <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
+          Engagements
+        </h1>
+        <p className="text-sm text-tbb-ink-3 max-w-2xl">
+          Each active client engagement. Click in for the Workspace view —
+          goals, projects, and action items in one place. Engagements are
+          created from a prospect&apos;s &ldquo;Convert to engagement&rdquo;
+          button in the Pipeline.
+        </p>
       </header>
 
       {rows.length === 0 ? (

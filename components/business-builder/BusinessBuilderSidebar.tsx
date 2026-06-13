@@ -86,7 +86,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     caption: "Bring new prospects in",
     icon: Filter,
     items: [
-      { href: "/business-builder/pipeline", label: "Prospects", icon: Filter, tourId: "Coach-pipeline" },
+      { href: "/business-builder/pipeline", label: "Prospects & Clients", icon: Filter, tourId: "Coach-pipeline" },
       {
         href: "/diagnostic",
         label: "Public diagnostic",

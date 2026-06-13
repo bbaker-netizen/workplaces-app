@@ -40,7 +40,7 @@ export default async function PipelinePage() {
         <div className="space-y-1">
           <p className="tbb-eyebrow">Pipeline</p>
           <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-            Prospects &amp; clients
+            Prospects &amp; Clients
           </h1>
           <p className="text-sm text-tbb-ink-3">
             {prospects.length} record{prospects.length === 1 ? "" : "s"} across

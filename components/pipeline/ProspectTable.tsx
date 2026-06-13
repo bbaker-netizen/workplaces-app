@@ -42,6 +42,7 @@ type ColumnKey =
   | "phone"
   | "stage"
   | "value"
+  | "monthly"
   | "next_action"
   | "owner"
   | "last_contact"
@@ -69,6 +70,7 @@ const COLUMNS: ColumnDef[] = [
   // never clip. 210 gives a tiny bit of breathing room.
   { key: "stage", label: "Stage", defaultWidth: 210, defaultVisible: true },
   { key: "value", label: "Value", defaultWidth: 110, defaultVisible: true, alignRight: true },
+  { key: "monthly", label: "Monthly", defaultWidth: 110, defaultVisible: true, alignRight: true },
   { key: "next_action", label: "Next action", defaultWidth: 160, defaultVisible: true },
   { key: "owner", label: "Owner", defaultWidth: 140, defaultVisible: true },
   { key: "last_contact", label: "Last contact", defaultWidth: 120, defaultVisible: true },
@@ -100,7 +102,11 @@ export function ProspectTable({
   initialPrefs: PipelineColumnPrefs | null;
 }) {
   const [query, setQuery] = useState("");
-  const [stageFilter, setStageFilter] = useState<ProspectStatus | "all">("all");
+  // Default to the prospect funnel — new leads + everyone being worked
+  // toward becoming a client — hiding onboarded clients and lost.
+  const [stageFilter, setStageFilter] = useState<
+    ProspectStatus | "all" | "prospects" | "clients"
+  >("prospects");
   const [visible, setVisible] = useState<ColumnKey[]>(() => {
     const fromPrefs = (initialPrefs?.visible ?? []) as ColumnKey[];
     // Make sure non-optional columns are always present + only known keys.
@@ -135,7 +141,13 @@ export function ProspectTable({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return prospects.filter((p) => {
-      if (stageFilter !== "all" && p.status !== stageFilter) return false;
+      if (stageFilter === "prospects") {
+        if (p.status === "onboarded" || p.status === "lost") return false;
+      } else if (stageFilter === "clients") {
+        if (p.status !== "onboarded") return false;
+      } else if (stageFilter !== "all" && p.status !== stageFilter) {
+        return false;
+      }
       if (!q) return true;
       return (
         p.companyName.toLowerCase().includes(q) ||
@@ -148,6 +160,13 @@ export function ProspectTable({
       );
     });
   }, [prospects, query, stageFilter]);
+
+  // Total monthly program fee across the rows currently shown — i.e. the
+  // monthly revenue this view represents (respects the stage filter).
+  const monthlyTotalCents = useMemo(
+    () => filtered.reduce((sum, p) => sum + (p.monthlyFeeCents ?? 0), 0),
+    [filtered],
+  );
 
   /* Persist preferences with a small debounce so dragging doesn't hit
      the server on every pixel. */
@@ -265,6 +284,9 @@ export function ProspectTable({
 
   return (
     <div className="space-y-3">
+      {/* Sticky toolbar — search, filter, columns, and the bulk-action
+          bar stay pinned at the top of the page while the list scrolls. */}
+      <div className="sticky top-0 z-20 bg-background pt-2 pb-2 space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
         <label className="relative flex-1 min-w-[240px] max-w-md">
           <Search
@@ -286,6 +308,8 @@ export function ProspectTable({
           }
           className="bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         >
+          <option value="prospects">Prospects (default)</option>
+          <option value="clients">Active clients</option>
           <option value="all">All stages</option>
           {Object.entries(STAGE_STYLES).map(([k, v]) => (
             <option key={k} value={k}>
@@ -363,6 +387,18 @@ export function ProspectTable({
 
         <span className="text-xs text-tbb-ink-3 tabular-nums">
           {filtered.length} of {prospects.length}
+          {monthlyTotalCents > 0 && (
+            <>
+              {" · "}
+              <span className="font-bold text-tbb-navy">
+                ${(monthlyTotalCents / 100).toLocaleString("en-CA", {
+                  maximumFractionDigits: 0,
+                })}
+                /mo
+              </span>{" "}
+              total
+            </>
+          )}
         </span>
       </div>
 
@@ -408,6 +444,7 @@ export function ProspectTable({
           )}
         </div>
       )}
+      </div>
 
       <div className="border border-tbb-line rounded-lg bg-white overflow-hidden shadow-tbb-sm">
         <div className="overflow-x-auto">
@@ -633,6 +670,27 @@ function CellByKey({
                   QB
                 </span>
               )}
+            </span>
+          ) : (
+            <Dash />
+          )}
+        </Td>
+      );
+    }
+    case "monthly": {
+      const cents = prospect.monthlyFeeCents;
+      return (
+        <Td alignRight>
+          {cents ? (
+            <span
+              className="tabular-nums font-bold text-tbb-navy whitespace-nowrap"
+              title="Monthly program fee this client pays"
+            >
+              ${(cents / 100).toLocaleString("en-CA", {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
+              <span className="font-normal text-tbb-ink-3">/mo</span>
             </span>
           ) : (
             <Dash />
