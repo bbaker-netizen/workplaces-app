@@ -582,7 +582,7 @@ function NavItemRow({
         aria-current={isActive ? "page" : undefined}
         {...linkExtras}
         className={
-          "flex-1 flex items-center gap-2.5 pl-3 pr-2.5 py-2 rounded-md text-sm font-bold transition-colors duration-tbb-base " +
+          "flex-1 flex items-center gap-2.5 pl-3 pr-9 py-2 rounded-md text-sm font-bold transition-colors duration-tbb-base " +
           (isActive
             ? "bg-white/15 text-white"
             : "text-white/95 hover:bg-tbb-cream/8 hover:text-white")
