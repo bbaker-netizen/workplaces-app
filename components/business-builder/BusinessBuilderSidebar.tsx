@@ -103,7 +103,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     icon: Rocket,
     items: [
       { href: "/business-builder", label: "My work", icon: CheckSquare, tourId: "Coach-home" },
-      { href: "/business-builder/engagements", label: "Engagements (Workspace)", icon: Briefcase },
+      { href: "/business-builder/engagements", label: "Client Portal", icon: Briefcase },
       { href: "/business-builder/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/business-builder/action-items", label: "Action items", icon: CheckSquare },
       { href: "/business-builder/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },

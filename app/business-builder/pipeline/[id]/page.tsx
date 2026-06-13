@@ -287,6 +287,8 @@ export default async function ProspectDetailPage({
             nextActionDate={prospect.nextActionDate}
             nextActionNote={prospect.nextActionNote}
             lastContactAt={prospect.lastContactAt}
+            programType={prospect.programType}
+            monthlyFeeCents={prospect.monthlyFeeCents}
           />
 
           {/* QuickBooks customer link — drives the pipeline Value */}

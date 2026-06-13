@@ -18,6 +18,8 @@ export function ProspectDealCard({
   nextActionDate,
   nextActionNote,
   lastContactAt,
+  programType,
+  monthlyFeeCents,
 }: {
   prospectId: string;
   expectedValueCents: number | null;
@@ -26,10 +28,16 @@ export function ProspectDealCard({
   nextActionDate: Date | null;
   nextActionNote: string | null;
   lastContactAt: Date | null;
+  programType: string | null;
+  monthlyFeeCents: number | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [valueDollars, setValueDollars] = useState(
     expectedValueCents ? (expectedValueCents / 100).toString() : "",
+  );
+  const [programVal, setProgramVal] = useState(programType ?? "");
+  const [monthlyDollars, setMonthlyDollars] = useState(
+    monthlyFeeCents ? (monthlyFeeCents / 100).toString() : "",
   );
   const [sourceVal, setSourceVal] = useState(leadSource ?? "");
   const [actionDate, setActionDate] = useState(
@@ -48,6 +56,11 @@ export function ProspectDealCard({
       valueDollars.trim() && Number.isFinite(valueNum) && valueNum >= 0
         ? Math.round(valueNum * 100)
         : null;
+    const monthlyNum = Number(monthlyDollars);
+    const monthlyCents =
+      monthlyDollars.trim() && Number.isFinite(monthlyNum) && monthlyNum >= 0
+        ? Math.round(monthlyNum * 100)
+        : null;
     startTransition(async () => {
       const r = await updateProspect({
         id: prospectId,
@@ -55,6 +68,11 @@ export function ProspectDealCard({
         leadSource: sourceVal || null,
         nextActionDate: actionDate || null,
         nextActionNote: actionNote.trim() || null,
+        programType:
+          programVal === "accelerator" || programVal === "implementer"
+            ? programVal
+            : null,
+        monthlyFeeCents: monthlyCents,
       });
       if (!r.ok) setError(r.error);
       else setEditing(false);
@@ -88,6 +106,27 @@ export function ProspectDealCard({
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0,
                 })}
+              </span>
+            ) : (
+              <span className="text-tbb-ink-4">Not set</span>
+            )}
+          </Field>
+          <Field label="Program">
+            {programType ? (
+              <span className="text-tbb-navy capitalize">{programType}</span>
+            ) : (
+              <span className="text-tbb-ink-4">Not set</span>
+            )}
+          </Field>
+          <Field label="Monthly fee">
+            <DollarSign className="w-3.5 h-3.5 text-tbb-ink-3 inline mr-1" aria-hidden />
+            {monthlyFeeCents ? (
+              <span className="tabular-nums font-bold text-tbb-navy">
+                ${(monthlyFeeCents / 100).toLocaleString("en-CA", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+                <span className="font-normal text-tbb-ink-3">/mo</span>
               </span>
             ) : (
               <span className="text-tbb-ink-4">Not set</span>
@@ -151,6 +190,30 @@ export function ProspectDealCard({
               value={valueDollars}
               onChange={(e) => setValueDollars(e.target.value)}
               disabled={isPending}
+              className={inputCls}
+            />
+          </EditField>
+          <EditField label="Program">
+            <select
+              value={programVal}
+              onChange={(e) => setProgramVal(e.target.value)}
+              disabled={isPending}
+              className={inputCls}
+            >
+              <option value="">Not set</option>
+              <option value="accelerator">Accelerator</option>
+              <option value="implementer">Implementer</option>
+            </select>
+          </EditField>
+          <EditField label="Monthly fee (CAD)">
+            <input
+              type="number"
+              min="0"
+              step="50"
+              value={monthlyDollars}
+              onChange={(e) => setMonthlyDollars(e.target.value)}
+              disabled={isPending}
+              placeholder="2500"
               className={inputCls}
             />
           </EditField>
