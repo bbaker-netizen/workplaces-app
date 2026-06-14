@@ -44,6 +44,7 @@ import { SoulFilePreviewButton } from "@/components/pipeline/SoulFilePreviewButt
 import { DeleteProspectButton } from "@/components/pipeline/DeleteProspectButton";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
+  canSendDiagnostic,
   STAGE_STYLES,
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
@@ -130,6 +131,12 @@ export default async function ProspectDetailPage({
   ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
+
+  // Most recent "Diagnostic sent" date, surfaced under the action so the
+  // profile documents when it went out (activities are sorted newest-first).
+  const lastDiagnosticSentAt =
+    activities.find((a) => a.type === "diagnostic_sent")?.occurredAt ?? null;
+  const showDiagnostic = canSendDiagnostic(prospect.status as ProspectStatus);
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-12 space-y-6">
@@ -221,17 +228,29 @@ export default async function ProspectDetailPage({
               companyName={prospect.companyName}
               recipientName={prospect.contactName}
             />
-            <div className="border-t border-tbb-line-soft pt-4 space-y-2">
-              <p className="text-xs text-tbb-ink-3">
-                Email them the public business diagnostic form. Their
-                submission will land back on this record.
-              </p>
-              <SendDiagnosticButton
-                prospectId={prospect.id}
-                recipientName={prospect.contactName}
-                recipientEmail={prospect.contactEmail}
-              />
-            </div>
+            {showDiagnostic && (
+              <div className="border-t border-tbb-line-soft pt-4 space-y-2">
+                <p className="text-xs text-tbb-ink-3">
+                  Email them the public business diagnostic form. Their
+                  submission will land back on this record.
+                </p>
+                <SendDiagnosticButton
+                  prospectId={prospect.id}
+                  recipientName={prospect.contactName}
+                  recipientEmail={prospect.contactEmail}
+                />
+                {lastDiagnosticSentAt && (
+                  <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-4">
+                    Diagnostic sent ·{" "}
+                    {lastDiagnosticSentAt.toLocaleDateString("en-CA", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="border-t border-tbb-line-soft pt-4 space-y-2">
               <p className="text-xs text-tbb-ink-3">
                 If we&apos;ve already had Fireflies-recorded sessions with
@@ -296,6 +315,7 @@ export default async function ProspectDetailPage({
             customerName={prospect.qboCustomerName}
             lifetimePaymentsCents={prospect.qboLifetimePaymentsCents}
             syncedAt={prospect.qboValueSyncedAt?.toISOString() ?? null}
+            linkedAt={prospect.qboLinkedAt?.toISOString() ?? null}
           />
 
           {/* Notes */}

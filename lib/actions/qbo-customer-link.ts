@@ -14,7 +14,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { prospects } from "@/lib/db/schema";
+import { prospectActivities, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
   getCustomerTotalPaymentsCents,
@@ -97,7 +97,7 @@ export async function setProspectQboCustomer(
       qboCustomerId,
     );
     await withSystemContext(async (tx) => {
-      await tx
+      const [updated] = await tx
         .update(prospects)
         .set({
           qboCustomerId,
@@ -105,8 +105,20 @@ export async function setProspectQboCustomer(
           qboRealmId: creds.realmId,
           qboLifetimePaymentsCents: cents,
           qboValueSyncedAt: new Date(),
+          qboLinkedAt: new Date(),
         })
-        .where(eq(prospects.id, prospectId));
+        .where(eq(prospects.id, prospectId))
+        .returning({ orgId: prospects.orgId });
+      // Log the link on the activity timeline so there's a dated record.
+      if (updated) {
+        await tx.insert(prospectActivities).values({
+          prospectId,
+          orgId: updated.orgId,
+          type: "qbo_linked",
+          subject: `Linked to QuickBooks customer ${qboCustomerName}`,
+          createdByUserProfileId: profile.userProfileId,
+        });
+      }
     });
     revalidatePath("/business-builder/pipeline");
     revalidatePath(`/business-builder/pipeline/${prospectId}`);
@@ -133,6 +145,7 @@ export async function clearProspectQboCustomer(
           qboRealmId: null,
           qboLifetimePaymentsCents: null,
           qboValueSyncedAt: null,
+          qboLinkedAt: null,
         })
         .where(eq(prospects.id, prospectId));
     });

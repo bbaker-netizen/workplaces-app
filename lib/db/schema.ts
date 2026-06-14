@@ -1825,6 +1825,9 @@ export const prospects = pgTable(
       mode: "number",
     }),
     qboValueSyncedAt: timestamp("qbo_value_synced_at", { withTimezone: true }),
+    /** When the QuickBooks customer link was first established (vs the
+     *  value-sync timestamp above). Stamped on link, cleared on unlink. */
+    qboLinkedAt: timestamp("qbo_linked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -31,12 +31,14 @@ export function ProspectQboCustomerPicker({
   customerName,
   lifetimePaymentsCents,
   syncedAt,
+  linkedAt,
 }: {
   prospectId: string;
   customerId: string | null;
   customerName: string | null;
   lifetimePaymentsCents: number | null;
   syncedAt: string | null;
+  linkedAt: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -122,6 +124,16 @@ export function ProspectQboCustomerPicker({
             Linked to{" "}
             <span className="font-bold">{customerName ?? "a customer"}</span>
           </p>
+          {linkedAt && (
+            <p className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-success">
+              <Check className="w-3 h-3" aria-hidden /> Linked{" "}
+              {new Date(linkedAt).toLocaleDateString("en-CA", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              })}
+            </p>
+          )}
           <p className="text-sm">
             <span className="text-tbb-ink-3">Lifetime payments: </span>
             <span className="tabular-nums font-bold text-tbb-navy">

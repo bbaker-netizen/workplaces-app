@@ -25,6 +25,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   documents,
   engagements,
+  prospectActivities,
   prospects,
   signatureEnvelopes,
   signatureSigners,
@@ -211,6 +212,17 @@ export async function createSignatureEnvelope(
         roleLabel: s.roleLabel ?? null,
         publicToken: newSigningToken(),
         status: "pending",
+      });
+    }
+
+    // Dated record on the prospect's activity timeline.
+    if (data.prospectId) {
+      await tx.insert(prospectActivities).values({
+        prospectId: data.prospectId,
+        orgId,
+        type: "signature_request",
+        subject: `Sent for signature: ${data.subject}`,
+        createdByUserProfileId: profile.userProfileId,
       });
     }
 

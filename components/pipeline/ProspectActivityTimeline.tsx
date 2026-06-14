@@ -11,6 +11,7 @@
 
 import { useState, useTransition } from "react";
 import {
+  Link2,
   Loader2,
   Mail,
   MessageSquare,
@@ -33,6 +34,8 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   stage_change: Sparkles,
   web_lead: Plus,
   signature_request: PenLine,
+  diagnostic_sent: Mail,
+  qbo_linked: Link2,
 };
 
 export function ProspectActivityTimeline({
