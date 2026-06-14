@@ -20,6 +20,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
+  clientWriteBlocked,
+  READ_ONLY_ERROR,
+} from "@/lib/server/engagement-guard";
+import {
   actionItems,
   notifications,
   userProfiles,
@@ -250,6 +254,9 @@ export async function updateActionItem(
     );
     if (!engagementId) {
       return { ok: false, error: "Action item not found." };
+    }
+    if (await clientWriteBlocked(profile.role, engagementId)) {
+      return { ok: false, error: READ_ONLY_ERROR };
     }
     const reassignmentEmail = await withEngagementContext(
       profile.orgId,

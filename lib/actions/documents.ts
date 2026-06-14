@@ -26,6 +26,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
+  clientWriteBlocked,
+  READ_ONLY_ERROR,
+} from "@/lib/server/engagement-guard";
+import {
   documentTags,
   documents,
   engagements,
@@ -72,6 +76,9 @@ export async function uploadDocument(
   }
   if (!z.string().uuid().safeParse(engagementId).success) {
     return { ok: false, error: "Invalid engagement id." };
+  }
+  if (await clientWriteBlocked(profile.role, engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
   if (!(file instanceof File)) {
     return { ok: false, error: "Pick a file to upload." };
