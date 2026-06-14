@@ -30,9 +30,9 @@ const TRANSCRIPT_CHAR_CAP = 60_000;
 
 // Same prompt as the engagement-create seeder so the previews match
 // what'll be saved when the engagement is later formalised.
-const SOUL_FILE_DRAFT_SYSTEM = `You are drafting a starter "Soul File" for a coaching engagement — a long-form context document that captures the most important things a business Coach needs to know about a client.
+const SOUL_FILE_DRAFT_SYSTEM = `You are writing a Business Builder insights brief on a coaching client — the catch-up document a brand-new Business Builder would read to get fully up to speed before walking into a session, as if they were taking over the relationship cold.
 
-A Soul File is structured around six sections in this exact order:
+Structure it around these sections, in this exact order:
 
 # Why this engagement exists
 The pain that brought the client to coaching. The "if we don't fix this, what breaks" statement in their words.
@@ -43,26 +43,29 @@ Snapshot of the business: stage, size, what they sell, who's running it, what's 
 # Where they want to be in 12 months
 The picture the founder paints when asked. Top-line revenue target, headcount, hours of personal time, anything specific.
 
-# Strategic backdrop
-Industry, market, competitive position, macro forces affecting them. Why now matters.
+# Who they are & how they like to work
+The people at the helm — names, backgrounds, what they each own. Their communication and working style: how they like to be talked to, what they respond well to, what energises them, and what frustrates or turns them off. Their likes and dislikes.
 
-# Founders
-Who's at the helm. Names, backgrounds, working styles, what they each own. The personal stakes.
+# What to watch out for
+Sensitivities, hot buttons, sore spots, and risks. Topics to handle carefully, commitments they tend to slip on, internal tensions, anything a new Business Builder could step on without realising. Be candid and specific.
+
+# Where things stand & what's next
+Momentum and status: what's been promised, what's been delivered, what's in progress, and what's outstanding or overdue. Then the concrete next actions — what needs to happen before or in the next session, and who owns it.
 
 # Hard-won learnings
 Things they've already tried that didn't work, things they've learned the hard way, beliefs they hold strongly.
 
-You will receive transcript text from one or more recent meetings between the Coach and the client. Your job: synthesize what the transcripts reveal into this six-section structure.
+You will receive transcript text from one or more recent meetings between the Business Builder and the client. Synthesize what the transcripts reveal into this structure.
 
 Rules:
 - Markdown output only. Use the section headings shown above (single #), nothing else.
-- Each section is 2-6 sentences of dense plain-spoken prose. NOT bullet points unless the transcripts literally list things.
+- Each section is 2-6 sentences of dense, plain-spoken prose (the "what to watch out for" and "where things stand & what's next" sections may use a short bullet list if that's clearer).
 - If a section has no evidence in the transcripts, write "_To be discussed in an upcoming session._" — do not invent.
-- No preamble. No "Here is the Soul File…". Start with the first heading.
+- No preamble. No "Here is the brief…". Start with the first heading.
 - No closing remarks. End after the last section.
-- First person from the Coach's POV is fine ("we talked about", "they want"). Never quote sentences verbatim — paraphrase.
+- First person from the Business Builder's POV is fine ("we talked about", "they want"). Never quote sentences verbatim — paraphrase.
 - Keep numbers and proper nouns exact as they appear in transcripts.
-- This is a starter draft. The Coach will edit it.`;
+- This is a draft to review and edit.`;
 
 const schema = z.object({
   prospectId: z.string().uuid(),
