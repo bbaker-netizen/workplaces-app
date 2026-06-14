@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Columns3, Loader2, Search, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, Columns3, Loader2, Search, X } from "lucide-react";
 import { ProspectStatusSelect } from "./ProspectStatusSelect";
 import {
   STAGE_STYLES,
@@ -28,7 +28,7 @@ import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
 import { formatCad } from "@/lib/format";
 import { setPipelineColumnPrefs } from "@/lib/actions/user-prefs";
-import { bulkDeleteProspects } from "@/lib/actions/prospects";
+import { bulkDeleteProspects, unarchiveProspect } from "@/lib/actions/prospects";
 import {
   hidePendingFeedback,
   showPendingFeedback,
@@ -106,7 +106,7 @@ export function ProspectTable({
   // Default to the prospect funnel — new leads + everyone being worked
   // toward becoming a client — hiding onboarded clients and lost.
   const [stageFilter, setStageFilter] = useState<
-    ProspectStatus | "all" | "prospects" | "clients"
+    ProspectStatus | "all" | "prospects" | "clients" | "archived"
   >("prospects");
   const [sortBy, setSortBy] = useState<"company" | "updated">("company");
   const [visible, setVisible] = useState<ColumnKey[]>(() => {
@@ -130,6 +130,8 @@ export function ProspectTable({
     return merged;
   });
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  // Column drag-to-reorder. `dragKey` is the header being dragged.
+  const [dragKey, setDragKey] = useState<ColumnKey | null>(null);
 
   // Bulk-select state. `selected` is a Set of prospect IDs the user
   // has ticked. The "Select all" checkbox at the top toggles every
@@ -143,7 +145,14 @@ export function ProspectTable({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const rows = prospects.filter((p) => {
-      if (stageFilter === "prospects") {
+      // Archived rows are hidden everywhere except the explicit
+      // "Archived" view, which shows only them.
+      const isArchived = Boolean(p.archivedAt);
+      if (stageFilter === "archived") {
+        if (!isArchived) return false;
+      } else if (isArchived) {
+        return false;
+      } else if (stageFilter === "prospects") {
         // The active funnel you're still working to win — hide signed
         // deals, active engagements (onboarded), and lost.
         if (
@@ -187,6 +196,12 @@ export function ProspectTable({
     () => filtered.reduce((sum, p) => sum + (p.monthlyFeeCents ?? 0), 0),
     [filtered],
   );
+
+  const archivedCount = useMemo(
+    () => prospects.filter((p) => p.archivedAt).length,
+    [prospects],
+  );
+  const viewingArchived = stageFilter === "archived";
 
   /* Persist preferences with a small debounce so dragging doesn't hit
      the server on every pixel. */
@@ -241,6 +256,22 @@ export function ProspectTable({
     window.addEventListener("pointerup", onUp);
   }
 
+  /** Move a column so it lands at the position of `toKey`. Persisted
+   *  into the same ordered `visible` pref that drives render order. */
+  function reorderColumn(fromKey: ColumnKey, toKey: ColumnKey) {
+    if (fromKey === toKey) return;
+    setVisible((prev) => {
+      const from = prev.indexOf(fromKey);
+      const to = prev.indexOf(toKey);
+      if (from < 0 || to < 0) return prev;
+      const next = [...prev];
+      next.splice(from, 1);
+      next.splice(to, 0, fromKey);
+      persist(next, widths);
+      return next;
+    });
+  }
+
   function resetToDefaults() {
     setVisible(DEFAULT_VISIBLE);
     setWidths({ ...DEFAULT_WIDTHS });
@@ -272,19 +303,19 @@ export function ProspectTable({
     setSelected(new Set());
   }
 
-  function bulkDelete() {
+  function bulkArchive() {
     if (selected.size === 0) return;
     const count = selected.size;
     if (
       !window.confirm(
-        `Delete ${count} prospect${count === 1 ? "" : "s"}?\n\n` +
-          `Removes them from the pipeline along with their activity log + ` +
-          `communications. This can't be undone.`,
+        `Archive ${count} prospect${count === 1 ? "" : "s"}?\n\n` +
+          `They move to the Archived view — their activity log and ` +
+          `communications are kept, and you can restore them anytime.`,
       )
     )
       return;
     setBulkError(null);
-    showPendingFeedback(`Deleting ${count} prospect${count === 1 ? "" : "s"}…`);
+    showPendingFeedback(`Archiving ${count} prospect${count === 1 ? "" : "s"}…`);
     startBulkTransition(async () => {
       const ids = Array.from(selected);
       const r = await bulkDeleteProspects(ids);
@@ -293,6 +324,27 @@ export function ProspectTable({
         setBulkError(r.error);
         return;
       }
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  function bulkRestore() {
+    if (selected.size === 0) return;
+    const count = selected.size;
+    setBulkError(null);
+    showPendingFeedback(`Restoring ${count} prospect${count === 1 ? "" : "s"}…`);
+    startBulkTransition(async () => {
+      const ids = Array.from(selected);
+      for (const id of ids) {
+        const r = await unarchiveProspect(id);
+        if (!r.ok) {
+          hidePendingFeedback();
+          setBulkError(r.error);
+          return;
+        }
+      }
+      hidePendingFeedback();
       setSelected(new Set());
       router.refresh();
     });
@@ -336,6 +388,9 @@ export function ProspectTable({
               {v.label}
             </option>
           ))}
+          {archivedCount > 0 && (
+            <option value="archived">Archived ({archivedCount})</option>
+          )}
         </select>
         <select
           value={sortBy}
@@ -398,6 +453,10 @@ export function ProspectTable({
                   );
                 })}
                 <div className="border-t border-tbb-line-soft mt-1 pt-1">
+                  <p className="px-2 py-1 text-[10px] text-tbb-ink-4">
+                    Tip: drag a column header to reorder. Drag its right edge
+                    to resize.
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
@@ -441,19 +500,35 @@ export function ProspectTable({
           <span className="text-sm font-bold text-tbb-navy">
             {selected.size} selected
           </span>
-          <button
-            type="button"
-            onClick={bulkDelete}
-            disabled={isBulkPending}
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-danger text-tbb-danger hover:bg-tbb-danger hover:text-white transition-colors disabled:opacity-50"
-          >
-            {isBulkPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Trash2 className="w-3.5 h-3.5" aria-hidden />
-            )}
-            Delete selected
-          </button>
+          {viewingArchived ? (
+            <button
+              type="button"
+              onClick={bulkRestore}
+              disabled={isBulkPending}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors disabled:opacity-50"
+            >
+              {isBulkPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+              ) : (
+                <ArchiveRestore className="w-3.5 h-3.5" aria-hidden />
+              )}
+              Restore selected
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={bulkArchive}
+              disabled={isBulkPending}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-danger text-tbb-danger hover:bg-tbb-danger hover:text-white transition-colors disabled:opacity-50"
+            >
+              {isBulkPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Archive className="w-3.5 h-3.5" aria-hidden />
+              )}
+              Archive selected
+            </button>
+          )}
           <button
             type="button"
             onClick={clearSelection}
@@ -517,8 +592,24 @@ export function ProspectTable({
                 {visibleColumns.map((c) => (
                   <th
                     key={c.key}
+                    draggable
+                    onDragStart={(e) => {
+                      setDragKey(c.key);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(e) => {
+                      if (dragKey && dragKey !== c.key) e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragKey) reorderColumn(dragKey, c.key);
+                      setDragKey(null);
+                    }}
+                    onDragEnd={() => setDragKey(null)}
+                    title="Drag to reorder column"
                     className={
-                      "relative px-4 py-2.5 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 select-none " +
+                      "relative px-4 py-2.5 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 select-none cursor-grab active:cursor-grabbing " +
+                      (dragKey === c.key ? "opacity-50 " : "") +
                       (c.alignRight ? "text-right" : "")
                     }
                   >
@@ -527,6 +618,8 @@ export function ProspectTable({
                       role="separator"
                       aria-orientation="vertical"
                       aria-label={`Resize ${c.label} column`}
+                      draggable={false}
+                      onDragStart={(e) => e.preventDefault()}
                       onPointerDown={(e) => {
                         e.preventDefault();
                         (e.target as Element).setPointerCapture?.(e.pointerId);

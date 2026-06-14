@@ -23,6 +23,10 @@ import {
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
 import { ConfettiBurst } from "@/components/fun/ConfettiBurst";
+import {
+  hidePendingFeedback,
+  showPendingFeedback,
+} from "@/components/layout/NavLoaderOverlay";
 
 export function ProspectStatusSelect({
   prospectId,
@@ -39,8 +43,10 @@ export function ProspectStatusSelect({
   function onChange(next: ProspectStatus) {
     const wasNotSigned = value !== "contract_signed";
     setValue(next);
+    showPendingFeedback("Updating stage…");
     startTransition(async () => {
       const r = await updateProspect({ id: prospectId, status: next });
+      hidePendingFeedback();
       if (!r.ok) {
         // Revert on failure.
         setValue(current);

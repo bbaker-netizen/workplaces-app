@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, Plus } from "lucide-react";
 import { createProspect } from "@/lib/actions/prospects";
 import { formatPhone } from "@/lib/format";
+import {
+  hidePendingFeedback,
+  showPendingFeedback,
+} from "@/components/layout/NavLoaderOverlay";
 import { LEAD_SOURCES, STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 import {
   validateProspect,
@@ -149,6 +153,7 @@ export function NewProspectForm({
       );
       return;
     }
+    showPendingFeedback("Saving prospect…");
     startTransition(async () => {
       // Parse the monthly-fee input (dollars) into cents.
       const feeTrimmed = monthlyFeeInput.trim();
@@ -179,9 +184,11 @@ export function NewProspectForm({
         expectedStartDate: expectedStartDate || null,
       });
       if (!r.ok) {
+        hidePendingFeedback();
         setError(r.error);
         return;
       }
+      // Leave the loader up — the redirect dismisses it on nav.
       router.push(`/business-builder/pipeline/${r.data.id}`);
     });
   }

@@ -319,9 +319,41 @@ export async function deleteProspect(
     return { ok: false, error: "Business Builders only." };
   try {
     await withSystemContext(async (tx) => {
-      await tx.delete(prospects).where(eq(prospects.id, id));
+      // Soft-delete: archive instead of hard-delete so a mis-click is
+      // recoverable. The activity log + communications stay intact.
+      await tx
+        .update(prospects)
+        .set({ archivedAt: new Date() })
+        .where(eq(prospects.id, id));
     });
     revalidatePath("/business-builder/pipeline");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/** Restore an archived prospect back into the active pipeline. */
+export async function unarchiveProspect(
+  id: string,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(prospects)
+        .set({ archivedAt: null })
+        .where(eq(prospects.id, id));
+    });
+    revalidatePath("/business-builder/pipeline");
+    revalidatePath(`/business-builder/pipeline/${id}`);
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -364,8 +396,10 @@ export async function bulkDeleteProspects(
   }
   try {
     const deleted = await withSystemContext(async (tx) => {
+      // Soft-delete in bulk — archive, don't destroy.
       const result = await tx
-        .delete(prospects)
+        .update(prospects)
+        .set({ archivedAt: new Date() })
         .where(
           and(inArray(prospects.id, ids), eq(prospects.orgId, profile.orgId)),
         )
