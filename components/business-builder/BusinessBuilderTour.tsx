@@ -63,7 +63,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Phase 03 — Deliver.",
     content:
-      "The deeper work — the nine deliverable types (SOPs, org charts, job profiles, financial dashboards, plans, assessments). Projects for app builds and marketing pushes. Goals for SMART outcomes. Hiring for TTI-driven candidate work. Soul File search across every engagement you own.",
+      "The deeper work — the nine deliverable types (SOPs, org charts, job profiles, financial dashboards, plans, assessments). Projects for app builds and marketing pushes. Hiring for TTI-driven candidate work.",
   },
   {
     target: '[data-tour="Coach-phase-bill"]',

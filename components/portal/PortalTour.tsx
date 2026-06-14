@@ -60,14 +60,6 @@ const STEPS: Step[] = [
       "Use Communication for anything between sessions — questions, decisions, file shares, things you want me to see before we meet. Two thread types: Leadership (private to you + leaders) and Team (everyone you've invited). Mention with @name to email-notify.",
   },
   {
-    target: '[data-tour="soul-file"]',
-    placement: "right",
-    skipBeacon: true,
-    title: "Your Soul File.",
-    content:
-      "The long-form context document for our engagement: why this business exists, where it's at, where it's heading, what we've learned. I write and maintain it; you read whenever you want the big picture in one place.",
-  },
-  {
     target: '[data-tour="documents"]',
     placement: "top",
     skipBeacon: true,
