@@ -40,6 +40,7 @@ export function EmbeddedAppManager({
   const [adding, setAdding] = useState(false);
   const [projectId, setProjectId] = useState("");
   const [authMode, setAuthMode] = useState("public");
+  const [instructions, setInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -58,6 +59,7 @@ export function EmbeddedAppManager({
         netlifyProjectId: project.id,
         displayName: project.name,
         appUrl: project.url,
+        instructions: instructions.trim() || null,
         // @ts-expect-error auth mode is a runtime-validated enum string
         authMode,
       });
@@ -68,6 +70,7 @@ export function EmbeddedAppManager({
       setAdding(false);
       setProjectId("");
       setAuthMode("public");
+      setInstructions("");
       router.refresh();
     });
   }
@@ -165,6 +168,19 @@ export function EmbeddedAppManager({
                     Signed token (app validates a Builder token)
                   </option>
                 </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  How to use / install (optional)
+                </span>
+                <textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  disabled={isPending}
+                  rows={3}
+                  placeholder="Markdown. e.g. how to bookmark it, add to the home screen, or install as a desktop app. The client sees this in their portal."
+                  className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
+                />
               </label>
             </>
           )}

@@ -1,10 +1,28 @@
 import { and, eq } from "drizzle-orm";
-import { embeddedApps, type EmbeddedApp } from "../schema";
+import { embeddedAppFavourites, embeddedApps, type EmbeddedApp } from "../schema";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
+  withTenantContext,
 } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
+
+/** The current user's favourited app ids (for the apps they can see). */
+export async function listMyFavouriteAppIds(): Promise<string[]> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return [];
+  try {
+    return await withTenantContext(profile.orgId, async (tx) => {
+      const rows = await tx
+        .select({ id: embeddedAppFavourites.embeddedAppId })
+        .from(embeddedAppFavourites)
+        .where(eq(embeddedAppFavourites.userProfileId, profile.userProfileId));
+      return rows.map((r) => r.id);
+    });
+  } catch {
+    return [];
+  }
+}
 
 export async function listEngagementEmbeddedApps(
   engagementId: string,

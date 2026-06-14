@@ -1556,6 +1556,9 @@ export const embeddedApps = pgTable(
     netlifyProjectId: text("netlify_project_id").notNull(),
     displayName: text("display_name").notNull(),
     description: text("description"),
+    /** Markdown how-to: using the tool + adding it to a browser/desktop
+     *  (bookmark, PWA install, etc.). Shown to clients in the portal. */
+    instructions: text("instructions"),
     appUrl: text("app_url").notNull(),
     authMode: embeddedAppAuthModeEnum("auth_mode")
       .notNull()
@@ -1567,6 +1570,32 @@ export const embeddedApps = pgTable(
   (t) => ({
     orgIdx: index("embedded_apps_org_idx").on(t.orgId),
     engagementIdx: index("embedded_apps_engagement_idx").on(t.engagementId),
+  }),
+);
+
+/** Per-user "favourite" flag on an embedded app, so clients can pin the
+ *  tools they reach for. One row per (app, user). */
+export const embeddedAppFavourites = pgTable(
+  "embedded_app_favourites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    embeddedAppId: uuid("embedded_app_id")
+      .notNull()
+      .references(() => embeddedApps.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("embedded_app_favourites_org_idx").on(t.orgId),
+    uniqueFav: uniqueIndex("embedded_app_favourites_unique").on(
+      t.embeddedAppId,
+      t.userProfileId,
+    ),
   }),
 );
 
