@@ -27,7 +27,7 @@ import {
 } from "@/lib/pipeline/stages";
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
-import { formatCad } from "@/lib/format";
+import { formatCad, formatPhone } from "@/lib/format";
 import { setPipelineColumnPrefs } from "@/lib/actions/user-prefs";
 import { bulkDeleteProspects, unarchiveProspect } from "@/lib/actions/prospects";
 import {
@@ -810,7 +810,7 @@ function CellByKey({
               className="text-tbb-blue hover:underline underline-offset-4 whitespace-nowrap"
               onClick={(e) => e.stopPropagation()}
             >
-              {prospect.phone}
+              {formatPhone(prospect.phone)}
             </a>
           ) : (
             <Dash />

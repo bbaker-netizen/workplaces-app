@@ -14,6 +14,7 @@ import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { ArrowLeft, Mail, Phone, Globe } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { formatPhone } from "@/lib/format";
 import {
   getProspect,
   listProspectActivities,
@@ -203,7 +204,7 @@ export default async function ProspectDetailPage({
                 <ContactRow
                   icon={<Phone className="w-3.5 h-3.5" />}
                   href={`tel:${prospect.phone}`}
-                  label={prospect.phone}
+                  label={formatPhone(prospect.phone)}
                 />
               )}
               {prospect.companyWebsite && (
