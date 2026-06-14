@@ -89,6 +89,70 @@ function revalidateProjectPaths(projectId?: string) {
   }
 }
 
+const bulkProjectSchema = z.object({
+  engagementId: z.string().uuid(),
+  names: z.array(z.string().max(300)).min(1).max(50),
+  revenueImpact: z.boolean().default(true),
+  marginImpact: z.boolean().default(false),
+});
+
+/**
+ * Create several projects at once from a list of names. Quality-gate
+ * flags (revenue / margin) apply to the whole batch; dates/leads/tasks
+ * get filled in per-project afterward.
+ */
+export async function createProjectsBulk(
+  input: z.input<typeof bulkProjectSchema>,
+): Promise<ActionResult<{ count: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (!canEdit(profile.role)) {
+    return { ok: false, error: "Your role can't create projects." };
+  }
+  const parsed = bulkProjectSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  }
+  const data = parsed.data;
+  if (!data.revenueImpact && !data.marginImpact) {
+    return {
+      ok: false,
+      error: "Projects must move top-line revenue, protect margin, or both.",
+    };
+  }
+  const names = data.names.map((n) => n.trim()).filter(Boolean);
+  if (names.length === 0) {
+    return { ok: false, error: "Add at least one project name." };
+  }
+  try {
+    const count = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      data.engagementId,
+      async (tx, boundOrgId) => {
+        await tx.insert(projects).values(
+          names.map((name) => ({
+            orgId: boundOrgId,
+            engagementId: data.engagementId,
+            name,
+            status: "planning" as const,
+            revenueImpact: data.revenueImpact,
+            marginImpact: data.marginImpact,
+          })),
+        );
+        return names.length;
+      },
+    );
+    revalidateProjectPaths();
+    return { ok: true, data: { count } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function createProject(
   input: CreateProjectInput,
 ): Promise<ActionResult<{ id: string }>> {
