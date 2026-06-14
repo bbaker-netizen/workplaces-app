@@ -62,6 +62,7 @@ import {
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
+import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
 
 export default async function EngagementDetailPage({
   params,
@@ -387,13 +388,14 @@ export default async function EngagementDetailPage({
             <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Projects
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Link
                 href={`/business-builder/engagements/${id}/gantt`}
                 className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
               >
                 Gantt chart →
               </Link>
+              <BulkAddProjects engagementId={id} />
               <Link
                 href={`/business-builder/projects/new?engagement=${id}`}
                 className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
