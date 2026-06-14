@@ -124,16 +124,17 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
 };
 
 /**
- * Pipeline order for kanban / grouped views. Active stages first;
- * closed (won / lost) at the end.
+ * Pipeline order — the six working stages (+ Lost) after the Wave B
+ * collapse. Retired stages (meeting_scheduled, diagnostic_pending,
+ * diagnostic_complete, negotiation) keep their STAGE_STYLES entries so
+ * any legacy reference still renders, but they're omitted here so they
+ * never appear as a selectable stage. Migration 0050 remaps existing
+ * rows off them.
  */
 export const STAGE_ORDER: ProspectStatus[] = [
   "new_lead",
   "first_contact",
-  "meeting_scheduled",
-  "diagnostic_complete",
   "proposal_sent",
-  "negotiation",
   "contract_sent",
   "contract_signed",
   "onboarded",
@@ -165,6 +166,7 @@ export const LEAD_SOURCES = [
 export const DIAGNOSTIC_ELIGIBLE_STAGES: readonly ProspectStatus[] = [
   "new_lead",
   "first_contact",
+  // Retained for legacy rows that predate the Wave B collapse.
   "meeting_scheduled",
   "diagnostic_pending",
 ];
