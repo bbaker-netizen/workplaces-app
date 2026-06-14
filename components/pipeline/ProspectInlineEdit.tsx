@@ -11,6 +11,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, Edit2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
@@ -94,6 +95,7 @@ function ContactEdit({
   companyName: string;
   onDone: () => void;
 }) {
+  const router = useRouter();
   const [company, setCompany] = useState(companyName);
   const [contactName, setContactName] = useState(initial.contactName ?? "");
   const [contactEmail, setContactEmail] = useState(initial.contactEmail);
@@ -140,7 +142,10 @@ function ContactEdit({
       });
       hidePendingFeedback();
       if (!r.ok) setError(r.error);
-      else onDone();
+      else {
+        onDone();
+        router.refresh();
+      }
     });
   }
 
@@ -248,6 +253,7 @@ function NotesEdit({
   initialNotes: string | null;
   onDone: () => void;
 }) {
+  const router = useRouter();
   const [notes, setNotes] = useState(initialNotes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -263,7 +269,10 @@ function NotesEdit({
       });
       hidePendingFeedback();
       if (!r.ok) setError(r.error);
-      else onDone();
+      else {
+        onDone();
+        router.refresh();
+      }
     });
   }
 
