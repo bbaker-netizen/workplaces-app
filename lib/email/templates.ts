@@ -482,6 +482,50 @@ export function newLeadEmail(input: NewLeadEmailInput): EmailEnvelope {
   return { to: input.to, subject, html, text };
 }
 
+export type ReferralRewardEmailInput = {
+  to: string;
+  coachName: string;
+  referrer: string;
+  companyName: string;
+};
+
+/**
+ * Sent to the coach when a referred prospect converts to an active
+ * engagement — the cue to buy the $50 gift certificate + thank-you card
+ * for the referrer. Pairs with the action-item task created on conversion.
+ */
+export function referralRewardEmail(
+  input: ReferralRewardEmailInput,
+): EmailEnvelope {
+  const url = appUrl() + "/business-builder/engagements";
+  const subject = `Thank-you owed: $50 gift cert for ${input.referrer}`;
+
+  const html = shell({
+    preheader: `${input.companyName} converted — send ${input.referrer} their referral thank-you.`,
+    heading: "Referral converted — send the thank-you",
+    accent: "#E87722",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.coachName)}, <strong>${escapeHtml(input.companyName)}</strong> just became an active engagement — and they came in as a referral from <strong>${escapeHtml(input.referrer)}</strong>.</p>
+      <p style="margin:0 0 12px 0;">Time to say thanks: buy a <strong>$50 gift certificate</strong> and send it with a thank-you card to ${escapeHtml(input.referrer)}.</p>
+      <p style="margin:0 0 12px 0;font-size:13px;color:#5A6470;">A matching task has been added to your work list so it doesn't slip.</p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Open The Builder",
+  });
+
+  const text = [
+    `Referral converted — send the thank-you`,
+    "",
+    `${input.companyName} just became an active engagement, referred by ${input.referrer}.`,
+    `Buy a $50 gift certificate and send it with a thank-you card to ${input.referrer}.`,
+    "",
+    `A matching task has been added to your work list.`,
+    `Open: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
 export function signatureCompletedEmail(
   input: SignatureCompletedEmailInput,
 ): EmailEnvelope {
