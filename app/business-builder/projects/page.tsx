@@ -50,26 +50,26 @@ export default async function CoachProjectsCrossPage() {
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {items.map((p) => (
             <li key={p.id}>
               <Link
-                href={`/portal/projects/${p.id}`}
-                className="block py-3 pl-3 hover:bg-tbb-cream-50 transition-colors group"
+                href={`/business-builder/projects/${p.id}`}
+                className="block h-full border border-tbb-line rounded-lg bg-white p-4 hover:border-tbb-blue hover:shadow-tbb-sm transition-all group space-y-2"
               >
-                <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                  <span className="font-bold text-foreground text-base tracking-tight group-hover:underline underline-offset-4">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-bold text-foreground text-base tracking-tight group-hover:text-tbb-blue">
                     {p.name}
                   </span>
-                  <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-                    {p.engagementName ?? "Engagement"}
-                  </span>
-                  <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+                  <span className="shrink-0 font-mono text-[9px] uppercase tracking-tbb-caps text-tbb-ink-3 bg-tbb-cream-50 border border-tbb-line rounded-pill px-2 py-0.5">
                     {p.status}
                   </span>
                 </div>
+                <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                  {p.engagementName ?? "Engagement"}
+                </p>
                 {p.targetDate && (
-                  <p className="mt-1 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                  <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
                     Target {new Date(p.targetDate).toLocaleDateString()}
                   </p>
                 )}
