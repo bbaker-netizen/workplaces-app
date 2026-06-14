@@ -14,7 +14,7 @@
  * orgs; Coach session is in master org). Uses withSystemContext.
  */
 
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { coaches, engagements, type Engagement } from "../schema";
 import { withSystemContext, withTenantContext } from "../tenant";
@@ -49,8 +49,9 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
     }
   }
 
-  // 2. Fallback: first engagement in the caller's home org.
-  return withTenantContext(profile.orgId, async (tx) => {
+  // 2. Fallback: first engagement in the caller's home org (clients live
+  //    here — their org holds exactly their engagement).
+  const home = await withTenantContext(profile.orgId, async (tx) => {
     const [row] = await tx
       .select()
       .from(engagements)
@@ -58,6 +59,25 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
       .limit(1);
     return row ?? null;
   });
+  if (home) return home;
+
+  // 3. Coaches don't own engagements in their home (master) org — client
+  //    engagements live in client orgs. So with nothing selected, fall
+  //    back to the most recent engagement across all clients. Without
+  //    this a coach previewing the portal sees "No engagement yet".
+  const isCoach =
+    profile.role === "master_admin" || profile.role === "coach";
+  if (isCoach) {
+    return withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(engagements)
+        .orderBy(desc(engagements.createdAt))
+        .limit(1);
+      return row ?? null;
+    });
+  }
+  return null;
 }
 
 /**

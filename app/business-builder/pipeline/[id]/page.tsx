@@ -257,15 +257,15 @@ export default async function ProspectDetailPage({
             <div className="border-t border-tbb-line-soft pt-4 space-y-2">
               <p className="text-xs text-tbb-ink-3">
                 If we&apos;ve already had Fireflies-recorded sessions with
-                this prospect, draft what their Soul File would look like
+                this prospect, draft the Business Builder insights on them
                 — no engagement created, no portal invite sent. Pure
                 preview so you can see what we know before deciding to
-                formalise them.
+                formalize them.
               </p>
               <SoulFilePreviewButton prospectId={prospect.id} />
             </div>
             {/* Convert prospect → engagement. Appears once the contract
-                is signed (or whenever Bruce wants to formalise). Carries
+                is signed (or whenever Bruce wants to formalize). Carries
                 program type, pricing tier, monthly fee, and start date
                 across so the engagement form is pre-filled. */}
             {!prospect.convertedEngagementId &&
@@ -273,7 +273,7 @@ export default async function ProspectDetailPage({
               prospect.status !== "lost" && (
               <div className="border-t border-tbb-line-soft pt-4 space-y-2">
                 <p className="text-xs text-tbb-ink-3">
-                  Ready to formalise this prospect into a paying
+                  Ready to formalize this prospect into a paying
                   engagement? We&apos;ll create their engagement + portal
                   so you can prepare it now. No email is sent — you invite
                   the client to their portal separately when you&apos;re

@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Circle,
   Diamond,
+  Eye,
   FileText,
   Flag,
   LayoutGrid,
@@ -253,10 +254,19 @@ export default async function EngagementDetailPage({
           <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
             {data.eng.name ?? "Engagement"}
           </h1>
-          <EngagementStatusControl
-            engagementId={id}
-            current={data.eng.status}
-          />
+          <div className="flex items-center gap-3 flex-wrap">
+            <Link
+              href={data.eng.slug ? `/portal/e/${data.eng.slug}` : "/portal/preview"}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
+              title="See this client's portal exactly as they do"
+            >
+              <Eye className="w-3.5 h-3.5" aria-hidden /> Preview portal
+            </Link>
+            <EngagementStatusControl
+              engagementId={id}
+              current={data.eng.status}
+            />
+          </div>
         </div>
         <p className="text-sm text-tbb-ink-3 max-w-2xl">
           The Workspace: every project and action item for this client,
