@@ -42,6 +42,9 @@ export function ProspectInlineEdit({
         contactEmail: string;
         phone: string | null;
         companyWebsite: string | null;
+        linkedinUrl: string | null;
+        facebookUrl: string | null;
+        instagramUrl: string | null;
       }
     | { notes: string | null };
   /** Current company name. In field="contact" mode it's both the
@@ -91,6 +94,9 @@ function ContactEdit({
     contactEmail: string;
     phone: string | null;
     companyWebsite: string | null;
+    linkedinUrl: string | null;
+    facebookUrl: string | null;
+    instagramUrl: string | null;
   };
   companyName: string;
   onDone: () => void;
@@ -102,6 +108,11 @@ function ContactEdit({
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [companyWebsite, setCompanyWebsite] = useState(
     initial.companyWebsite ?? "",
+  );
+  const [linkedinUrl, setLinkedinUrl] = useState(initial.linkedinUrl ?? "");
+  const [facebookUrl, setFacebookUrl] = useState(initial.facebookUrl ?? "");
+  const [instagramUrl, setInstagramUrl] = useState(
+    initial.instagramUrl ?? "",
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -144,6 +155,9 @@ function ContactEdit({
         contactEmail: contactEmail.trim(),
         phone: phone.trim() || null,
         companyWebsite: companyWebsite.trim() || null,
+        linkedinUrl: linkedinUrl.trim() || null,
+        facebookUrl: facebookUrl.trim() || null,
+        instagramUrl: instagramUrl.trim() || null,
       });
       hidePendingFeedback();
       if (!r.ok) setError(r.error);
@@ -159,7 +173,10 @@ function ContactEdit({
     contactName !== (initial.contactName ?? "") ||
     contactEmail !== initial.contactEmail ||
     phone !== (initial.phone ?? "") ||
-    companyWebsite !== (initial.companyWebsite ?? "");
+    companyWebsite !== (initial.companyWebsite ?? "") ||
+    linkedinUrl !== (initial.linkedinUrl ?? "") ||
+    facebookUrl !== (initial.facebookUrl ?? "") ||
+    instagramUrl !== (initial.instagramUrl ?? "");
 
   const companyIssue = validation.errors.find((i) => i.field === "companyName");
   const contactIssue = validation.errors.find((i) => i.field === "contactName");
@@ -227,6 +244,54 @@ function ContactEdit({
           className={inputCls}
         />
       </label>
+      <label className="block space-y-1">
+        <span className="flex items-center justify-between gap-2">
+          <span className={labelCls}>LinkedIn</span>
+          <a
+            href={linkedInSearchUrl(contactName, company)}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+          >
+            Find on LinkedIn ↗
+          </a>
+        </span>
+        <input
+          type="text"
+          inputMode="url"
+          value={linkedinUrl}
+          onChange={(e) => setLinkedinUrl(e.target.value)}
+          placeholder="linkedin.com/in/…"
+          disabled={isPending}
+          className={inputCls}
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block space-y-1">
+          <span className={labelCls}>Facebook</span>
+          <input
+            type="text"
+            inputMode="url"
+            value={facebookUrl}
+            onChange={(e) => setFacebookUrl(e.target.value)}
+            placeholder="facebook.com/…"
+            disabled={isPending}
+            className={inputCls}
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className={labelCls}>Instagram</span>
+          <input
+            type="text"
+            inputMode="url"
+            value={instagramUrl}
+            onChange={(e) => setInstagramUrl(e.target.value)}
+            placeholder="instagram.com/…"
+            disabled={isPending}
+            className={inputCls}
+          />
+        </label>
+      </div>
       {error && <p className="text-sm text-tbb-danger">{error}</p>}
       <div className="flex items-center gap-2">
         <button
@@ -320,6 +385,15 @@ const inputCls =
 
 const labelCls =
   "text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3";
+
+/** A Google search scoped to LinkedIn for this contact + company, so the
+ *  Business Builder can find the profile fast and paste the URL back in. */
+export function linkedInSearchUrl(name: string, company: string): string {
+  const q = [name.trim(), company.trim(), "LinkedIn"]
+    .filter(Boolean)
+    .join(" ");
+  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+}
 
 function InlineIssue({ message }: { message: string }) {
   return (

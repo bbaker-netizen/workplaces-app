@@ -56,6 +56,9 @@ const createSchema = z.object({
   contactEmail: z.string().email().max(254),
   phone: optionalString,
   companyWebsite: optionalString,
+  linkedinUrl: optionalString,
+  facebookUrl: optionalString,
+  instagramUrl: optionalString,
   leadSource: optionalString,
   referrerName: optionalString,
   expectedValueCents: z.number().int().nonnegative().nullable().optional(),
@@ -135,6 +138,9 @@ export async function createProspect(
         contactEmail: data.contactEmail,
         phone: data.phone ? formatPhone(data.phone) : null,
         companyWebsite: normalizeWebsite(data.companyWebsite),
+        linkedinUrl: normalizeWebsite(data.linkedinUrl),
+        facebookUrl: normalizeWebsite(data.facebookUrl),
+        instagramUrl: normalizeWebsite(data.instagramUrl),
         leadSource: data.leadSource ?? null,
         referrerName: data.referrerName ?? null,
         expectedValueCents: data.expectedValueCents ?? null,
@@ -167,6 +173,9 @@ const updateSchema = z.object({
   contactEmail: z.string().email().max(254).optional(),
   phone: optionalString,
   companyWebsite: optionalString,
+  linkedinUrl: optionalString,
+  facebookUrl: optionalString,
+  instagramUrl: optionalString,
   industry: optionalString,
   leadSource: optionalString,
   referrerName: optionalString,
@@ -275,6 +284,12 @@ export async function updateProspect(
         updates.phone = data.phone ? formatPhone(data.phone) : null;
       if (data.companyWebsite !== undefined)
         updates.companyWebsite = normalizeWebsite(data.companyWebsite);
+      if (data.linkedinUrl !== undefined)
+        updates.linkedinUrl = normalizeWebsite(data.linkedinUrl);
+      if (data.facebookUrl !== undefined)
+        updates.facebookUrl = normalizeWebsite(data.facebookUrl);
+      if (data.instagramUrl !== undefined)
+        updates.instagramUrl = normalizeWebsite(data.instagramUrl);
       if (data.industry !== undefined) updates.industry = data.industry;
       if (data.leadSource !== undefined) updates.leadSource = data.leadSource;
       if (data.referrerName !== undefined)
