@@ -18,13 +18,71 @@ import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
+  actionItems,
   coaches,
   engagements,
   orgs,
   prospects,
+  userProfiles,
   type Prospect,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { sendEmailQuietly } from "@/lib/email/send";
+import { referralRewardEmail } from "@/lib/email/templates";
+
+/** A queued "thank the referrer" reward to email after the DB commit. */
+type ReferralReward = { referrer: string; companyName: string };
+
+/**
+ * When a referred prospect becomes an active engagement, drop a task on
+ * the coach's plate to send the $50 gift certificate + thank-you card.
+ * Returns the reward details (for the follow-up email) or null if this
+ * prospect wasn't a referral. Runs inside the caller's system-context tx.
+ */
+async function insertReferralReward(
+  tx: Parameters<Parameters<typeof withSystemContext>[0]>[0],
+  params: {
+    prospect: Prospect;
+    engagementId: string;
+    engagementOrgId: string;
+    coachUserProfileId: string;
+  },
+): Promise<ReferralReward | null> {
+  const { prospect, engagementId, engagementOrgId, coachUserProfileId } = params;
+  if ((prospect.leadSource ?? "").trim().toLowerCase() !== "referral") {
+    return null;
+  }
+  const referrer = (prospect.referrerName ?? "").trim();
+  if (referrer.length < 2) return null;
+  // Due in a week — enough lead time to buy the card + certificate.
+  const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await tx.insert(actionItems).values({
+    orgId: engagementOrgId,
+    engagementId,
+    title: `Buy $50 gift certificate + thank-you card for ${referrer}`,
+    description: `${prospect.companyName} came in as a referral from ${referrer}. Now that they're an active engagement, send a $50 gift certificate and a thank-you card to ${referrer}.`,
+    status: "open",
+    assigneeUserProfileId: coachUserProfileId,
+    dueDate,
+    createdBy: "coach",
+  });
+  return { referrer, companyName: prospect.companyName };
+}
+
+/** Load the coach's email + name for the referral-reward email. */
+async function loadCoachContact(
+  userProfileId: string,
+): Promise<{ email: string; name: string } | null> {
+  return withSystemContext(async (tx) => {
+    const [u] = await tx
+      .select({ email: userProfiles.email, name: userProfiles.fullName })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, userProfileId))
+      .limit(1);
+    if (!u?.email) return null;
+    return { email: u.email, name: u.name ?? "there" };
+  });
+}
 
 type Result<T = { engagementId: string }> =
   | { ok: true; data: T }
@@ -98,14 +156,16 @@ export async function activateProspectAsEngagement(
   }
   const coachId = await ensureCoachId(profile.userProfileId, profile.orgId);
   try {
-    const engagementId = await withSystemContext(async (tx) => {
+    const result = await withSystemContext(async (tx) => {
       const [p] = await tx
         .select()
         .from(prospects)
         .where(eq(prospects.id, prospectId))
         .limit(1);
       if (!p) throw new Error("Prospect not found.");
-      if (p.convertedEngagementId) return p.convertedEngagementId;
+      if (p.convertedEngagementId) {
+        return { engagementId: p.convertedEngagementId, reward: null };
+      }
       const rows = buildRows(p, coachId);
       await tx.insert(orgs).values(rows.org);
       await tx.insert(engagements).values(rows.engagement);
@@ -116,12 +176,33 @@ export async function activateProspectAsEngagement(
           status: "onboarded",
         })
         .where(eq(prospects.id, p.id));
-      return rows.newEngagementId;
+      const reward = await insertReferralReward(tx, {
+        prospect: p,
+        engagementId: rows.newEngagementId,
+        engagementOrgId: rows.org.id,
+        coachUserProfileId: profile.userProfileId,
+      });
+      return { engagementId: rows.newEngagementId, reward };
     });
+    // Email the coach about the gift cert after the commit, so a mail
+    // hiccup can never roll back the conversion.
+    if (result.reward) {
+      const coach = await loadCoachContact(profile.userProfileId);
+      if (coach) {
+        await sendEmailQuietly(
+          referralRewardEmail({
+            to: coach.email,
+            coachName: coach.name,
+            referrer: result.reward.referrer,
+            companyName: result.reward.companyName,
+          }),
+        );
+      }
+    }
     revalidatePath("/business-builder/pipeline");
     revalidatePath(`/business-builder/pipeline/${prospectId}`);
     revalidatePath("/business-builder/engagements");
-    return { ok: true, data: { engagementId } };
+    return { ok: true, data: { engagementId: result.engagementId } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -138,13 +219,13 @@ export async function activateAllSignedProspects(): Promise<
   }
   const coachId = await ensureCoachId(profile.userProfileId, profile.orgId);
   try {
-    const activated = await withSystemContext(async (tx) => {
+    const { count, rewards } = await withSystemContext(async (tx) => {
       const [master] = await tx
         .select({ id: orgs.id })
         .from(orgs)
         .where(eq(orgs.type, "master"))
         .limit(1);
-      if (!master) return 0;
+      if (!master) return { count: 0, rewards: [] as ReferralReward[] };
       const signed = await tx
         .select()
         .from(prospects)
@@ -156,6 +237,7 @@ export async function activateAllSignedProspects(): Promise<
           ),
         );
       let count = 0;
+      const rewards: ReferralReward[] = [];
       for (const p of signed) {
         const rows = buildRows(p, coachId);
         await tx.insert(orgs).values(rows.org);
@@ -167,13 +249,35 @@ export async function activateAllSignedProspects(): Promise<
             status: "onboarded",
           })
           .where(eq(prospects.id, p.id));
+        const reward = await insertReferralReward(tx, {
+          prospect: p,
+          engagementId: rows.newEngagementId,
+          engagementOrgId: rows.org.id,
+          coachUserProfileId: profile.userProfileId,
+        });
+        if (reward) rewards.push(reward);
         count++;
       }
-      return count;
+      return { count, rewards };
     });
+    if (rewards.length > 0) {
+      const coach = await loadCoachContact(profile.userProfileId);
+      if (coach) {
+        for (const reward of rewards) {
+          await sendEmailQuietly(
+            referralRewardEmail({
+              to: coach.email,
+              coachName: coach.name,
+              referrer: reward.referrer,
+              companyName: reward.companyName,
+            }),
+          );
+        }
+      }
+    }
     revalidatePath("/business-builder/pipeline");
     revalidatePath("/business-builder/engagements");
-    return { ok: true, data: { activated } };
+    return { ok: true, data: { activated: count } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
