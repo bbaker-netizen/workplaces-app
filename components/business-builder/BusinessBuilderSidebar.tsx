@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
@@ -127,7 +127,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       { href: "/business-builder/library", label: "Tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },
-      { href: "/business-builder/welcome/modules", label: "Module reference", icon: HelpCircle },
     ],
   },
 ];
@@ -156,6 +155,23 @@ export function BusinessBuilderSidebar({
   const [collapsed, setCollapsed] = useState(collapsedInitial);
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
+
+  // Keep the menu's scroll position across navigations — clicking an item
+  // used to jump the nav back to the top.
+  const navRef = useRef<HTMLElement>(null);
+  const navScrollTop = useRef(0);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const onScroll = () => {
+      navScrollTop.current = nav.scrollTop;
+    };
+    nav.addEventListener("scroll", onScroll, { passive: true });
+    return () => nav.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    if (navRef.current) navRef.current.scrollTop = navScrollTop.current;
+  }, [pathname]);
 
   // Per-phase open/closed state. Defaults to ALL CLOSED so the sidebar
   // is quiet until you click into a section. Persists in localStorage
@@ -303,6 +319,7 @@ export function BusinessBuilderSidebar({
 
       {/* Nav */}
       <nav
+        ref={navRef}
         className={
           "flex-1 overflow-y-auto " + (collapsed ? "px-1.5 py-3 space-y-3" : "px-3 py-4 space-y-5")
         }

@@ -32,6 +32,7 @@ import {
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { TakeTheTourButton } from "@/components/business-builder/TakeTheBusinessBuilderTourButton";
 import { LifecycleOverview } from "@/components/business-builder/LifecycleOverview";
+import { ModuleReference } from "@/components/business-builder/ModuleReference";
 
 export default async function CoachWelcomePage() {
   const profile = await ensureUserProfile();
@@ -59,10 +60,10 @@ export default async function CoachWelcomePage() {
         <div className="pt-2 flex flex-wrap gap-3">
           <TakeTheTourButton label="Run the interactive walkthrough" />
           <Link
-            href="/business-builder/welcome/modules"
+            href="#module-reference"
             className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-5 py-2.5 rounded-pill bg-tbb-navy text-white hover:bg-tbb-navy-700 transition-colors duration-tbb-base"
           >
-            Module reference
+            Jump to module reference ↓
           </Link>
           <Link
             href="/business-builder"
@@ -538,6 +539,8 @@ export default async function CoachWelcomePage() {
           </li>
         </ul>
       </section>
+
+      <ModuleReference />
     </main>
   );
 }

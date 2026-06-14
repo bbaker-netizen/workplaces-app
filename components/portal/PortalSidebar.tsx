@@ -15,7 +15,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
@@ -95,6 +95,22 @@ export function PortalSidebar({
   const [collapsed, setCollapsed] = useState(collapsedInitial);
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
+
+  // Keep the menu's scroll position across navigations.
+  const navRef = useRef<HTMLElement>(null);
+  const navScrollTop = useRef(0);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const onScroll = () => {
+      navScrollTop.current = nav.scrollTop;
+    };
+    nav.addEventListener("scroll", onScroll, { passive: true });
+    return () => nav.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    if (navRef.current) navRef.current.scrollTop = navScrollTop.current;
+  }, [pathname]);
 
   function isActiveHref(href: string): boolean {
     if (href === "/portal") return pathname === "/portal";
@@ -190,6 +206,7 @@ export function PortalSidebar({
 
       {/* Nav */}
       <nav
+        ref={navRef}
         className={
           "flex-1 overflow-y-auto " +
           (collapsed ? "px-1.5 py-3 space-y-3" : "px-3 py-4 space-y-5")
