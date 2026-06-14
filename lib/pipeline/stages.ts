@@ -144,6 +144,7 @@ export const STAGE_ORDER: ProspectStatus[] = [
 export const LEAD_SOURCES = [
   "Web diagnostic",
   "Referral",
+  "Repeat Client",
   "Google Ads Campaign",
   "Google Search",
   "Cold outreach",
@@ -152,7 +153,6 @@ export const LEAD_SOURCES = [
   "Phone call",
   "Social media",
   "Conference",
-  "Other",
 ] as const;
 
 /**
