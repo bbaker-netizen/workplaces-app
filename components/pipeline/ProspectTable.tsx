@@ -21,6 +21,7 @@ import Link from "next/link";
 import { Archive, ArchiveRestore, Columns3, Loader2, Search, X } from "lucide-react";
 import { ProspectStatusSelect } from "./ProspectStatusSelect";
 import {
+  STAGE_ORDER,
   STAGE_STYLES,
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
@@ -203,6 +204,57 @@ export function ProspectTable({
   );
   const viewingArchived = stageFilter === "archived";
 
+  /* Persist the chosen view (filter + search + sort) across reloads and
+     navigations until the coach resets it. Hydrate from localStorage on
+     mount (after first paint, to avoid an SSR mismatch), then mirror any
+     change back. */
+  const VIEW_KEY = "tbb.pipeline.view";
+  const viewHydrated = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VIEW_KEY);
+      if (raw) {
+        const v = JSON.parse(raw) as {
+          stageFilter?: string;
+          query?: string;
+          sortBy?: string;
+        };
+        if (typeof v.stageFilter === "string")
+          setStageFilter(v.stageFilter as typeof stageFilter);
+        if (typeof v.query === "string") setQuery(v.query);
+        if (v.sortBy === "company" || v.sortBy === "updated")
+          setSortBy(v.sortBy);
+      }
+    } catch {
+      /* ignore malformed/blocked storage */
+    }
+    viewHydrated.current = true;
+  }, []);
+  useEffect(() => {
+    if (!viewHydrated.current) return;
+    try {
+      localStorage.setItem(
+        VIEW_KEY,
+        JSON.stringify({ stageFilter, query, sortBy }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [stageFilter, query, sortBy]);
+
+  const viewIsDefault =
+    stageFilter === "prospects" && query === "" && sortBy === "company";
+  function resetView() {
+    setStageFilter("prospects");
+    setQuery("");
+    setSortBy("company");
+    try {
+      localStorage.removeItem(VIEW_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
   /* Persist preferences with a small debounce so dragging doesn't hit
      the server on every pixel. */
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -383,9 +435,9 @@ export function ProspectTable({
           <option value="prospects">Prospects (default)</option>
           <option value="clients">Active engagements</option>
           <option value="all">All stages</option>
-          {Object.entries(STAGE_STYLES).map(([k, v]) => (
+          {STAGE_ORDER.map((k) => (
             <option key={k} value={k}>
-              {v.label}
+              {STAGE_STYLES[k].label}
             </option>
           ))}
           {archivedCount > 0 && (
@@ -472,6 +524,18 @@ export function ProspectTable({
             </>
           )}
         </div>
+
+        {!viewIsDefault && (
+          <button
+            type="button"
+            onClick={resetView}
+            className="inline-flex items-center gap-1 text-xs font-bold text-tbb-blue hover:underline"
+            title="Clear search, filter and sort back to the default view"
+          >
+            <X className="w-3.5 h-3.5" aria-hidden />
+            Reset view
+          </button>
+        )}
 
         <span className="text-xs text-tbb-ink-3 tabular-nums">
           {filtered.length} of {prospects.length}
