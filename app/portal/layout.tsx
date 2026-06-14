@@ -50,6 +50,26 @@ export default async function PortalLayout({
     getCurrentUserPrefs(),
   ]);
 
+  // Archived engagement = the client relationship is closed. Coaches
+  // previewing fall back to a live engagement (getCurrentEngagement skips
+  // archived), so an archived engagement here means an actual client whose
+  // access has ended — show a closed-portal notice instead of the modules.
+  if (engagement?.archivedAt && !isCoachRole) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-6">
+        <div className="max-w-md text-center space-y-3">
+          <h1 className="font-bold text-foreground text-2xl tracking-tight">
+            This portal is closed
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Your engagement has wrapped up, so portal access is paused. If you
+            think this is a mistake, reach out to your Business Builder.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const modules = engagement
     ? await getEnabledModules(profile.orgId, profile.role, engagement.id)
     : ALL_MODULES.filter((m) => m.visibleTo.includes(profile.role));

@@ -328,12 +328,13 @@ export async function deleteProspect(
         .set({ archivedAt: new Date() })
         .where(eq(prospects.id, id))
         .returning({ engagementId: prospects.convertedEngagementId });
-      // Portal follows the contact: archiving an active client pauses
-      // their engagement so the portal goes read-only.
+      // Portal follows the contact: archiving an active client archives
+      // their engagement too — removed from the Engagements list and the
+      // portal closed off.
       if (row?.engagementId) {
         await tx
           .update(engagements)
-          .set({ status: "paused" })
+          .set({ status: "paused", archivedAt: new Date() })
           .where(eq(engagements.id, row.engagementId));
       }
     });
@@ -368,7 +369,7 @@ export async function unarchiveProspect(
       if (row?.engagementId) {
         await tx
           .update(engagements)
-          .set({ status: "active" })
+          .set({ status: "active", archivedAt: null })
           .where(eq(engagements.id, row.engagementId));
       }
     });
@@ -432,7 +433,7 @@ export async function bulkDeleteProspects(
       if (engagementIds.length > 0) {
         await tx
           .update(engagements)
-          .set({ status: "paused" })
+          .set({ status: "paused", archivedAt: new Date() })
           .where(inArray(engagements.id, engagementIds));
       }
       return result.length;

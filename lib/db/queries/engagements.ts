@@ -14,7 +14,7 @@
  * orgs; Coach session is in master org). Uses withSystemContext.
  */
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { coaches, engagements, type Engagement } from "../schema";
 import { withSystemContext, withTenantContext } from "../tenant";
@@ -72,6 +72,7 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
       const [row] = await tx
         .select()
         .from(engagements)
+        .where(isNull(engagements.archivedAt))
         .orderBy(desc(engagements.createdAt))
         .limit(1);
       return row ?? null;
@@ -115,6 +116,11 @@ export async function listCoachEngagements(): Promise<Engagement[]> {
     return tx
       .select()
       .from(engagements)
-      .where(eq(engagements.coachId, Coach.id));
+      .where(
+        and(
+          eq(engagements.coachId, Coach.id),
+          isNull(engagements.archivedAt),
+        ),
+      );
   });
 }
