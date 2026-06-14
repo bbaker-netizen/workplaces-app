@@ -26,6 +26,7 @@ import {
 } from "@/lib/pipeline/stages";
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
+import { formatCad } from "@/lib/format";
 import { setPipelineColumnPrefs } from "@/lib/actions/user-prefs";
 import { bulkDeleteProspects } from "@/lib/actions/prospects";
 import {
@@ -69,7 +70,7 @@ const COLUMNS: ColumnDef[] = [
   // Stage column has a 164px chip + 32px cell padding = needs 196 to
   // never clip. 210 gives a tiny bit of breathing room.
   { key: "stage", label: "Stage", defaultWidth: 210, defaultVisible: true },
-  { key: "value", label: "Value", defaultWidth: 110, defaultVisible: true, alignRight: true },
+  { key: "value", label: "Total value", defaultWidth: 110, defaultVisible: true, alignRight: true },
   { key: "monthly", label: "Monthly", defaultWidth: 110, defaultVisible: true, alignRight: true },
   { key: "next_action", label: "Next action", defaultWidth: 160, defaultVisible: true },
   { key: "owner", label: "Owner", defaultWidth: 140, defaultVisible: true },
@@ -649,35 +650,22 @@ function CellByKey({
         </Td>
       );
     case "value": {
-      // Prefer the client's actual lifetime payments from QuickBooks —
-      // a direct customer link on the prospect, else a link via the
-      // converted engagement — and fall back to the manually-entered
-      // expected value for prospects not yet linked to a QBO customer.
-      const qboCents =
+      // The client's lifetime payments from QuickBooks — a direct customer
+      // link on the prospect, else a link via the converted engagement.
+      const cents =
         prospect.qboLifetimePaymentsCents ??
         prospect.engagementQboLifetimePaymentsCents;
-      const hasQbo = qboCents !== null && qboCents !== undefined;
-      const cents = hasQbo ? qboCents : prospect.expectedValueCents;
       return (
         <Td alignRight>
           {cents ? (
             <span
               className="tabular-nums font-bold text-tbb-navy whitespace-nowrap"
-              title={
-                hasQbo
-                  ? "Lifetime payments received (from QuickBooks)"
-                  : "Expected value (estimate)"
-              }
+              title="Lifetime payments received (from QuickBooks)"
             >
-              ${(cents / 100).toLocaleString("en-CA", {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              })}
-              {hasQbo && (
-                <span className="ml-1 align-middle text-[9px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
-                  QB
-                </span>
-              )}
+              {formatCad(cents)}
+              <span className="ml-1 align-middle text-[9px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
+                QB
+              </span>
             </span>
           ) : (
             <Dash />
@@ -694,10 +682,7 @@ function CellByKey({
               className="tabular-nums font-bold text-tbb-navy whitespace-nowrap"
               title="Monthly program fee this client pays"
             >
-              ${(cents / 100).toLocaleString("en-CA", {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              })}
+              {formatCad(cents)}
               <span className="font-normal text-tbb-ink-3">/mo</span>
             </span>
           ) : (

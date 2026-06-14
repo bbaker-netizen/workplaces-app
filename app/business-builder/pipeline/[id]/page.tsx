@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/queries/prospects";
 import { listEnvelopesForProspect } from "@/lib/db/queries/signatures";
 import { listForProspect } from "@/lib/db/queries/client-communications";
+import { listBusinessBuilders } from "@/lib/db/queries/user-profiles";
 import {
   documentTemplates,
   emailTemplates,
@@ -72,6 +73,7 @@ export default async function ProspectDetailPage({
     docTemplates,
     me,
     org,
+    businessBuilders,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -128,6 +130,7 @@ export default async function ProspectDetailPage({
         .limit(1);
       return o ?? null;
     }),
+    listBusinessBuilders(),
   ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
@@ -298,14 +301,16 @@ export default async function ProspectDetailPage({
           {/* Deal card */}
           <ProspectDealCard
             prospectId={prospect.id}
-            expectedValueCents={prospect.expectedValueCents}
+            totalClientValueCents={prospect.qboLifetimePaymentsCents}
             leadSource={prospect.leadSource}
+            ownerUserProfileId={prospect.ownerUserProfileId}
             ownerName={prospect.ownerName}
             nextActionDate={prospect.nextActionDate}
             nextActionNote={prospect.nextActionNote}
             lastContactAt={prospect.lastContactAt}
             programType={prospect.programType}
             monthlyFeeCents={prospect.monthlyFeeCents}
+            businessBuilders={businessBuilders}
           />
 
           {/* QuickBooks customer link — drives the pipeline Value */}

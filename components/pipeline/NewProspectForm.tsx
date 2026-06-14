@@ -36,7 +36,6 @@ export function NewProspectForm({
   const [phone, setPhone] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [leadSource, setLeadSource] = useState("");
-  const [expectedValue, setExpectedValue] = useState("");
   const [nextActionDate, setNextActionDate] = useState("");
   const [nextActionNote, setNextActionNote] = useState("");
   const [status, setStatus] = useState<string>("new_lead");
@@ -116,11 +115,6 @@ export function NewProspectForm({
       return;
     }
     startTransition(async () => {
-      const valueNum = Number(expectedValue);
-      const valueCents =
-        expectedValue.trim() && Number.isFinite(valueNum) && valueNum >= 0
-          ? Math.round(valueNum * 100)
-          : null;
       // Parse the monthly-fee input (dollars) into cents.
       const feeTrimmed = monthlyFeeInput.trim();
       const monthlyFeeCents =
@@ -134,7 +128,6 @@ export function NewProspectForm({
         phone: phone.trim() || null,
         companyWebsite: companyWebsite.trim() || null,
         leadSource: leadSource || null,
-        expectedValueCents: valueCents,
         nextActionDate: nextActionDate || null,
         nextActionNote: nextActionNote.trim() || null,
         // @ts-expect-error status is a narrow string enum at runtime
@@ -250,20 +243,6 @@ export function NewProspectForm({
               </option>
             ))}
           </select>
-        </Field>
-        <Field label="Expected value (CAD)">
-          <div className="flex items-center gap-1">
-            <span className="text-sm text-tbb-ink-3">$</span>
-            <input
-              type="number"
-              step="100"
-              min="0"
-              value={expectedValue}
-              onChange={(e) => setExpectedValue(e.target.value)}
-              disabled={isPending}
-              className={inputCls}
-            />
-          </div>
         </Field>
         <Field label="Initial stage">
           <select
