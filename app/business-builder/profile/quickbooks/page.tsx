@@ -30,8 +30,8 @@ export default async function QboProfilePage({
 }) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin" && profile.role !== "coach") {
-    redirect("/portal");
+  if (profile.role !== "master_admin") {
+    redirect("/business-builder");
   }
 
   const stored = await withSystemContext(async (tx) => {

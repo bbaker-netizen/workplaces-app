@@ -33,6 +33,7 @@ export default async function BusinessBuilderLayout({
     <div className="min-h-screen bg-background flex">
       <BusinessBuilderSidebar
         fullName={result.fullName}
+        isMasterAdmin={result.role === "master_admin"}
         pinnedNavItems={prefs.pinnedNavItems}
         collapsedInitial={prefs.sidebarCollapsed}
         pulse={pulse}

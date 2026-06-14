@@ -71,8 +71,8 @@ function StatusPill({ status }: { status: Status }) {
 export default async function IntegrationsHubPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin" && profile.role !== "coach") {
-    redirect("/portal");
+  if (profile.role !== "master_admin") {
+    redirect("/business-builder");
   }
 
   // Load connection state for each integration in parallel.

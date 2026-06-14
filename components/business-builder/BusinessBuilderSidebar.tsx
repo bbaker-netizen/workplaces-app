@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "@clerk/nextjs";
 import {
@@ -65,6 +65,9 @@ type BusinessBuilderNavItem = {
    *  public diagnostic) so the Business Builder doesn't get trapped
    *  on a page with no nav back to the console. */
   external?: boolean;
+  /** Only show this item to master admins. Standard Business Builders
+   *  (coach role) don't see system-settings entries. */
+  masterAdminOnly?: boolean;
 };
 
 type BusinessBuilderPhase = {
@@ -125,7 +128,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       // prospect's "Convert to engagement" button (one obvious path).
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
       { href: "/business-builder/library", label: "Tools & tutorials", icon: Sparkles },
-      { href: "/business-builder/settings", label: "Settings", icon: Settings },
+      { href: "/business-builder/settings", label: "Settings", icon: Settings, masterAdminOnly: true },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },
     ],
   },
@@ -139,12 +142,16 @@ for (const phase of BUSINESS_BUILDER_PHASES) {
 
 export function BusinessBuilderSidebar({
   fullName,
+  isMasterAdmin = false,
   unreadCount,
   pinnedNavItems,
   collapsedInitial,
   pulse,
 }: {
   fullName: string;
+  /** Master admins see system-settings nav entries; standard Business
+   *  Builders (coach role) don't. */
+  isMasterAdmin?: boolean;
   unreadCount?: number;
   pinnedNavItems: string[];
   collapsedInitial: boolean;
@@ -273,9 +280,20 @@ export function BusinessBuilderSidebar({
     });
   }
 
+  // Hide master-admin-only entries from standard Business Builders.
+  const visiblePhases = useMemo(
+    () =>
+      BUSINESS_BUILDER_PHASES.map((p) => ({
+        ...p,
+        items: p.items.filter((it) => isMasterAdmin || !it.masterAdminOnly),
+      })).filter((p) => p.items.length > 0),
+    [isMasterAdmin],
+  );
+
   const pinnedItems = pins
     .map((href) => ALL_ITEMS_BY_HREF.get(href))
-    .filter((it): it is BusinessBuilderNavItem => Boolean(it));
+    .filter((it): it is BusinessBuilderNavItem => Boolean(it))
+    .filter((it) => isMasterAdmin || !it.masterAdminOnly);
 
   return (
     <aside
@@ -365,7 +383,7 @@ export function BusinessBuilderSidebar({
           </section>
         )}
 
-        {BUSINESS_BUILDER_PHASES.map((phase) => {
+        {visiblePhases.map((phase) => {
           const PhaseIcon = phase.icon;
           const isOpen = openPhases.has(phase.key);
           const hasActiveChild = phase.items.some((it) =>
