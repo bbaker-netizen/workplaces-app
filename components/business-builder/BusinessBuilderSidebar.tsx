@@ -33,12 +33,10 @@ import {
   HelpCircle,
   Hammer,
   Inbox,
-  Link as LinkIcon,
   LogOut,
   MessagesSquare,
   PenLine,
   Rocket,
-  Search,
   Settings,
   Sparkles,
   Star,
@@ -87,13 +85,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     icon: Filter,
     items: [
       { href: "/business-builder/pipeline", label: "Prospects & Clients", icon: Filter, tourId: "Coach-pipeline" },
-      {
-        href: "/diagnostic",
-        label: "Public diagnostic",
-        icon: LinkIcon,
-        tourId: "Coach-diagnostic",
-        external: true,
-      },
     ],
   },
   {
@@ -119,7 +110,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       { href: "/business-builder/deliverables", label: "Deliverables", icon: FileText, tourId: "Coach-deliverables" },
       { href: "/business-builder/projects", label: "Projects", icon: Briefcase },
       // Goals removed per Bruce — was redundant with Projects in practice.
-      { href: "/business-builder/soul-search", label: "Soul File search", icon: Search },
+      // Soul File removed per Bruce — the concept is retired across the app.
     ],
   },
   {

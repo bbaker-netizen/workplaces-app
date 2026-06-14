@@ -43,10 +43,6 @@ const STARTERS: { label: string; text: string }[] = [
     text: "What's the difference between Action Items, Deliverables, Projects, and Goals?",
   },
   {
-    label: "What's the Soul File?",
-    text: "What is the Soul File and why does it matter?",
-  },
-  {
     label: "How do I send a contract?",
     text: "How do I send a contract for signature?",
   },

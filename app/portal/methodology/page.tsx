@@ -14,7 +14,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { CheckCircle2, BookOpen, Target, Compass } from "lucide-react";
+import { CheckCircle2, Target, Compass } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 
 export default async function MethodologyPage() {
@@ -60,20 +60,6 @@ export default async function MethodologyPage() {
           Sessions are scheduled in the <em>Sessions</em> module; notes
           stay attached to the session so the rhythm of the engagement
           is always visible.
-        </p>
-      </Section>
-
-      <Section
-        icon={<BookOpen className="w-5 h-5" aria-hidden />}
-        title="The Soul File"
-      >
-        <p>
-          Each engagement has one Soul File — the deep context document.
-          Why the business exists. Where it&apos;s trying to go. The
-          founders, the strategy, the hard-won learnings. It&apos;s the
-          background music for every BBS, every deliverable, every
-          decision. Open the <em>Soul File</em> module any time to read
-          or update it.
         </p>
       </Section>
 
