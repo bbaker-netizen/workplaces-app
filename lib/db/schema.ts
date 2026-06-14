@@ -557,6 +557,12 @@ export const tasks = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    /** Parent task for sub-tasks. Null = top-level. Deleting a parent
+     *  cascades to its sub-tasks. One level of nesting. */
+    parentTaskId: uuid("parent_task_id").references(
+      (): AnyPgColumn => tasks.id,
+      { onDelete: "cascade" },
+    ),
     title: text("title").notNull(),
     description: text("description"),
     status: taskStatusEnum("status").notNull().default("todo"),

@@ -29,6 +29,7 @@ export type TaskMember = { id: string; fullName: string };
 
 export type TaskRow = {
   id: string;
+  parentTaskId: string | null;
   title: string;
   description: string | null;
   status: TaskStatus;
@@ -51,26 +52,64 @@ export function TaskList({
 }) {
   const [error, setError] = useState<string | null>(null);
 
+  // Build the one-level tree: top-level tasks + their sub-tasks.
+  const tops = tasks.filter((t) => !t.parentTaskId);
+  const childrenByParent = new Map<string, TaskRow[]>();
+  for (const t of tasks) {
+    if (t.parentTaskId) {
+      const arr = childrenByParent.get(t.parentTaskId) ?? [];
+      arr.push(t);
+      childrenByParent.set(t.parentTaskId, arr);
+    }
+  }
+
   return (
     <section className="space-y-3">
       <h2 className="font-bold text-foreground text-xl tracking-tight">
         Tasks
       </h2>
-      {tasks.length === 0 ? (
+      {tops.length === 0 ? (
         <p className="font-sans text-sm text-muted-foreground italic">
           No tasks yet.
         </p>
       ) : (
         <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
-          {tasks.map((t) => (
-            <TaskRowView
-              key={t.id}
-              task={t}
-              members={members}
-              canEdit={canEdit}
-              onError={setError}
-            />
-          ))}
+          {tops.map((t) => {
+            const subs = childrenByParent.get(t.id) ?? [];
+            const doneSubs = subs.filter((s) => s.status === "done").length;
+            return (
+              <li key={t.id} className="py-2">
+                <TaskRowView
+                  task={t}
+                  members={members}
+                  canEdit={canEdit}
+                  onError={setError}
+                  subCount={subs.length}
+                  subDone={doneSubs}
+                />
+                {(subs.length > 0 || canEdit) && (
+                  <div className="ml-7 mt-1 border-l-2 border-tbb-line-soft pl-3 space-y-0.5">
+                    {subs.map((s) => (
+                      <TaskRowView
+                        key={s.id}
+                        task={s}
+                        members={members}
+                        canEdit={canEdit}
+                        onError={setError}
+                      />
+                    ))}
+                    {canEdit && (
+                      <NewTaskForm
+                        projectId={projectId}
+                        parentTaskId={t.id}
+                        onError={setError}
+                      />
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       {canEdit && <NewTaskForm projectId={projectId} onError={setError} />}
@@ -88,11 +127,15 @@ function TaskRowView({
   members,
   canEdit,
   onError,
+  subCount = 0,
+  subDone = 0,
 }: {
   task: TaskRow;
   members: TaskMember[];
   canEdit: boolean;
   onError: (e: string | null) => void;
+  subCount?: number;
+  subDone?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
@@ -153,7 +196,7 @@ function TaskRowView({
     task.dueDate && task.dueDate < new Date() && task.status !== "done";
 
   return (
-    <li className="py-3">
+    <div className="py-1.5">
       {editing ? (
         <div className="space-y-2">
           <input
@@ -280,6 +323,9 @@ function TaskRowView({
                   </span>
                 )}
                 <span>{task.percentComplete}% complete</span>
+                {subCount > 0 && (
+                  <span> · {subDone}/{subCount} sub-tasks</span>
+                )}
               </p>
             </button>
           </div>
@@ -296,17 +342,20 @@ function TaskRowView({
           )}
         </div>
       )}
-    </li>
+    </div>
   );
 }
 
 function NewTaskForm({
   projectId,
+  parentTaskId,
   onError,
 }: {
   projectId: string;
+  parentTaskId?: string;
   onError: (e: string | null) => void;
 }) {
+  const isSubtask = Boolean(parentTaskId);
   const [title, setTitle] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -316,6 +365,7 @@ function NewTaskForm({
     startTransition(async () => {
       const result = await createTask({
         projectId,
+        parentTaskId: parentTaskId ?? null,
         title: title.trim(),
       });
       if (!result.ok) onError(result.error);
@@ -329,20 +379,26 @@ function NewTaskForm({
         e.preventDefault();
         submit();
       }}
-      className="flex items-center gap-2 pt-3"
+      className={"flex items-center gap-2 " + (isSubtask ? "py-1" : "pt-3")}
     >
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         disabled={isPending}
-        placeholder="Add a task…"
-        className="flex-1 bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+        placeholder={isSubtask ? "Add a sub-task…" : "Add a task…"}
+        className={
+          "flex-1 bg-white border border-tbb-line rounded-md font-sans focus:outline-none focus:ring-2 focus:ring-tbb-blue " +
+          (isSubtask ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm")
+        }
       />
       <button
         type="submit"
         disabled={isPending || !title.trim()}
-        className="inline-flex items-center gap-1 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
+        className={
+          "inline-flex items-center gap-1 font-sans font-bold uppercase tracking-tbb-caps rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 " +
+          (isSubtask ? "px-2.5 py-1.5 text-[10px]" : "px-3 py-2 text-xs")
+        }
       >
         {isPending ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
