@@ -1253,6 +1253,12 @@ export const deliverables = pgTable(
      *  for the milestone position. */
     targetDate: timestamp("target_date", { withTimezone: true }),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    /** Who marked this delivered (coach or client). Shown to both sides
+     *  alongside the delivered date. */
+    completedByUserProfileId: uuid("completed_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
     revenueImpact: boolean("revenue_impact").notNull().default(false),
     marginImpact: boolean("margin_impact").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

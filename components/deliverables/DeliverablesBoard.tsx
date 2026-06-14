@@ -63,7 +63,12 @@ type Item = {
   status: DStatus;
   documentId: string | null;
   deliveredAt: Date | null;
+  completedByName: string | null;
 };
+
+function toDateInput(d: Date | null): string {
+  return d ? new Date(d).toISOString().slice(0, 10) : "";
+}
 
 export function DeliverablesBoard({
   engagementId,
@@ -86,6 +91,16 @@ export function DeliverablesBoard({
     setError(null);
     startTransition(async () => {
       const result = await updateDeliverable(id, { status: next });
+      if (!result.ok) setError(result.error);
+    });
+  };
+
+  const onChangeDeliveredDate = (id: string, value: string) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateDeliverable(id, {
+        deliveredAt: value || null,
+      });
       if (!result.ok) setError(result.error);
     });
   };
@@ -150,10 +165,29 @@ export function DeliverablesBoard({
                     {d.description}
                   </p>
                 )}
-                {d.deliveredAt && (
-                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                    Delivered {new Date(d.deliveredAt).toLocaleDateString()}
-                  </p>
+                {d.status === "delivered" && (
+                  <div className="mt-1 flex items-center gap-2 flex-wrap font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+                    <span>Completed</span>
+                    {canEdit ? (
+                      <input
+                        type="date"
+                        value={toDateInput(d.deliveredAt)}
+                        onChange={(e) =>
+                          onChangeDeliveredDate(d.id, e.target.value)
+                        }
+                        disabled={isPending}
+                        aria-label={`Completion date for ${d.title}`}
+                        className="border border-tbb-line rounded px-1.5 py-0.5 text-[10px] font-mono bg-white"
+                      />
+                    ) : (
+                      <span className="text-foreground">
+                        {d.deliveredAt
+                          ? new Date(d.deliveredAt).toLocaleDateString()
+                          : "—"}
+                      </span>
+                    )}
+                    {d.completedByName && <span>· by {d.completedByName}</span>}
+                  </div>
                 )}
               </div>
               {d.documentId && (
