@@ -6,7 +6,7 @@
  */
 
 import { cookies } from "next/headers";
-import { desc } from "drizzle-orm";
+import { desc, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
@@ -46,6 +46,9 @@ export async function GET(req: Request) {
         tx
           .select({ slug: engagements.slug })
           .from(engagements)
+          // Skip archived clients — previewing one of those binds the
+          // portal to a closed engagement and every module reads empty.
+          .where(isNull(engagements.archivedAt))
           .orderBy(desc(engagements.createdAt))
           .limit(1),
       );

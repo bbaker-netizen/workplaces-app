@@ -11,6 +11,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
+import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 
 export default async function EngagementsListPage() {
   const profile = await ensureUserProfile();
@@ -156,6 +157,10 @@ export default async function EngagementsListPage() {
                   engagementId={e.id}
                   engagementName={e.name ?? e.orgName ?? "this client"}
                   archived
+                />
+                <DeleteEngagementButton
+                  engagementId={e.id}
+                  engagementName={e.name ?? e.orgName ?? "this client"}
                 />
               </li>
             ))}

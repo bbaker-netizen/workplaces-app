@@ -18,8 +18,8 @@ import { ProfileClerkButton } from "@/components/settings/ProfileClerkButton";
 export default async function ProfileSettingsPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin") {
-    redirect("/business-builder");
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    redirect("/portal");
   }
 
   // Pull the user's full profile so we can surface the read-only

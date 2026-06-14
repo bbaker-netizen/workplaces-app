@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Home } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getUnreadNotificationCount } from "@/lib/db/queries/notifications";
 import {
@@ -88,6 +90,21 @@ export default async function PortalLayout({
         isCoach={profile.role === "master_admin" || profile.role === "coach"}
       />
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Persistent top bar — always gives a one-click way back to the
+            portal home from any module page (documents, sessions, etc.). */}
+        <div className="sticky top-0 z-20 border-b border-tbb-line bg-background/95 backdrop-blur px-6 py-2.5 flex items-center gap-3">
+          <Link
+            href="/portal"
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
+          >
+            <Home className="w-3.5 h-3.5" aria-hidden /> Portal home
+          </Link>
+          {engagement?.name && (
+            <span className="text-xs text-tbb-ink-3 truncate">
+              {engagement.name}
+            </span>
+          )}
+        </div>
         {readOnly && (
           <div className="border-b border-tbb-warning/40 bg-tbb-warning/10 px-6 py-3 text-sm text-tbb-ink-2 flex items-center gap-3 flex-wrap">
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-warning">

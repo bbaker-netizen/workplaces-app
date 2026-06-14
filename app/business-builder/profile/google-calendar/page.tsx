@@ -34,8 +34,8 @@ export default async function GoogleCalendarConnectPage({
 }) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin") {
-    redirect("/business-builder");
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    redirect("/portal");
   }
   const status = await getConnectionStatus(profile.userProfileId);
   const params = await searchParams;
