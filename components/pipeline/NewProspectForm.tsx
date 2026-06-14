@@ -260,14 +260,15 @@ export function NewProspectForm({
               if (phone.trim()) setPhone(formatPhone(phone));
             }}
             disabled={isPending}
-            placeholder="+1 780-555-1234"
+            placeholder="(780) 555-1234"
             className={inputCls}
           />
         </Field>
         <Field label="Website">
           <input
-            type="url"
-            placeholder="https://"
+            type="text"
+            inputMode="url"
+            placeholder="acme.com"
             value={companyWebsite}
             onChange={(e) => setCompanyWebsite(e.target.value)}
             disabled={isPending}

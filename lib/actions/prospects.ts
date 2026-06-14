@@ -19,7 +19,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
-import { formatPhone } from "@/lib/format";
+import { formatPhone, normalizeWebsite } from "@/lib/format";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -134,7 +134,7 @@ export async function createProspect(
         contactName: data.contactName.trim(),
         contactEmail: data.contactEmail,
         phone: data.phone ? formatPhone(data.phone) : null,
-        companyWebsite: data.companyWebsite ?? null,
+        companyWebsite: normalizeWebsite(data.companyWebsite),
         leadSource: data.leadSource ?? null,
         referrerName: data.referrerName ?? null,
         expectedValueCents: data.expectedValueCents ?? null,
@@ -273,7 +273,8 @@ export async function updateProspect(
       if (data.contactEmail !== undefined) updates.contactEmail = data.contactEmail;
       if (data.phone !== undefined)
         updates.phone = data.phone ? formatPhone(data.phone) : null;
-      if (data.companyWebsite !== undefined) updates.companyWebsite = data.companyWebsite;
+      if (data.companyWebsite !== undefined)
+        updates.companyWebsite = normalizeWebsite(data.companyWebsite);
       if (data.industry !== undefined) updates.industry = data.industry;
       if (data.leadSource !== undefined) updates.leadSource = data.leadSource;
       if (data.referrerName !== undefined)
