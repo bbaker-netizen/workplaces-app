@@ -41,6 +41,7 @@ export default async function PortalDeliverablesPage() {
           status: d.status,
           documentId: d.documentId,
           deliveredAt: d.deliveredAt,
+          completedByName: d.completedByName,
         }))}
         canEdit={canEdit}
       />

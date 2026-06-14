@@ -61,7 +61,18 @@ const createSchema = z.object({
   marginImpact: z.boolean().default(false),
 });
 
-const updateSchema = createSchema.partial().omit({ engagementId: true });
+const updateSchema = createSchema
+  .partial()
+  .omit({ engagementId: true })
+  .extend({
+    /** Explicit completion date (YYYY-MM-DD). Lets either side record the
+     *  actual date a deliverable was completed, not just "now". */
+    deliveredAt: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
+      .nullable()
+      .optional(),
+  });
 
 export async function createDeliverable(
   input: z.input<typeof createSchema>,
@@ -146,7 +157,25 @@ export async function updateDeliverable(
           update.description = data.description;
         if (data.status !== undefined) {
           update.status = data.status;
-          if (data.status === "delivered") update.deliveredAt = new Date();
+          if (data.status === "delivered") {
+            // Record who completed it + the date (provided or now).
+            update.deliveredAt = data.deliveredAt
+              ? new Date(data.deliveredAt)
+              : new Date();
+            update.completedByUserProfileId = profile.userProfileId;
+          } else {
+            // Moving off "delivered" clears the completion stamp.
+            update.deliveredAt = null;
+            update.completedByUserProfileId = null;
+          }
+        } else if (data.deliveredAt !== undefined) {
+          // Adjusting the completion date on an already-delivered item.
+          update.deliveredAt = data.deliveredAt
+            ? new Date(data.deliveredAt)
+            : null;
+          update.completedByUserProfileId = data.deliveredAt
+            ? profile.userProfileId
+            : null;
         }
         if (data.documentId !== undefined)
           update.documentId = data.documentId;
