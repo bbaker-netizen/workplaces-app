@@ -96,20 +96,34 @@ export function PortalSidebar({
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
 
-  // Keep the menu's scroll position across navigations.
+  // Keep the menu's scroll position across navigations (sessionStorage so
+  // it survives a remount; restore on the next frame to beat any reset).
   const navRef = useRef<HTMLElement>(null);
-  const navScrollTop = useRef(0);
   useEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
     const onScroll = () => {
-      navScrollTop.current = nav.scrollTop;
+      try {
+        sessionStorage.setItem("portal-nav-scroll", String(nav.scrollTop));
+      } catch {
+        /* ignore */
+      }
     };
     nav.addEventListener("scroll", onScroll, { passive: true });
     return () => nav.removeEventListener("scroll", onScroll);
   }, []);
   useEffect(() => {
-    if (navRef.current) navRef.current.scrollTop = navScrollTop.current;
+    const nav = navRef.current;
+    if (!nav) return;
+    const raf = requestAnimationFrame(() => {
+      try {
+        const s = sessionStorage.getItem("portal-nav-scroll");
+        if (s != null) nav.scrollTop = parseInt(s, 10) || 0;
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => cancelAnimationFrame(raf);
   }, [pathname]);
 
   function isActiveHref(href: string): boolean {

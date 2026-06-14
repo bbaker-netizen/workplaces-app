@@ -157,20 +157,35 @@ export function BusinessBuilderSidebar({
   const [, startTransition] = useTransition();
 
   // Keep the menu's scroll position across navigations — clicking an item
-  // used to jump the nav back to the top.
+  // used to jump the nav back to the top. Persist in sessionStorage (so it
+  // survives a remount) and restore on the next frame (so it beats any
+  // post-navigation scroll reset).
   const navRef = useRef<HTMLElement>(null);
-  const navScrollTop = useRef(0);
   useEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
     const onScroll = () => {
-      navScrollTop.current = nav.scrollTop;
+      try {
+        sessionStorage.setItem("bb-nav-scroll", String(nav.scrollTop));
+      } catch {
+        /* ignore */
+      }
     };
     nav.addEventListener("scroll", onScroll, { passive: true });
     return () => nav.removeEventListener("scroll", onScroll);
   }, []);
   useEffect(() => {
-    if (navRef.current) navRef.current.scrollTop = navScrollTop.current;
+    const nav = navRef.current;
+    if (!nav) return;
+    const raf = requestAnimationFrame(() => {
+      try {
+        const s = sessionStorage.getItem("bb-nav-scroll");
+        if (s != null) nav.scrollTop = parseInt(s, 10) || 0;
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => cancelAnimationFrame(raf);
   }, [pathname]);
 
   // Per-phase open/closed state. Defaults to ALL CLOSED so the sidebar
