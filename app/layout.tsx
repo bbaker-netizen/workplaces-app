@@ -6,10 +6,35 @@ import { PageTransition } from "@/components/layout/PageTransition";
 import { NavLoaderOverlay } from "@/components/layout/NavLoaderOverlay";
 import "./globals.css";
 
+// Absolute base for OpenGraph / Twitter image URLs. The
+// app/opengraph-image.png + app/twitter-image.png files are picked up by
+// Next's file convention and emitted as <meta og:image> / <meta
+// twitter:image> automatically — metadataBase makes those URLs absolute
+// so link unfurls (Slack, iMessage, LinkedIn, X) resolve the image
+// without any manual upload.
+const siteUrl =
+  process.env.NEXT_PUBLIC_APP_URL ??
+  "https://workplaces-the-builder.netlify.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Business Builder Portal · By Workplaces",
   description:
     "Coaching, deliverables, and invoicing — one operating platform for the Workplaces practice.",
+  openGraph: {
+    title: "The Builder · By Workplaces",
+    description:
+      "Coaching, deliverables, and invoicing — one operating platform for the Workplaces practice.",
+    siteName: "The Builder",
+    type: "website",
+    url: siteUrl,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "The Builder · By Workplaces",
+    description:
+      "Coaching, deliverables, and invoicing — one operating platform for the Workplaces practice.",
+  },
 };
 
 // Clerk components themed to the Business Builders palette.
