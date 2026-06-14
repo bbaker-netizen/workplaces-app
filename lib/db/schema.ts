@@ -1915,6 +1915,9 @@ export const prospects = pgTable(
      *  default pipeline but recoverable (no data loss). Replaces hard
      *  delete for the Delete buttons. */
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    /** When the contract was signed — set when status moves to
+     *  contract_signed. Drives the "Date signed" sort on the pipeline. */
+    contractSignedAt: timestamp("contract_signed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

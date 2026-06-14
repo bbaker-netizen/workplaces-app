@@ -110,15 +110,20 @@ function ContactEdit({
   // "contact ≠ company" check.
   const validation = useMemo(
     () =>
-      validateProspect({
-        companyName: company.trim(),
-        contactName: contactName.trim(),
-        contactEmail: contactEmail.trim(),
-        phone: phone.trim() || null,
-        // On an edit we don't nag about the "looks like a person"
-        // soft warning — the coach is deliberately setting the name.
-        legalNameConfirmed: true,
-      }),
+      validateProspect(
+        {
+          companyName: company.trim(),
+          contactName: contactName.trim(),
+          contactEmail: contactEmail.trim(),
+          phone: phone.trim() || null,
+          // On an edit we don't nag about the "looks like a person"
+          // soft warning — the coach is deliberately setting the name.
+          legalNameConfirmed: true,
+        },
+        // Update mode: structural name rules become warnings, so editing
+        // a phone/website isn't blocked by a legacy one-word contact name.
+        "update",
+      ),
     [company, contactName, contactEmail, phone],
   );
 

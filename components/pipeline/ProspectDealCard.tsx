@@ -164,7 +164,7 @@ export function ProspectDealCard({
             {leadSource ? (
               <span className="text-tbb-navy">{leadSource}</span>
             ) : (
-              <span className="text-tbb-ink-4">Unknown</span>
+              <span className="text-tbb-ink-4">Not set</span>
             )}
           </Field>
           {leadSource === "Referral" && (
@@ -172,7 +172,7 @@ export function ProspectDealCard({
               {referrerName ? (
                 <span className="text-tbb-navy">{referrerName}</span>
               ) : (
-                <span className="text-tbb-ink-4">Unknown</span>
+                <span className="text-tbb-ink-4">Not set</span>
               )}
             </Field>
           )}
@@ -270,7 +270,7 @@ export function ProspectDealCard({
               disabled={isPending}
               className={inputCls}
             >
-              <option value="">Unknown</option>
+              <option value="">Pick one</option>
               {LEAD_SOURCES.map((s) => (
                 <option key={s} value={s}>
                   {s}

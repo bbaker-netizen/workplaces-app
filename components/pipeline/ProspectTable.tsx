@@ -109,7 +109,9 @@ export function ProspectTable({
   const [stageFilter, setStageFilter] = useState<
     ProspectStatus | "all" | "prospects" | "clients" | "archived"
   >("prospects");
-  const [sortBy, setSortBy] = useState<"company" | "updated">("company");
+  const [sortBy, setSortBy] = useState<
+    "company" | "updated" | "owner" | "signed"
+  >("company");
   const [visible, setVisible] = useState<ColumnKey[]>(() => {
     const fromPrefs = (initialPrefs?.visible ?? []) as ColumnKey[];
     // Make sure non-optional columns are always present + only known keys.
@@ -187,6 +189,25 @@ export function ProspectTable({
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
       }
+      if (sortBy === "owner") {
+        // By Business Builder (owner). Unassigned sorts to the bottom,
+        // then alphabetical by company within an owner.
+        const ao = a.ownerName ?? "￿";
+        const bo = b.ownerName ?? "￿";
+        return (
+          ao.localeCompare(bo) || a.companyName.localeCompare(b.companyName)
+        );
+      }
+      if (sortBy === "signed") {
+        // By date signed, most recent first. Unsigned sort to the bottom.
+        const at = a.contractSignedAt
+          ? new Date(a.contractSignedAt).getTime()
+          : -Infinity;
+        const bt = b.contractSignedAt
+          ? new Date(b.contractSignedAt).getTime()
+          : -Infinity;
+        return bt - at;
+      }
       return a.companyName.localeCompare(b.companyName);
     });
   }, [prospects, query, stageFilter, sortBy]);
@@ -222,7 +243,12 @@ export function ProspectTable({
         if (typeof v.stageFilter === "string")
           setStageFilter(v.stageFilter as typeof stageFilter);
         if (typeof v.query === "string") setQuery(v.query);
-        if (v.sortBy === "company" || v.sortBy === "updated")
+        if (
+          v.sortBy === "company" ||
+          v.sortBy === "updated" ||
+          v.sortBy === "owner" ||
+          v.sortBy === "signed"
+        )
           setSortBy(v.sortBy);
       }
     } catch {
@@ -446,12 +472,18 @@ export function ProspectTable({
         </select>
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as "company" | "updated")}
+          onChange={(e) =>
+            setSortBy(
+              e.target.value as "company" | "updated" | "owner" | "signed",
+            )
+          }
           className="bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           aria-label="Sort rows"
         >
           <option value="company">Sort: Company A–Z</option>
-          <option value="updated">Sort: Recently updated</option>
+          <option value="updated">Sort: Last updated</option>
+          <option value="owner">Sort: Business Builder</option>
+          <option value="signed">Sort: Date signed</option>
         </select>
 
         {/* Columns menu */}
