@@ -6,40 +6,45 @@
  */
 
 import { useState, useTransition } from "react";
-import { CalendarClock, DollarSign, Edit2, UserCircle2 } from "lucide-react";
+import { CalendarClock, Edit2, UserCircle2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import { LEAD_SOURCES } from "@/lib/pipeline/stages";
+import { formatCad } from "@/lib/format";
+import type { BusinessBuilderOption } from "@/lib/db/queries/user-profiles";
 
 export function ProspectDealCard({
   prospectId,
-  expectedValueCents,
+  totalClientValueCents,
   leadSource,
+  ownerUserProfileId,
   ownerName,
   nextActionDate,
   nextActionNote,
   lastContactAt,
   programType,
   monthlyFeeCents,
+  businessBuilders,
 }: {
   prospectId: string;
-  expectedValueCents: number | null;
+  /** Lifetime payments received, synced from QuickBooks. Read-only. */
+  totalClientValueCents: number | null;
   leadSource: string | null;
+  ownerUserProfileId: string | null;
   ownerName: string | null;
   nextActionDate: Date | null;
   nextActionNote: string | null;
   lastContactAt: Date | null;
   programType: string | null;
   monthlyFeeCents: number | null;
+  businessBuilders: BusinessBuilderOption[];
 }) {
   const [editing, setEditing] = useState(false);
-  const [valueDollars, setValueDollars] = useState(
-    expectedValueCents ? (expectedValueCents / 100).toString() : "",
-  );
   const [programVal, setProgramVal] = useState(programType ?? "");
   const [monthlyDollars, setMonthlyDollars] = useState(
     monthlyFeeCents ? (monthlyFeeCents / 100).toString() : "",
   );
   const [sourceVal, setSourceVal] = useState(leadSource ?? "");
+  const [ownerVal, setOwnerVal] = useState(ownerUserProfileId ?? "");
   const [actionDate, setActionDate] = useState(
     nextActionDate
       ? new Date(nextActionDate).toISOString().slice(0, 10)
@@ -51,11 +56,6 @@ export function ProspectDealCard({
 
   function save() {
     setError(null);
-    const valueNum = Number(valueDollars);
-    const cents =
-      valueDollars.trim() && Number.isFinite(valueNum) && valueNum >= 0
-        ? Math.round(valueNum * 100)
-        : null;
     const monthlyNum = Number(monthlyDollars);
     const monthlyCents =
       monthlyDollars.trim() && Number.isFinite(monthlyNum) && monthlyNum >= 0
@@ -64,8 +64,8 @@ export function ProspectDealCard({
     startTransition(async () => {
       const r = await updateProspect({
         id: prospectId,
-        expectedValueCents: cents,
         leadSource: sourceVal || null,
+        ownerUserProfileId: ownerVal || null,
         nextActionDate: actionDate || null,
         nextActionNote: actionNote.trim() || null,
         programType:
@@ -98,17 +98,13 @@ export function ProspectDealCard({
 
       {!editing ? (
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Expected value">
-            <DollarSign className="w-3.5 h-3.5 text-tbb-ink-3 inline mr-1" aria-hidden />
-            {expectedValueCents ? (
+          <Field label="Total client value">
+            {totalClientValueCents !== null ? (
               <span className="tabular-nums font-bold text-tbb-navy">
-                ${(expectedValueCents / 100).toLocaleString("en-CA", {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                })}
+                {formatCad(totalClientValueCents)}
               </span>
             ) : (
-              <span className="text-tbb-ink-4">Not set</span>
+              <span className="text-tbb-ink-4">No QuickBooks link</span>
             )}
           </Field>
           <Field label="Program">
@@ -119,13 +115,9 @@ export function ProspectDealCard({
             )}
           </Field>
           <Field label="Monthly fee">
-            <DollarSign className="w-3.5 h-3.5 text-tbb-ink-3 inline mr-1" aria-hidden />
             {monthlyFeeCents ? (
               <span className="tabular-nums font-bold text-tbb-navy">
-                ${(monthlyFeeCents / 100).toLocaleString("en-CA", {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                })}
+                {formatCad(monthlyFeeCents)}
                 <span className="font-normal text-tbb-ink-3">/mo</span>
               </span>
             ) : (
@@ -182,17 +174,6 @@ export function ProspectDealCard({
         </div>
       ) : (
         <div className="space-y-3">
-          <EditField label="Expected value (CAD)">
-            <input
-              type="number"
-              step="100"
-              min="0"
-              value={valueDollars}
-              onChange={(e) => setValueDollars(e.target.value)}
-              disabled={isPending}
-              className={inputCls}
-            />
-          </EditField>
           <EditField label="Program">
             <select
               value={programVal}
@@ -206,16 +187,36 @@ export function ProspectDealCard({
             </select>
           </EditField>
           <EditField label="Monthly fee (CAD)">
-            <input
-              type="number"
-              min="0"
-              step="50"
-              value={monthlyDollars}
-              onChange={(e) => setMonthlyDollars(e.target.value)}
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-tbb-ink-3">
+                $
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="50"
+                value={monthlyDollars}
+                onChange={(e) => setMonthlyDollars(e.target.value)}
+                disabled={isPending}
+                placeholder="2500"
+                className={inputCls + " pl-7"}
+              />
+            </div>
+          </EditField>
+          <EditField label="Owner (Business Builder)">
+            <select
+              value={ownerVal}
+              onChange={(e) => setOwnerVal(e.target.value)}
               disabled={isPending}
-              placeholder="2500"
               className={inputCls}
-            />
+            >
+              <option value="">Unassigned</option>
+              {businessBuilders.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.fullName}
+                </option>
+              ))}
+            </select>
           </EditField>
           <EditField label="Lead source">
             <select

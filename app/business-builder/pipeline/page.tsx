@@ -14,7 +14,6 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listProspects } from "@/lib/db/queries/prospects";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { ProspectTable } from "@/components/pipeline/ProspectTable";
-import { BulkActivateButton } from "@/components/pipeline/BulkActivateButton";
 import { STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 
 export default async function PipelinePage() {
@@ -49,7 +48,6 @@ export default async function PipelinePage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <BulkActivateButton />
           <Link
             href="/business-builder/pipeline/new"
             className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base shadow-tbb-cta"
