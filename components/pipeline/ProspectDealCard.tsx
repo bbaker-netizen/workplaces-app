@@ -6,6 +6,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   hidePendingFeedback,
   showPendingFeedback,
@@ -44,6 +45,7 @@ export function ProspectDealCard({
   monthlyFeeCents: number | null;
   businessBuilders: BusinessBuilderOption[];
 }) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [programVal, setProgramVal] = useState(programType ?? "");
   const [monthlyDollars, setMonthlyDollars] = useState(
@@ -103,7 +105,10 @@ export function ProspectDealCard({
       });
       hidePendingFeedback();
       if (!r.ok) setError(r.error);
-      else setEditing(false);
+      else {
+        setEditing(false);
+        router.refresh();
+      }
     });
   }
 
