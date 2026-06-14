@@ -12,12 +12,29 @@ import "./globals.css";
 // twitter:image> automatically — metadataBase makes those URLs absolute
 // so link unfurls (Slack, iMessage, LinkedIn, X) resolve the image
 // without any manual upload.
-const siteUrl =
-  process.env.NEXT_PUBLIC_APP_URL ??
-  "https://workplaces-the-builder.netlify.app";
+//
+// Built defensively: a malformed NEXT_PUBLIC_APP_URL (e.g. missing the
+// https:// scheme) must NEVER throw here — a throw in the metadata module
+// crashes every page above the error boundary (a blank white screen).
+const FALLBACK_URL = "https://workplaces-the-builder.netlify.app";
+function safeBaseUrl(): URL {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const candidate = raw
+    ? /^https?:\/\//i.test(raw)
+      ? raw
+      : `https://${raw}`
+    : FALLBACK_URL;
+  try {
+    return new URL(candidate);
+  } catch {
+    return new URL(FALLBACK_URL);
+  }
+}
+const siteBase = safeBaseUrl();
+const siteUrl = siteBase.toString().replace(/\/$/, "");
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: siteBase,
   title: "Business Builder Portal · By Workplaces",
   description:
     "Coaching, deliverables, and invoicing — one operating platform for the Workplaces practice.",

@@ -1,5 +1,9 @@
--- New portal module key so "My Notes" can be toggled per engagement.
-ALTER TYPE "public"."portal_module" ADD VALUE IF NOT EXISTS 'notes';--> statement-breakpoint
+-- NOTE: the `portal_module` enum gets its 'notes' value in 0056, which
+-- runs ALTER TYPE ADD VALUE as a lone statement. Postgres forbids
+-- ALTER TYPE ADD VALUE inside a transaction block, and the migrate runner
+-- sends each file as one multi-statement (implicitly transactional) blob —
+-- so it must live alone in its own file, not bundled with the CREATE TABLE
+-- below (which previously made this whole migration fail every deploy).
 -- Private per-user scratchpad in the client portal. One markdown note per
 -- (engagement, user); visible only to its owner. Same tenant-scoped RLS
 -- pattern as every other table.
