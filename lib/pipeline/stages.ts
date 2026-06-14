@@ -155,7 +155,25 @@ export const LEAD_SOURCES = [
   "Other",
 ] as const;
 
-/** Activity types for the timeline. */
+/**
+ * Stages where the "Send diagnostic" action is offered. The diagnostic is
+ * an early-qualification tool, so it's only shown for new leads / prospects
+ * who haven't progressed past the diagnostic step (diagnostic_pending is
+ * included so it can be re-sent). Once they're further down the funnel the
+ * button drops off the prospect page.
+ */
+export const DIAGNOSTIC_ELIGIBLE_STAGES: readonly ProspectStatus[] = [
+  "new_lead",
+  "first_contact",
+  "meeting_scheduled",
+  "diagnostic_pending",
+];
+
+export function canSendDiagnostic(status: ProspectStatus): boolean {
+  return DIAGNOSTIC_ELIGIBLE_STAGES.includes(status);
+}
+
+/** Activity types the coach can pick when manually logging an entry. */
 export const ACTIVITY_TYPES = [
   { value: "call", label: "Call" },
   { value: "email", label: "Email" },
@@ -168,6 +186,20 @@ export const ACTIVITY_TYPES = [
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number]["value"];
 
+/**
+ * Display labels for system-generated activity types that aren't in the
+ * manual-log dropdown but still appear on the timeline (stamped by actions
+ * like Send diagnostic and Link QuickBooks customer).
+ */
+const SYSTEM_ACTIVITY_LABELS: Record<string, string> = {
+  diagnostic_sent: "Diagnostic sent",
+  qbo_linked: "QuickBooks linked",
+};
+
 export function activityTypeLabel(type: string): string {
-  return ACTIVITY_TYPES.find((t) => t.value === type)?.label ?? type;
+  return (
+    ACTIVITY_TYPES.find((t) => t.value === type)?.label ??
+    SYSTEM_ACTIVITY_LABELS[type] ??
+    type
+  );
 }
