@@ -11,7 +11,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -71,6 +71,54 @@ export async function archiveEngagement(engagementId: string): Promise<Result> {
     });
     revalidatePath("/business-builder/engagements");
     revalidatePath(`/business-builder/engagements/${engagementId}`);
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Permanently delete an engagement and ALL of its workspace data
+ * (sessions, action items, projects, documents, deliverables, messages,
+ * etc. — every engagement-scoped table cascades on the FK). Irreversible.
+ *
+ * Safety rails: coach-only, and the engagement must already be archived
+ * (you archive first, then delete from the Archived list). The
+ * originating prospect's `converted_engagement_id` is set to null by the
+ * FK, so the prospect stays in the pipeline; the client's Clerk org and
+ * logins are left intact (delete those in Clerk if needed).
+ */
+export async function deleteEngagementPermanently(
+  engagementId: string,
+): Promise<Result> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  try {
+    const deleted = await withSystemContext(async (tx) => {
+      const rows = await tx
+        .delete(engagements)
+        .where(
+          and(
+            eq(engagements.id, engagementId),
+            // Only archived engagements can be hard-deleted — prevents
+            // nuking an active client by mistake.
+            isNotNull(engagements.archivedAt),
+          ),
+        )
+        .returning({ id: engagements.id });
+      return rows.length;
+    });
+    if (deleted === 0) {
+      return {
+        ok: false,
+        error: "Archive the client first, then delete it from the Archived list.",
+      };
+    }
+    revalidatePath("/business-builder/engagements");
     revalidatePath("/portal");
     return { ok: true };
   } catch (e) {

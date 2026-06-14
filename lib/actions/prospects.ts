@@ -309,9 +309,40 @@ export async function updateProspect(
           : null;
       if (Object.keys(updates).length === 0) return;
       await tx.update(prospects).set(updates).where(eq(prospects.id, data.id));
+
+      // Keep the linked engagement (and its client org) in sync with the
+      // prospect's company name so editing the contact's details actually
+      // flows through to the Client Portal list / engagement header. The
+      // engagement name is snapshotted at conversion; without this it goes
+      // stale the moment you fix a typo on the prospect.
+      if (data.companyName !== undefined) {
+        const [linked] = await tx
+          .select({ engagementId: prospects.convertedEngagementId })
+          .from(prospects)
+          .where(eq(prospects.id, data.id))
+          .limit(1);
+        if (linked?.engagementId) {
+          await tx
+            .update(engagements)
+            .set({ name: data.companyName })
+            .where(eq(engagements.id, linked.engagementId));
+          const [eng] = await tx
+            .select({ orgId: engagements.orgId })
+            .from(engagements)
+            .where(eq(engagements.id, linked.engagementId))
+            .limit(1);
+          if (eng?.orgId) {
+            await tx
+              .update(orgs)
+              .set({ name: data.companyName })
+              .where(eq(orgs.id, eng.orgId));
+          }
+        }
+      }
     });
     revalidatePath("/business-builder/pipeline");
     revalidatePath(`/business-builder/pipeline/${data.id}`);
+    revalidatePath("/business-builder/engagements");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
