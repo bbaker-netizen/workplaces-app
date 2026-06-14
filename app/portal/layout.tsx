@@ -8,6 +8,10 @@ import {
 } from "@/lib/db/queries/engagements";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { ALL_MODULES, getEnabledModules } from "@/lib/modules";
+import {
+  isEngagementReadOnly,
+  readOnlyReason,
+} from "@/lib/engagement-lifecycle";
 import { PortalSidebar } from "@/components/portal/PortalSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { PortalTour } from "@/components/portal/PortalTour";
@@ -50,6 +54,8 @@ export default async function PortalLayout({
     ? await getEnabledModules(profile.orgId, profile.role, engagement.id)
     : ALL_MODULES.filter((m) => m.visibleTo.includes(profile.role));
 
+  const readOnly = isEngagementReadOnly(engagement?.status);
+
   return (
     <div className="min-h-screen bg-background flex">
       <PortalSidebar
@@ -62,6 +68,18 @@ export default async function PortalLayout({
         isCoach={profile.role === "master_admin" || profile.role === "coach"}
       />
       <div className="flex-1 flex flex-col min-w-0">
+        {readOnly && (
+          <div className="border-b border-tbb-warning/40 bg-tbb-warning/10 px-6 py-3 text-sm text-tbb-ink-2 flex items-center gap-3 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-warning">
+              {readOnlyReason(engagement?.status)}
+            </span>
+            <span>
+              This engagement is {readOnlyReason(engagement?.status)} — your
+              portal is read-only for now. You can still view everything;
+              reach out to your Business Builder to pick things back up.
+            </span>
+          </div>
+        )}
         <main className="flex-1">{children}</main>
         <PortalFooter />
       </div>
