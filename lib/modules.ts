@@ -94,11 +94,10 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   // Files.
   { key: "documents", label: "Documents", href: "/portal/documents", visibleTo: ALL_ROLES, sortOrder: 30, phase: "files" },
 
-  // The plan — methodology, deep work, soul file, growth track.
-  // Soul File is coach-only context (you write/manage it at
-  // /business-builder/soul-file). Removed from the client portal —
-  // clients don't see it. visibleTo restricted to Business Builders.
-  { key: "soul_file",    label: "Soul File",    href: "/portal/soul-file",    visibleTo: ["master_admin", "coach"], sortOrder: 40, phase: "plan" },
+  // The plan — methodology, deep work, growth track.
+  // Soul File is intentionally NOT a portal module. It's coach-only
+  // context written/managed at /business-builder/soul-file; it never
+  // appears in the client portal menu (or coach preview).
   // Goals removed per Bruce — redundant with Projects in practice.
   { key: "projects",     label: "Projects",     href: "/portal/projects",     visibleTo: ALL_ROLES, sortOrder: 60, phase: "plan" },
   { key: "deliverables", label: "Deliverables", href: "/portal/deliverables", visibleTo: ALL_ROLES, sortOrder: 70, phase: "plan" },
