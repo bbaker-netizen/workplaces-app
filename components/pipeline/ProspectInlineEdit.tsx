@@ -209,7 +209,7 @@ function ContactEdit({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           onBlur={() => phone.trim() && setPhone(formatPhone(phone))}
-          placeholder="+1 780-555-1234"
+          placeholder="(780) 555-1234"
           disabled={isPending}
           className={inputCls}
         />
@@ -218,10 +218,11 @@ function ContactEdit({
       <label className="block space-y-1">
         <span className={labelCls}>Website</span>
         <input
-          type="url"
+          type="text"
+          inputMode="url"
           value={companyWebsite}
           onChange={(e) => setCompanyWebsite(e.target.value)}
-          placeholder="https://"
+          placeholder="acme.com"
           disabled={isPending}
           className={inputCls}
         />

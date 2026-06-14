@@ -31,3 +31,25 @@ export function formatPhone(raw: string): string {
   }
   return trimmed;
 }
+
+/**
+ * Tidy a website the way a non-technical user types it. Accepts bare
+ * domains ("acme.com", "www.acme.com") and prepends "https://" so the
+ * stored value is always a clickable absolute URL. Already-schemed
+ * values (http:// / https://) pass through untouched. Returns null for
+ * empty input.
+ *
+ * Why this exists: an `<input type="url">` rejects bare domains, which
+ * silently blocked the whole new-prospect form from submitting. We now
+ * accept anything and normalise here instead.
+ */
+export function normalizeWebsite(
+  raw: string | null | undefined,
+): string | null {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  // Already has a scheme (http, https, mailto, etc.) — leave it.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  // Strip any accidental leading slashes, then prefix https://.
+  return `https://${trimmed.replace(/^\/+/, "")}`;
+}

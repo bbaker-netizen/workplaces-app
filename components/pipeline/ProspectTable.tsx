@@ -27,7 +27,7 @@ import {
 } from "@/lib/pipeline/stages";
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
-import { formatCad, formatPhone } from "@/lib/format";
+import { formatCad, formatPhone, normalizeWebsite } from "@/lib/format";
 import { setPipelineColumnPrefs } from "@/lib/actions/user-prefs";
 import { bulkDeleteProspects, unarchiveProspect } from "@/lib/actions/prospects";
 import {
@@ -965,7 +965,7 @@ function CellByKey({
         <Td>
           {prospect.companyWebsite ? (
             <a
-              href={prospect.companyWebsite}
+              href={normalizeWebsite(prospect.companyWebsite) ?? "#"}
               target="_blank"
               rel="noreferrer noopener"
               className="text-tbb-blue hover:underline underline-offset-4 truncate block"
