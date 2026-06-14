@@ -2,17 +2,29 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Loader2, Plus, Trash2, ExternalLink } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Plus,
+  Star,
+  Trash2,
+  ExternalLink,
+} from "lucide-react";
 import {
   createEmbeddedApp,
   deleteEmbeddedApp,
+  toggleAppFavourite,
 } from "@/lib/actions/embedded-apps";
+import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 
 type App = {
   id: string;
   netlifyProjectId: string;
   displayName: string;
   description: string | null;
+  instructions: string | null;
+  isFavourite: boolean;
   appUrl: string;
   authMode: "public" | "token_passthrough" | "clerk_sso";
   isVisible: boolean;
@@ -34,9 +46,35 @@ export function EmbeddedAppList({
     netlifyProjectId: "",
     appUrl: "",
     description: "",
+    instructions: "",
     authMode: "public" as App["authMode"],
   });
   const [isPending, startTransition] = useTransition();
+  // Optimistic favourite state keyed by app id; falls back to the
+  // server-provided flag when not yet touched this session.
+  const [favOverride, setFavOverride] = useState<Record<string, boolean>>({});
+  const [openInstructions, setOpenInstructions] = useState<Record<string, boolean>>(
+    {},
+  );
+
+  const isFav = (a: App) => favOverride[a.id] ?? a.isFavourite;
+
+  function toggleFav(id: string, current: boolean) {
+    setFavOverride((m) => ({ ...m, [id]: !current }));
+    startTransition(async () => {
+      const r = await toggleAppFavourite(id);
+      if (!r.ok) {
+        // Revert on failure.
+        setFavOverride((m) => ({ ...m, [id]: current }));
+        setError(r.error);
+      }
+    });
+  }
+
+  // Favourites float to the top; otherwise keep server order.
+  const ordered = [...apps].sort(
+    (a, b) => Number(isFav(b)) - Number(isFav(a)),
+  );
 
   const submit = () => {
     if (!draft.displayName.trim() || !draft.appUrl.trim()) {
@@ -50,6 +88,7 @@ export function EmbeddedAppList({
         netlifyProjectId: draft.netlifyProjectId.trim() || draft.appUrl,
         displayName: draft.displayName.trim(),
         description: draft.description.trim() || null,
+        instructions: draft.instructions.trim() || null,
         appUrl: draft.appUrl.trim(),
         authMode: draft.authMode,
       });
@@ -61,6 +100,7 @@ export function EmbeddedAppList({
           netlifyProjectId: "",
           appUrl: "",
           description: "",
+          instructions: "",
           authMode: "public",
         });
       }
@@ -88,43 +128,91 @@ export function EmbeddedAppList({
         </div>
       ) : (
         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {apps.map((a) => (
-            <li
-              key={a.id}
-              className="border border-tbb-line rounded-md bg-white p-4 flex flex-col gap-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <Link
-                  href={a.appUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold text-foreground text-lg tracking-tight hover:underline underline-offset-4 group inline-flex items-center gap-1"
-                >
-                  {a.displayName}
-                  <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" aria-hidden />
-                </Link>
-                {isCoach && (
-                  <button
-                    type="button"
-                    onClick={() => remove(a.id, a.displayName)}
-                    disabled={isPending}
-                    aria-label={`Remove ${a.displayName}`}
-                    className="p-1 rounded text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50"
+          {ordered.map((a) => {
+            const fav = isFav(a);
+            const showInstructions = openInstructions[a.id] ?? false;
+            return (
+              <li
+                key={a.id}
+                className="border border-tbb-line rounded-md bg-white p-4 flex flex-col gap-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <Link
+                    href={a.appUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold text-foreground text-lg tracking-tight hover:underline underline-offset-4 group inline-flex items-center gap-1"
                   >
-                    <Trash2 className="w-3.5 h-3.5" aria-hidden />
-                  </button>
+                    {a.displayName}
+                    <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" aria-hidden />
+                  </Link>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleFav(a.id, fav)}
+                      aria-label={fav ? `Unfavourite ${a.displayName}` : `Favourite ${a.displayName}`}
+                      aria-pressed={fav}
+                      className={
+                        "p-1 rounded hover:bg-tbb-cream-50 " +
+                        (fav ? "text-tbb-warning" : "text-muted-foreground")
+                      }
+                    >
+                      <Star
+                        className="w-4 h-4"
+                        aria-hidden
+                        fill={fav ? "currentColor" : "none"}
+                      />
+                    </button>
+                    {isCoach && (
+                      <button
+                        type="button"
+                        onClick={() => remove(a.id, a.displayName)}
+                        disabled={isPending}
+                        aria-label={`Remove ${a.displayName}`}
+                        className="p-1 rounded text-muted-foreground hover:text-tbb-danger hover:bg-tbb-cream-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {a.description && (
+                  <p className="font-sans text-sm text-muted-foreground">
+                    {a.description}
+                  </p>
                 )}
-              </div>
-              {a.description && (
-                <p className="font-sans text-sm text-muted-foreground">
-                  {a.description}
+                {a.instructions && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenInstructions((m) => ({
+                          ...m,
+                          [a.id]: !showInstructions,
+                        }))
+                      }
+                      className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+                    >
+                      {showInstructions ? (
+                        <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5" aria-hidden />
+                      )}
+                      How to use / install
+                    </button>
+                    {showInstructions && (
+                      <div className="mt-2 rounded-md border border-tbb-line bg-tbb-cream-50 p-3">
+                        <MarkdownBody body={a.instructions} />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+                  {a.authMode.replace("_", " ")} · {a.isVisible ? "visible" : "hidden"}
                 </p>
-              )}
-              <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                {a.authMode.replace("_", " ")} · {a.isVisible ? "visible" : "hidden"}
-              </p>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -196,6 +284,16 @@ export function EmbeddedAppList({
             rows={2}
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            disabled={isPending}
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
+          />
+          <textarea
+            placeholder="How to use / install (markdown) — e.g. how to bookmark it, add it to the home screen, or install as a desktop app. Shown to the client."
+            rows={3}
+            value={draft.instructions}
+            onChange={(e) =>
+              setDraft({ ...draft, instructions: e.target.value })
+            }
             disabled={isPending}
             className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
           />

@@ -24,6 +24,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
+  clientWriteBlocked,
+  READ_ONLY_ERROR,
+} from "@/lib/server/engagement-guard";
+import {
   actionItems,
   documents,
   messageAttachments,
@@ -135,6 +139,10 @@ export async function createMessage(
       ok: false,
       error: "Your role can't post in this thread.",
     };
+  }
+
+  if (await clientWriteBlocked(profile.role, data.engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
 
   try {

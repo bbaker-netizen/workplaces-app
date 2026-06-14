@@ -1,13 +1,18 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { embeddedApps, type UserProfile } from "@/lib/db/schema";
+import {
+  embeddedAppFavourites,
+  embeddedApps,
+  type UserProfile,
+} from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
+  withTenantContext,
 } from "@/lib/db/tenant";
 
 type Role = UserProfile["role"];
@@ -25,6 +30,7 @@ const createSchema = z.object({
   netlifyProjectId: z.string().min(1).max(200),
   displayName: z.string().min(1).max(200),
   description: z.string().max(2000).nullable().optional(),
+  instructions: z.string().max(20000).nullable().optional(),
   appUrl: z.string().url(),
   authMode: authModeEnum.default("public"),
   isVisible: z.boolean().default(true),
@@ -60,6 +66,7 @@ export async function createEmbeddedApp(
             netlifyProjectId: data.netlifyProjectId,
             displayName: data.displayName,
             description: data.description ?? null,
+            instructions: data.instructions ?? null,
             appUrl: data.appUrl,
             authMode: data.authMode,
             isVisible: data.isVisible,
@@ -112,6 +119,8 @@ export async function updateEmbeddedApp(
           update.displayName = data.displayName;
         if (data.description !== undefined)
           update.description = data.description;
+        if (data.instructions !== undefined)
+          update.instructions = data.instructions;
         if (data.appUrl !== undefined) update.appUrl = data.appUrl;
         if (data.authMode !== undefined) update.authMode = data.authMode;
         if (data.isVisible !== undefined) update.isVisible = data.isVisible;
@@ -130,6 +139,50 @@ export async function updateEmbeddedApp(
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     };
+  }
+}
+
+/**
+ * Toggle the current user's favourite flag on an app. Idempotent
+ * insert-or-delete on the (app, user) pair. Any portal user can favourite.
+ */
+export async function toggleAppFavourite(
+  embeddedAppId: string,
+): Promise<ActionResult<{ favourited: boolean }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (!z.string().uuid().safeParse(embeddedAppId).success) {
+    return { ok: false, error: "Invalid app id." };
+  }
+  try {
+    const favourited = await withTenantContext(profile.orgId, async (tx) => {
+      const [existing] = await tx
+        .select({ id: embeddedAppFavourites.id })
+        .from(embeddedAppFavourites)
+        .where(
+          and(
+            eq(embeddedAppFavourites.embeddedAppId, embeddedAppId),
+            eq(embeddedAppFavourites.userProfileId, profile.userProfileId),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        await tx
+          .delete(embeddedAppFavourites)
+          .where(eq(embeddedAppFavourites.id, existing.id));
+        return false;
+      }
+      await tx.insert(embeddedAppFavourites).values({
+        orgId: profile.orgId,
+        embeddedAppId,
+        userProfileId: profile.userProfileId,
+      });
+      return true;
+    });
+    revalidatePath("/portal/apps");
+    return { ok: true, data: { favourited } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

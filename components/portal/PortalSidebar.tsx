@@ -31,6 +31,7 @@ import {
   GraduationCap,
   LineChart,
   MessagesSquare,
+  NotebookPen,
   PenSquare,
   Puzzle,
   Settings,
@@ -68,6 +69,7 @@ const ICON_FOR_MODULE: Record<PortalModuleKey, React.ComponentType<{ className?:
   team: Users,
   hiring: UserCheck,
   embedded_apps: Puzzle,
+  notes: NotebookPen,
 };
 
 export function PortalSidebar({

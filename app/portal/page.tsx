@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { CheckCircle2, MessageSquare, Calendar, FileText, Sparkles } from "lucide-react";
+import { CheckCircle2, MessageSquare, Calendar, FileText } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   getCurrentEngagement,
@@ -19,7 +19,7 @@ import { listEngagementActionItems } from "@/lib/db/queries/action-items";
 import { getNextSession } from "@/lib/db/queries/bbs-sessions";
 import { listEngagementRecentActivity } from "@/lib/db/queries/messages";
 import { listEngagementDocuments } from "@/lib/db/queries/documents";
-import { getSoulFileForEngagement } from "@/lib/db/queries/soul-files";
+import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { TOMBSTONE_BODY } from "@/lib/communication/tombstone";
 import {
   formatSessionTime,
@@ -51,15 +51,13 @@ export default async function PortalDashboard() {
     );
   }
 
-  // Five batched reads. Each is independent — Promise.all to overlap.
-  const [allItems, nextSession, recent, documents, soulFile] =
-    await Promise.all([
-      listEngagementActionItems(engagement.id),
-      getNextSession(engagement.id),
-      listEngagementRecentActivity(engagement.id, 5),
-      listEngagementDocuments(engagement.id),
-      getSoulFileForEngagement(engagement.id),
-    ]);
+  // Four batched reads. Each is independent — Promise.all to overlap.
+  const [allItems, nextSession, recent, documents] = await Promise.all([
+    listEngagementActionItems(engagement.id),
+    getNextSession(engagement.id),
+    listEngagementRecentActivity(engagement.id, 5),
+    listEngagementDocuments(engagement.id),
+  ]);
 
   // Coach roles were redirected to /business-builder above, so by this point the
   // viewer is always a client-side role and "draft" items stay hidden.
@@ -84,6 +82,23 @@ export default async function PortalDashboard() {
   const recentDocs = documents.slice(0, 3);
   const greeting = greetingFor(new Date());
 
+  // Greeting name. Normally the signed-in client. When a coach is
+  // previewing, greet with the client lead's name (falling back to any
+  // client member) so the preview reads the way the client will see it —
+  // not "Good evening, Bruce".
+  let greetingName = profile.fullName.split(" ")[0] ?? profile.fullName;
+  if (isPreview) {
+    const members = await listEngagementMembers(engagement.id);
+    const client =
+      members.find((m) => m.role === "client_lead") ??
+      members.find(
+        (m) => m.role === "client_manager" || m.role === "client_employee",
+      );
+    if (client?.fullName) {
+      greetingName = client.fullName.split(" ")[0] ?? client.fullName;
+    }
+  }
+
   return (
     <main className="max-w-4xl mx-auto px-6 py-10 sm:py-12 space-y-10">
       {isPreview && (
@@ -107,7 +122,7 @@ export default async function PortalDashboard() {
           {engagement.name ?? "Engagement"}
         </p>
         <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
-          {greeting}, {profile.fullName.split(" ")[0] ?? profile.fullName}.
+          {greeting}, {greetingName}.
         </h1>
       </header>
 
@@ -233,33 +248,6 @@ export default async function PortalDashboard() {
                 </li>
               ))}
             </ul>
-          )}
-        </Card>
-
-        {/* Soul file */}
-        <Card
-          tourId="soul-file"
-          icon={<Sparkles className="w-4 h-4" aria-hidden />}
-          title="Soul File"
-          href="/portal/soul-file"
-          ctaLabel="Open Soul File"
-        >
-          {soulFile && soulFile.body.trim().length > 0 ? (
-            <div className="space-y-2">
-              <p className="font-sans text-sm text-muted-foreground line-clamp-4">
-                {flatten(soulFile.body)}
-              </p>
-              {soulFile.lastEditorName && (
-                <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                  Last edited by {soulFile.lastEditorName}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="font-sans text-sm text-muted-foreground italic">
-              Empty for now. The Soul File is the deep context for this
-              engagement.
-            </p>
           )}
         </Card>
 

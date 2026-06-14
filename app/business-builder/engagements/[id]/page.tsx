@@ -59,6 +59,7 @@ import {
   type NetlifyProjectOption,
 } from "@/components/business-builder/EmbeddedAppManager";
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
+import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
 
 export default async function EngagementDetailPage({
   params,
@@ -248,9 +249,15 @@ export default async function EngagementDetailPage({
         >
           <ArrowLeft className="w-3 h-3" aria-hidden /> Engagements
         </Link>
-        <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-          {data.eng.name ?? "Engagement"}
-        </h1>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
+            {data.eng.name ?? "Engagement"}
+          </h1>
+          <EngagementStatusControl
+            engagementId={id}
+            current={data.eng.status}
+          />
+        </div>
         <p className="text-sm text-tbb-ink-3 max-w-2xl">
           The Workspace: every project and action item for this client,
           nested the way they relate to each other. Projects at the top,

@@ -140,6 +140,7 @@ export const portalModuleEnum = pgEnum("portal_module", [
   "embedded_apps",
   "subscriptions",
   "hiring",
+  "notes",
 ]);
 
 export const prospectStatusEnum = pgEnum("prospect_status", [
@@ -720,6 +721,38 @@ export const soulFiles = pgTable(
   (t) => ({
     orgIdx: index("soul_files_org_idx").on(t.orgId),
     engagementIdx: index("soul_files_engagement_idx").on(t.engagementId),
+  }),
+);
+
+/**
+ * Private per-user scratchpad in the client portal. One markdown note
+ * per (engagement, user) — visible only to its owner (never the coach or
+ * other client members). Stays editable even when the engagement is
+ * paused; it's personal space, not engagement collaboration.
+ */
+export const portalNotes = pgTable(
+  "portal_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("portal_notes_org_idx").on(t.orgId),
+    uniqueOwner: uniqueIndex("portal_notes_engagement_user_unique").on(
+      t.engagementId,
+      t.userProfileId,
+    ),
   }),
 );
 
@@ -1523,6 +1556,9 @@ export const embeddedApps = pgTable(
     netlifyProjectId: text("netlify_project_id").notNull(),
     displayName: text("display_name").notNull(),
     description: text("description"),
+    /** Markdown how-to: using the tool + adding it to a browser/desktop
+     *  (bookmark, PWA install, etc.). Shown to clients in the portal. */
+    instructions: text("instructions"),
     appUrl: text("app_url").notNull(),
     authMode: embeddedAppAuthModeEnum("auth_mode")
       .notNull()
@@ -1534,6 +1570,32 @@ export const embeddedApps = pgTable(
   (t) => ({
     orgIdx: index("embedded_apps_org_idx").on(t.orgId),
     engagementIdx: index("embedded_apps_engagement_idx").on(t.engagementId),
+  }),
+);
+
+/** Per-user "favourite" flag on an embedded app, so clients can pin the
+ *  tools they reach for. One row per (app, user). */
+export const embeddedAppFavourites = pgTable(
+  "embedded_app_favourites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    embeddedAppId: uuid("embedded_app_id")
+      .notNull()
+      .references(() => embeddedApps.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("embedded_app_favourites_org_idx").on(t.orgId),
+    uniqueFav: uniqueIndex("embedded_app_favourites_unique").on(
+      t.embeddedAppId,
+      t.userProfileId,
+    ),
   }),
 );
 

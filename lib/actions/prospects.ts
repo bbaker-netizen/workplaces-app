@@ -16,7 +16,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { orgs, prospects } from "@/lib/db/schema";
+import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
 
@@ -321,12 +321,22 @@ export async function deleteProspect(
     await withSystemContext(async (tx) => {
       // Soft-delete: archive instead of hard-delete so a mis-click is
       // recoverable. The activity log + communications stay intact.
-      await tx
+      const [row] = await tx
         .update(prospects)
         .set({ archivedAt: new Date() })
-        .where(eq(prospects.id, id));
+        .where(eq(prospects.id, id))
+        .returning({ engagementId: prospects.convertedEngagementId });
+      // Portal follows the contact: archiving an active client pauses
+      // their engagement so the portal goes read-only.
+      if (row?.engagementId) {
+        await tx
+          .update(engagements)
+          .set({ status: "paused" })
+          .where(eq(engagements.id, row.engagementId));
+      }
     });
     revalidatePath("/business-builder/pipeline");
+    revalidatePath("/business-builder/engagements");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -347,13 +357,22 @@ export async function unarchiveProspect(
     return { ok: false, error: "Business Builders only." };
   try {
     await withSystemContext(async (tx) => {
-      await tx
+      const [row] = await tx
         .update(prospects)
         .set({ archivedAt: null })
-        .where(eq(prospects.id, id));
+        .where(eq(prospects.id, id))
+        .returning({ engagementId: prospects.convertedEngagementId });
+      // Restoring a contact reactivates its engagement (and the portal).
+      if (row?.engagementId) {
+        await tx
+          .update(engagements)
+          .set({ status: "active" })
+          .where(eq(engagements.id, row.engagementId));
+      }
     });
     revalidatePath("/business-builder/pipeline");
     revalidatePath(`/business-builder/pipeline/${id}`);
+    revalidatePath("/business-builder/engagements");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -403,10 +422,21 @@ export async function bulkDeleteProspects(
         .where(
           and(inArray(prospects.id, ids), eq(prospects.orgId, profile.orgId)),
         )
-        .returning({ id: prospects.id });
+        .returning({ engagementId: prospects.convertedEngagementId });
+      // Pause any linked engagements so their portals follow suit.
+      const engagementIds = result
+        .map((r) => r.engagementId)
+        .filter((id): id is string => Boolean(id));
+      if (engagementIds.length > 0) {
+        await tx
+          .update(engagements)
+          .set({ status: "paused" })
+          .where(inArray(engagements.id, engagementIds));
+      }
       return result.length;
     });
     revalidatePath("/business-builder/pipeline");
+    revalidatePath("/business-builder/engagements");
     return { ok: true, data: { deleted } };
   } catch (e) {
     return {
