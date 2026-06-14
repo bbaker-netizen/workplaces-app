@@ -99,6 +99,7 @@ export default async function PortalDocumentsPage() {
         {driveFolderId && (
           <SharedDriveFolder
             folderName={driveFolderName}
+            folderId={driveFolderId}
             files={driveFiles}
             unavailable={driveUnavailable}
           />

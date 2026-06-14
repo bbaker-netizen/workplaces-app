@@ -29,6 +29,7 @@ import {
   FileText,
   Folder,
   GraduationCap,
+  Home,
   LineChart,
   MessagesSquare,
   NotebookPen,
@@ -194,6 +195,26 @@ export function PortalSidebar({
           (collapsed ? "px-1.5 py-3 space-y-3" : "px-3 py-4 space-y-5")
         }
       >
+        {/* Home — always first, returns to the portal dashboard. */}
+        <Link
+          href="/portal"
+          aria-current={isActiveHref("/portal") ? "page" : undefined}
+          className={
+            "flex items-center gap-2.5 rounded-md transition-colors " +
+            (collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2") +
+            " " +
+            (isActiveHref("/portal")
+              ? "bg-tbb-blue text-white"
+              : "text-tbb-cream/80 hover:bg-tbb-cream/10 hover:text-white")
+          }
+          title="Home"
+        >
+          <Home className="w-4 h-4 shrink-0" aria-hidden />
+          {!collapsed && (
+            <span className="text-sm font-bold">Home</span>
+          )}
+        </Link>
+
         {pinnedModules.length > 0 && (
           <section className={collapsed ? "space-y-1" : "space-y-1.5"}>
             {!collapsed && (

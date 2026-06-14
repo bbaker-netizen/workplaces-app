@@ -107,7 +107,11 @@ export default async function PortalDashboard() {
             Preview
           </span>
           <span>
-            You&apos;re viewing the client portal as a client would see it.
+            Previewing{" "}
+            <span className="font-bold">{engagement.name ?? "this client"}</span>
+            &rsquo;s portal as the client sees it. Use{" "}
+            <span className="font-bold">Preview portal</span> on a specific
+            engagement to switch clients.
           </span>
           <Link
             href="/business-builder"
