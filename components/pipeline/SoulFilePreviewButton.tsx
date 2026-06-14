@@ -100,7 +100,7 @@ export function SoulFilePreviewButton({
         className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill app-cta-orange shadow-tbb-cta"
       >
         <Sparkles className="w-3.5 h-3.5" aria-hidden />
-        Preview Soul File from Fireflies
+        Preview Insights from Fireflies
       </button>
 
       {open && (
@@ -113,7 +113,7 @@ export function SoulFilePreviewButton({
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="Soul File draft"
+            aria-label="Insights draft"
           >
             {/* Header */}
             <header className="flex items-start gap-3 px-5 py-4 border-b border-tbb-line-soft">
@@ -123,7 +123,7 @@ export function SoulFilePreviewButton({
               />
               <div className="flex-1 min-w-0">
                 <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-ink-3">
-                  Soul File draft · preview only
+                  Insights draft · preview only
                 </p>
                 <h2 className="font-black text-tbb-navy text-lg tracking-tight">
                   Generated from Fireflies + Claude
@@ -161,7 +161,7 @@ export function SoulFilePreviewButton({
                   </p>
                   <p className="text-xs text-tbb-ink-3 max-w-md">
                     Claude is reading the last 3 sessions and drafting a
-                    6-section Soul File. Usually 15-30 seconds.
+                    6-section insights brief. Usually 15-30 seconds.
                   </p>
                 </div>
               )}
