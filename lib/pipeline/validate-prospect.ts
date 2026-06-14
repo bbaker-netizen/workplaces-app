@@ -85,9 +85,21 @@ function countDigits(s: string): number {
   return n;
 }
 
-export function validateProspect(input: ProspectInput): ValidationResult {
+export function validateProspect(
+  input: ProspectInput,
+  mode: "create" | "update" = "create",
+): ValidationResult {
   const errors: ValidationIssue[] = [];
   const warnings: ValidationIssue[] = [];
+
+  // Structural name rules (2-word contact, contact ≠ company, entity
+  // suffix) are a quality gate when CREATING a prospect, but must not
+  // hard-block EDITS — legacy/imported contacts often have a single-word
+  // name, and the coach should still be able to save a phone or website.
+  // On update they become non-blocking warnings.
+  const structBucket = mode === "update" ? warnings : errors;
+  const structLevel: "error" | "warning" =
+    mode === "update" ? "warning" : "error";
 
   const company = (input.companyName ?? "").trim();
   const contact = (input.contactName ?? "").trim();
@@ -124,28 +136,28 @@ export function validateProspect(input: ProspectInput): ValidationResult {
         "Contact name is required — the human you talk to at this company.",
     });
   } else if (!/\s/.test(contact)) {
-    errors.push({
+    structBucket.push({
       field: "contactName",
-      level: "error",
+      level: structLevel,
       message:
-        "Contact name needs both first and last name (e.g. \"Jane Smith\"), not just one word.",
+        "Contact name reads as one word — ideally first + last name (e.g. \"Jane Smith\").",
     });
   } else if (
     company.length >= 2 &&
     contact.toLowerCase() === company.toLowerCase()
   ) {
-    errors.push({
+    structBucket.push({
       field: "contactName",
-      level: "error",
+      level: structLevel,
       message:
-        "Contact name shouldn't be the same as the company name. Put the person's first + last name here, and the legal business name in the Company field above.",
+        "Contact name is the same as the company name. Put the person's first + last name here, and the legal business name in the Company field above.",
     });
   } else if (ENTITY_SUFFIX_RE.test(contact)) {
-    errors.push({
+    structBucket.push({
       field: "contactName",
-      level: "error",
+      level: structLevel,
       message:
-        "Contact name has a company suffix (Inc/LLC/Ltd/etc). The contact name is the person — try their first + last name.",
+        "Contact name has a company suffix (Inc/LLC/Ltd/etc) — the contact name should be the person.",
     });
   }
 

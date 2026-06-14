@@ -235,13 +235,16 @@ export async function updateProspect(
       data.contactName !== undefined &&
       data.contactEmail !== undefined
     ) {
-      const quality = validateProspect({
-        companyName: data.companyName,
-        contactName: data.contactName,
-        contactEmail: data.contactEmail,
-        phone: data.phone ?? null,
-        legalNameConfirmed: data.legalNameConfirmed ?? false,
-      });
+      const quality = validateProspect(
+        {
+          companyName: data.companyName,
+          contactName: data.contactName,
+          contactEmail: data.contactEmail,
+          phone: data.phone ?? null,
+          legalNameConfirmed: data.legalNameConfirmed ?? false,
+        },
+        "update",
+      );
       if (!quality.ok) {
         return {
           ok: false,
@@ -285,7 +288,13 @@ export async function updateProspect(
         updates.nextActionNote = data.nextActionNote;
       if (data.ownerUserProfileId !== undefined)
         updates.ownerUserProfileId = data.ownerUserProfileId;
-      if (data.status !== undefined) updates.status = data.status;
+      if (data.status !== undefined) {
+        updates.status = data.status;
+        // Stamp the signed date when they reach contract_signed.
+        if (data.status === "contract_signed") {
+          updates.contractSignedAt = new Date();
+        }
+      }
       if (data.notes !== undefined) updates.notes = data.notes;
       if (data.programType !== undefined)
         updates.programType = data.programType;

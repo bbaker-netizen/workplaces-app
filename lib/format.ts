@@ -21,12 +21,13 @@ export function formatCad(cents: number | null | undefined, dash = "—"): strin
  */
 export function formatPhone(raw: string): string {
   const trimmed = raw.trim();
-  const digits = trimmed.replace(/\D/g, "");
+  let digits = trimmed.replace(/\D/g, "");
+  // Drop a leading country-code "1" — we don't show +1.
+  if (digits.length === 11 && digits.startsWith("1")) {
+    digits = digits.slice(1);
+  }
   if (digits.length === 10) {
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  }
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
   }
   return trimmed;
 }

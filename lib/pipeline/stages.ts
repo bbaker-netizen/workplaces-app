@@ -143,15 +143,11 @@ export const STAGE_ORDER: ProspectStatus[] = [
 
 /** Common lead-source values for the dropdown. */
 export const LEAD_SOURCES = [
-  "Web diagnostic",
   "Referral",
   "Repeat Client",
   "Google Ads Campaign",
   "Google Search",
-  "Cold outreach",
   "Networking event",
-  "Inbound email",
-  "Phone call",
   "Social media",
   "Conference",
 ] as const;
