@@ -266,6 +266,8 @@ const taskStatusEnum = z.enum(["todo", "in_progress", "done", "blocked"]);
 
 const createTaskSchema = z.object({
   projectId: z.string().uuid(),
+  /** Parent task for a sub-task. Omitted/null = top-level task. */
+  parentTaskId: z.string().uuid().nullable().optional(),
   title: z.string().min(1, "Title is required").max(500),
   description: z.string().max(20000).nullable().optional(),
   status: taskStatusEnum.default("todo"),
@@ -324,6 +326,7 @@ export async function createTask(
           .values({
             orgId: boundOrgId,
             projectId: data.projectId,
+            parentTaskId: data.parentTaskId ?? null,
             title: data.title,
             description: data.description ?? null,
             status: data.status,

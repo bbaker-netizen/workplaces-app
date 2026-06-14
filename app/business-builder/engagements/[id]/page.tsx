@@ -302,12 +302,6 @@ export default async function EngagementDetailPage({
           >
             Meetings (Fireflies) →
           </Link>
-          <Link
-            href={`/business-builder/engagements/${id}/gantt`}
-            className="inline-flex items-center gap-1 text-tbb-blue hover:underline font-bold"
-          >
-            View Gantt chart →
-          </Link>
         </div>
       </header>
 
@@ -393,12 +387,20 @@ export default async function EngagementDetailPage({
             <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Projects
             </p>
-            <Link
-              href={`/business-builder/projects/new?engagement=${id}`}
-              className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
-            >
-              + Add project
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/business-builder/engagements/${id}/gantt`}
+                className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+              >
+                Gantt chart →
+              </Link>
+              <Link
+                href={`/business-builder/projects/new?engagement=${id}`}
+                className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+              >
+                + Add project
+              </Link>
+            </div>
           </header>
           <div className="divide-y divide-tbb-line-soft">
             {data.projects.map((p) => (

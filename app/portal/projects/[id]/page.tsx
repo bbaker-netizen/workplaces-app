@@ -61,6 +61,7 @@ export default async function PortalProjectDetailPage({
         projectId={project.id}
         tasks={project.tasks.map((t) => ({
           id: t.id,
+          parentTaskId: t.parentTaskId,
           title: t.title,
           description: t.description,
           status: t.status,
