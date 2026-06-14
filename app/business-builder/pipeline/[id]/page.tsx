@@ -12,7 +12,17 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, Mail, Phone, Globe } from "lucide-react";
+import {
+  ArrowLeft,
+  Mail,
+  Phone,
+  Globe,
+  Link2,
+  Share2,
+  AtSign,
+  Search,
+} from "lucide-react";
+import { linkedInSearchUrl } from "@/components/pipeline/ProspectInlineEdit";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
 import {
@@ -188,6 +198,9 @@ export default async function ProspectDetailPage({
                   contactEmail: prospect.contactEmail,
                   phone: prospect.phone,
                   companyWebsite: prospect.companyWebsite,
+                  linkedinUrl: prospect.linkedinUrl,
+                  facebookUrl: prospect.facebookUrl,
+                  instagramUrl: prospect.instagramUrl,
                 }}
               />
             </div>
@@ -212,6 +225,42 @@ export default async function ProspectDetailPage({
                   icon={<Globe className="w-3.5 h-3.5" />}
                   href={normalizeWebsite(prospect.companyWebsite) ?? "#"}
                   label={prospect.companyWebsite.replace(/^https?:\/\//, "")}
+                  external
+                />
+              )}
+              {prospect.linkedinUrl ? (
+                <ContactRow
+                  icon={<Link2 className="w-3.5 h-3.5" />}
+                  href={normalizeWebsite(prospect.linkedinUrl) ?? "#"}
+                  label={prospect.linkedinUrl.replace(/^https?:\/\/(www\.)?/, "")}
+                  external
+                />
+              ) : (
+                <a
+                  href={linkedInSearchUrl(
+                    prospect.contactName ?? "",
+                    prospect.companyName,
+                  )}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-tbb-blue hover:underline"
+                >
+                  <Search className="w-3.5 h-3.5" aria-hidden /> Find on LinkedIn
+                </a>
+              )}
+              {prospect.facebookUrl && (
+                <ContactRow
+                  icon={<Share2 className="w-3.5 h-3.5" />}
+                  href={normalizeWebsite(prospect.facebookUrl) ?? "#"}
+                  label={prospect.facebookUrl.replace(/^https?:\/\/(www\.)?/, "")}
+                  external
+                />
+              )}
+              {prospect.instagramUrl && (
+                <ContactRow
+                  icon={<AtSign className="w-3.5 h-3.5" />}
+                  href={normalizeWebsite(prospect.instagramUrl) ?? "#"}
+                  label={prospect.instagramUrl.replace(/^https?:\/\/(www\.)?/, "")}
                   external
                 />
               )}

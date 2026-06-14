@@ -1857,6 +1857,11 @@ export const prospects = pgTable(
     contactEmail: text("contact_email").notNull(),
     phone: text("phone"),
     companyWebsite: text("company_website"),
+    /** Social handles — LinkedIn is the one Bruce names; Facebook /
+     *  Instagram cover the trades world. Stored as full URLs. */
+    linkedinUrl: text("linkedin_url"),
+    facebookUrl: text("facebook_url"),
+    instagramUrl: text("instagram_url"),
     industry: text("industry"),
     leadSource: text("lead_source"),
     /** Who referred this prospect — required when leadSource = "Referral".
