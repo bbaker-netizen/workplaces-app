@@ -7,9 +7,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Building2,
+  CalendarCheck,
   CreditCard,
   FileText,
   Plug,
+  Receipt,
   User,
   Users,
 } from "lucide-react";
@@ -41,6 +43,7 @@ const CARDS: SettingsCard[] = [
       "Default monthly-fee suggestions per program + client size. Drives the {{monthly_fee}} placeholder in your contracts.",
     icon: CreditCard,
     status: "ready",
+    masterAdminOnly: true,
   },
   {
     href: "/business-builder/templates",
@@ -63,8 +66,25 @@ const CARDS: SettingsCard[] = [
     href: "/business-builder/settings/integrations",
     title: "Integrations & connections",
     description:
-      "Google (Calendar + Gmail), QuickBooks Online, Twilio (SMS), Fireflies, Resend. Connection status and management links.",
+      "Account-wide services: Twilio (SMS), Netlify, Fireflies, Resend, and the master Google/QuickBooks status. System config.",
     icon: Plug,
+    status: "ready",
+    masterAdminOnly: true,
+  },
+  {
+    href: "/business-builder/profile/google-calendar",
+    title: "My calendar & email",
+    description:
+      "Connect your own Google Calendar + Gmail so your sessions sync and client emails are captured. Personal to you.",
+    icon: CalendarCheck,
+    status: "ready",
+  },
+  {
+    href: "/business-builder/profile/quickbooks",
+    title: "My QuickBooks",
+    description:
+      "Connect your own QuickBooks Online company file to pull client payment values onto your pipeline. Personal to you.",
+    icon: Receipt,
     status: "ready",
   },
   {
@@ -80,13 +100,14 @@ const CARDS: SettingsCard[] = [
 export default async function SettingsHubPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  // System settings are master-admin only. Standard Business Builders
-  // (coach role) are bounced back to their console — they don't
-  // configure the business or its integrations.
-  if (profile.role !== "master_admin") {
-    redirect("/business-builder");
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    redirect("/portal");
   }
 
+  // Standard Business Builders see the hub but the account-level cards
+  // (company, pricing, system integrations, team) are locked to master
+  // admins. Personal cards (their own calendar/QuickBooks, profile,
+  // templates) stay open.
   const isMasterAdmin = profile.role === "master_admin";
 
   return (
