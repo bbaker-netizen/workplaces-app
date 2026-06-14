@@ -19,8 +19,8 @@ import { PricingTiersManager } from "@/components/settings/PricingTiersManager";
 export default async function PricingSettingsPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin" && profile.role !== "coach") {
-    redirect("/portal");
+  if (profile.role !== "master_admin") {
+    redirect("/business-builder");
   }
 
   // Defensive load — if the pricing_tiers table doesn't exist yet

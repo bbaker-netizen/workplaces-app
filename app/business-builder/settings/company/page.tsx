@@ -20,7 +20,7 @@ export default async function CompanySettingsPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin") {
-    redirect("/business-builder/settings");
+    redirect("/business-builder");
   }
 
   const [org] = await withSystemContext(async (tx) =>

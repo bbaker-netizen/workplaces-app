@@ -11,6 +11,7 @@ import {
   FileText,
   Plug,
   User,
+  Users,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 
@@ -50,6 +51,15 @@ const CARDS: SettingsCard[] = [
     status: "ready",
   },
   {
+    href: "/business-builder/settings/team",
+    title: "Business Builders",
+    description:
+      "Invite teammates (like Jen) as standard Business Builders or co-admins, and set who can reach these system settings.",
+    icon: Users,
+    status: "ready",
+    masterAdminOnly: true,
+  },
+  {
     href: "/business-builder/settings/integrations",
     title: "Integrations & connections",
     description:
@@ -70,8 +80,11 @@ const CARDS: SettingsCard[] = [
 export default async function SettingsHubPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin" && profile.role !== "coach") {
-    redirect("/portal");
+  // System settings are master-admin only. Standard Business Builders
+  // (coach role) are bounced back to their console — they don't
+  // configure the business or its integrations.
+  if (profile.role !== "master_admin") {
+    redirect("/business-builder");
   }
 
   const isMasterAdmin = profile.role === "master_admin";
