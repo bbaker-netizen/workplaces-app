@@ -73,6 +73,12 @@ export default async function GoogleCalendarConnectPage({
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-8">
       <header className="space-y-1">
+        <Link
+          href="/business-builder/settings/integrations"
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
+        >
+          ← Integrations
+        </Link>
         <p className="tbb-eyebrow">Integrations</p>
         <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
           Google Workspace

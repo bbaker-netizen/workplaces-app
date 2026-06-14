@@ -38,17 +38,15 @@ import {
   actionItems,
   bbsSessions,
   engagements,
-  googleCalendarEventMappings,
   orgs,
   projects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { listExternalEvents } from "@/lib/integrations/google-calendar";
-import { ImportFromCalendarPanel } from "@/components/calendar/ImportFromCalendarPanel";
 import { SuggestSlotsPanel } from "./SuggestSlotsPanel";
 
 type ViewMode = "week" | "month";
-type EventType = "session" | "action" | "project";
+type EventType = "session" | "action" | "project" | "external";
 
 type CalendarEvent = {
   id: string;
@@ -85,11 +83,15 @@ function endOfMonth(d: Date): Date {
 }
 
 function parseTypes(raw: string | undefined): Set<EventType> {
-  const defaults: EventType[] = ["session", "action", "project"];
+  const defaults: EventType[] = ["session", "action", "project", "external"];
   if (!raw) return new Set<EventType>(defaults);
   const parts = raw.split(",").filter(Boolean) as EventType[];
   const valid = parts.filter(
-    (p) => p === "session" || p === "action" || p === "project",
+    (p) =>
+      p === "session" ||
+      p === "action" ||
+      p === "project" ||
+      p === "external",
   );
   return valid.length > 0
     ? new Set<EventType>(valid)
@@ -232,50 +234,30 @@ export default async function CalendarPage({
       ),
     ]);
 
-  // #5: upcoming Google Calendar events the Business Builder can import
-  // as sessions. Best-effort — if Google isn't connected or the API
-  // hiccups, we just skip the import panel rather than break the page.
-  let importableEvents: {
-    id: string;
-    summary: string;
-    startIso: string;
-    startLabel: string;
-  }[] = [];
-  try {
-    const now = new Date();
-    const horizon = addDays(now, 45);
-    const [external, importedMappings] = await Promise.all([
-      listExternalEvents(profile.userProfileId, now, horizon),
-      withSystemContext(async (tx) =>
-        tx
-          .select({ googleEventId: googleCalendarEventMappings.googleEventId })
-          .from(googleCalendarEventMappings)
-          .where(
-            eq(
-              googleCalendarEventMappings.userProfileId,
-              profile.userProfileId,
-            ),
-          ),
-      ),
-    ]);
-    const importedIds = new Set(importedMappings.map((m) => m.googleEventId));
-    importableEvents = external
-      .filter((e) => !importedIds.has(e.id))
-      .map((e) => ({
-        id: e.id,
-        summary: e.summary,
-        startIso: e.start.toISOString(),
-        startLabel: e.start.toLocaleString("en-CA", {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          timeZone: "America/Edmonton",
-        }),
+  // Google Calendar events for the visible range — synced in and shown
+  // on the grid automatically (no manual import). Best-effort: if Google
+  // isn't connected or the API hiccups, we just skip them.
+  let externalEvents: CalendarEvent[] = [];
+  if (typeFilter.has("external")) {
+    try {
+      const external = await listExternalEvents(
+        profile.userProfileId,
+        rangeStart,
+        rangeEnd,
+      );
+      externalEvents = external.map((e) => ({
+        id: `g-${e.id}`,
+        type: "external" as const,
+        date: e.start,
+        title: e.summary,
+        engagementId: "",
+        engagementName: null,
+        status: "confirmed",
+        href: e.htmlLink ?? "#",
       }));
-  } catch {
-    // Google not connected / transient API error — skip the panel.
+    } catch {
+      // Google not connected / transient API error — skip.
+    }
   }
 
   // Merge into a unified event list.
@@ -310,6 +292,7 @@ export default async function CalendarPage({
       status: p.status,
       href: `/portal/projects/${p.id}`,
     })),
+    ...externalEvents,
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   // Bucket events by day.
@@ -505,14 +488,6 @@ export default async function CalendarPage({
         </span>
       </div>
 
-      <ImportFromCalendarPanel
-        events={importableEvents}
-        engagements={allEngagements.map((e) => ({
-          id: e.id,
-          name: e.name ?? "(unnamed)",
-        }))}
-      />
-
       <SuggestSlotsPanel />
 
       <div className="border border-tbb-line rounded-lg bg-white overflow-hidden shadow-tbb-sm">
@@ -641,27 +616,35 @@ function chipClass(active: boolean, type: EventType): string {
     return base + "bg-tbb-blue text-white border-tbb-blue";
   if (type === "action")
     return base + "bg-tbb-orange text-white border-tbb-orange";
+  if (type === "external")
+    return base + "bg-emerald-600 text-white border-emerald-600";
   return base + "bg-tbb-navy text-white border-tbb-navy";
 }
 
 function EventChip({ event }: { event: CalendarEvent }) {
   const isSession = event.type === "session";
   const isAction = event.type === "action";
+  const isExternal = event.type === "external";
+  const timed = isSession || isExternal;
   return (
     <Link
       href={event.href}
+      target={isExternal ? "_blank" : undefined}
+      rel={isExternal ? "noopener noreferrer" : undefined}
       className={
         "block px-1.5 py-1 rounded text-[10px] leading-snug border-l-2 hover:opacity-80 " +
         (isSession
           ? "bg-tbb-blue-50 border-tbb-blue text-tbb-navy"
           : isAction
             ? "bg-tbb-cream-50 border-tbb-orange text-tbb-navy"
-            : "bg-tbb-navy/10 border-tbb-navy text-tbb-navy")
+            : isExternal
+              ? "bg-emerald-50 border-emerald-500 text-emerald-900"
+              : "bg-tbb-navy/10 border-tbb-navy text-tbb-navy")
       }
       title={`${event.title}${event.engagementName ? " — " + event.engagementName : ""}`}
     >
       <span className="font-bold tabular-nums">
-        {isSession
+        {timed
           ? event.date.toLocaleTimeString("en-CA", {
               hour: "numeric",
               minute: "2-digit",
@@ -681,7 +664,9 @@ function TypePill({ type }: { type: EventType }) {
       ? { label: "Session", cls: "bg-tbb-blue text-white", Icon: CalendarIcon }
       : type === "action"
         ? { label: "Action", cls: "bg-tbb-orange text-white", Icon: CheckSquare }
-        : { label: "Project", cls: "bg-tbb-navy text-white", Icon: Flag };
+        : type === "external"
+          ? { label: "Google", cls: "bg-emerald-600 text-white", Icon: CalendarIcon }
+          : { label: "Project", cls: "bg-tbb-navy text-white", Icon: Flag };
   const I = meta.Icon;
   return (
     <span

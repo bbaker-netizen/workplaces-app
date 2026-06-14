@@ -69,10 +69,10 @@ export default async function QboProfilePage({
           and shows them as the &ldquo;Value&rdquo; on your pipeline.
         </p>
         <Link
-          href="/business-builder"
+          href="/business-builder/settings/integrations"
           className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
-          ← Console
+          ← Integrations
         </Link>
       </header>
 
