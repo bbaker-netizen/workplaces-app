@@ -30,7 +30,8 @@ export type PortalModuleKey =
   | "team"
   | "methodology"
   | "embedded_apps"
-  | "hiring";
+  | "hiring"
+  | "notes";
 
 /**
  * Engagement-lifecycle phase a module sits inside. The sidebar nav
@@ -87,6 +88,7 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   { key: "action_items", label: "Action items", href: "/portal/action-items", visibleTo: ALL_ROLES, sortOrder: 0,  phase: "today" },
   { key: "calendar",     label: "Calendar",     href: "/portal/calendar",     visibleTo: ALL_ROLES, sortOrder: 5,  phase: "today" },
   { key: "sessions",     label: "Sessions",     href: "/portal/sessions",     visibleTo: ALL_ROLES, sortOrder: 10, phase: "today" },
+  { key: "notes",        label: "My Notes",     href: "/portal/notes",        visibleTo: ALL_ROLES, sortOrder: 15, phase: "today" },
 
   // Conversations.
   { key: "communication", label: "Communication", href: "/portal/communication", visibleTo: ALL_ROLES, sortOrder: 20, phase: "conversations" },
