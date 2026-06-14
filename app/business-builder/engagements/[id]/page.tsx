@@ -61,6 +61,7 @@ import {
 } from "@/components/business-builder/EmbeddedAppManager";
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
+import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 
 export default async function EngagementDetailPage({
   params,
@@ -265,6 +266,12 @@ export default async function EngagementDetailPage({
             <EngagementStatusControl
               engagementId={id}
               current={data.eng.status}
+            />
+            <EngagementArchiveButton
+              engagementId={id}
+              engagementName={data.eng.name ?? "this client"}
+              archived={Boolean(data.eng.archivedAt)}
+              variant="full"
             />
           </div>
         </div>

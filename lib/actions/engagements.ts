@@ -50,3 +50,55 @@ export async function setEngagementStatus(
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/**
+ * Archive (soft-delete) an entire engagement — removes the client from
+ * the Engagements list and closes their portal. Reversible via
+ * unarchiveEngagement. Coach-only.
+ */
+export async function archiveEngagement(engagementId: string): Promise<Result> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(engagements)
+        .set({ archivedAt: new Date(), status: "paused" })
+        .where(eq(engagements.id, engagementId));
+    });
+    revalidatePath("/business-builder/engagements");
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Restore an archived engagement (and reactivate it). Coach-only. */
+export async function unarchiveEngagement(
+  engagementId: string,
+): Promise<Result> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(engagements)
+        .set({ archivedAt: null, status: "active" })
+        .where(eq(engagements.id, engagementId));
+    });
+    revalidatePath("/business-builder/engagements");
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}

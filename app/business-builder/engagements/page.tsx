@@ -10,6 +10,7 @@ import { ArrowRight, Briefcase, Eye } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 
 export default async function EngagementsListPage() {
   const profile = await ensureUserProfile();
@@ -29,6 +30,7 @@ export default async function EngagementsListPage() {
         slug: engagements.slug,
         type: engagements.type,
         status: engagements.status,
+        archivedAt: engagements.archivedAt,
         startDate: engagements.startDate,
         orgId: engagements.orgId,
       })
@@ -55,18 +57,18 @@ export default async function EngagementsListPage() {
         .filter((p) => p.engagementId)
         .map((p) => [p.engagementId!, p]),
     );
-    return (
-      engs
-        // Hide engagements whose contact was archived ("deleted") — the
-        // client disappears from the list along with the contact.
-        .filter((e) => !prospectByEng.get(e.id)?.archivedAt)
-        .map((e) => ({
-          ...e,
-          orgName: orgById.get(e.orgId) ?? null,
-          prospect: prospectByEng.get(e.id) ?? null,
-        }))
-    );
+    return engs.map((e) => ({
+      ...e,
+      orgName: orgById.get(e.orgId) ?? null,
+      prospect: prospectByEng.get(e.id) ?? null,
+    }));
   });
+
+  // Archived clients drop off the main list into a separate, restorable
+  // section. Archive is the single source of truth — set directly or when
+  // the client's contact is archived.
+  const active = rows.filter((e) => !e.archivedAt);
+  const archived = rows.filter((e) => e.archivedAt);
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
@@ -83,10 +85,10 @@ export default async function EngagementsListPage() {
         </p>
       </header>
 
-      {rows.length === 0 ? (
+      {active.length === 0 ? (
         <div className="border border-dashed border-tbb-line rounded-lg bg-white p-10 text-center space-y-2">
           <Briefcase className="w-8 h-8 text-tbb-blue mx-auto" aria-hidden />
-          <p className="font-bold text-tbb-navy">No engagements yet.</p>
+          <p className="font-bold text-tbb-navy">No active engagements.</p>
           <p className="text-sm text-tbb-ink-3">
             Engagements show up after a prospect signs a BBA and you create
             their workspace.
@@ -94,7 +96,7 @@ export default async function EngagementsListPage() {
         </div>
       ) : (
         <ul className="border border-tbb-line rounded-lg bg-white divide-y divide-tbb-line-soft overflow-hidden shadow-tbb-sm">
-          {rows.map((e) => (
+          {active.map((e) => (
             <li key={e.id} className="flex items-center gap-2 px-5 py-4 hover:bg-tbb-cream-50 transition-colors">
               <Link
                 href={`/business-builder/engagements/${e.id}`}
@@ -123,9 +125,42 @@ export default async function EngagementsListPage() {
                   <Eye className="w-3 h-3" aria-hidden /> View portal
                 </Link>
               )}
+              <EngagementArchiveButton
+                engagementId={e.id}
+                engagementName={e.name ?? e.orgName ?? "this client"}
+                archived={false}
+              />
             </li>
           ))}
         </ul>
+      )}
+
+      {archived.length > 0 && (
+        <section className="space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            Archived clients ({archived.length})
+          </p>
+          <ul className="border border-tbb-line rounded-lg bg-tbb-cream-50 divide-y divide-tbb-line-soft overflow-hidden">
+            {archived.map((e) => (
+              <li key={e.id} className="flex items-center gap-2 px-5 py-3">
+                <span className="flex-1 min-w-0">
+                  <span className="block font-bold text-tbb-ink-3 line-through truncate">
+                    {e.name ?? e.orgName ?? "Untitled engagement"}
+                  </span>
+                  <span className="block text-[11px] text-tbb-ink-4">
+                    {e.prospect?.contactName && `${e.prospect.contactName} · `}
+                    Archived
+                  </span>
+                </span>
+                <EngagementArchiveButton
+                  engagementId={e.id}
+                  engagementName={e.name ?? e.orgName ?? "this client"}
+                  archived
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </main>
   );

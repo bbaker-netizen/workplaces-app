@@ -423,6 +423,11 @@ export const engagements = pgTable(
     stageOfGrowthStage: bigint("stage_of_growth_stage", { mode: "number" }),
     stageAssessedAt: timestamp("stage_assessed_at", { withTimezone: true }),
     slug: text("slug"),
+    /** Soft-delete / archive for the whole engagement. When set, the
+     *  client is removed from the Engagements list and their portal is
+     *  closed off. Set when the coach archives the client (directly or by
+     *  archiving their contact); cleared on restore. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     /** Monthly fee charged to this client, in cents. Surfaces as
      *  `{{monthly_fee}}` in document templates (rendered as
      *  "$2,500/month"). Set at engagement creation, pre-filled from
