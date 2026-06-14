@@ -60,7 +60,18 @@ export default async function CoachSessionsPage({
         </nav>
       </header>
 
-      <ScheduleSessionForm engagementId={engagement.id} />
+      {engagement.status === "active" ? (
+        <div className="rounded-md border border-tbb-line bg-tbb-cream-50 px-4 py-3 text-sm text-tbb-ink-3 mb-6">
+          <span className="font-bold text-tbb-ink-2">
+            This client is on the books.
+          </span>{" "}
+          Schedule Business Building Sessions in Google Calendar — they sync
+          into the app automatically. Manual scheduling is hidden for active
+          clients to keep the calendar the single source of truth.
+        </div>
+      ) : (
+        <ScheduleSessionForm engagementId={engagement.id} />
+      )}
       <SessionList
         upcoming={upcoming}
         past={past}

@@ -48,8 +48,16 @@ export default async function PortalSessionsPage() {
       </header>
 
       <div className="space-y-8">
-        {canSchedule && (
-          <ScheduleSessionForm engagementId={engagement.id} />
+        {engagement.status === "active" ? (
+          <div className="rounded-md border border-tbb-line bg-tbb-cream-50 px-4 py-3 text-sm text-tbb-ink-3">
+            <span className="font-bold text-tbb-ink-2">
+              Sessions are on the books.
+            </span>{" "}
+            Your Business Building Sessions are scheduled in Google Calendar
+            and sync here automatically — no need to add them manually.
+          </div>
+        ) : (
+          canSchedule && <ScheduleSessionForm engagementId={engagement.id} />
         )}
         <SessionList
           upcoming={upcoming}

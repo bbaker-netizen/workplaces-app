@@ -132,7 +132,10 @@ export function ProspectDealCard({
                 {formatCad(totalClientValueCents)}
               </span>
             ) : (
-              <span className="text-tbb-ink-4">No QuickBooks link</span>
+              <span className="text-tbb-ink-4">
+                Link this client&apos;s QuickBooks customer below to pull
+                their lifetime value.
+              </span>
             )}
           </Field>
           <Field label="Program">

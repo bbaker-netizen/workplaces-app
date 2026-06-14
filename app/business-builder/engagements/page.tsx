@@ -45,6 +45,7 @@ export default async function EngagementsListPage() {
         engagementId: prospects.convertedEngagementId,
         contactName: prospects.contactName,
         companyName: prospects.companyName,
+        archivedAt: prospects.archivedAt,
       })
       .from(prospects)
       .where(inArray(prospects.convertedEngagementId, engs.map((e) => e.id)));
@@ -54,11 +55,17 @@ export default async function EngagementsListPage() {
         .filter((p) => p.engagementId)
         .map((p) => [p.engagementId!, p]),
     );
-    return engs.map((e) => ({
-      ...e,
-      orgName: orgById.get(e.orgId) ?? null,
-      prospect: prospectByEng.get(e.id) ?? null,
-    }));
+    return (
+      engs
+        // Hide engagements whose contact was archived ("deleted") — the
+        // client disappears from the list along with the contact.
+        .filter((e) => !prospectByEng.get(e.id)?.archivedAt)
+        .map((e) => ({
+          ...e,
+          orgName: orgById.get(e.orgId) ?? null,
+          prospect: prospectByEng.get(e.id) ?? null,
+        }))
+    );
   });
 
   return (

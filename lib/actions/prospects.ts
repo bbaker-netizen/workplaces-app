@@ -19,6 +19,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
+import { formatPhone } from "@/lib/format";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -132,7 +133,7 @@ export async function createProspect(
         companyName: data.companyName.trim(),
         contactName: data.contactName.trim(),
         contactEmail: data.contactEmail,
-        phone: data.phone ?? null,
+        phone: data.phone ? formatPhone(data.phone) : null,
         companyWebsite: data.companyWebsite ?? null,
         leadSource: data.leadSource ?? null,
         referrerName: data.referrerName ?? null,
@@ -267,7 +268,8 @@ export async function updateProspect(
       if (data.companyName !== undefined) updates.companyName = data.companyName;
       if (data.contactName !== undefined) updates.contactName = data.contactName;
       if (data.contactEmail !== undefined) updates.contactEmail = data.contactEmail;
-      if (data.phone !== undefined) updates.phone = data.phone;
+      if (data.phone !== undefined)
+        updates.phone = data.phone ? formatPhone(data.phone) : null;
       if (data.companyWebsite !== undefined) updates.companyWebsite = data.companyWebsite;
       if (data.industry !== undefined) updates.industry = data.industry;
       if (data.leadSource !== undefined) updates.leadSource = data.leadSource;
