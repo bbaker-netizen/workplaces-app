@@ -56,6 +56,7 @@ const createSchema = z.object({
   phone: optionalString,
   companyWebsite: optionalString,
   leadSource: optionalString,
+  referrerName: optionalString,
   expectedValueCents: z.number().int().nonnegative().nullable().optional(),
   nextActionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   nextActionNote: optionalString,
@@ -107,6 +108,8 @@ export async function createProspect(
     contactEmail: data.contactEmail,
     phone: data.phone ?? null,
     legalNameConfirmed: data.legalNameConfirmed ?? false,
+    leadSource: data.leadSource ?? null,
+    referrerName: data.referrerName ?? null,
   });
   if (!quality.ok) {
     return {
@@ -132,6 +135,7 @@ export async function createProspect(
         phone: data.phone ?? null,
         companyWebsite: data.companyWebsite ?? null,
         leadSource: data.leadSource ?? null,
+        referrerName: data.referrerName ?? null,
         expectedValueCents: data.expectedValueCents ?? null,
         nextActionDate: data.nextActionDate
           ? new Date(data.nextActionDate)
@@ -164,6 +168,7 @@ const updateSchema = z.object({
   companyWebsite: optionalString,
   industry: optionalString,
   leadSource: optionalString,
+  referrerName: optionalString,
   expectedValueCents: z.number().int().nonnegative().nullable().optional(),
   nextActionDate: z
     .string()
@@ -244,6 +249,18 @@ export async function updateProspect(
       }
     }
   }
+  // Referral leads must carry a referrer. Enforce whenever the lead
+  // source is being set to Referral (the deal card sends both together).
+  if (
+    data.leadSource !== undefined &&
+    (data.leadSource ?? "").trim().toLowerCase() === "referral" &&
+    (data.referrerName ?? "").trim().length < 2
+  ) {
+    return {
+      ok: false,
+      error: "Add the referrer's name — Referral leads need a referrer on file.",
+    };
+  }
   try {
     await withSystemContext(async (tx) => {
       const updates: Partial<typeof prospects.$inferInsert> = {};
@@ -254,6 +271,8 @@ export async function updateProspect(
       if (data.companyWebsite !== undefined) updates.companyWebsite = data.companyWebsite;
       if (data.industry !== undefined) updates.industry = data.industry;
       if (data.leadSource !== undefined) updates.leadSource = data.leadSource;
+      if (data.referrerName !== undefined)
+        updates.referrerName = data.referrerName;
       if (data.expectedValueCents !== undefined)
         updates.expectedValueCents = data.expectedValueCents;
       if (data.nextActionDate !== undefined)

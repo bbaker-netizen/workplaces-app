@@ -303,6 +303,7 @@ export default async function ProspectDetailPage({
             prospectId={prospect.id}
             totalClientValueCents={prospect.qboLifetimePaymentsCents}
             leadSource={prospect.leadSource}
+            referrerName={prospect.referrerName}
             ownerUserProfileId={prospect.ownerUserProfileId}
             ownerName={prospect.ownerName}
             nextActionDate={prospect.nextActionDate}

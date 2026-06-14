@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, Plus } from "lucide-react";
 import { createProspect } from "@/lib/actions/prospects";
+import { formatPhone } from "@/lib/format";
 import { LEAD_SOURCES, STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 import {
   validateProspect,
@@ -36,6 +37,7 @@ export function NewProspectForm({
   const [phone, setPhone] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [leadSource, setLeadSource] = useState("");
+  const [referrerName, setReferrerName] = useState("");
   const [nextActionDate, setNextActionDate] = useState("");
   const [nextActionNote, setNextActionNote] = useState("");
   const [status, setStatus] = useState<string>("new_lead");
@@ -83,9 +85,41 @@ export function NewProspectForm({
         contactEmail: contactEmail.trim(),
         phone: phone.trim() || null,
         legalNameConfirmed,
+        leadSource: leadSource || null,
+        referrerName: referrerName.trim() || null,
       }),
-    [companyName, contactName, contactEmail, phone, legalNameConfirmed],
+    [
+      companyName,
+      contactName,
+      contactEmail,
+      phone,
+      legalNameConfirmed,
+      leadSource,
+      referrerName,
+    ],
   );
+
+  // Warn before leaving with unsaved input (tab close / reload / external
+  // nav). Only arms once the user has actually typed something.
+  const isDirty =
+    companyName !== "" ||
+    contactName !== "" ||
+    contactEmail !== "" ||
+    phone !== "" ||
+    companyWebsite !== "" ||
+    leadSource !== "" ||
+    referrerName !== "" ||
+    nextActionNote !== "" ||
+    notes !== "";
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   function issueFor(
     field: ValidationIssue["field"],
@@ -107,6 +141,7 @@ export function NewProspectForm({
       contactName: true,
       contactEmail: true,
       phone: true,
+      referrerName: true,
     });
     if (!validation.ok) {
       setError(
@@ -128,6 +163,7 @@ export function NewProspectForm({
         phone: phone.trim() || null,
         companyWebsite: companyWebsite.trim() || null,
         leadSource: leadSource || null,
+        referrerName: leadSource === "Referral" ? referrerName.trim() : null,
         nextActionDate: nextActionDate || null,
         nextActionNote: nextActionNote.trim() || null,
         // @ts-expect-error status is a narrow string enum at runtime
@@ -207,13 +243,15 @@ export function NewProspectForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Phone" required issue={issueFor("phone")}>
+        <Field label="Phone" issue={issueFor("phone")}>
           <input
-            required
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
+            onBlur={() => {
+              setTouched((t) => ({ ...t, phone: true }));
+              if (phone.trim()) setPhone(formatPhone(phone));
+            }}
             disabled={isPending}
             placeholder="+1 780-555-1234"
             className={inputCls}
@@ -244,6 +282,22 @@ export function NewProspectForm({
             ))}
           </select>
         </Field>
+        {leadSource === "Referral" && (
+          <Field
+            label="Referred by"
+            required
+            issue={issueFor("referrerName")}
+          >
+            <input
+              value={referrerName}
+              onChange={(e) => setReferrerName(e.target.value)}
+              onBlur={() => setTouched((t) => ({ ...t, referrerName: true }))}
+              disabled={isPending}
+              placeholder="Who referred them?"
+              className={inputCls}
+            />
+          </Field>
+        )}
         <Field label="Initial stage">
           <select
             value={status}

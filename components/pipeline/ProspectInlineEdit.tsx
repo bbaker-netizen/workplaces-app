@@ -14,6 +14,12 @@ import { useMemo, useState, useTransition } from "react";
 import { AlertTriangle, Edit2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
+import { formatPhone } from "@/lib/format";
+
+/** Confirm before tossing unsaved edits. */
+function confirmDiscard(dirty: boolean): boolean {
+  return !dirty || window.confirm("Discard your unsaved changes?");
+}
 
 type Field = "contact" | "notes";
 
@@ -132,6 +138,13 @@ function ContactEdit({
     });
   }
 
+  const dirty =
+    company !== companyName ||
+    contactName !== (initial.contactName ?? "") ||
+    contactEmail !== initial.contactEmail ||
+    phone !== (initial.phone ?? "") ||
+    companyWebsite !== (initial.companyWebsite ?? "");
+
   const companyIssue = validation.errors.find((i) => i.field === "companyName");
   const contactIssue = validation.errors.find((i) => i.field === "contactName");
   const emailIssue = validation.errors.find((i) => i.field === "contactEmail");
@@ -179,6 +192,7 @@ function ContactEdit({
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          onBlur={() => phone.trim() && setPhone(formatPhone(phone))}
           placeholder="+1 780-555-1234"
           disabled={isPending}
           className={inputCls}
@@ -208,7 +222,7 @@ function ContactEdit({
         </button>
         <button
           type="button"
-          onClick={onDone}
+          onClick={() => confirmDiscard(dirty) && onDone()}
           disabled={isPending}
           className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
         >
@@ -231,6 +245,7 @@ function NotesEdit({
   const [notes, setNotes] = useState(initialNotes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const dirty = notes !== (initialNotes ?? "");
 
   function save() {
     setError(null);
@@ -266,7 +281,7 @@ function NotesEdit({
         </button>
         <button
           type="button"
-          onClick={onDone}
+          onClick={() => confirmDiscard(dirty) && onDone()}
           disabled={isPending}
           className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
         >
