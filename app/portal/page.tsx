@@ -84,8 +84,8 @@ export default async function PortalDashboard() {
 
   // Greeting name. Normally the signed-in client. When a coach is
   // previewing, greet with the client lead's name (falling back to any
-  // client member) so the preview reads the way the client will see it —
-  // not "Good evening, Bruce".
+  // client member, then the company/engagement name) so the preview reads
+  // the way the client will see it — never "Good evening, Bruce".
   let greetingName = profile.fullName.split(" ")[0] ?? profile.fullName;
   if (isPreview) {
     const members = await listEngagementMembers(engagement.id);
@@ -94,9 +94,9 @@ export default async function PortalDashboard() {
       members.find(
         (m) => m.role === "client_manager" || m.role === "client_employee",
       );
-    if (client?.fullName) {
-      greetingName = client.fullName.split(" ")[0] ?? client.fullName;
-    }
+    greetingName = client?.fullName
+      ? (client.fullName.split(" ")[0] ?? client.fullName)
+      : (engagement.name ?? "there");
   }
 
   return (
