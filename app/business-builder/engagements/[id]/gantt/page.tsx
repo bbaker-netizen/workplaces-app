@@ -37,6 +37,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { InlineProjectDateEdit } from "@/components/projects/InlineProjectDateEdit";
+import { InteractiveGantt } from "@/components/projects/InteractiveGantt";
 
 function dayMs(): number {
   return 24 * 60 * 60 * 1000;
@@ -181,6 +182,27 @@ export default async function ProjectGanttPage({
           its bar in-place.
         </p>
       </header>
+
+      {data.projects.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            Reschedule projects (drag)
+          </h2>
+          <InteractiveGantt
+            projects={data.projects.map((p) => ({
+              id: p.id,
+              name: p.name,
+              status: p.status,
+              startISO: p.startDate ? new Date(p.startDate).toISOString() : null,
+              targetISO: p.targetDate
+                ? new Date(p.targetDate).toISOString()
+                : null,
+            }))}
+            rangeStartISO={minDate.toISOString()}
+            totalDays={totalDays}
+          />
+        </section>
+      )}
 
       {data.projects.length === 0 && milestoneDeliverables.length === 0 ? (
         <div className="border border-dashed border-tbb-line rounded-lg bg-white p-10 text-center space-y-3">
