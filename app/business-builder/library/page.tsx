@@ -41,7 +41,7 @@ export default async function ResourceLibraryPage() {
       <header className="space-y-2">
         <p className="tbb-eyebrow">Resources</p>
         <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-          Tools &amp; tutorials
+          Client tools &amp; tutorials
         </h1>
         <p className="text-sm text-tbb-ink-3 max-w-2xl">
           Your growing library of apps, video tutorials, and written
