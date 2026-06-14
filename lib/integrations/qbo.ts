@@ -311,13 +311,42 @@ export async function getCustomerTotalPaymentsCents(
   realmId: string,
   customerId: string,
 ): Promise<number> {
+  // Sum BOTH Payments (cash applied to invoices) and SalesReceipts
+  // (point-of-sale, no invoice). Counting Payments alone undercounts any
+  // client paid via sales receipts — the likely cause of low lifetime
+  // totals for long-standing clients.
+  const payments = await sumEntityTotalsCents(
+    accessToken,
+    realmId,
+    customerId,
+    "Payment",
+  );
+  const salesReceipts = await sumEntityTotalsCents(
+    accessToken,
+    realmId,
+    customerId,
+    "SalesReceipt",
+  );
+  return payments + salesReceipts;
+}
+
+/**
+ * Sum `TotalAmt` across every row of a QBO entity for one customer,
+ * paginating until the result set is exhausted.
+ */
+async function sumEntityTotalsCents(
+  accessToken: string,
+  realmId: string,
+  customerId: string,
+  entity: "Payment" | "SalesReceipt",
+): Promise<number> {
   const safe = customerId.replace(/'/g, "''");
   const pageSize = 100;
   let start = 1;
   let totalCents = 0;
   for (;;) {
     const query =
-      `select * from Payment where CustomerRef = '${safe}' ` +
+      `select * from ${entity} where CustomerRef = '${safe}' ` +
       `startposition ${start} maxresults ${pageSize}`;
     const resp = await qboFetch(
       accessToken,
@@ -326,18 +355,18 @@ export async function getCustomerTotalPaymentsCents(
     );
     if (!resp.ok) {
       throw new Error(
-        `QBO payment query failed (${resp.status}): ${await resp.text()}`,
+        `QBO ${entity} query failed (${resp.status}): ${await resp.text()}`,
       );
     }
     const data = (await resp.json()) as {
-      QueryResponse: { Payment?: Array<{ TotalAmt?: number }> };
+      QueryResponse: Record<string, Array<{ TotalAmt?: number }> | undefined>;
     };
-    const payments = data.QueryResponse.Payment ?? [];
-    for (const p of payments) {
-      // Round each payment to cents before summing to avoid float drift.
-      totalCents += Math.round((p.TotalAmt ?? 0) * 100);
+    const rows = data.QueryResponse[entity] ?? [];
+    for (const r of rows) {
+      // Round each row to cents before summing to avoid float drift.
+      totalCents += Math.round((r.TotalAmt ?? 0) * 100);
     }
-    if (payments.length < pageSize) break;
+    if (rows.length < pageSize) break;
     start += pageSize;
   }
   return totalCents;

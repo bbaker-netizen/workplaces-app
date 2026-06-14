@@ -108,6 +108,7 @@ export function ProspectTable({
   const [stageFilter, setStageFilter] = useState<
     ProspectStatus | "all" | "prospects" | "clients"
   >("prospects");
+  const [sortBy, setSortBy] = useState<"company" | "updated">("company");
   const [visible, setVisible] = useState<ColumnKey[]>(() => {
     const fromPrefs = (initialPrefs?.visible ?? []) as ColumnKey[];
     // Make sure non-optional columns are always present + only known keys.
@@ -141,7 +142,7 @@ export function ProspectTable({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return prospects.filter((p) => {
+    const rows = prospects.filter((p) => {
       if (stageFilter === "prospects") {
         // The active funnel you're still working to win — hide signed
         // deals, active engagements (onboarded), and lost.
@@ -168,7 +169,17 @@ export function ProspectTable({
         (p.industry ?? "").toLowerCase().includes(q)
       );
     });
-  }, [prospects, query, stageFilter]);
+    // Sort the visible rows: alphabetical by company, or most-recently
+    // updated first.
+    return [...rows].sort((a, b) => {
+      if (sortBy === "updated") {
+        return (
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      }
+      return a.companyName.localeCompare(b.companyName);
+    });
+  }, [prospects, query, stageFilter, sortBy]);
 
   // Total monthly program fee across the rows currently shown — i.e. the
   // monthly revenue this view represents (respects the stage filter).
@@ -325,6 +336,15 @@ export function ProspectTable({
               {v.label}
             </option>
           ))}
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as "company" | "updated")}
+          className="bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+          aria-label="Sort rows"
+        >
+          <option value="company">Sort: Company A–Z</option>
+          <option value="updated">Sort: Recently updated</option>
         </select>
 
         {/* Columns menu */}
