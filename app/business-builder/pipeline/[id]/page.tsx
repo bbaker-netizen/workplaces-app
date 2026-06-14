@@ -414,22 +414,23 @@ export default async function ProspectDetailPage({
         emailTemplates={templates}
       />
 
-      {/* Danger zone — delete this prospect. Hard delete with confirm
-          dialog. Removes activity log + comms, then returns to /business-builder/pipeline. */}
+      {/* Archive this prospect (soft-delete). Recoverable from the
+          Archived view; activity log + comms are preserved. */}
       <section className="border border-tbb-danger/30 bg-tbb-cream-50 rounded-lg p-5 space-y-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-danger">
-            Danger zone
+            {prospect.archivedAt ? "Archived" : "Archive"}
           </p>
           <p className="text-sm text-tbb-ink-2 mt-1">
-            Permanently remove this prospect. Use this for genuine
-            duplicates or test rows — not &quot;lost&quot; deals (set
-            Stage = Lost instead so the historical context stays).
+            {prospect.archivedAt
+              ? "This prospect is archived and hidden from the pipeline. Restore it to bring it back."
+              : "Archive removes this prospect from the pipeline but keeps the record, activity log, and communications — restore it anytime. For deals that didn't close, set Stage = Lost instead so they stay in the funnel history."}
           </p>
         </div>
         <DeleteProspectButton
           prospectId={prospect.id}
           prospectLabel={prospect.companyName}
+          archived={Boolean(prospect.archivedAt)}
         />
       </section>
     </main>

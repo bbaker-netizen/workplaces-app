@@ -1832,6 +1832,10 @@ export const prospects = pgTable(
     /** When the QuickBooks customer link was first established (vs the
      *  value-sync timestamp above). Stamped on link, cleared on unlink. */
     qboLinkedAt: timestamp("qbo_linked_at", { withTimezone: true }),
+    /** Soft-delete. When set, the prospect is archived — hidden from the
+     *  default pipeline but recoverable (no data loss). Replaces hard
+     *  delete for the Delete buttons. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

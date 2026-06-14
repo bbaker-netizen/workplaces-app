@@ -6,6 +6,10 @@
  */
 
 import { useState, useTransition } from "react";
+import {
+  hidePendingFeedback,
+  showPendingFeedback,
+} from "@/components/layout/NavLoaderOverlay";
 import { CalendarClock, Edit2, UserCircle2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import { LEAD_SOURCES } from "@/lib/pipeline/stages";
@@ -82,6 +86,7 @@ export function ProspectDealCard({
       monthlyDollars.trim() && Number.isFinite(monthlyNum) && monthlyNum >= 0
         ? Math.round(monthlyNum * 100)
         : null;
+    showPendingFeedback("Saving…");
     startTransition(async () => {
       const r = await updateProspect({
         id: prospectId,
@@ -96,6 +101,7 @@ export function ProspectDealCard({
             : null,
         monthlyFeeCents: monthlyCents,
       });
+      hidePendingFeedback();
       if (!r.ok) setError(r.error);
       else setEditing(false);
     });

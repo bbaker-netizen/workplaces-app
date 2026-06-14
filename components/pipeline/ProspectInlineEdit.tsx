@@ -15,6 +15,10 @@ import { AlertTriangle, Edit2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
 import { formatPhone } from "@/lib/format";
+import {
+  hidePendingFeedback,
+  showPendingFeedback,
+} from "@/components/layout/NavLoaderOverlay";
 
 /** Confirm before tossing unsaved edits. */
 function confirmDiscard(dirty: boolean): boolean {
@@ -124,6 +128,7 @@ function ContactEdit({
       );
       return;
     }
+    showPendingFeedback("Saving…");
     startTransition(async () => {
       const r = await updateProspect({
         id: prospectId,
@@ -133,6 +138,7 @@ function ContactEdit({
         phone: phone.trim() || null,
         companyWebsite: companyWebsite.trim() || null,
       });
+      hidePendingFeedback();
       if (!r.ok) setError(r.error);
       else onDone();
     });
@@ -249,11 +255,13 @@ function NotesEdit({
 
   function save() {
     setError(null);
+    showPendingFeedback("Saving…");
     startTransition(async () => {
       const r = await updateProspect({
         id: prospectId,
         notes: notes.trim() || null,
       });
+      hidePendingFeedback();
       if (!r.ok) setError(r.error);
       else onDone();
     });

@@ -28,9 +28,12 @@ import {
   FileText,
   Flag,
   LayoutGrid,
+  MessageSquare,
   Workflow,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { listProspectActivities } from "@/lib/db/queries/prospects";
+import { activityTypeLabel } from "@/lib/pipeline/stages";
 import {
   actionItems,
   deliverables,
@@ -151,7 +154,11 @@ export default async function EngagementDetailPage({
           .where(eq(orgs.id, eng.orgId))
           .limit(1),
         tx
-          .select({ contactEmail: prospects.contactEmail })
+          .select({
+            id: prospects.id,
+            companyName: prospects.companyName,
+            contactEmail: prospects.contactEmail,
+          })
           .from(prospects)
           .where(eq(prospects.convertedEngagementId, id))
           .limit(1),
@@ -167,10 +174,19 @@ export default async function EngagementDetailPage({
       netlifyResources: netlifyRows,
       clerkOrgId: orgRow[0]?.clerkOrgId ?? null,
       clientEmail: prospectRow[0]?.contactEmail ?? null,
+      prospectId: prospectRow[0]?.id ?? null,
+      prospectCompany: prospectRow[0]?.companyName ?? null,
     };
   });
 
   if (!data) notFound();
+
+  // Pull the originating prospect's activity log so the pre-engagement
+  // history (calls, emails, meetings, diagnostic, stage changes) lives
+  // alongside the engagement instead of stranded back in the pipeline.
+  const pipelineActivities = data.prospectId
+    ? (await listProspectActivities(data.prospectId)).slice(0, 8)
+    : [];
 
   // Bucket the data into the tree shape the UI expects.
   const projectsByGoal = new Map<string | "unassigned", typeof data.projects>();
@@ -434,6 +450,56 @@ export default async function EngagementDetailPage({
           </ul>
         )}
       </section>
+
+      {/* Pipeline history — the originating prospect's comms + activity. */}
+      {data.prospectId && (
+        <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
+          <header className="px-5 py-3 border-b border-tbb-line bg-tbb-cream-50 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-tbb-blue" aria-hidden />
+              <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                From the pipeline
+              </p>
+            </div>
+            <Link
+              href={`/business-builder/pipeline/${data.prospectId}`}
+              className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              Open prospect →
+            </Link>
+          </header>
+          {pipelineActivities.length === 0 ? (
+            <p className="text-xs text-tbb-ink-3 italic px-5 py-4">
+              No logged activity from before this became an engagement.
+            </p>
+          ) : (
+            <ul className="divide-y divide-tbb-line-soft">
+              {pipelineActivities.map((a) => (
+                <li
+                  key={a.id}
+                  className="px-5 py-3 flex items-baseline justify-between gap-3 flex-wrap"
+                >
+                  <span className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue shrink-0">
+                      {activityTypeLabel(a.type)}
+                    </span>
+                    <span className="text-sm text-tbb-ink-2 truncate">
+                      {a.subject || a.body || "—"}
+                    </span>
+                  </span>
+                  <span className="text-[11px] text-tbb-ink-3 whitespace-nowrap">
+                    {new Date(a.occurredAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {/* Orphan action items (no project) */}
       {orphanActions.length > 0 && (
