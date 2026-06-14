@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementSessions } from "@/lib/db/queries/bbs-sessions";
+import { listEngagementMeetings } from "@/lib/db/queries/meetings";
 import { ScheduleSessionForm } from "@/components/sessions/ScheduleSessionForm";
 import { SessionList } from "@/components/sessions/SessionList";
+import { MeetingRecaps } from "@/components/meetings/MeetingRecaps";
 
 export default async function PortalSessionsPage() {
   const profile = await ensureUserProfile();
@@ -30,7 +32,10 @@ export default async function PortalSessionsPage() {
     profile.role === "client_lead" ||
     profile.role === "client_manager";
 
-  const { upcoming, past } = await listEngagementSessions(engagement.id);
+  const [{ upcoming, past }, meetings] = await Promise.all([
+    listEngagementSessions(engagement.id),
+    listEngagementMeetings(engagement.id),
+  ]);
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12">
@@ -69,6 +74,16 @@ export default async function PortalSessionsPage() {
               ? "Schedule the first session above and the rhythm starts."
               : "Your Business Builder is lining up sessions. They'll land here with a real Google Calendar invite."
           }
+        />
+        <MeetingRecaps
+          meetings={meetings.map((m) => ({
+            id: m.id,
+            title: m.title,
+            occurredAt: m.occurredAt,
+            summaryOverview: m.summaryOverview,
+            summaryBullets: m.summaryBullets,
+            transcriptUrl: m.transcriptUrl,
+          }))}
         />
       </div>
     </main>
