@@ -32,10 +32,19 @@ export type ProspectInput = {
   contactEmail: string;
   phone?: string | null;
   legalNameConfirmed?: boolean;
+  /** Lead source — drives the "referrer required" rule below. */
+  leadSource?: string | null;
+  /** Who referred them. Required when leadSource === "Referral". */
+  referrerName?: string | null;
 };
 
 export type ValidationIssue = {
-  field: "companyName" | "contactName" | "contactEmail" | "phone";
+  field:
+    | "companyName"
+    | "contactName"
+    | "contactEmail"
+    | "phone"
+    | "referrerName";
   level: "error" | "warning";
   message: string;
 };
@@ -156,25 +165,27 @@ export function validateProspect(input: ProspectInput): ValidationResult {
     });
   }
 
-  /* ---------- Phone (required) ----------
-   * Phone is required because the contract preamble + emergency
-   * outreach + Twilio SMS all need a number on file. We don't
-   * enforce a specific country format — clients can be Canadian,
-   * US, or international — but the value has to contain at least
-   * 7 digits so we know it's a real number, not "TBD" or "n/a". */
-  if (phone.length === 0) {
+  /* ---------- Phone (optional, but valid if provided) ----------
+   * Phone can be left blank, but if a number IS entered it has to be a
+   * real one — at least 7 digits — not "TBD" or "n/a". */
+  if (phone.length > 0 && countDigits(phone) < 7) {
     errors.push({
       field: "phone",
       level: "error",
       message:
-        "Phone number is required — the contract and any urgent outreach need this on file.",
+        "That phone number doesn't look right — needs at least 7 digits, including area code.",
     });
-  } else if (countDigits(phone) < 7) {
+  }
+
+  /* ---------- Referrer (required when lead source = Referral) ---------- */
+  const leadSource = (input.leadSource ?? "").trim();
+  const referrer = (input.referrerName ?? "").trim();
+  if (leadSource.toLowerCase() === "referral" && referrer.length < 2) {
     errors.push({
-      field: "phone",
+      field: "referrerName",
       level: "error",
       message:
-        "Phone number's too short — needs at least 7 digits, including country / area code.",
+        "Who referred them? Add the referrer's name — they get a $50 thank-you if this becomes a client.",
     });
   }
 

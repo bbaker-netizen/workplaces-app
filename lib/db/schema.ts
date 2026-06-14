@@ -1780,6 +1780,10 @@ export const prospects = pgTable(
     companyWebsite: text("company_website"),
     industry: text("industry"),
     leadSource: text("lead_source"),
+    /** Who referred this prospect — required when leadSource = "Referral".
+     *  On conversion to an active engagement, drives the $50 gift-cert /
+     *  thank-you-card reminder. */
+    referrerName: text("referrer_name"),
     expectedValueCents: bigint("expected_value_cents", { mode: "number" }),
     currency: text("currency").notNull().default("CAD"),
     /** Which program they're being slotted into. Captured on the

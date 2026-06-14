@@ -16,6 +16,7 @@ export function ProspectDealCard({
   prospectId,
   totalClientValueCents,
   leadSource,
+  referrerName,
   ownerUserProfileId,
   ownerName,
   nextActionDate,
@@ -29,6 +30,7 @@ export function ProspectDealCard({
   /** Lifetime payments received, synced from QuickBooks. Read-only. */
   totalClientValueCents: number | null;
   leadSource: string | null;
+  referrerName: string | null;
   ownerUserProfileId: string | null;
   ownerName: string | null;
   nextActionDate: Date | null;
@@ -44,6 +46,7 @@ export function ProspectDealCard({
     monthlyFeeCents ? (monthlyFeeCents / 100).toString() : "",
   );
   const [sourceVal, setSourceVal] = useState(leadSource ?? "");
+  const [referrerVal, setReferrerVal] = useState(referrerName ?? "");
   const [ownerVal, setOwnerVal] = useState(ownerUserProfileId ?? "");
   const [actionDate, setActionDate] = useState(
     nextActionDate
@@ -54,8 +57,26 @@ export function ProspectDealCard({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const referralChosen = sourceVal === "Referral";
+
+  const dealDirty =
+    programVal !== (programType ?? "") ||
+    monthlyDollars !== (monthlyFeeCents ? (monthlyFeeCents / 100).toString() : "") ||
+    sourceVal !== (leadSource ?? "") ||
+    referrerVal !== (referrerName ?? "") ||
+    ownerVal !== (ownerUserProfileId ?? "") ||
+    actionDate !==
+      (nextActionDate
+        ? new Date(nextActionDate).toISOString().slice(0, 10)
+        : "") ||
+    actionNote !== (nextActionNote ?? "");
+
   function save() {
     setError(null);
+    if (referralChosen && referrerVal.trim().length < 2) {
+      setError("Add the referrer's name — Referral leads need a referrer.");
+      return;
+    }
     const monthlyNum = Number(monthlyDollars);
     const monthlyCents =
       monthlyDollars.trim() && Number.isFinite(monthlyNum) && monthlyNum >= 0
@@ -65,6 +86,7 @@ export function ProspectDealCard({
       const r = await updateProspect({
         id: prospectId,
         leadSource: sourceVal || null,
+        referrerName: referralChosen ? referrerVal.trim() : null,
         ownerUserProfileId: ownerVal || null,
         nextActionDate: actionDate || null,
         nextActionNote: actionNote.trim() || null,
@@ -131,6 +153,15 @@ export function ProspectDealCard({
               <span className="text-tbb-ink-4">Unknown</span>
             )}
           </Field>
+          {leadSource === "Referral" && (
+            <Field label="Referred by">
+              {referrerName ? (
+                <span className="text-tbb-navy">{referrerName}</span>
+              ) : (
+                <span className="text-tbb-ink-4">Unknown</span>
+              )}
+            </Field>
+          )}
           <Field label="Owner">
             <UserCircle2 className="w-3.5 h-3.5 text-tbb-ink-3 inline mr-1" aria-hidden />
             <span className="text-tbb-navy">
@@ -233,6 +264,20 @@ export function ProspectDealCard({
               ))}
             </select>
           </EditField>
+          {referralChosen && (
+            <EditField label="Referred by (required)">
+              <input
+                value={referrerVal}
+                onChange={(e) => setReferrerVal(e.target.value)}
+                disabled={isPending}
+                placeholder="Who referred them?"
+                className={inputCls}
+              />
+              <span className="text-[11px] text-tbb-ink-3">
+                They get a $50 thank-you gift if this becomes a client.
+              </span>
+            </EditField>
+          )}
           <EditField label="Next action date">
             <input
               type="date"
@@ -265,7 +310,11 @@ export function ProspectDealCard({
             </button>
             <button
               type="button"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                if (dealDirty && !window.confirm("Discard your unsaved changes?"))
+                  return;
+                setEditing(false);
+              }}
               disabled={isPending}
               className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
             >
