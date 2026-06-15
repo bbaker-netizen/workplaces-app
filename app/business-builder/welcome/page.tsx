@@ -232,26 +232,42 @@ export default async function CoachWelcomePage() {
 
         <Step
           icon={<Folder className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Link the client's Google Drive folder"
-          href="/business-builder/documents/[engagementId]"
-          hrefLabel="(from each engagement's Documents page)"
+          title="Connect Google Drive for each client"
+          href="/business-builder/drive-link"
+          hrefLabel="(Auto-link Drive folders)"
         >
           <p>
             One Google connection at{" "}
             <Link href="/business-builder/profile/google-calendar" className="text-tbb-blue underline">
               /business-builder/profile/google-calendar
             </Link>{" "}
-            powers three things: two-way Calendar sync for BBS sessions,
-            Gmail capture into the Inbox, and Drive folder mirroring
-            per engagement.
+            powers four things: two-way Calendar sync for BBS sessions (and
+            calendar events with a client attendee auto-create sessions),
+            Gmail capture into the Inbox, the Meeting-notes recaps, and
+            Google Drive.
           </p>
           <p className="mt-2">
-            On any engagement&apos;s Documents page, paste the share URL
-            of that client&apos;s Drive folder. Files inside the folder
-            appear right on the page (read-only, click-through to Drive).
-            Bruce keeps everything in Drive as usual; clients see the
-            mirror in The Builder.
+            Open a client&apos;s Drive panel from the{" "}
+            <span className="font-bold">Documents &amp; Drive</span> button
+            on their engagement page. Two ways to wire Drive:
           </p>
+          <ul className="mt-2 list-disc pl-5 space-y-1">
+            <li>
+              <span className="font-bold">Create managed folder</span> — the
+              app makes a folder in your Drive and keeps it in sync{" "}
+              <span className="font-bold">both ways</span>: files uploaded in
+              The Builder land in Drive, and files you drop in the Drive
+              folder show in the client&apos;s portal.
+            </li>
+            <li>
+              <span className="font-bold">Link an existing folder</span> —
+              paste a share URL for a read-only mirror. To do this in bulk,{" "}
+              <Link href="/business-builder/drive-link" className="text-tbb-blue underline">
+                Auto-link Drive folders
+              </Link>{" "}
+              scans your Drive and matches folders to clients by name.
+            </li>
+          </ul>
         </Step>
 
         <Step
@@ -298,6 +314,13 @@ export default async function CoachWelcomePage() {
             recording ID. The system pulls the transcript and Claude
             extracts proposed action items as drafts — you review,
             assign, and publish them within 24 hours.
+          </p>
+          <p className="mt-2">
+            Hit <strong>Sync from Fireflies</strong> on a client&apos;s
+            Meetings page to pull every recorded meeting&apos;s recap. Each
+            client also gets a <strong>Meeting notes</strong> section in
+            their own portal with the recaps and a one-click link to the
+            recording — so they can revisit any session.
           </p>
         </Step>
 

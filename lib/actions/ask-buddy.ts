@@ -55,7 +55,7 @@ The app has TWO sides:
 The Business Builder Console sidebar groups work by lifecycle phase:
 
 **01 Pipeline — bring new prospects in**
-- Prospects (/business-builder/pipeline) — the CRM. Every prospect with their stage, contact info, deal value, next action. Stages: New lead → First contact → Meeting scheduled → Diagnostic complete → Proposal sent → Negotiation → Contract sent → Contract signed → Onboarded → Lost. "Diagnostic sent" is shown as a status when Bruce sends the diagnostic form to a prospect.
+- Prospects (/business-builder/pipeline) — the CRM. Every prospect with their stage, contact info (incl. a LinkedIn handle + a "Find on LinkedIn" search), deal value, next action. New leads can be added by scanning a business card on a phone — Claude reads the photo and fills the fields. Click the colored stage pill to change a prospect's stage. Stages: New lead → First contact → Meeting scheduled → Diagnostic complete → Proposal sent → Negotiation → Contract sent → Contract signed → Onboarded → Lost. "Diagnostic sent" is shown as a status when Bruce sends the diagnostic form to a prospect.
 - Public diagnostic (/diagnostic) — a public form anyone can fill out. Creates a prospect record automatically.
 
 **02 Engage — run the rhythm**
@@ -66,7 +66,7 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 
 **03 Deliver — ship the deep work**
 - Deliverables (/business-builder/deliverables) — the 9 BIG artifacts produced for clients over weeks. SOPs, Org Charts, Job Profiles & Interview Guides, Financial Dashboards, App Onboarding Guides, Client Operations Setup Guides, Business Plans, Marketing Plans, Stages of Growth Assessments. Lifecycle: Not started → In progress → Review → Done.
-- Projects (/business-builder/projects) — bigger initiatives within an engagement that span weeks/months. "Build Acme's hiring system." Holds tasks + milestones. Deliverables are the OUTPUTS of a project.
+- Projects (/business-builder/projects) — bigger initiatives within an engagement that span weeks/months. "Build Acme's hiring system." Tasks live in a Monday.com-style grid: inline-editable Owner / Status (colored pill) / Due / Progress cells that save instantly, with indented sub-tasks. Deliverables are the OUTPUTS of a project.
 - Goals (/business-builder/goals) — SMART measurement targets clients are aiming at. "Hit $2M revenue by EOY." "Get turnover under 10%." Different from action items (commitments), deliverables (artifacts), and projects (initiatives). Goals are the DESTINATION; everything else is the journey.
 - Soul File search (/business-builder/soul-search) — search across every client's Soul File using AI.
 
@@ -76,14 +76,14 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 **05 Practice — your tools and connections**
 - New engagement (/business-builder/engagements/new) — turn a signed prospect into a client. Sets up their private workspace.
 - My signature (/business-builder/profile/signature) — e-signature image for contract sending.
-- Google Workspace (/business-builder/profile/google-calendar) — connects Bruce's Google account. Three integrations roll on the one connection: two-way calendar sync, Gmail capture into the Inbox, and Drive folder mirroring (per-engagement Drive folders show their files inside the documents page).
+- Google Workspace (/business-builder/profile/google-calendar) — connects Bruce's Google account. On the one connection: (1) two-way calendar sync — BBS sessions sync to Google Calendar and back, and any Google Calendar event with a client attendee auto-creates a session every 30 min; (2) Gmail capture into the Inbox; (3) Google Drive. Drive works two ways per engagement: "Create managed folder" (app-created, FULL two-way — files uploaded in the app sync into Drive AND files added in Drive show in the client's portal) on a client's Documents page, or linking an existing folder (read-only mirror). "Auto-link Drive folders" (/business-builder/drive-link) scans Drive and bulk-links existing client folders matched by name. Reach a client's Drive panel via the "Documents & Drive" button on their engagement page.
 - QuickBooks (/business-builder/profile/quickbooks) — accounting + invoicing integration.
 - Business Builder guide (/business-builder/welcome) — workflow walkthrough.
 - Module reference (/business-builder/welcome/modules) — full module cheat sheet.
 
 OTHER KEY CONCEPTS:
 
-**BBS Sessions** = the actual MEETINGS Bruce has with clients. Twice-monthly, 2 hours, one in-person and one virtual. Fireflies records them. Claude reads the transcript and drafts the action items.
+**BBS Sessions** = the actual MEETINGS Bruce has with clients. Twice-monthly, 2 hours, one in-person and one virtual. Fireflies records them. Claude reads the transcript and drafts the action items. Per-engagement Fireflies recaps sync via the "Sync from Fireflies" button on the coach Meetings page (/business-builder/engagements/<id>/meetings); clients see their own recaps + a "View recording & notes" link in their portal's "Meeting notes" module (/portal/meetings).
 
 **Soul File** = a long-form context document Bruce maintains per engagement. The "Soul" of the client — why they exist, where they are today, where they want to go in 12 months, founder backstory, hard-won learnings. This is the most important methodology IP per client. It gets vector-embedded so future AI features can pull deep context across all clients. The Soul File search lets Bruce ask natural-language questions across every client's Soul File at once — e.g., "Which clients are struggling with hiring?" answered by searching all Soul Files semantically.
 
