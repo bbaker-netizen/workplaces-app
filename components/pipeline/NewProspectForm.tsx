@@ -44,8 +44,6 @@ export function NewProspectForm({
   const [phone, setPhone] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
-  const [facebookUrl, setFacebookUrl] = useState("");
-  const [instagramUrl, setInstagramUrl] = useState("");
   const [leadSource, setLeadSource] = useState("");
   const [referrerName, setReferrerName] = useState("");
   const [nextActionDate, setNextActionDate] = useState("");
@@ -129,8 +127,6 @@ export function NewProspectForm({
     phone !== "" ||
     companyWebsite !== "" ||
     linkedinUrl !== "" ||
-    facebookUrl !== "" ||
-    instagramUrl !== "" ||
     leadSource !== "" ||
     referrerName !== "" ||
     nextActionNote !== "" ||
@@ -188,8 +184,6 @@ export function NewProspectForm({
         phone: phone.trim() || null,
         companyWebsite: companyWebsite.trim() || null,
         linkedinUrl: linkedinUrl.trim() || null,
-        facebookUrl: facebookUrl.trim() || null,
-        instagramUrl: instagramUrl.trim() || null,
         leadSource: leadSource || null,
         referrerName: leadSource === "Referral" ? referrerName.trim() : null,
         nextActionDate: nextActionDate || null,
@@ -317,28 +311,6 @@ export function NewProspectForm({
           >
             Find on LinkedIn ↗
           </a>
-        </Field>
-        <Field label="Facebook">
-          <input
-            type="text"
-            inputMode="url"
-            placeholder="facebook.com/…"
-            value={facebookUrl}
-            onChange={(e) => setFacebookUrl(e.target.value)}
-            disabled={isPending}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Instagram">
-          <input
-            type="text"
-            inputMode="url"
-            placeholder="instagram.com/…"
-            value={instagramUrl}
-            onChange={(e) => setInstagramUrl(e.target.value)}
-            disabled={isPending}
-            className={inputCls}
-          />
         </Field>
         <Field label="Lead source">
           <select
