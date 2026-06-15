@@ -62,12 +62,19 @@ export async function scanDriveFolderMatches(): Promise<
   try {
     folders = await listDriveFolders(profile.userProfileId);
   } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    // A 401 means the stored Google token went stale/was revoked — a
+    // reconnect mints a fresh one. Surface that instead of raw JSON.
+    if (/\b401\b|unauthenticated|invalid.{0,3}credential/i.test(msg)) {
+      return {
+        ok: false,
+        error:
+          "Your Google connection has expired or lost access. Go to Settings → My calendar & email, disconnect and reconnect Google, then scan again.",
+      };
+    }
     return {
       ok: false,
-      error:
-        e instanceof Error
-          ? `Drive: ${e.message}`
-          : "Couldn't read your Drive folders.",
+      error: msg ? `Drive: ${msg}` : "Couldn't read your Drive folders.",
     };
   }
 
