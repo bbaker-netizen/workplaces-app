@@ -165,10 +165,15 @@ export default async function ProspectDetailPage({
           <h1 className="text-tbb-h2 font-bold text-tbb-navy tracking-tbb-tight">
             {prospect.companyName}
           </h1>
-          <ProspectStatusSelect
-            prospectId={prospect.id}
-            current={prospect.status as ProspectStatus}
-          />
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Stage
+            </span>
+            <ProspectStatusSelect
+              prospectId={prospect.id}
+              current={prospect.status as ProspectStatus}
+            />
+          </span>
         </div>
         <p className="text-sm text-tbb-ink-3">
           {stage.caption} · Created{" "}

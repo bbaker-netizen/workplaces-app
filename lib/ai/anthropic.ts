@@ -113,6 +113,62 @@ export async function complete(
   };
 }
 
+export type ImageInput = {
+  /** Base64-encoded image bytes (no data: prefix). */
+  base64: string;
+  mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+};
+
+/**
+ * Single-turn completion with one image attached — Claude vision. Used
+ * by the business-card scanner to read contact details off a photo.
+ * Same result shape as `complete`.
+ */
+export async function completeWithImage(input: {
+  system: string;
+  user: string;
+  image: ImageInput;
+  model?: ClaudeModel;
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<CompletionResult> {
+  const model = input.model ?? "claude-sonnet-4-6";
+  const response = await client().messages.create({
+    model,
+    max_tokens: input.maxTokens ?? 1024,
+    temperature: input.temperature ?? 0,
+    system: input.system,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: input.image.mediaType,
+              data: input.image.base64,
+            },
+          },
+          { type: "text", text: input.user },
+        ],
+      },
+    ],
+  });
+
+  const text = response.content
+    .map((b) => (b.type === "text" ? b.text : ""))
+    .join("");
+
+  return {
+    text,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+    cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+    cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+  };
+}
+
 /**
  * Streaming completion. Calls `onToken` with each text delta. Returns
  * the same result shape as `complete` once the stream finishes.
