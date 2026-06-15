@@ -32,15 +32,15 @@ import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
  *     gmail.modify (which would let us mark messages read/archive); the
  *     CRM never touches the user's mailbox state.
  *   - drive.readonly — read/list any Drive folder Bruce shares (the
- *     read-only "paste a folder URL" mirror). This is the only Drive
- *     scope the OAuth consent screen is currently configured for. Adding
- *     write scopes (drive.file / full drive) broke the whole Google
- *     connection until the consent screen lists them, so Drive *write*
- *     (managed folders) is gated on that Google Cloud Console step.
+ *     read-only "paste a folder URL" mirror, and listing files added
+ *     directly in Drive).
+ *   - drive.file — write access to files + folders the app creates, for
+ *     the two-way Documents sync (managed folder + upload mirroring).
+ *     Non-sensitive, so it doesn't need extra Google verification.
  *   - openid email — identifies the connected Google account.
  */
 export const GOOGLE_CALENDAR_SCOPE =
-  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly openid email";
+  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file openid email";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

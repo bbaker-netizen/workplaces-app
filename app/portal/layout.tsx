@@ -83,21 +83,24 @@ export default async function PortalLayout({
         fullName={profile.fullName}
         unreadCount={unreadCount}
         modules={modules}
-        engagementName={engagement?.name ?? null}
+        // For coaches previewing, omit the name here — the layout is
+        // cached across navigation and would go stale when switching
+        // clients. Real clients (one fixed engagement) keep their branding.
+        engagementName={isCoachRole ? null : (engagement?.name ?? null)}
         pinnedNavItems={prefs.pinnedNavItems}
         collapsedInitial={prefs.sidebarCollapsed}
         isCoach={profile.role === "master_admin" || profile.role === "coach"}
       />
       <div className="flex-1 flex flex-col min-w-0">
         {/* Persistent top bar — always gives a one-click way back to the
-            portal home from any module page (documents, sessions, etc.). */}
+            portal home from any module page (documents, sessions, etc.).
+            We deliberately DON'T render the engagement name here: this
+            layout is preserved across client-side navigation, so when a
+            coach switches which client they're previewing the name would
+            go stale and show the wrong client. The page's hero + preview
+            banner name the client correctly on every render. */}
         <div className="sticky top-0 z-20 border-b border-tbb-line bg-background/95 backdrop-blur px-6 py-2.5 flex items-center gap-3">
           <PortalHomeLink />
-          {engagement?.name && (
-            <span className="text-xs text-tbb-ink-3 truncate">
-              {engagement.name}
-            </span>
-          )}
         </div>
         {readOnly && (
           <div className="border-b border-tbb-warning/40 bg-tbb-warning/10 px-6 py-3 text-sm text-tbb-ink-2 flex items-center gap-3 flex-wrap">
