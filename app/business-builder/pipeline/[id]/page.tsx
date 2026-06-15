@@ -18,8 +18,6 @@ import {
   Phone,
   Globe,
   Link2,
-  Share2,
-  AtSign,
   Search,
 } from "lucide-react";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
@@ -204,8 +202,6 @@ export default async function ProspectDetailPage({
                   phone: prospect.phone,
                   companyWebsite: prospect.companyWebsite,
                   linkedinUrl: prospect.linkedinUrl,
-                  facebookUrl: prospect.facebookUrl,
-                  instagramUrl: prospect.instagramUrl,
                 }}
               />
             </div>
@@ -252,22 +248,6 @@ export default async function ProspectDetailPage({
                 >
                   <Search className="w-3.5 h-3.5" aria-hidden /> Find on LinkedIn
                 </a>
-              )}
-              {prospect.facebookUrl && (
-                <ContactRow
-                  icon={<Share2 className="w-3.5 h-3.5" />}
-                  href={normalizeWebsite(prospect.facebookUrl) ?? "#"}
-                  label={prospect.facebookUrl.replace(/^https?:\/\/(www\.)?/, "")}
-                  external
-                />
-              )}
-              {prospect.instagramUrl && (
-                <ContactRow
-                  icon={<AtSign className="w-3.5 h-3.5" />}
-                  href={normalizeWebsite(prospect.instagramUrl) ?? "#"}
-                  label={prospect.instagramUrl.replace(/^https?:\/\/(www\.)?/, "")}
-                  external
-                />
               )}
             </div>
           </section>

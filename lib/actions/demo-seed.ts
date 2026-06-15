@@ -140,8 +140,6 @@ export async function seedDemoEngagement(): Promise<Result> {
         phone: "(780) 555-0142",
         companyWebsite: "https://northwind-demo.example",
         linkedinUrl: "https://www.linkedin.com/company/northwind-demo",
-        facebookUrl: "https://facebook.com/northwinddemo",
-        instagramUrl: "https://instagram.com/northwinddemo",
         industry: "Commercial construction",
         leadSource: "Referral",
         status: "onboarded",
