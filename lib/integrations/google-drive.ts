@@ -169,6 +169,33 @@ export async function getFileMetadata(
 
 /* ------------------------------ writes ------------------------------ */
 
+/**
+ * List folders in the connected user's Drive (id + name + link), newest
+ * first, capped. Used by the "auto-link client folders" tool to match
+ * existing Drive folders to engagements by name.
+ */
+export async function listDriveFolders(
+  userProfileId: string,
+  pageSize = 200,
+): Promise<Array<{ id: string; name: string; webViewLink: string | null }>> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) throw new Error("Google not connected for this user.");
+  const params = new URLSearchParams({
+    q: "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+    fields: "files(id,name,webViewLink)",
+    pageSize: String(pageSize),
+    orderBy: "modifiedTime desc",
+  });
+  const data = await drive<{
+    files: Array<{ id: string; name: string; webViewLink?: string }>;
+  }>(token.token, `/files?${params.toString()}`);
+  return (data.files ?? []).map((f) => ({
+    id: f.id,
+    name: f.name,
+    webViewLink: f.webViewLink ?? null,
+  }));
+}
+
 /** Find an existing non-trashed folder by exact name under an optional
  *  parent, or null. Used so we don't create duplicate parent folders. */
 async function findFolderByName(
