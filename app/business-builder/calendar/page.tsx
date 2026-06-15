@@ -34,6 +34,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { SyncFromGoogleButton } from "@/components/calendar/SyncFromGoogleButton";
 import {
   actionItems,
   bbsSessions,
@@ -396,6 +397,7 @@ export default async function CalendarPage({
             dates across every client — one screen. Toggle types or
             scope to a single client to focus.
           </p>
+          <SyncFromGoogleButton />
         </div>
         <div className="flex items-center gap-1">
           <Link

@@ -149,4 +149,19 @@ export const firefliesExtract = inngest.createFunction(
   },
 );
 
-export const allFunctions = [dueSoonFlush, firefliesExtract];
+/* ------------------------- calendar sync ------------------------- */
+
+export const calendarSync = inngest.createFunction(
+  { id: "calendar-sync" },
+  // Every 30 minutes — pulls each connected coach's upcoming Google
+  // Calendar events into BBS sessions for the matching engagement.
+  { cron: "*/30 * * * *" },
+  async ({ step }) => {
+    return step.run("sync", async () => {
+      const { syncAllConnectedCalendars } = await import("@/lib/calendar/sync");
+      return syncAllConnectedCalendars();
+    });
+  },
+);
+
+export const allFunctions = [dueSoonFlush, firefliesExtract, calendarSync];
