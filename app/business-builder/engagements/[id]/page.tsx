@@ -28,6 +28,7 @@ import {
   Eye,
   FileText,
   Flag,
+  FolderOpen,
   LayoutGrid,
   MessageSquare,
   Workflow,
@@ -263,6 +264,13 @@ export default async function EngagementDetailPage({
               title="See this client's portal exactly as they do"
             >
               <Eye className="w-3.5 h-3.5" aria-hidden /> Preview portal
+            </Link>
+            <Link
+              href={`/business-builder/documents/${id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
+              title="Documents + Google Drive folder for this client"
+            >
+              <FolderOpen className="w-3.5 h-3.5" aria-hidden /> Documents &amp; Drive
             </Link>
             <EngagementStatusControl
               engagementId={id}

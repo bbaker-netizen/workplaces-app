@@ -667,6 +667,10 @@ function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
   const overdue = pulse.overdueActionsCount;
   const awaiting = pulse.awaitingSignatureCount;
   const next = pulse.nextSession;
+  // Things that actually need attention drive the badge count.
+  const attention = overdue + awaiting;
+  const [open, setOpen] = useState(false);
+
   const nextTimeLabel = next
     ? new Date(next.scheduledAt).toLocaleString("en-CA", {
         weekday: "short",
@@ -679,84 +683,122 @@ function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
     : null;
 
   return (
-    <div className="border-t border-tbb-cream/15 px-3 py-3 space-y-2">
-      <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-white/55">
-        Today
-      </p>
-      {/* Next session */}
-      <Link
-        href="/business-builder/calendar"
-        className="block px-2.5 py-2 rounded-md bg-tbb-cream/5 hover:bg-tbb-cream/12 transition-colors group"
+    <div className="border-t border-tbb-cream/15 px-3 py-2">
+      {/* Compact header — collapsed by default so the sidebar stays clean.
+          The badge surfaces anything needing attention without the three
+          stacked cards. Click to expand the detail. */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-1.5 py-1.5 rounded-md hover:bg-tbb-cream/8 transition-colors"
       >
-        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-white/55 group-hover:text-white/70">
-          <CalendarDays className="w-3 h-3" aria-hidden />
-          Next session
-        </p>
-        {next ? (
-          <>
-            <p className="text-[11px] font-bold text-white truncate">
-              {nextTimeLabel}
-            </p>
-            <p className="text-[10px] text-white/65 truncate">
-              {next.engagementName ?? "Engagement"} · {next.type.replace(/_/g, " ")}
-            </p>
-          </>
+        <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-white/55">
+          Today
+        </span>
+        {attention > 0 ? (
+          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-tbb-orange text-white text-[10px] font-bold tabular-nums">
+            {attention}
+          </span>
         ) : (
-          <p className="text-[11px] text-white/65 italic">
-            Nothing scheduled
-          </p>
+          <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-success/90">
+            All clear
+          </span>
         )}
-      </Link>
-      {/* Overdue action items */}
-      <Link
-        href="/business-builder/action-items"
-        className={
-          "block px-2.5 py-2 rounded-md transition-colors group " +
-          (overdue > 0
-            ? "bg-tbb-orange/20 hover:bg-tbb-orange/30 border border-tbb-orange/40"
-            : "bg-tbb-cream/5 hover:bg-tbb-cream/12")
-        }
-      >
-        <p
+        {!open && next && (
+          <span className="ml-1 text-[10px] text-white/55 truncate">
+            · Next {nextTimeLabel}
+          </span>
+        )}
+        <ChevronDown
+          aria-hidden
           className={
-            "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps " +
-            (overdue > 0 ? "text-tbb-orange" : "text-white/55 group-hover:text-white/70")
+            "ml-auto w-3.5 h-3.5 text-white/40 transition-transform " +
+            (open ? "rotate-180" : "")
           }
-        >
-          <AlertTriangle className="w-3 h-3" aria-hidden />
-          Overdue
-        </p>
-        <p className="text-[13px] font-bold text-white">
-          {overdue === 0
-            ? "All clear"
-            : `${overdue} action item${overdue === 1 ? "" : "s"}`}
-        </p>
-      </Link>
-      {/* Signatures awaiting */}
-      <Link
-        href="/business-builder/templates"
-        className={
-          "block px-2.5 py-2 rounded-md transition-colors group " +
-          (awaiting > 0
-            ? "bg-tbb-blue/15 hover:bg-tbb-blue/25 border border-tbb-blue/40"
-            : "bg-tbb-cream/5 hover:bg-tbb-cream/12")
-        }
-      >
-        <p
-          className={
-            "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps " +
-            (awaiting > 0 ? "text-tbb-blue-light" : "text-white/55 group-hover:text-white/70")
-          }
-        >
-          <PenLine className="w-3 h-3" aria-hidden />
-          Awaiting signature
-        </p>
-        <p className="text-[13px] font-bold text-white">
-          {awaiting === 0
-            ? "Nothing out"
-            : `${awaiting} envelope${awaiting === 1 ? "" : "s"}`}
-        </p>
-      </Link>
+        />
+      </button>
+
+      {open && (
+        <div className="mt-1.5 space-y-1.5">
+          <Link
+            href="/business-builder/calendar"
+            className="block px-2.5 py-2 rounded-md bg-tbb-cream/5 hover:bg-tbb-cream/12 transition-colors group"
+          >
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps text-white/55 group-hover:text-white/70">
+              <CalendarDays className="w-3 h-3" aria-hidden />
+              Next session
+            </p>
+            {next ? (
+              <>
+                <p className="text-[11px] font-bold text-white truncate">
+                  {nextTimeLabel}
+                </p>
+                <p className="text-[10px] text-white/65 truncate">
+                  {next.engagementName ?? "Engagement"} ·{" "}
+                  {next.type.replace(/_/g, " ")}
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-white/65 italic">
+                Nothing scheduled
+              </p>
+            )}
+          </Link>
+          <Link
+            href="/business-builder/action-items"
+            className={
+              "block px-2.5 py-2 rounded-md transition-colors group " +
+              (overdue > 0
+                ? "bg-tbb-orange/20 hover:bg-tbb-orange/30 border border-tbb-orange/40"
+                : "bg-tbb-cream/5 hover:bg-tbb-cream/12")
+            }
+          >
+            <p
+              className={
+                "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps " +
+                (overdue > 0
+                  ? "text-tbb-orange"
+                  : "text-white/55 group-hover:text-white/70")
+              }
+            >
+              <AlertTriangle className="w-3 h-3" aria-hidden />
+              Overdue
+            </p>
+            <p className="text-[13px] font-bold text-white">
+              {overdue === 0
+                ? "All clear"
+                : `${overdue} action item${overdue === 1 ? "" : "s"}`}
+            </p>
+          </Link>
+          <Link
+            href="/business-builder/templates"
+            className={
+              "block px-2.5 py-2 rounded-md transition-colors group " +
+              (awaiting > 0
+                ? "bg-tbb-blue/15 hover:bg-tbb-blue/25 border border-tbb-blue/40"
+                : "bg-tbb-cream/5 hover:bg-tbb-cream/12")
+            }
+          >
+            <p
+              className={
+                "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps " +
+                (awaiting > 0
+                  ? "text-tbb-blue-light"
+                  : "text-white/55 group-hover:text-white/70")
+              }
+            >
+              <PenLine className="w-3 h-3" aria-hidden />
+              Awaiting signature
+            </p>
+            <p className="text-[13px] font-bold text-white">
+              {awaiting === 0
+                ? "Nothing out"
+                : `${awaiting} envelope${awaiting === 1 ? "" : "s"}`}
+            </p>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
