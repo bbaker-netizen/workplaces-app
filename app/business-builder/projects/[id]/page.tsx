@@ -37,7 +37,7 @@ export default async function CoachProjectDetailPage({
   ]);
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12 space-y-10">
+    <main className="max-w-5xl mx-auto px-6 py-12 space-y-10">
       <header className="space-y-2">
         <Link
           href="/business-builder/projects"
