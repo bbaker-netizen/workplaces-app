@@ -470,65 +470,16 @@ export async function syncUserGmail(args: {
 
   for (const id of ids) {
     try {
-      const msg = await getMessage(token.token, id);
-      const headers = headersToMap(msg.payload);
-      const internalEpoch = Number(msg.internalDate ?? 0);
-      if (internalEpoch > latest) latest = internalEpoch;
-
-      const fromAddrs = extractAddresses(headers.get("from"));
-      const toAddrs = extractAddresses(headers.get("to"));
-      const ccAddrs = extractAddresses(headers.get("cc"));
-      const bccAddrs = extractAddresses(headers.get("bcc"));
-      const participants = [...fromAddrs, ...toAddrs, ...ccAddrs, ...bccAddrs];
-
-      // Exclude the syncing user's own email from the match-set so a
-      // self-as-prospect test record doesn't cause every email to match.
-      // We only care whether the OTHER party is a known client.
-      const otherParticipants = ownerEmailLower
-        ? participants.filter((p) => p.toLowerCase() !== ownerEmailLower)
-        : participants;
-
-      const match = matchParticipantToClient(lookup, otherParticipants);
-      if (!match) continue;
-
-      const fromOwner = fromAddrs.some(
-        (a) => ownerEmailLower && a.toLowerCase() === ownerEmailLower,
-      );
-      const direction = fromOwner ? "outbound" : "inbound";
-
-      const { text, html } = extractBodies(msg.payload);
-      const subject = headers.get("subject") ?? null;
-      const occurredAt = internalEpoch ? new Date(internalEpoch) : new Date();
-      const messageIdHeader = headers.get("message-id") ?? null;
-      const threadKey =
-        headers.get("references") ??
-        headers.get("in-reply-to") ??
-        msg.threadId ??
-        null;
-
-      await withTenantContext(args.masterOrgId, async (tx) => {
-        await tx
-          .insert(clientCommunications)
-          .values({
-            orgId: args.masterOrgId,
-            prospectId: match.prospectId ?? null,
-            engagementId: match.engagementId ?? null,
-            channel: "email",
-            direction,
-            fromAddress: headers.get("from") ?? null,
-            toAddresses: [...toAddrs, ...ccAddrs, ...bccAddrs],
-            subject,
-            body: text,
-            bodyHtml: html,
-            threadKey,
-            externalId: messageIdHeader ?? msg.id,
-            occurredAt,
-            tags: [],
-            createdByUserProfileId: args.userProfileId,
-          })
-          .onConflictDoNothing();
+      const r = await processGmailMessage({
+        accessToken: token.token,
+        messageId: id,
+        lookup,
+        ownerEmailLower,
+        masterOrgId: args.masterOrgId,
+        userProfileId: args.userProfileId,
       });
-      captured++;
+      if (r.internalEpoch > latest) latest = r.internalEpoch;
+      if (r.captured) captured++;
     } catch (e) {
       console.error("[gmail-sync] message failed", id, e);
     }
@@ -540,6 +491,160 @@ export async function syncUserGmail(args: {
     latestAt: new Date(latest),
   };
 }
+
+/**
+ * Fetch one Gmail message, match its participants to a known client, and
+ * store it as a client_communications row (idempotent via
+ * onConflictDoNothing on external_id). Shared by the forward sync and the
+ * per-client backfill. Returns whether it was captured + the message's
+ * internalDate so callers can advance a watermark.
+ */
+async function processGmailMessage(args: {
+  accessToken: string;
+  messageId: string;
+  lookup: MatchLookup;
+  ownerEmailLower: string | null;
+  masterOrgId: string;
+  userProfileId: string;
+}): Promise<{ captured: boolean; internalEpoch: number }> {
+  const msg = await getMessage(args.accessToken, args.messageId);
+  const headers = headersToMap(msg.payload);
+  const internalEpoch = Number(msg.internalDate ?? 0);
+
+  const fromAddrs = extractAddresses(headers.get("from"));
+  const toAddrs = extractAddresses(headers.get("to"));
+  const ccAddrs = extractAddresses(headers.get("cc"));
+  const bccAddrs = extractAddresses(headers.get("bcc"));
+  const participants = [...fromAddrs, ...toAddrs, ...ccAddrs, ...bccAddrs];
+
+  // Exclude the syncing user's own email from the match-set so a
+  // self-as-prospect test record doesn't cause every email to match.
+  const otherParticipants = args.ownerEmailLower
+    ? participants.filter((p) => p.toLowerCase() !== args.ownerEmailLower)
+    : participants;
+
+  const match = matchParticipantToClient(args.lookup, otherParticipants);
+  if (!match) return { captured: false, internalEpoch };
+
+  const fromOwner = fromAddrs.some(
+    (a) => args.ownerEmailLower && a.toLowerCase() === args.ownerEmailLower,
+  );
+  const direction = fromOwner ? "outbound" : "inbound";
+
+  const { text, html } = extractBodies(msg.payload);
+  const subject = headers.get("subject") ?? null;
+  const occurredAt = internalEpoch ? new Date(internalEpoch) : new Date();
+  const messageIdHeader = headers.get("message-id") ?? null;
+  const threadKey =
+    headers.get("references") ??
+    headers.get("in-reply-to") ??
+    msg.threadId ??
+    null;
+
+  await withTenantContext(args.masterOrgId, async (tx) => {
+    await tx
+      .insert(clientCommunications)
+      .values({
+        orgId: args.masterOrgId,
+        prospectId: match.prospectId ?? null,
+        engagementId: match.engagementId ?? null,
+        channel: "email",
+        direction,
+        fromAddress: headers.get("from") ?? null,
+        toAddresses: [...toAddrs, ...ccAddrs, ...bccAddrs],
+        subject,
+        body: text,
+        bodyHtml: html,
+        threadKey,
+        externalId: messageIdHeader ?? msg.id,
+        occurredAt,
+        tags: [],
+        createdByUserProfileId: args.userProfileId,
+      })
+      .onConflictDoNothing();
+  });
+  return { captured: true, internalEpoch };
+}
+
+/**
+ * List Gmail message ids exchanged with a SPECIFIC address in the window.
+ * Uses Gmail's `from:/to:` search so we pull only that contact's thread —
+ * a handful of messages, not the whole mailbox — which keeps the backfill
+ * fast and inside the function time limit. Paginates up to `max`.
+ */
+async function listMessagesWithAddress(
+  accessToken: string,
+  email: string,
+  sinceEpochMs: number,
+  max: number,
+): Promise<string[]> {
+  const sinceSeconds = Math.floor(sinceEpochMs / 1000);
+  const safe = email.replace(/[()]/g, "");
+  const q = `after:${sinceSeconds} (from:${safe} OR to:${safe} OR cc:${safe})`;
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  while (ids.length < max) {
+    const params = new URLSearchParams({ q, maxResults: "100" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await gmail<{
+      messages?: { id: string }[];
+      nextPageToken?: string;
+    }>(accessToken, `/users/me/messages?${params.toString()}`);
+    for (const m of data.messages ?? []) ids.push(m.id);
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return ids.slice(0, max);
+}
+
+/**
+ * One-time backfill of a single contact's email history. Searches Gmail
+ * for messages to/from `contactEmail` over the last `sinceDays`, ignoring
+ * the forward-only sync watermark, and stores every match. Idempotent —
+ * already-synced messages are skipped on insert. Returns counts.
+ */
+export async function backfillContactEmails(args: {
+  userProfileId: string;
+  masterOrgId: string;
+  contactEmail: string;
+  sinceDays?: number;
+  maxMessages?: number;
+}): Promise<{ scanned: number; captured: number }> {
+  const token = await getValidAccessToken(args.userProfileId);
+  if (!token) return { scanned: 0, captured: 0 };
+
+  const sinceMs = Date.now() - (args.sinceDays ?? 365) * 24 * 60 * 60 * 1000;
+  const ids = await listMessagesWithAddress(
+    token.token,
+    args.contactEmail,
+    sinceMs,
+    args.maxMessages ?? 300,
+  );
+  if (ids.length === 0) return { scanned: 0, captured: 0 };
+
+  const lookup = await buildMatchLookup(args.masterOrgId);
+  const ownerEmailLower = (await ownerEmailFor(args.userProfileId))
+    ?.toLowerCase() ?? null;
+
+  let captured = 0;
+  for (const id of ids) {
+    try {
+      const r = await processGmailMessage({
+        accessToken: token.token,
+        messageId: id,
+        lookup,
+        ownerEmailLower,
+        masterOrgId: args.masterOrgId,
+        userProfileId: args.userProfileId,
+      });
+      if (r.captured) captured++;
+    } catch (e) {
+      console.error("[gmail-backfill] message failed", id, e);
+    }
+  }
+  return { scanned: ids.length, captured };
+}
+
 
 async function ownerEmailFor(userProfileId: string): Promise<string | null> {
   const row = await withSystemContext(async (tx) => {
