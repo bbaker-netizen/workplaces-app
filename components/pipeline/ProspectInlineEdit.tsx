@@ -12,6 +12,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { AlertTriangle, Edit2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
@@ -385,15 +386,6 @@ const inputCls =
 
 const labelCls =
   "text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3";
-
-/** A Google search scoped to LinkedIn for this contact + company, so the
- *  Business Builder can find the profile fast and paste the URL back in. */
-export function linkedInSearchUrl(name: string, company: string): string {
-  const q = [name.trim(), company.trim(), "LinkedIn"]
-    .filter(Boolean)
-    .join(" ");
-  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
-}
 
 function InlineIssue({ message }: { message: string }) {
   return (
