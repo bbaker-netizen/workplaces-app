@@ -48,7 +48,9 @@ export type DriveFolderOption = { folderId: string; folderName: string };
  * can bulk-link auto-matches AND hand-pick a folder for any client whose
  * name doesn't match its Drive folder.
  */
-export async function scanDriveFolderMatches(): Promise<
+export async function scanDriveFolderMatches(
+  parentFolderUrlOrId?: string,
+): Promise<
   | { ok: true; matches: DriveFolderMatch[]; folders: DriveFolderOption[] }
   | { ok: false; error: string }
 > {
@@ -58,9 +60,24 @@ export async function scanDriveFolderMatches(): Promise<
     return { ok: false, error: "Business Builders only." };
   }
 
+  // Scope to the coach's "Clients" parent folder when given, so we list the
+  // client folders inside it — not every folder in the whole Drive.
+  let parentId: string | undefined;
+  if (parentFolderUrlOrId && parentFolderUrlOrId.trim()) {
+    const parsed = parseDriveFolderId(parentFolderUrlOrId);
+    if (!parsed) {
+      return {
+        ok: false,
+        error:
+          "Couldn't read a folder ID from that. Paste the Drive folder's share URL (it contains /folders/<id> or ?id=<id>).",
+      };
+    }
+    parentId = parsed;
+  }
+
   let folders: Array<{ id: string; name: string }>;
   try {
-    folders = await listDriveFolders(profile.userProfileId);
+    folders = await listDriveFolders(profile.userProfileId, parentId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     // A 401 means the stored Google token went stale/was revoked — a

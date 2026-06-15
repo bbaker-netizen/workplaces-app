@@ -171,20 +171,28 @@ export async function getFileMetadata(
 
 /**
  * List folders in the connected user's Drive (id + name + link), newest
- * first, capped. Used by the "auto-link client folders" tool to match
- * existing Drive folders to engagements by name.
+ * first, capped. Pass `parentId` to list only the immediate sub-folders
+ * of a specific folder (e.g. the coach's "Clients" folder) — without it,
+ * lists every folder in the Drive. Used by the "auto-link client folders"
+ * tool to match folders to engagements by name.
  */
 export async function listDriveFolders(
   userProfileId: string,
-  pageSize = 200,
+  parentId?: string,
+  pageSize = 500,
 ): Promise<Array<{ id: string; name: string; webViewLink: string | null }>> {
   const token = await getValidAccessToken(userProfileId);
   if (!token) throw new Error("Google not connected for this user.");
+  const clauses = [
+    "mimeType = 'application/vnd.google-apps.folder'",
+    "trashed = false",
+  ];
+  if (parentId) clauses.push(`'${parentId}' in parents`);
   const params = new URLSearchParams({
-    q: "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+    q: clauses.join(" and "),
     fields: "files(id,name,webViewLink)",
     pageSize: String(pageSize),
-    orderBy: "modifiedTime desc",
+    orderBy: "name",
   });
   const data = await drive<{
     files: Array<{ id: string; name: string; webViewLink?: string }>;
