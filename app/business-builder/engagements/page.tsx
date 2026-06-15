@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, inArray } from "drizzle-orm";
-import { ArrowRight, Briefcase, Eye } from "lucide-react";
+import { ArrowRight, Briefcase, Eye, FolderSymlink } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -86,8 +86,14 @@ export default async function EngagementsListPage() {
           button in the Pipeline.
         </p>
         {(profile.role === "master_admin" || profile.role === "coach") && (
-          <div className="pt-2">
+          <div className="pt-2 flex items-center gap-2 flex-wrap">
             <SeedDemoButton />
+            <Link
+              href="/business-builder/drive-link"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
+            >
+              <FolderSymlink className="w-3.5 h-3.5" aria-hidden /> Auto-link Drive folders
+            </Link>
           </div>
         )}
       </header>

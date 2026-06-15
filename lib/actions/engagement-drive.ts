@@ -6,17 +6,107 @@
  * documents uploaded into the app.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements } from "@/lib/db/schema";
-import { withEngagementContext } from "@/lib/db/tenant";
+import { withEngagementContext, withSystemContext } from "@/lib/db/tenant";
 import {
   ensureManagedClientFolder,
   getFolderMetadata,
+  listDriveFolders,
   parseDriveFolderId,
 } from "@/lib/integrations/google-drive";
+
+/** Normalise a name for fuzzy folder↔engagement matching. */
+function norm(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\(.*?\)/g, " ") // drop "(Demo)" etc.
+    .replace(
+      /\b(demo|client|clients|files|folder|the|builder|inc|llc|ltd|co|corp|company)\b/g,
+      " ",
+    )
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export type DriveFolderMatch = {
+  engagementId: string;
+  engagementName: string;
+  alreadyLinked: boolean;
+  suggestion: { folderId: string; folderName: string } | null;
+};
+
+/**
+ * Scan the coach's Drive folders and suggest a match for each engagement
+ * by name. Coach-only. Returns one row per active engagement with its
+ * best folder suggestion (or null), so the coach can bulk-link existing
+ * client folders instead of pasting URLs one by one.
+ */
+export async function scanDriveFolderMatches(): Promise<
+  | { ok: true; matches: DriveFolderMatch[] }
+  | { ok: false; error: string }
+> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+
+  let folders: Array<{ id: string; name: string }>;
+  try {
+    folders = await listDriveFolders(profile.userProfileId);
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? `Drive: ${e.message}`
+          : "Couldn't read your Drive folders.",
+    };
+  }
+
+  const engs = await withSystemContext(async (tx) =>
+    tx
+      .select({
+        id: engagements.id,
+        name: engagements.name,
+        folderId: engagements.googleDriveFolderId,
+      })
+      .from(engagements)
+      .where(isNull(engagements.archivedAt)),
+  );
+
+  const normedFolders = folders.map((f) => ({ ...f, n: norm(f.name) }));
+
+  const matches: DriveFolderMatch[] = engs.map((e) => {
+    const name = e.name ?? "Engagement";
+    const en = norm(name);
+    let suggestion: { folderId: string; folderName: string } | null = null;
+    if (en) {
+      // Prefer an exact normalised match, else a containment either way.
+      const exact = normedFolders.find((f) => f.n === en);
+      const partial =
+        exact ??
+        normedFolders.find(
+          (f) => f.n && (f.n.includes(en) || en.includes(f.n)),
+        );
+      if (partial) {
+        suggestion = { folderId: partial.id, folderName: partial.name };
+      }
+    }
+    return {
+      engagementId: e.id,
+      engagementName: name,
+      alreadyLinked: Boolean(e.folderId),
+      suggestion,
+    };
+  });
+
+  return { ok: true, matches };
+}
 
 const linkSchema = z.object({
   engagementId: z.string().uuid(),
