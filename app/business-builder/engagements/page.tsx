@@ -85,7 +85,7 @@ export default async function EngagementsListPage() {
           created from a prospect&apos;s &ldquo;Convert to engagement&rdquo;
           button in the Pipeline.
         </p>
-        {profile.role === "master_admin" && (
+        {(profile.role === "master_admin" || profile.role === "coach") && (
           <div className="pt-2">
             <SeedDemoButton />
           </div>
