@@ -85,16 +85,15 @@ export default async function CoachDocumentsPage({
     ]);
 
   const isGoogleConnected = Boolean(googleState);
-  // Token may hold drive.readonly (old) or the full drive scope (new,
-  // needed for two-way). Either lets us read/list; only full drive lets
-  // us create managed folders + upload.
+  // Token may hold drive.readonly (old) and/or drive.file (new, needed to
+  // create managed folders + upload). Either drive scope lets us read/list.
   const grantedScopes = (googleState?.scope ?? "").split(" ");
   const hasDriveScope = grantedScopes.some((s) =>
     s.startsWith("https://www.googleapis.com/auth/drive"),
   );
-  const hasDriveWrite = grantedScopes.includes(
-    "https://www.googleapis.com/auth/drive",
-  );
+  const hasDriveWrite =
+    grantedScopes.includes("https://www.googleapis.com/auth/drive.file") ||
+    grantedScopes.includes("https://www.googleapis.com/auth/drive");
   const linkedFolderId = engagementWithDrive?.folderId ?? null;
   const linkedFolderName = engagementWithDrive?.folderName ?? null;
   const driveManaged = engagementWithDrive?.managed ?? false;
