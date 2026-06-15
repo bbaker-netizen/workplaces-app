@@ -141,6 +141,7 @@ export const portalModuleEnum = pgEnum("portal_module", [
   "subscriptions",
   "hiring",
   "notes",
+  "meetings",
 ]);
 
 export const prospectStatusEnum = pgEnum("prospect_status", [
