@@ -12,6 +12,7 @@ import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
+import { SeedDemoButton } from "@/components/business-builder/SeedDemoButton";
 
 export default async function EngagementsListPage() {
   const profile = await ensureUserProfile();
@@ -84,6 +85,11 @@ export default async function EngagementsListPage() {
           created from a prospect&apos;s &ldquo;Convert to engagement&rdquo;
           button in the Pipeline.
         </p>
+        {profile.role === "master_admin" && (
+          <div className="pt-2">
+            <SeedDemoButton />
+          </div>
+        )}
       </header>
 
       {active.length === 0 ? (
