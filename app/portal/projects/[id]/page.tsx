@@ -35,7 +35,7 @@ export default async function PortalProjectDetailPage({
     : [[] as Awaited<ReturnType<typeof listEngagementMembers>>, [] as Awaited<ReturnType<typeof listEngagementGoals>>];
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12 space-y-10">
+    <main className="max-w-5xl mx-auto px-6 py-12 space-y-10">
       <header className="space-y-2">
         <Link
           href="/portal/projects"
