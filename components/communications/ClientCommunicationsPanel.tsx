@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { sendClientMessage } from "@/lib/actions/send-client-message";
 import { resolveTemplateForProspect } from "@/lib/actions/email-templates";
+import { syncContactEmails } from "@/lib/actions/gmail-backfill";
 import type { CommunicationRow } from "@/lib/db/queries/client-communications";
 
 export type EmailTemplateOption = {
@@ -85,6 +86,28 @@ export function ClientCommunicationsPanel({
   const [error, setError] = useState<string | null>(null);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  function onSyncEmails() {
+    if (!contactEmail || syncing) return;
+    setSyncMsg(null);
+    setSyncing(true);
+    void (async () => {
+      const r = await syncContactEmails({ contactEmail });
+      setSyncing(false);
+      if (!r.ok) {
+        setSyncMsg(r.error);
+        return;
+      }
+      setSyncMsg(
+        r.captured > 0
+          ? `Pulled ${r.captured} email${r.captured === 1 ? "" : "s"} from Gmail.`
+          : "No earlier emails found for this contact in the last year.",
+      );
+      if (r.captured > 0) router.refresh();
+    })();
+  }
 
   // Composer ref + auto-scroll. The composer renders at the TOP of
   // the timeline; if Bruce hits Reply on a row that's already scrolled
@@ -285,6 +308,26 @@ export function ClientCommunicationsPanel({
                   : undefined
             }
           />
+          <ComposeButton
+            icon={
+              syncing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Mail className="w-3.5 h-3.5" aria-hidden />
+              )
+            }
+            onClick={onSyncEmails}
+            label={syncing ? "Syncing…" : "Sync from Gmail"}
+            disabled={!contactEmail || syncing}
+            tooltip={
+              contactEmail
+                ? "Pull this contact's email history (last year) from your Gmail"
+                : "Add a contact email on the prospect first"
+            }
+          />
+          {syncMsg && (
+            <span className="text-xs text-tbb-ink-3 self-center">{syncMsg}</span>
+          )}
         </div>
       )}
 

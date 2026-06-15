@@ -540,7 +540,7 @@ export default async function EngagementDetailPage({
               Standalone commitments that aren&apos;t part of a project.
             </p>
           </header>
-          <ul className="divide-y divide-tbb-line-soft">
+          <ul className="divide-y divide-tbb-line-soft px-5">
             {orphanActions.map((a) => (
               <ActionRow key={a.id} action={a} />
             ))}

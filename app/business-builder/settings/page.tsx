@@ -11,7 +11,6 @@ import {
   CreditCard,
   FileText,
   Plug,
-  Receipt,
   User,
   Users,
 } from "lucide-react";
@@ -77,14 +76,6 @@ const CARDS: SettingsCard[] = [
     description:
       "Connect your own Google Calendar + Gmail so your sessions sync and client emails are captured. Personal to you.",
     icon: CalendarCheck,
-    status: "ready",
-  },
-  {
-    href: "/business-builder/profile/quickbooks",
-    title: "My QuickBooks",
-    description:
-      "Connect your own QuickBooks Online company file to pull client payment values onto your pipeline. Personal to you.",
-    icon: Receipt,
     status: "ready",
   },
   {
