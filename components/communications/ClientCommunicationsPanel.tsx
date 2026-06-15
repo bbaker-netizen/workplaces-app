@@ -619,7 +619,12 @@ function CommunicationItem({
   row: CommunicationRow;
   onReply?: () => void;
 }) {
-  const preview = (row.body || row.subject || "").slice(0, 280);
+  const [expanded, setExpanded] = useState(false);
+  const fullBody = row.body || "";
+  // "Long" if the body is clamped by the 3-line preview — give the user a
+  // way to read the whole thing. Without this the timeline only ever shows
+  // a snippet, which reads as "I can't open the email".
+  const isLong = fullBody.length > 200 || fullBody.split("\n").length > 3;
   return (
     <li className="px-5 py-3 hover:bg-tbb-cream-50">
       <div className="flex items-start gap-3">
@@ -654,15 +659,29 @@ function CommunicationItem({
             </span>
           </div>
           {row.subject && (
-            <p className="text-sm text-tbb-navy font-bold truncate">
+            <p className="text-sm text-tbb-navy font-bold">
               {row.subject}
             </p>
           )}
-          <p className="text-sm text-tbb-ink-2 whitespace-pre-wrap line-clamp-3">
-            {preview}
+          <p
+            className={
+              "text-sm text-tbb-ink-2 whitespace-pre-wrap break-words" +
+              (expanded ? "" : " line-clamp-3")
+            }
+          >
+            {fullBody || row.subject || "(no message body)"}
           </p>
-          {onReply && (
-            <div>
+          <div className="flex items-center gap-3">
+            {isLong && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+              >
+                {expanded ? "Show less" : "Show full email"}
+              </button>
+            )}
+            {onReply && (
               <button
                 type="button"
                 onClick={onReply}
@@ -670,8 +689,8 @@ function CommunicationItem({
               >
                 Reply →
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </li>

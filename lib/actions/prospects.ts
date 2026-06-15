@@ -324,19 +324,23 @@ export async function updateProspect(
           : null;
       if (Object.keys(updates).length === 0) return;
       await tx.update(prospects).set(updates).where(eq(prospects.id, data.id));
+    });
 
-      // Keep the linked engagement (and its client org) in sync with the
-      // prospect's company name so editing the contact's details actually
-      // flows through to the Client Portal list / engagement header. The
-      // engagement name is snapshotted at conversion; without this it goes
-      // stale the moment you fix a typo on the prospect.
-      if (data.companyName !== undefined) {
-        const [linked] = await tx
-          .select({ engagementId: prospects.convertedEngagementId })
-          .from(prospects)
-          .where(eq(prospects.id, data.id))
-          .limit(1);
-        if (linked?.engagementId) {
+    // Keep the linked engagement (and its client org) in sync with the
+    // prospect's company name so editing the contact flows through to the
+    // Client Portal list / engagement header. BEST-EFFORT and OUTSIDE the
+    // main write: a failure here must never roll back the prospect save
+    // (that would silently drop the phone/website/LinkedIn the coach just
+    // typed). Logged, not surfaced.
+    if (data.companyName !== undefined) {
+      try {
+        await withSystemContext(async (tx) => {
+          const [linked] = await tx
+            .select({ engagementId: prospects.convertedEngagementId })
+            .from(prospects)
+            .where(eq(prospects.id, data.id))
+            .limit(1);
+          if (!linked?.engagementId) return;
           await tx
             .update(engagements)
             .set({ name: data.companyName })
@@ -352,9 +356,11 @@ export async function updateProspect(
               .set({ name: data.companyName })
               .where(eq(orgs.id, eng.orgId));
           }
-        }
+        });
+      } catch (e) {
+        console.error("[updateProspect] company-name propagation failed:", e);
       }
-    });
+    }
     revalidatePath("/business-builder/pipeline");
     revalidatePath(`/business-builder/pipeline/${data.id}`);
     revalidatePath("/business-builder/engagements");

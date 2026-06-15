@@ -12,7 +12,11 @@ import {
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 import { syncUserGmail } from "./gmail";
 
-const DEFAULT_LOOKBACK_DAYS = 14;
+// First-sync depth: how far back to scan when there's no watermark yet
+// (a brand-new connection). 90 days so recent history — months of threads
+// with a contact — is captured on the first run, not just the last fortnight.
+// Once the watermark is set, syncs are incremental from there.
+const DEFAULT_LOOKBACK_DAYS = 90;
 
 export type SyncSummary = {
   userProfileId: string;
