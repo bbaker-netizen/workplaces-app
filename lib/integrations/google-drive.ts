@@ -1,16 +1,19 @@
 /**
- * Google Drive — minimal read-only wrapper.
+ * Google Drive wrapper.
  *
  * Uses the shared Google OAuth token from lib/integrations/google-calendar.
- * The connection's drive.readonly scope grants enough for what we use:
- * fetch folder metadata, list files inside a folder.
- *
- * No writes ever. The app reads Drive; it never modifies it.
+ * Read paths (metadata, listing) plus — with the full `drive` scope — the
+ * write paths behind the two-way Documents sync: create a managed folder
+ * per engagement and upload files into it.
  */
 
 import { getValidAccessToken } from "./google-calendar";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
+
+/** Top-level folder all app-created client folders live under. */
+const CLIENTS_PARENT_NAME = "The Builder — Clients";
 
 async function drive<T>(
   accessToken: string,
@@ -162,6 +165,136 @@ export async function getFileMetadata(
     }
     throw e;
   }
+}
+
+/* ------------------------------ writes ------------------------------ */
+
+/** Find an existing non-trashed folder by exact name under an optional
+ *  parent, or null. Used so we don't create duplicate parent folders. */
+async function findFolderByName(
+  accessToken: string,
+  name: string,
+  parentId?: string,
+): Promise<string | null> {
+  const safeName = name.replace(/'/g, "\\'");
+  const clauses = [
+    `name = '${safeName}'`,
+    "mimeType = 'application/vnd.google-apps.folder'",
+    "trashed = false",
+  ];
+  if (parentId) clauses.push(`'${parentId}' in parents`);
+  const params = new URLSearchParams({
+    q: clauses.join(" and "),
+    fields: "files(id,name)",
+    pageSize: "1",
+  });
+  const data = await drive<{ files: Array<{ id: string }> }>(
+    accessToken,
+    `/files?${params.toString()}`,
+  );
+  return data.files?.[0]?.id ?? null;
+}
+
+/** Create a Drive folder, returning its id + webViewLink. */
+export async function createDriveFolder(
+  userProfileId: string,
+  name: string,
+  parentId?: string,
+): Promise<{ id: string; name: string; webViewLink: string | null }> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) throw new Error("Google not connected for this user.");
+  const body: Record<string, unknown> = {
+    name,
+    mimeType: "application/vnd.google-apps.folder",
+  };
+  if (parentId) body.parents = [parentId];
+  const data = await drive<{
+    id: string;
+    name: string;
+    webViewLink?: string;
+  }>(token.token, `/files?fields=id,name,webViewLink`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return { id: data.id, name: data.name, webViewLink: data.webViewLink ?? null };
+}
+
+/**
+ * Ensure the per-engagement managed folder exists under the shared
+ * "The Builder — Clients" parent, reusing it if already present. Returns
+ * the folder id + name + link.
+ */
+export async function ensureManagedClientFolder(
+  userProfileId: string,
+  clientName: string,
+): Promise<{ id: string; name: string; webViewLink: string | null }> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) throw new Error("Google not connected for this user.");
+  // Parent ("The Builder — Clients") — reuse or create.
+  let parentId = await findFolderByName(token.token, CLIENTS_PARENT_NAME);
+  if (!parentId) {
+    parentId = (await createDriveFolder(userProfileId, CLIENTS_PARENT_NAME)).id;
+  }
+  // Client folder under the parent — reuse or create.
+  const existing = await findFolderByName(token.token, clientName, parentId);
+  if (existing) {
+    const meta = await getFolderMetadata(userProfileId, existing);
+    return {
+      id: existing,
+      name: meta?.name ?? clientName,
+      webViewLink: `https://drive.google.com/drive/folders/${existing}`,
+    };
+  }
+  return createDriveFolder(userProfileId, clientName, parentId);
+}
+
+/**
+ * Upload a file into a Drive folder via the multipart endpoint. Returns
+ * the new file's id + webViewLink.
+ */
+export async function uploadFileToDrive(
+  userProfileId: string,
+  folderId: string,
+  filename: string,
+  mimeType: string,
+  bytes: Uint8Array,
+): Promise<{ id: string; webViewLink: string | null }> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) throw new Error("Google not connected for this user.");
+
+  const boundary = `builder-${Math.random().toString(36).slice(2)}`;
+  const metadata = JSON.stringify({ name: filename, parents: [folderId] });
+  const enc = new TextEncoder();
+  const head = enc.encode(
+    `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      `${metadata}\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: ${mimeType || "application/octet-stream"}\r\n\r\n`,
+  );
+  const tail = enc.encode(`\r\n--${boundary}--\r\n`);
+  const body = new Uint8Array(head.length + bytes.length + tail.length);
+  body.set(head, 0);
+  body.set(bytes, head.length);
+  body.set(tail, head.length + bytes.length);
+
+  const res = await fetch(
+    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,webViewLink`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token.token}`,
+        "content-type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Google Drive upload ${res.status}: ${text}`);
+  }
+  const json = (await res.json()) as { id: string; webViewLink?: string };
+  return { id: json.id, webViewLink: json.webViewLink ?? null };
 }
 
 /**

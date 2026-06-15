@@ -411,9 +411,13 @@ export const engagements = pgTable(
       mode: "number",
     }),
     qboValueSyncedAt: timestamp("qbo_value_synced_at", { withTimezone: true }),
-    // Linked Google Drive folder for this engagement (read-only mirror).
+    // Linked Google Drive folder for this engagement. When
+    // `googleDriveManaged` is true the app created this folder and can
+    // write into it (full two-way); otherwise it's a pasted, read-only
+    // mirror of a folder Bruce owns elsewhere.
     googleDriveFolderId: text("google_drive_folder_id"),
     googleDriveFolderName: text("google_drive_folder_name"),
+    googleDriveManaged: boolean("google_drive_managed").notNull().default(false),
     googleDriveLinkedByUserProfileId: uuid(
       "google_drive_linked_by_user_profile_id",
     ).references(() => userProfiles.id, { onDelete: "set null" }),
@@ -1031,6 +1035,10 @@ export const documents = pgTable(
       () => userProfiles.id,
     ),
     version: bigint("version", { mode: "number" }).notNull().default(1),
+    // When this engagement has a managed Drive folder, app uploads are
+    // mirrored into Drive and the resulting file is recorded here.
+    googleDriveFileId: text("google_drive_file_id"),
+    googleDriveWebLink: text("google_drive_web_link"),
     parentDocumentId: uuid("parent_document_id").references(
       (): AnyPgColumn => documents.id,
       { onDelete: "set null" },

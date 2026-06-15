@@ -30,6 +30,7 @@ import {
   READ_ONLY_ERROR,
 } from "@/lib/server/engagement-guard";
 import {
+  coaches,
   documentTags,
   documents,
   engagements,
@@ -37,11 +38,13 @@ import {
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
+  withSystemContext,
 } from "@/lib/db/tenant";
 import {
   deleteDocumentBlob,
   uploadDocumentBlob,
 } from "@/lib/storage/blobs";
+import { uploadFileToDrive } from "@/lib/integrations/google-drive";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -94,7 +97,11 @@ export async function uploadDocument(
 
   // Resolve the engagement's org id once (works cross-org for Coach
   // roles) and re-use it for both the blob path and the row insert.
+  // Also pick up whether this engagement has a managed Drive folder so
+  // we can mirror the upload into it afterwards.
   let boundOrgId: string;
+  let driveManaged = false;
+  let driveFolderId: string | null = null;
   try {
     boundOrgId = await withEngagementContext(
       profile.orgId,
@@ -102,11 +109,17 @@ export async function uploadDocument(
       engagementId,
       async (tx, orgId) => {
         const [eng] = await tx
-          .select({ id: engagements.id })
+          .select({
+            id: engagements.id,
+            managed: engagements.googleDriveManaged,
+            folderId: engagements.googleDriveFolderId,
+          })
           .from(engagements)
           .where(eq(engagements.id, engagementId))
           .limit(1);
         if (!eng) throw new Error("Engagement not found.");
+        driveManaged = eng.managed;
+        driveFolderId = eng.folderId;
         return orgId;
       },
     );
@@ -165,6 +178,51 @@ export async function uploadDocument(
       return row;
     },
     );
+
+    // Mirror the upload into the managed Drive folder (best-effort). The
+    // folder lives in the OWNING coach's Drive — clients have no Google
+    // connection — so we sign the upload with the coach's token, not the
+    // uploader's. A failure here never fails the upload; the file is
+    // already safe in Blobs + the documents table.
+    if (driveManaged && driveFolderId) {
+      try {
+        const coachUserProfileId = await withSystemContext(async (tx) => {
+          const [row] = await tx
+            .select({ upid: coaches.userProfileId })
+            .from(engagements)
+            .innerJoin(coaches, eq(coaches.id, engagements.coachId))
+            .where(eq(engagements.id, engagementId))
+            .limit(1);
+          return row?.upid ?? null;
+        });
+        if (coachUserProfileId) {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const driveFile = await uploadFileToDrive(
+            coachUserProfileId,
+            driveFolderId,
+            upload.filename,
+            upload.fileType,
+            bytes,
+          );
+          await withEngagementContext(
+            profile.orgId,
+            profile.role,
+            engagementId,
+            async (tx) => {
+              await tx
+                .update(documents)
+                .set({
+                  googleDriveFileId: driveFile.id,
+                  googleDriveWebLink: driveFile.webViewLink,
+                })
+                .where(eq(documents.id, created.id));
+            },
+          );
+        }
+      } catch (e) {
+        console.error("[uploadDocument] Drive mirror failed:", e);
+      }
+    }
 
     revalidatePath("/portal/documents");
     revalidatePath(`/business-builder/documents/${engagementId}`);

@@ -11,11 +11,13 @@ import { useRouter } from "next/navigation";
 import {
   ExternalLink,
   FolderOpen,
+  FolderPlus,
   Link as LinkIcon,
   Loader2,
   Unlink,
 } from "lucide-react";
 import {
+  createManagedDriveFolder,
   linkEngagementDriveFolder,
   unlinkEngagementDriveFolder,
 } from "@/lib/actions/engagement-drive";
@@ -25,23 +27,39 @@ export function EngagementDrivePanel({
   engagementId,
   linkedFolderId,
   linkedFolderName,
+  managed = false,
   files,
   fileFetchError,
   isGoogleConnected,
   hasDriveScope,
+  hasDriveWrite = false,
 }: {
   engagementId: string;
   linkedFolderId: string | null;
   linkedFolderName: string | null;
+  managed?: boolean;
   files: DriveFile[];
   fileFetchError: string | null;
   isGoogleConnected: boolean;
   hasDriveScope: boolean;
+  hasDriveWrite?: boolean;
 }) {
   const router = useRouter();
   const [linkInput, setLinkInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function createManaged() {
+    setError(null);
+    startTransition(async () => {
+      const r = await createManagedDriveFolder(engagementId);
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   function submitLink() {
     setError(null);
@@ -139,9 +157,44 @@ export function EngagementDrivePanel({
       </div>
 
       {!linkedFolderId ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          <div className="rounded-md border border-tbb-line bg-tbb-cream-50 p-3 space-y-2">
+            <p className="text-sm text-tbb-ink-2">
+              <span className="font-bold text-tbb-navy">
+                Create a managed folder
+              </span>{" "}
+              — the app makes a folder in your Drive for this client and keeps
+              it in sync both ways: files you upload here land in Drive, and
+              files you drop in the Drive folder show up here.
+            </p>
+            {hasDriveWrite ? (
+              <button
+                type="button"
+                onClick={createManaged}
+                disabled={isPending}
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-navy text-white hover:bg-tbb-blue disabled:opacity-50 shadow-tbb-cta"
+              >
+                {isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <FolderPlus className="w-3.5 h-3.5" aria-hidden />
+                )}
+                Create managed folder
+              </button>
+            ) : (
+              <a
+                href="/api/google-calendar/connect"
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-navy text-white hover:bg-tbb-blue w-fit"
+              >
+                Reconnect Google to enable two-way
+              </a>
+            )}
+          </div>
+          <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            or link an existing folder (read-only)
+          </p>
           <p className="text-sm text-tbb-ink-2">
-            Paste the share URL of your Drive folder for this client. Files
+            Paste the share URL of a Drive folder you already have. Files
             inside it (read-only) appear right below.
           </p>
           <div className="flex gap-2">
@@ -184,6 +237,11 @@ export function EngagementDrivePanel({
             <span className="font-bold text-tbb-navy">
               {linkedFolderName ?? "Linked folder"}
             </span>
+            {managed && (
+              <span className="text-[9px] font-bold uppercase tracking-tbb-caps px-1.5 py-0.5 rounded-pill bg-tbb-success/15 text-tbb-success">
+                Two-way
+              </span>
+            )}
             <a
               href={`https://drive.google.com/drive/folders/${linkedFolderId}`}
               target="_blank"
