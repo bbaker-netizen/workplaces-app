@@ -33,7 +33,10 @@ export async function GET(req: Request) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 60 * 6,
+      // 30 days — matches the selected-engagement cookie. A short expiry
+      // meant a long working session would silently drop preview mode and
+      // bounce the coach to the console mid-action (e.g. adding a subtask).
+      maxAge: 60 * 60 * 24 * 30,
     });
 
     // If no client is selected yet, default to the most recent engagement
