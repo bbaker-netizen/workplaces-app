@@ -22,6 +22,8 @@ export function DriveFolderMatcher() {
   const router = useRouter();
   const [matches, setMatches] = useState<DriveFolderMatch[] | null>(null);
   const [folders, setFolders] = useState<DriveFolderOption[]>([]);
+  // The "Clients" parent folder to scan inside (Drive URL or ID).
+  const [parentUrl, setParentUrl] = useState("");
   // The text typed into each row's search box (defaults to the name match).
   const [query, setQuery] = useState<Record<string, string>>({});
   const [linked, setLinked] = useState<Record<string, boolean>>({});
@@ -45,7 +47,7 @@ export function DriveFolderMatcher() {
   function scan() {
     setError(null);
     startTransition(async () => {
-      const r = await scanDriveFolderMatches();
+      const r = await scanDriveFolderMatches(parentUrl);
       if (!r.ok) {
         setError(r.error);
         return;
@@ -108,6 +110,26 @@ export function DriveFolderMatcher() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-tbb-line bg-white p-4 space-y-2">
+        <label className="block text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+          Your &ldquo;Clients&rdquo; folder (Drive URL or ID) — optional
+        </label>
+        <input
+          type="text"
+          value={parentUrl}
+          onChange={(e) => setParentUrl(e.target.value)}
+          placeholder="https://drive.google.com/drive/folders/…"
+          disabled={busy}
+          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+        />
+        <p className="text-[11px] text-tbb-ink-3">
+          Paste the folder that holds your client folders, and the scan only
+          lists the folders inside it (not your whole Drive). In Drive,
+          right-click the folder → Share → Copy link. Leave blank to scan
+          every folder.
+        </p>
+      </div>
+
       <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"
