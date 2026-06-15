@@ -53,16 +53,28 @@ export function SoulFilePreviewButton({
     setCopied(false);
     setState({ kind: "loading" });
     startTransition(async () => {
-      const r = await previewSoulFileDraft({ prospectId });
-      if (r.ok) {
+      try {
+        const r = await previewSoulFileDraft({ prospectId });
+        if (r.ok) {
+          setState({
+            kind: "ready",
+            body: r.data.body,
+            transcriptCount: r.data.transcriptCount,
+            transcriptTitles: r.data.transcriptTitles,
+          });
+        } else {
+          setState({ kind: "error", message: r.error });
+        }
+      } catch {
+        // A thrown/rejected action (e.g. the serverless function timing
+        // out on a long Fireflies + Claude run, or a dropped connection)
+        // must NOT escape to the page error boundary — keep it in the
+        // modal as a retryable message.
         setState({
-          kind: "ready",
-          body: r.data.body,
-          transcriptCount: r.data.transcriptCount,
-          transcriptTitles: r.data.transcriptTitles,
+          kind: "error",
+          message:
+            "That took too long or the connection dropped before the draft finished. Pulling several Fireflies transcripts and drafting can be slow — please try again.",
         });
-      } else {
-        setState({ kind: "error", message: r.error });
       }
     });
   }
