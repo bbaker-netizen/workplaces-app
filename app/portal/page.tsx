@@ -140,28 +140,27 @@ export default async function PortalDashboard() {
         </div>
       )}
 
-      {/* Hero band — warm, branded, sets the tone instead of a bare line. */}
-      <header className="relative overflow-hidden rounded-xl bg-tbb-navy text-tbb-cream px-6 py-9 sm:px-10 sm:py-11 shadow-tbb-md">
-        {/* soft glow + a single brand accent dot (Safety Vest Orange) */}
+      {/* Hero band — compact, branded, content-forward. Explicit text
+          colors because globals.css forces h1/p to dark ink, which would
+          render invisible on the navy band. */}
+      <header className="relative overflow-hidden rounded-xl bg-tbb-navy px-6 py-6 sm:px-8 shadow-tbb-md">
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-16 -right-12 h-52 w-52 rounded-full bg-tbb-orange/15 blur-3xl"
+          className="pointer-events-none absolute -top-16 -right-12 h-48 w-48 rounded-full bg-tbb-orange/15 blur-3xl"
         />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute top-6 right-7 h-3 w-3 rounded-full bg-tbb-orange"
-        />
-        <div className="relative">
-          <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-cream/55">
-            {engagement.name ?? "Engagement"} · The Builder
-          </p>
-          <h1 className="mt-2 font-display font-black text-4xl sm:text-5xl tracking-tbb-tight leading-[1.03]">
-            {greeting}, {greetingName}.
-          </h1>
-          <p className="mt-3 font-sans text-sm sm:text-base text-tbb-cream/80 max-w-xl">
-            {heroLine}
-          </p>
-          <p className="mt-5 inline-flex items-center gap-2 font-display text-[11px] font-black uppercase tracking-tbb-caps text-tbb-orange">
+        <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-cream/55">
+              {engagement.name ?? "Engagement"} · The Builder
+            </p>
+            <h1 className="mt-1 font-display font-black text-tbb-cream text-2xl sm:text-3xl tracking-tbb-tight leading-tight">
+              {greeting}, {greetingName}.
+            </h1>
+            <p className="mt-1.5 font-sans text-sm text-tbb-cream/75 max-w-xl">
+              {heroLine}
+            </p>
+          </div>
+          <p className="flex items-center gap-2 font-display text-[11px] font-black uppercase tracking-tbb-caps text-tbb-orange shrink-0">
             <span aria-hidden className="h-px w-6 bg-tbb-orange/60" />
             Build what compounds.
           </p>
