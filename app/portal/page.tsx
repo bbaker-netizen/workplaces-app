@@ -108,6 +108,17 @@ export default async function PortalDashboard() {
       : (engagement.name ?? "there");
   }
 
+  // Warm, adaptive hero line — a brand-new portal gets a welcome instead
+  // of a bare "here's where things stand" over empty cards.
+  const isFresh =
+    !nextSession &&
+    myOpenAll.length === 0 &&
+    activeProjects.length === 0 &&
+    documents.length === 0;
+  const heroLine = isFresh
+    ? "Welcome to your build space. Your sessions, projects, and documents will all live right here as we get rolling."
+    : "Here's where your business build stands today — everything in one place.";
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-10 sm:py-12 space-y-8">
       {isPreview && (
@@ -130,16 +141,31 @@ export default async function PortalDashboard() {
       )}
 
       {/* Hero band — warm, branded, sets the tone instead of a bare line. */}
-      <header className="rounded-xl bg-tbb-navy text-tbb-cream px-6 py-7 sm:px-8 sm:py-9 shadow-tbb-sm">
-        <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-blue-light">
-          {engagement.name ?? "Engagement"}
-        </p>
-        <h1 className="mt-1 font-display font-bold text-3xl sm:text-4xl tracking-tight leading-none">
-          {greeting}, {greetingName}.
-        </h1>
-        <p className="mt-2 font-sans text-sm text-tbb-cream/70 max-w-xl">
-          Here&apos;s where things stand with your business build today.
-        </p>
+      <header className="relative overflow-hidden rounded-xl bg-tbb-navy text-tbb-cream px-6 py-9 sm:px-10 sm:py-11 shadow-tbb-md">
+        {/* soft glow + a single brand accent dot (Safety Vest Orange) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-16 -right-12 h-52 w-52 rounded-full bg-tbb-orange/15 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute top-6 right-7 h-3 w-3 rounded-full bg-tbb-orange"
+        />
+        <div className="relative">
+          <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-cream/55">
+            {engagement.name ?? "Engagement"} · The Builder
+          </p>
+          <h1 className="mt-2 font-display font-black text-4xl sm:text-5xl tracking-tbb-tight leading-[1.03]">
+            {greeting}, {greetingName}.
+          </h1>
+          <p className="mt-3 font-sans text-sm sm:text-base text-tbb-cream/80 max-w-xl">
+            {heroLine}
+          </p>
+          <p className="mt-5 inline-flex items-center gap-2 font-display text-[11px] font-black uppercase tracking-tbb-caps text-tbb-orange">
+            <span aria-hidden className="h-px w-6 bg-tbb-orange/60" />
+            Build what compounds.
+          </p>
+        </div>
       </header>
 
       {/* Stat strip — at-a-glance pulse. */}
