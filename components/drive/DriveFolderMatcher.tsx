@@ -3,10 +3,9 @@
 /**
  * DriveFolderMatcher — "Scan my Drive → link client folders".
  *
- * Scans the coach's Drive folders, pre-selects a name match for each
- * engagement, and lets the coach link them in bulk OR hand-pick a folder
- * from a dropdown for any client whose name doesn't match its Drive
- * folder. Linking is read-only mirror (same as pasting a URL).
+ * Scans the coach's Drive folders, pre-fills a name match per engagement,
+ * and lets the coach link them in bulk OR type-to-search the right folder
+ * for any client whose name doesn't match. Linking is a read-only mirror.
  */
 
 import { useMemo, useState, useTransition } from "react";
@@ -23,10 +22,25 @@ export function DriveFolderMatcher() {
   const router = useRouter();
   const [matches, setMatches] = useState<DriveFolderMatch[] | null>(null);
   const [folders, setFolders] = useState<DriveFolderOption[]>([]);
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  // The text typed into each row's search box (defaults to the name match).
+  const [query, setQuery] = useState<Record<string, string>>({});
   const [linked, setLinked] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
+
+  // Resolve a typed folder name back to its id (first match wins).
+  const idByName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of folders) {
+      if (!m.has(f.folderName)) m.set(f.folderName, f.folderId);
+    }
+    return m;
+  }, [folders]);
+
+  function resolveId(engagementId: string): string | null {
+    const q = (query[engagementId] ?? "").trim();
+    return q ? (idByName.get(q) ?? null) : null;
+  }
 
   function scan() {
     setError(null);
@@ -36,19 +50,19 @@ export function DriveFolderMatcher() {
         setError(r.error);
         return;
       }
-      const initSel: Record<string, string> = {};
+      const initQuery: Record<string, string> = {};
       for (const m of r.matches) {
-        if (m.suggestion) initSel[m.engagementId] = m.suggestion.folderId;
+        if (m.suggestion) initQuery[m.engagementId] = m.suggestion.folderName;
       }
       setMatches(r.matches);
       setFolders(r.folders);
-      setSelected(initSel);
+      setQuery(initQuery);
       setLinked({});
     });
   }
 
   function linkOne(engagementId: string) {
-    const folderId = selected[engagementId];
+    const folderId = resolveId(engagementId);
     if (!folderId) return;
     setError(null);
     startTransition(async () => {
@@ -67,8 +81,9 @@ export function DriveFolderMatcher() {
     setError(null);
     startTransition(async () => {
       for (const m of matches) {
-        const folderId = selected[m.engagementId];
-        if (!folderId || linked[m.engagementId]) continue;
+        if (linked[m.engagementId]) continue;
+        const folderId = resolveId(m.engagementId);
+        if (!folderId) continue;
         const r = await linkEngagementDriveFolder({
           engagementId: m.engagementId,
           folderUrlOrId: folderId,
@@ -86,9 +101,10 @@ export function DriveFolderMatcher() {
   const pendingCount = useMemo(() => {
     if (!matches) return 0;
     return matches.filter(
-      (m) => selected[m.engagementId] && !linked[m.engagementId],
+      (m) => !linked[m.engagementId] && resolveId(m.engagementId),
     ).length;
-  }, [matches, selected, linked]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches, query, linked, idByName]);
 
   return (
     <div className="space-y-4">
@@ -113,7 +129,7 @@ export function DriveFolderMatcher() {
             disabled={busy}
             className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white disabled:opacity-50"
           >
-            Link {pendingCount} selected
+            Link {pendingCount} ready
           </button>
         )}
       </div>
@@ -126,11 +142,18 @@ export function DriveFolderMatcher() {
 
       {matches && (
         <p className="text-xs text-tbb-ink-3">
-          We pre-pick a folder where the names match. For any client that
-          didn&apos;t match, choose the right folder from the dropdown and
-          hit Link. (Folders found: {folders.length}.)
+          Start typing a folder name to search — the box filters your{" "}
+          {folders.length} Drive folders. Where the names matched we filled it
+          in for you.
         </p>
       )}
+
+      {/* One shared list powers the type-ahead on every row. */}
+      <datalist id="drive-folder-options">
+        {folders.map((f) => (
+          <option key={f.folderId} value={f.folderName} />
+        ))}
+      </datalist>
 
       {matches && matches.length === 0 && (
         <p className="text-sm text-tbb-ink-3">No active clients to match.</p>
@@ -140,8 +163,8 @@ export function DriveFolderMatcher() {
         <ul className="space-y-2">
           {matches.map((m) => {
             const isLinked = linked[m.engagementId];
-            const sel = selected[m.engagementId] ?? "";
-            const matched = Boolean(m.suggestion);
+            const q = query[m.engagementId] ?? "";
+            const resolvable = Boolean(resolveId(m.engagementId));
             return (
               <li
                 key={m.engagementId}
@@ -154,29 +177,25 @@ export function DriveFolderMatcher() {
                   <p className="text-[11px] uppercase tracking-tbb-caps font-bold text-tbb-ink-4">
                     {m.alreadyLinked
                       ? "Already linked"
-                      : matched
+                      : m.suggestion
                         ? "Name match"
-                        : "No match — pick one"}
+                        : "Search for the folder"}
                   </p>
                 </div>
-                <select
-                  value={sel}
+                <input
+                  type="text"
+                  list="drive-folder-options"
+                  value={q}
+                  placeholder="Type to search your Drive folders…"
                   onChange={(e) =>
-                    setSelected((p) => ({
+                    setQuery((p) => ({
                       ...p,
                       [m.engagementId]: e.target.value,
                     }))
                   }
                   disabled={busy}
-                  className="flex-1 min-w-0 bg-white border border-tbb-line rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-                >
-                  <option value="">— pick a Drive folder —</option>
-                  {folders.map((f) => (
-                    <option key={f.folderId} value={f.folderId}>
-                      {f.folderName}
-                    </option>
-                  ))}
-                </select>
+                  className="flex-1 min-w-0 bg-white border border-tbb-line rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                />
                 {isLinked ? (
                   <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-success">
                     <Check className="w-3.5 h-3.5" aria-hidden /> Linked
@@ -185,7 +204,12 @@ export function DriveFolderMatcher() {
                   <button
                     type="button"
                     onClick={() => linkOne(m.engagementId)}
-                    disabled={busy || !sel}
+                    disabled={busy || !resolvable}
+                    title={
+                      resolvable
+                        ? undefined
+                        : "Pick a folder from the list first"
+                    }
                     className="shrink-0 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
                   >
                     <LinkIcon className="w-3.5 h-3.5" aria-hidden /> Link
