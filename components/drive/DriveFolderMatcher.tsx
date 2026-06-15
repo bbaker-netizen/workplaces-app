@@ -164,9 +164,11 @@ export function DriveFolderMatcher() {
 
       {matches && (
         <p className="text-xs text-tbb-ink-3">
-          Start typing a folder name to search — the box filters your{" "}
-          {folders.length} Drive folders. Where the names matched we filled it
-          in for you.
+          Type a folder name to search your {folders.length} folders (we
+          pre-fill name matches). Hit <span className="font-bold">Link</span>{" "}
+          on a row to save it to that client, or{" "}
+          <span className="font-bold">Link N ready</span> to save them all at
+          once.
         </p>
       )}
 

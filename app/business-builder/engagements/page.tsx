@@ -12,6 +12,7 @@ import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
+import { CollapsibleSection } from "@/components/business-builder/CollapsibleSection";
 import { SeedDemoButton } from "@/components/business-builder/SeedDemoButton";
 
 export default async function EngagementsListPage() {
@@ -149,11 +150,8 @@ export default async function EngagementsListPage() {
       )}
 
       {archived.length > 0 && (
-        <section className="space-y-2">
-          <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-            Archived clients ({archived.length})
-          </p>
-          <ul className="border border-tbb-line rounded-lg bg-tbb-cream-50 divide-y divide-tbb-line-soft overflow-hidden">
+        <CollapsibleSection title={`Show archived clients (${archived.length})`}>
+          <ul className="mt-2 border border-tbb-line rounded-lg bg-tbb-cream-50 divide-y divide-tbb-line-soft overflow-hidden">
             {archived.map((e) => (
               <li key={e.id} className="flex items-center gap-2 px-5 py-3">
                 <span className="flex-1 min-w-0">
@@ -177,7 +175,7 @@ export default async function EngagementsListPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </CollapsibleSection>
       )}
     </main>
   );
