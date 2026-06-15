@@ -39,14 +39,17 @@ export type DriveFolderMatch = {
   suggestion: { folderId: string; folderName: string } | null;
 };
 
+export type DriveFolderOption = { folderId: string; folderName: string };
+
 /**
  * Scan the coach's Drive folders and suggest a match for each engagement
  * by name. Coach-only. Returns one row per active engagement with its
- * best folder suggestion (or null), so the coach can bulk-link existing
- * client folders instead of pasting URLs one by one.
+ * best folder suggestion (or null) PLUS the full folder list, so the coach
+ * can bulk-link auto-matches AND hand-pick a folder for any client whose
+ * name doesn't match its Drive folder.
  */
 export async function scanDriveFolderMatches(): Promise<
-  | { ok: true; matches: DriveFolderMatch[] }
+  | { ok: true; matches: DriveFolderMatch[]; folders: DriveFolderOption[] }
   | { ok: false; error: string }
 > {
   const profile = await ensureUserProfile();
@@ -105,7 +108,11 @@ export async function scanDriveFolderMatches(): Promise<
     };
   });
 
-  return { ok: true, matches };
+  const folderOptions: DriveFolderOption[] = [...folders]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((f) => ({ folderId: f.id, folderName: f.name }));
+
+  return { ok: true, matches, folders: folderOptions };
 }
 
 const linkSchema = z.object({
