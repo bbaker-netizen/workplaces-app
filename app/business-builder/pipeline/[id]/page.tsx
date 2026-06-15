@@ -22,7 +22,7 @@ import {
   AtSign,
   Search,
 } from "lucide-react";
-import { linkedInSearchUrl } from "@/components/pipeline/ProspectInlineEdit";
+import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
 import {

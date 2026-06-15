@@ -14,7 +14,7 @@ import {
   validateProspect,
   type ValidationIssue,
 } from "@/lib/pipeline/validate-prospect";
-import { linkedInSearchUrl } from "@/components/pipeline/ProspectInlineEdit";
+import { linkedInSearchUrl } from "@/lib/pipeline/social";
 
 type PricingTierOption = {
   id: string;
