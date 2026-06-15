@@ -607,6 +607,78 @@ export async function listExternalEvents(
     .filter((x): x is ExternalEvent => x !== null);
 }
 
+/**
+ * Pull events shaped for the auto-sync job: attendee emails (for matching
+ * to an engagement), event status (to detect cancellations), and a
+ * virtual/in-person hint. `showDeleted` is on so cancellations surface as
+ * status==="cancelled" rather than silently vanishing.
+ */
+export type SyncEvent = {
+  id: string;
+  summary: string;
+  start: Date;
+  end: Date;
+  status: string;
+  attendeeEmails: string[];
+  isVirtual: boolean;
+};
+
+export async function listEventsForSync(
+  token: string,
+  calendarId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<SyncEvent[]> {
+  const params = new URLSearchParams({
+    timeMin: rangeStart.toISOString(),
+    timeMax: rangeEnd.toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "250",
+    showDeleted: "true",
+  });
+  const data = await api<{
+    items: {
+      id: string;
+      summary?: string;
+      status?: string;
+      start?: { dateTime?: string; date?: string };
+      end?: { dateTime?: string; date?: string };
+      location?: string;
+      hangoutLink?: string;
+      conferenceData?: unknown;
+      attendees?: { email?: string }[];
+    }[];
+  }>(
+    token,
+    `/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
+  );
+  return (data.items ?? [])
+    .map((e) => {
+      // Only timed events become sessions — skip all-day entries.
+      const startStr = e.start?.dateTime;
+      if (!startStr) return null;
+      const endStr = e.end?.dateTime ?? e.end?.date ?? startStr;
+      const locationVirtual = /\b(zoom|meet\.google|teams\.microsoft|https?:\/\/)/i.test(
+        e.location ?? "",
+      );
+      const isVirtual =
+        Boolean(e.hangoutLink) || Boolean(e.conferenceData) || locationVirtual;
+      return {
+        id: e.id,
+        summary: e.summary ?? "(no title)",
+        start: new Date(startStr),
+        end: new Date(endStr),
+        status: e.status ?? "confirmed",
+        attendeeEmails: (e.attendees ?? [])
+          .map((a) => (a.email ?? "").toLowerCase())
+          .filter(Boolean),
+        isVirtual,
+      };
+    })
+    .filter((x): x is SyncEvent => x !== null);
+}
+
 /** Pull the connected Google account email via the userinfo endpoint. */
 export async function fetchGoogleEmail(accessToken: string): Promise<string | null> {
   try {
