@@ -75,6 +75,7 @@ export default async function CoachDocumentsPage({
           .select({
             folderId: engagementsTable.googleDriveFolderId,
             folderName: engagementsTable.googleDriveFolderName,
+            managed: engagementsTable.googleDriveManaged,
           })
           .from(engagementsTable)
           .where(eq(engagementsTable.id, engagement.id))
@@ -84,9 +85,19 @@ export default async function CoachDocumentsPage({
     ]);
 
   const isGoogleConnected = Boolean(googleState);
-  const hasDriveScope = (googleState?.scope ?? "").includes("drive.readonly");
+  // Token may hold drive.readonly (old) or the full drive scope (new,
+  // needed for two-way). Either lets us read/list; only full drive lets
+  // us create managed folders + upload.
+  const grantedScopes = (googleState?.scope ?? "").split(" ");
+  const hasDriveScope = grantedScopes.some((s) =>
+    s.startsWith("https://www.googleapis.com/auth/drive"),
+  );
+  const hasDriveWrite = grantedScopes.includes(
+    "https://www.googleapis.com/auth/drive",
+  );
   const linkedFolderId = engagementWithDrive?.folderId ?? null;
   const linkedFolderName = engagementWithDrive?.folderName ?? null;
+  const driveManaged = engagementWithDrive?.managed ?? false;
 
   // Pull files for the linked folder if there is one and Drive scope is granted.
   let driveFiles: DriveFile[] = [];
@@ -150,10 +161,12 @@ export default async function CoachDocumentsPage({
         engagementId={engagement.id}
         linkedFolderId={linkedFolderId}
         linkedFolderName={linkedFolderName}
+        managed={driveManaged}
         files={driveFiles}
         fileFetchError={driveError}
         isGoogleConnected={isGoogleConnected}
         hasDriveScope={hasDriveScope}
+        hasDriveWrite={hasDriveWrite}
       />
 
       <DocumentUploadForm engagementId={engagement.id} />

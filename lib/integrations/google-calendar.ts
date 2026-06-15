@@ -31,13 +31,15 @@ import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
  *     as if Bruce had sent them from Gmail directly. We don't request
  *     gmail.modify (which would let us mark messages read/archive); the
  *     CRM never touches the user's mailbox state.
- *   - drive.readonly — list and read Drive files Bruce links per
- *     engagement so client folders mirror into the app's Documents
- *     view. Read-only — the app never modifies a file in Drive.
+ *   - drive — full Drive access, for the two-way Documents sync: the app
+ *     creates a managed folder per engagement, uploads files into it, and
+ *     lists everything in it (including files added directly in Drive).
+ *     Broader than drive.readonly because mirroring app uploads OUT to
+ *     Drive and seeing manually-added files both require write + full read.
  *   - openid email — identifies the connected Google account.
  */
 export const GOOGLE_CALENDAR_SCOPE =
-  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly openid email";
+  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive openid email";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

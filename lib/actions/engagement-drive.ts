@@ -13,6 +13,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements } from "@/lib/db/schema";
 import { withEngagementContext } from "@/lib/db/tenant";
 import {
+  ensureManagedClientFolder,
   getFolderMetadata,
   parseDriveFolderId,
 } from "@/lib/integrations/google-drive";
@@ -97,6 +98,87 @@ export async function linkEngagementDriveFolder(
       ok: false,
       error: e instanceof Error ? e.message : "Server error.",
     };
+  }
+}
+
+/**
+ * Create an app-managed Drive folder for the engagement (full two-way).
+ * Creates `The Builder — Clients / <Client Name>` in the coach's Drive,
+ * reusing it if it already exists, and marks the engagement managed so
+ * uploads mirror into it. Coach-only.
+ */
+export async function createManagedDriveFolder(
+  engagementId: string,
+): Promise<
+  | { ok: true; folderName: string; folderId: string }
+  | { ok: false; error: string }
+> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  if (!z.string().uuid().safeParse(engagementId).success) {
+    return { ok: false, error: "Invalid id." };
+  }
+
+  // Resolve a human name for the folder from the engagement / client org.
+  let clientName = "Client";
+  try {
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [eng] = await tx
+          .select({ name: engagements.name })
+          .from(engagements)
+          .where(eq(engagements.id, engagementId))
+          .limit(1);
+        if (eng?.name) clientName = eng.name;
+      },
+    );
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Server error." };
+  }
+
+  let folder: { id: string; name: string };
+  try {
+    folder = await ensureManagedClientFolder(profile.userProfileId, clientName);
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? `Drive: ${e.message}`
+          : "Couldn't create the Drive folder.",
+    };
+  }
+
+  try {
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        await tx
+          .update(engagements)
+          .set({
+            googleDriveFolderId: folder.id,
+            googleDriveFolderName: folder.name,
+            googleDriveManaged: true,
+            googleDriveLinkedByUserProfileId: profile.userProfileId,
+            googleDriveLinkedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(engagements.id, engagementId));
+      },
+    );
+    revalidatePath(`/business-builder/documents/${engagementId}`);
+    revalidatePath("/portal/documents");
+    return { ok: true, folderName: folder.name, folderId: folder.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Server error." };
   }
 }
 
