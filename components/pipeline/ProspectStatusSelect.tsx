@@ -15,7 +15,7 @@
  */
 
 import { useTransition, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import {
   STAGE_STYLES,
@@ -60,16 +60,18 @@ export function ProspectStatusSelect({
 
   return (
     <>
-      <span className="relative inline-block">
+      <span className="relative inline-flex items-center gap-1">
         <span
+          title="Click to change stage"
           className={
             // Every pill renders at the same fixed width regardless
             // of label length — so "LOST" looks the same size as
             // "MEETING SCHEDULED". Width chosen so the longest
             // label ("MEETING SCHEDULED" = ~134pt of text + padding)
-            // fits without truncation. justify-center keeps short
-            // labels centered inside the chip.
-            "flex items-center justify-center gap-1 px-2 py-1 rounded-pill text-[10.5px] font-bold uppercase tracking-tbb-caps whitespace-nowrap w-[164px] " +
+            // fits without truncation. A trailing chevron + ring make
+            // it read as an interactive dropdown (the native <select>
+            // sits invisibly on top), not a static badge.
+            "flex items-center justify-center gap-1 pl-2 pr-1.5 py-1 rounded-pill text-[10.5px] font-bold uppercase tracking-tbb-caps whitespace-nowrap w-[180px] ring-1 ring-inset ring-black/15 " +
             style.chipClass
           }
         >
@@ -77,6 +79,7 @@ export function ProspectStatusSelect({
             <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
           )}
           {style.label}
+          <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" aria-hidden />
         </span>
         <select
           aria-label="Change stage"

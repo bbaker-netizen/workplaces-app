@@ -15,6 +15,8 @@ import {
   type ValidationIssue,
 } from "@/lib/pipeline/validate-prospect";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
+import { ScanCardButton } from "@/components/pipeline/ScanCardButton";
+import type { ScannedCard } from "@/lib/actions/scan-card";
 
 type PricingTierOption = {
   id: string;
@@ -61,6 +63,17 @@ export function NewProspectForm({
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isPending, startTransition] = useTransition();
+
+  // Prefill from a scanned business card — only fills fields the card
+  // actually had; the coach reviews everything before saving.
+  function applyScanned(d: ScannedCard) {
+    if (d.companyName) setCompanyName(d.companyName);
+    if (d.contactName) setContactName(d.contactName);
+    if (d.contactEmail) setContactEmail(d.contactEmail);
+    if (d.phone) setPhone(d.phone);
+    if (d.companyWebsite) setCompanyWebsite(d.companyWebsite);
+    if (d.linkedinUrl) setLinkedinUrl(d.linkedinUrl);
+  }
 
   const tiersForProgram = useMemo(
     () => pricingTiers.filter((t) => t.program === programType),
@@ -211,6 +224,7 @@ export function NewProspectForm({
       }}
       className="space-y-5"
     >
+      <ScanCardButton onScanned={applyScanned} />
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Company (legal name)" required issue={issueFor("companyName")}>
           <input
