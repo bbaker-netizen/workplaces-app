@@ -56,7 +56,9 @@ export async function GET(
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 60 * 6,
+      // 30 days — a short expiry silently dropped preview mode mid-session
+      // and bounced the coach to the console on the next action.
+      maxAge: 60 * 60 * 24 * 30,
     });
   }
   return res;

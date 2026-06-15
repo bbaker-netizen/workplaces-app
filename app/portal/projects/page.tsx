@@ -13,14 +13,6 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-const STATUS_TONE: Record<string, string> = {
-  planning: "text-muted-foreground",
-  active: "text-tbb-navy font-bold",
-  blocked: "text-tbb-danger font-bold",
-  completed: "text-tbb-navy font-bold",
-  cancelled: "text-muted-foreground line-through",
-};
-
 const STATUS_ORDER: Record<string, number> = {
   active: 0,
   planning: 1,
@@ -74,7 +66,7 @@ export default async function PortalProjectsPage() {
       </header>
 
       {items.length === 0 ? (
-        <div className="border border-dashed border-tbb-line rounded-md bg-white p-8 text-center space-y-2">
+        <div className="border border-dashed border-tbb-line rounded-xl bg-white p-10 text-center space-y-2">
           <p className="text-3xl" aria-hidden>🏗️</p>
           <p className="font-bold text-foreground text-base tracking-tight">
             Nothing under construction yet.
@@ -86,7 +78,7 @@ export default async function PortalProjectsPage() {
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
+        <ul className="space-y-3">
           {items.map((p) => {
             const pct =
               p.taskCount === 0
@@ -96,48 +88,44 @@ export default async function PortalProjectsPage() {
               <li key={p.id}>
                 <Link
                   href={`/portal/projects/${p.id}`}
-                  className="block py-4 pl-3 hover:bg-tbb-cream-50 transition-colors group"
+                  className="block rounded-xl border border-tbb-line bg-white p-4 sm:p-5 shadow-tbb-xs hover:shadow-tbb-sm hover:border-tbb-blue/50 transition-all"
                 >
-                  <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                    <span className="font-bold text-foreground text-lg tracking-tight group-hover:underline underline-offset-4">
-                      {p.name}
-                    </span>
-                    <span
-                      className={
-                        "ml-auto font-mono text-[10px] uppercase tracking-tbb-caps " +
-                        (STATUS_TONE[p.status] ?? "text-muted-foreground")
-                      }
-                    >
-                      {STATUS_LABEL[p.status] ?? p.status}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-x-3 gap-y-0.5 flex-wrap font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-                    {p.leadName && <span>Lead: {p.leadName}</span>}
-                    {p.targetDate && (
-                      <span>
-                        Target {new Date(p.targetDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-1">
+                      <span className="font-bold text-foreground text-lg tracking-tight">
+                        {p.name}
                       </span>
-                    )}
-                    <span>
-                      {p.taskCountDone}/{p.taskCount} tasks · {pct}%
-                    </span>
-                    <span className="ml-auto flex gap-1">
-                      {p.revenueImpact && (
-                        <span className="rounded-full border border-tbb-blue text-tbb-navy bg-tbb-cream-50 px-2 py-px">
-                          Revenue
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                        {p.leadName && <span>Lead: {p.leadName}</span>}
+                        {p.targetDate && (
+                          <span>
+                            Target{" "}
+                            {new Date(p.targetDate).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </span>
+                        )}
+                        <span>
+                          {p.taskCountDone}/{p.taskCount} tasks · {pct}%
                         </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
+                      <ProjectStatusPill status={p.status} />
+                      {(p.revenueImpact || p.marginImpact) && (
+                        <div className="flex gap-1">
+                          {p.revenueImpact && <ImpactBadge>Revenue</ImpactBadge>}
+                          {p.marginImpact && <ImpactBadge>Margin</ImpactBadge>}
+                        </div>
                       )}
-                      {p.marginImpact && (
-                        <span className="rounded-full border border-tbb-blue text-tbb-navy bg-tbb-cream-50 px-2 py-px">
-                          Margin
-                        </span>
-                      )}
-                    </span>
+                    </div>
                   </div>
                   {p.taskCount > 0 && (
-                    <div className="mt-2 h-1 bg-tbb-line rounded-full overflow-hidden">
+                    <div className="mt-3 h-1.5 bg-tbb-line-soft rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-tbb-blue-700"
+                        className="h-full bg-tbb-success transition-all"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -149,5 +137,34 @@ export default async function PortalProjectsPage() {
         </ul>
       )}
     </main>
+  );
+}
+
+const STATUS_PILL: Record<string, string> = {
+  planning: "bg-tbb-line-soft text-tbb-ink-2",
+  active: "bg-tbb-success text-white",
+  blocked: "bg-tbb-danger text-white",
+  completed: "bg-tbb-navy text-white",
+  cancelled: "bg-tbb-line-soft text-tbb-ink-3 line-through",
+};
+
+function ProjectStatusPill({ status }: { status: string }) {
+  return (
+    <span
+      className={
+        "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-tbb-caps whitespace-nowrap " +
+        (STATUS_PILL[status] ?? "bg-tbb-line-soft text-tbb-ink-2")
+      }
+    >
+      {STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
+
+function ImpactBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-tbb-blue/50 text-tbb-blue bg-tbb-blue/5 px-2 py-px text-[10px] font-bold uppercase tracking-tbb-caps">
+      {children}
+    </span>
   );
 }
