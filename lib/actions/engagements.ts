@@ -69,6 +69,12 @@ export async function archiveEngagement(engagementId: string): Promise<Result> {
         .set({ archivedAt: new Date(), status: "paused" })
         .where(eq(engagements.id, engagementId));
     });
+    // Best-effort: move an app-managed Drive folder into the coach's
+    // Archive folder. No-op for read-only-linked folders.
+    const { moveEngagementFolderToArchive } = await import(
+      "@/lib/actions/engagement-drive"
+    );
+    await moveEngagementFolderToArchive(engagementId);
     revalidatePath("/business-builder/engagements");
     revalidatePath(`/business-builder/engagements/${engagementId}`);
     revalidatePath("/portal");

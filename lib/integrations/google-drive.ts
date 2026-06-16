@@ -284,6 +284,37 @@ export async function ensureManagedClientFolder(
 }
 
 /**
+ * Move a Drive file/folder under a new parent (e.g. archive a managed
+ * client folder into the coach's "Archive" folder). Works for files the
+ * app created (drive.file scope). Best-effort: throws on API error.
+ */
+export async function moveDriveFolderToParent(
+  userProfileId: string,
+  fileId: string,
+  newParentId: string,
+): Promise<void> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) throw new Error("Google not connected for this user.");
+  // Look up current parents so we can detach them as we attach the new one.
+  const meta = await drive<{ parents?: string[] }>(
+    token.token,
+    `/files/${encodeURIComponent(fileId)}?fields=parents`,
+  );
+  const params = new URLSearchParams({
+    addParents: newParentId,
+    fields: "id,parents",
+  });
+  if (meta.parents && meta.parents.length > 0) {
+    params.set("removeParents", meta.parents.join(","));
+  }
+  await drive(
+    token.token,
+    `/files/${encodeURIComponent(fileId)}?${params.toString()}`,
+    { method: "PATCH", body: JSON.stringify({}) },
+  );
+}
+
+/**
  * Upload a file into a Drive folder via the multipart endpoint. Returns
  * the new file's id + webViewLink.
  */

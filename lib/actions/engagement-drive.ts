@@ -10,14 +10,106 @@ import { eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { engagements } from "@/lib/db/schema";
+import {
+  coaches,
+  engagements,
+  googleCalendarTokens,
+} from "@/lib/db/schema";
 import { withEngagementContext, withSystemContext } from "@/lib/db/tenant";
 import {
   ensureManagedClientFolder,
   getFolderMetadata,
   listDriveFolders,
+  moveDriveFolderToParent,
   parseDriveFolderId,
 } from "@/lib/integrations/google-drive";
+
+/**
+ * Set (or clear) the coach's "Archive" Drive folder — where app-managed
+ * client folders are moved when their client is archived. Coach-only.
+ */
+export async function setDriveArchiveFolder(
+  urlOrId: string,
+): Promise<{ ok: true; folderName: string } | { ok: false; error: string }> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  const folderId = parseDriveFolderId(urlOrId);
+  if (!folderId) {
+    return {
+      ok: false,
+      error: "Couldn't read a folder ID from that — paste the folder's share URL.",
+    };
+  }
+  let meta: { id: string; name: string } | null;
+  try {
+    meta = await getFolderMetadata(profile.userProfileId, folderId);
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? `Drive: ${e.message}` : "Drive unreachable.",
+    };
+  }
+  if (!meta) {
+    return { ok: false, error: "Drive can't see that folder — check the link." };
+  }
+  await withSystemContext(async (tx) => {
+    await tx
+      .update(googleCalendarTokens)
+      .set({ driveArchiveFolderId: meta!.id, updatedAt: new Date() })
+      .where(eq(googleCalendarTokens.userProfileId, profile.userProfileId));
+  });
+  revalidatePath("/business-builder/drive-link");
+  return { ok: true, folderName: meta.name };
+}
+
+/**
+ * Move an engagement's app-managed Drive folder into the owning coach's
+ * Archive folder. Best-effort, called when a client is archived. No-op
+ * unless the folder is app-managed AND the coach set an Archive folder
+ * (we can't move read-only-linked folders — drive.file only covers
+ * app-created ones).
+ */
+export async function moveEngagementFolderToArchive(
+  engagementId: string,
+): Promise<void> {
+  try {
+    const info = await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          folderId: engagements.googleDriveFolderId,
+          managed: engagements.googleDriveManaged,
+          coachUserProfileId: coaches.userProfileId,
+        })
+        .from(engagements)
+        .innerJoin(coaches, eq(coaches.id, engagements.coachId))
+        .where(eq(engagements.id, engagementId))
+        .limit(1);
+      if (!row?.folderId || !row.managed) return null;
+      const [tok] = await tx
+        .select({ archive: googleCalendarTokens.driveArchiveFolderId })
+        .from(googleCalendarTokens)
+        .where(eq(googleCalendarTokens.userProfileId, row.coachUserProfileId))
+        .limit(1);
+      if (!tok?.archive) return null;
+      return {
+        folderId: row.folderId,
+        coachUserProfileId: row.coachUserProfileId,
+        archiveFolderId: tok.archive,
+      };
+    });
+    if (!info) return;
+    await moveDriveFolderToParent(
+      info.coachUserProfileId,
+      info.folderId,
+      info.archiveFolderId,
+    );
+  } catch (e) {
+    console.error("[moveEngagementFolderToArchive] failed:", e);
+  }
+}
 
 /** Normalise a name for fuzzy folder↔engagement matching. */
 function norm(s: string): string {
