@@ -10,9 +10,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, FolderSymlink } from "lucide-react";
+import { eq } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getConnectionStatus } from "@/lib/integrations/google-calendar";
+import { googleCalendarTokens } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
 import { DriveFolderMatcher } from "@/components/drive/DriveFolderMatcher";
+import { DriveArchiveFolderSetter } from "@/components/drive/DriveArchiveFolderSetter";
 
 export default async function DriveLinkPage() {
   const profile = await ensureUserProfile();
@@ -21,6 +25,16 @@ export default async function DriveLinkPage() {
     redirect("/portal");
   }
   const status = await getConnectionStatus(profile.userProfileId);
+  const archiveSet = status.connected
+    ? await withSystemContext(async (tx) => {
+        const [t] = await tx
+          .select({ archive: googleCalendarTokens.driveArchiveFolderId })
+          .from(googleCalendarTokens)
+          .where(eq(googleCalendarTokens.userProfileId, profile.userProfileId))
+          .limit(1);
+        return Boolean(t?.archive);
+      })
+    : false;
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-6">
@@ -57,7 +71,10 @@ export default async function DriveLinkPage() {
           </Link>
         </div>
       ) : (
-        <DriveFolderMatcher />
+        <div className="space-y-6">
+          <DriveArchiveFolderSetter initialSet={archiveSet} />
+          <DriveFolderMatcher />
+        </div>
       )}
     </main>
   );

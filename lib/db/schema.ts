@@ -1336,6 +1336,9 @@ export const googleCalendarTokens = pgTable(
     scope: text("scope").notNull(),
     calendarId: text("calendar_id").notNull().default("primary"),
     googleEmail: text("google_email"),
+    // Where app-managed client folders get moved when their client is
+    // archived (per-coach "Archive" folder, a Drive folder id).
+    driveArchiveFolderId: text("drive_archive_folder_id"),
     // Gmail sync state (migration 0024). Disabled => no Gmail polling for
     // this user. lastSyncedAt = wall-clock time we last ran sync; lastMessageAt
     // = internalDate of the newest message captured (used as next-sync floor).
