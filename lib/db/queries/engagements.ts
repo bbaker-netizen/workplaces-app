@@ -49,24 +49,30 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
     }
   }
 
-  // 2. Fallback: first engagement in the caller's home org (clients live
-  //    here — their org holds exactly their engagement).
-  const home = await withTenantContext(profile.orgId, async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(engagements)
-      .where(eq(engagements.orgId, profile.orgId))
-      .limit(1);
-    return row ?? null;
-  });
-  if (home) return home;
+  const isCoach =
+    profile.role === "master_admin" || profile.role === "coach";
+
+  // 2. Fallback for CLIENTS: their home org holds exactly their
+  //    engagement. (Skip for coaches — the master org holds many
+  //    engagements, so an org-scoped pick would return an arbitrary
+  //    client. That was a cross-client bug.) Order deterministically.
+  if (!isCoach) {
+    const home = await withTenantContext(profile.orgId, async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(engagements)
+        .where(eq(engagements.orgId, profile.orgId))
+        .orderBy(desc(engagements.createdAt))
+        .limit(1);
+      return row ?? null;
+    });
+    if (home) return home;
+  }
 
   // 3. Coaches don't own engagements in their home (master) org — client
   //    engagements live in client orgs. So with nothing selected, fall
   //    back to the most recent engagement across all clients. Without
   //    this a coach previewing the portal sees "No engagement yet".
-  const isCoach =
-    profile.role === "master_admin" || profile.role === "coach";
   if (isCoach) {
     return withSystemContext(async (tx) => {
       const [row] = await tx
@@ -91,10 +97,13 @@ export async function getEngagementBySlug(
 ): Promise<Engagement | null> {
   if (!slug) return null;
   return withSystemContext(async (tx) => {
+    // Order deterministically so a (theoretical) slug collision always
+    // resolves to the same engagement rather than an arbitrary row.
     const [row] = await tx
       .select()
       .from(engagements)
       .where(eq(engagements.slug, slug))
+      .orderBy(desc(engagements.createdAt))
       .limit(1);
     return row ?? null;
   });
