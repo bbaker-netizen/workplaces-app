@@ -30,7 +30,9 @@ import {
   Flag,
   FolderOpen,
   LayoutGrid,
+  ListTree,
   MessageSquare,
+  Video,
   Workflow,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -272,6 +274,13 @@ export default async function EngagementDetailPage({
             >
               <FolderOpen className="w-3.5 h-3.5" aria-hidden /> Documents &amp; Drive
             </Link>
+            <Link
+              href={`/business-builder/engagements/${id}/meetings`}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
+              title="Fireflies meeting notes — sync the latest"
+            >
+              <Video className="w-3.5 h-3.5" aria-hidden /> Meetings &amp; sync
+            </Link>
             <EngagementStatusControl
               engagementId={id}
               current={data.eng.status}
@@ -305,12 +314,6 @@ export default async function EngagementDetailPage({
             {data.deliverables.length} deliverable
             {data.deliverables.length === 1 ? "" : "s"}
           </span>
-          <Link
-            href={`/business-builder/engagements/${id}/meetings`}
-            className="ml-auto inline-flex items-center gap-1 text-tbb-blue hover:underline font-bold"
-          >
-            Meetings (Fireflies) →
-          </Link>
         </div>
       </header>
 
@@ -576,8 +579,22 @@ function ProjectBlock({
               Project
             </p>
             <StatusPill status={project.status} />
+            <Link
+              href={`/business-builder/projects/${project.id}`}
+              className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+              title="Open the task grid — add tasks and sub-tasks"
+            >
+              <ListTree className="w-3.5 h-3.5" aria-hidden /> Manage tasks
+            </Link>
           </div>
-          <h3 className="font-bold text-tbb-navy">{project.name}</h3>
+          <h3 className="font-bold text-tbb-navy">
+            <Link
+              href={`/business-builder/projects/${project.id}`}
+              className="hover:underline"
+            >
+              {project.name}
+            </Link>
+          </h3>
           {project.description && (
             <p className="text-xs text-tbb-ink-3 mt-0.5">
               {project.description}
