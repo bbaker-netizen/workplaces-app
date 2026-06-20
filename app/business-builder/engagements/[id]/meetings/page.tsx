@@ -18,6 +18,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import {
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
   ExternalLink,
   Users,
   Video,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
+import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 
 export default async function EngagementMeetingsPage({
   params,
@@ -130,92 +132,97 @@ function MeetingCard({
     : [];
   return (
     <li className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
-      <header className="px-5 py-3 border-b border-tbb-line-soft bg-tbb-cream-50/40 flex items-baseline justify-between gap-3 flex-wrap">
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <h3 className="font-bold text-tbb-navy">{meeting.title}</h3>
-          <span className="inline-flex items-center gap-1 text-xs text-tbb-ink-3">
-            <CalendarDays className="w-3 h-3" aria-hidden />
-            {new Date(meeting.occurredAt).toLocaleString("en-CA", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </span>
-          {typeof meeting.durationMin === "number" && (
-            <span className="text-xs text-tbb-ink-3">
-              · {meeting.durationMin} min
+      {/* Native <details> = collapse with no client JS. Collapsed by
+          default so the list stays scannable. */}
+      <details className="group">
+        <summary className="cursor-pointer list-none px-5 py-3 bg-tbb-cream-50/40 flex items-center justify-between gap-3 flex-wrap hover:bg-tbb-cream-50">
+          <div className="flex items-baseline gap-3 flex-wrap min-w-0">
+            <h3 className="font-bold text-tbb-navy">{meeting.title}</h3>
+            <span className="inline-flex items-center gap-1 text-xs text-tbb-ink-3">
+              <CalendarDays className="w-3 h-3" aria-hidden />
+              {new Date(meeting.occurredAt).toLocaleString("en-CA", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                timeZone: "America/Edmonton",
+              })}
             </span>
+            {typeof meeting.durationMin === "number" && (
+              <span className="text-xs text-tbb-ink-3">
+                · {meeting.durationMin} min
+              </span>
+            )}
+          </div>
+          <ChevronDown
+            className="w-4 h-4 text-tbb-ink-3 shrink-0 transition-transform group-open:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        <div className="px-5 py-4 space-y-3 border-t border-tbb-line-soft">
+          {meeting.transcriptUrl && (
+            <a
+              href={meeting.transcriptUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              <ExternalLink className="w-3 h-3" aria-hidden /> Open in Fireflies
+            </a>
           )}
+          {meeting.summaryOverview && (
+            <section>
+              <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
+                Overview
+              </p>
+              <MarkdownBody body={meeting.summaryOverview} />
+            </section>
+          )}
+          {meeting.summaryBullets && (
+            <section>
+              <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
+                Highlights
+              </p>
+              <MarkdownBody body={meeting.summaryBullets} />
+            </section>
+          )}
+          {meeting.summaryKeywords && (
+            <section>
+              <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
+                Keywords
+              </p>
+              <p className="text-sm text-tbb-ink-3">{meeting.summaryKeywords}</p>
+            </section>
+          )}
+          {attendees.length > 0 && (
+            <section>
+              <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1 inline-flex items-center gap-1">
+                <Users className="w-3 h-3" aria-hidden /> Attendees
+              </p>
+              <ul className="flex flex-wrap gap-1">
+                {attendees.map((a, i) => (
+                  <li
+                    key={i}
+                    className="text-[11px] text-tbb-ink-3 bg-tbb-cream-50 px-2 py-0.5 rounded-pill"
+                  >
+                    {a.name ?? a.email ?? "Unknown"}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {!meeting.summaryOverview &&
+            !meeting.summaryBullets &&
+            !meeting.summaryKeywords && (
+              <p className="text-xs text-tbb-ink-3 italic">
+                No summary returned by Fireflies for this meeting.
+                {meeting.transcriptUrl && " Open it in Fireflies to read the full transcript."}
+              </p>
+            )}
         </div>
-        {meeting.transcriptUrl && (
-          <a
-            href={meeting.transcriptUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
-          >
-            <ExternalLink className="w-3 h-3" aria-hidden /> Open in Fireflies
-          </a>
-        )}
-      </header>
-      <div className="px-5 py-4 space-y-3">
-        {meeting.summaryOverview && (
-          <section>
-            <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
-              Overview
-            </p>
-            <p className="text-sm text-tbb-ink-2 leading-relaxed whitespace-pre-line">
-              {meeting.summaryOverview}
-            </p>
-          </section>
-        )}
-        {meeting.summaryBullets && (
-          <section>
-            <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
-              Highlights
-            </p>
-            <p className="text-sm text-tbb-ink-2 leading-relaxed whitespace-pre-line">
-              {meeting.summaryBullets}
-            </p>
-          </section>
-        )}
-        {meeting.summaryKeywords && (
-          <section>
-            <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
-              Keywords
-            </p>
-            <p className="text-sm text-tbb-ink-3">{meeting.summaryKeywords}</p>
-          </section>
-        )}
-        {attendees.length > 0 && (
-          <section>
-            <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1 inline-flex items-center gap-1">
-              <Users className="w-3 h-3" aria-hidden /> Attendees
-            </p>
-            <ul className="flex flex-wrap gap-1">
-              {attendees.map((a, i) => (
-                <li
-                  key={i}
-                  className="text-[11px] text-tbb-ink-3 bg-tbb-cream-50 px-2 py-0.5 rounded-pill"
-                >
-                  {a.name ?? a.email ?? "Unknown"}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        {!meeting.summaryOverview &&
-          !meeting.summaryBullets &&
-          !meeting.summaryKeywords && (
-            <p className="text-xs text-tbb-ink-3 italic">
-              No summary returned by Fireflies for this meeting.
-              {meeting.transcriptUrl && " Open it in Fireflies to read the full transcript."}
-            </p>
-          )}
-      </div>
+      </details>
     </li>
   );
 }

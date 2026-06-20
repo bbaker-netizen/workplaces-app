@@ -9,10 +9,11 @@
  */
 
 import { redirect } from "next/navigation";
-import { ExternalLink, Video } from "lucide-react";
+import { ChevronDown, ExternalLink, Video } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementMeetings } from "@/lib/db/queries/meetings";
+import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 
 function formatMeetingDate(d: Date): string {
   return new Date(d).toLocaleString("en-CA", {
@@ -59,20 +60,17 @@ export default async function PortalMeetingsPage() {
           </p>
         </div>
       ) : (
-        <ul className="space-y-4">
-          {meetings.map((m) => {
-            const bullets = (m.summaryBullets ?? "")
-              .split("\n")
-              .map((b) => b.replace(/^[-•*]\s*/, "").trim())
-              .filter(Boolean);
-            return (
-              <li
-                key={m.id}
-                className="border border-tbb-line rounded-lg bg-white p-5 shadow-tbb-xs space-y-3"
-              >
-                <div className="flex items-start justify-between gap-3 flex-wrap">
+        <ul className="space-y-3">
+          {meetings.map((m) => (
+            <li
+              key={m.id}
+              className="border border-tbb-line rounded-lg bg-white shadow-tbb-xs overflow-hidden"
+            >
+              {/* Collapsed by default so the list stays scannable. */}
+              <details className="group">
+                <summary className="cursor-pointer list-none px-5 py-3 flex items-center justify-between gap-3 hover:bg-tbb-cream-50">
                   <div className="min-w-0">
-                    <h2 className="font-bold text-tbb-navy text-lg">
+                    <h2 className="font-bold text-tbb-navy text-base sm:text-lg truncate">
                       {m.title}
                     </h2>
                     <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
@@ -80,41 +78,36 @@ export default async function PortalMeetingsPage() {
                       {m.durationMin ? ` · ${m.durationMin} min` : ""}
                     </p>
                   </div>
+                  <ChevronDown
+                    className="w-4 h-4 text-tbb-ink-3 shrink-0 transition-transform group-open:rotate-180"
+                    aria-hidden
+                  />
+                </summary>
+                <div className="px-5 py-4 space-y-3 border-t border-tbb-line-soft">
                   {m.transcriptUrl && (
                     <a
                       href={m.transcriptUrl}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="shrink-0 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
                     >
                       <ExternalLink className="w-3.5 h-3.5" aria-hidden />
                       View recording &amp; notes
                     </a>
                   )}
+                  {m.summaryOverview && <MarkdownBody body={m.summaryOverview} />}
+                  {m.summaryBullets && <MarkdownBody body={m.summaryBullets} />}
+                  {!m.summaryOverview && !m.summaryBullets && (
+                    <p className="text-sm text-tbb-ink-3 italic">
+                      {m.transcriptUrl
+                        ? "Recap coming soon — the recording link above has the full meeting."
+                        : "Recap coming soon."}
+                    </p>
+                  )}
                 </div>
-
-                {m.summaryOverview && (
-                  <p className="text-sm text-tbb-ink-2 leading-relaxed">
-                    {m.summaryOverview}
-                  </p>
-                )}
-                {bullets.length > 0 && (
-                  <ul className="list-disc pl-5 space-y-1 text-sm text-tbb-ink-2">
-                    {bullets.map((b, i) => (
-                      <li key={i}>{b}</li>
-                    ))}
-                  </ul>
-                )}
-                {!m.summaryOverview && bullets.length === 0 && (
-                  <p className="text-sm text-tbb-ink-3 italic">
-                    {m.transcriptUrl
-                      ? "Recap coming soon — the recording link above has the full meeting."
-                      : "Recap coming soon."}
-                  </p>
-                )}
-              </li>
-            );
-          })}
+              </details>
+            </li>
+          ))}
         </ul>
       )}
     </main>
