@@ -18,14 +18,17 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   engagementMeetings,
   engagements,
-  prospects,
-  userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
   fetchMeetingDetail,
   searchTranscriptsByAttendee,
 } from "@/lib/integrations/fireflies";
+import {
+  getEmailAttribution,
+  getEngagementMatchEmails,
+  type EmailAttribution,
+} from "@/lib/sync/match-emails";
 
 export type SyncResult =
   | { ok: true; data: { inserted: number; updated: number; skipped: number } }
@@ -37,46 +40,40 @@ export type SyncResult =
  * Runs under system context throughout (cross-org, RLS-bypass) since the
  * cron has no user. Idempotent (UNIQUE on engagement_id + transcript_id).
  */
-async function syncMeetingsCore(engagementId: string): Promise<SyncResult> {
-  // Step 1: engagement org + every email tied to it (match targets).
-  const lookup = await withSystemContext(async (tx) => {
+async function syncMeetingsCore(
+  engagementId: string,
+  attribution?: EmailAttribution,
+): Promise<SyncResult> {
+  // Step 0: email attribution across all engagements. The coach attends
+  // every client's meetings, and contact emails get reused, so we only
+  // ever match on emails that belong to exactly ONE client — never the
+  // coach's email or any email shared across engagements. Otherwise one
+  // client's meetings get filed under another (the cross-client bug).
+  const attr = attribution ?? (await getEmailAttribution());
+
+  const orgRow = await withSystemContext(async (tx) => {
     const [eng] = await tx
       .select({ orgId: engagements.orgId })
       .from(engagements)
       .where(eq(engagements.id, engagementId))
       .limit(1);
-    if (!eng) return null;
-    // Match targets = every email we know for this client. Signed-up
-    // users live in user_profiles, but a client that hasn't accepted
-    // their invite yet only has an email on the originating lead record —
-    // so include the prospect's contact email too. Without this, a fresh
-    // engagement reports "no client emails" and Fireflies can't match.
-    const profiles = await tx
-      .select({ email: userProfiles.email })
-      .from(userProfiles)
-      .where(eq(userProfiles.orgId, eng.orgId));
-    const leads = await tx
-      .select({ email: prospects.contactEmail })
-      .from(prospects)
-      .where(eq(prospects.convertedEngagementId, engagementId));
-    return {
-      orgId: eng.orgId,
-      emails: [...profiles, ...leads]
-        .map((p) => p.email)
-        .filter((e): e is string => Boolean(e)),
-    };
+    return eng ?? null;
   });
+  if (orgRow === null) return { ok: false, error: "Engagement not found." };
+  const orgId = orgRow.orgId;
 
-  if (lookup === null) return { ok: false, error: "Engagement not found." };
-  if (lookup.emails.length === 0) {
+  const emails = await getEngagementMatchEmails(engagementId, attr.excluded);
+  if (emails.length === 0) {
+    // Always reconcile, even with no match emails — this is how a client
+    // whose only "email" was the coach's gets its mis-filed rows cleared.
+    await reconcileMisfiledMeetings(engagementId, emails, attr);
     return {
       ok: false,
       error:
-        "No client email on this engagement yet. Add the client's email on " +
-        "their lead/Pipeline record, then sync again.",
+        "No client-specific email on this engagement yet. Add the client's " +
+        "own email on their lead/Pipeline record (not the coach's), then sync.",
     };
   }
-  const { orgId, emails } = lookup;
 
   // Step 2: query Fireflies once per unique email; dedupe by transcript id.
   const transcriptSummaries = new Map<
@@ -192,7 +189,67 @@ async function syncMeetingsCore(engagementId: string): Promise<SyncResult> {
     });
   }
 
+  // Step 4: clean up any meetings previously mis-filed under this client
+  // (e.g. another client's call that matched on the coach's shared email).
+  await reconcileMisfiledMeetings(engagementId, emails, attr);
+
   return { ok: true, data: { inserted, updated, skipped } };
+}
+
+/**
+ * Remove meetings filed under `engagementId` that provably belong to a
+ * DIFFERENT client — i.e. a stored attendee email uniquely identifies
+ * another engagement, and none of this engagement's own match emails are
+ * present. Self-heals the cross-client contamination on every sync.
+ */
+async function reconcileMisfiledMeetings(
+  engagementId: string,
+  matchEmails: string[],
+  attr: EmailAttribution,
+): Promise<number> {
+  const mine = new Set(matchEmails.map((e) => e.toLowerCase()));
+  const rows = await withSystemContext(async (tx) =>
+    tx
+      .select({
+        id: engagementMeetings.id,
+        attendees: engagementMeetings.attendees,
+      })
+      .from(engagementMeetings)
+      .where(eq(engagementMeetings.engagementId, engagementId)),
+  );
+
+  const toDelete: string[] = [];
+  for (const row of rows) {
+    const attendees = Array.isArray(row.attendees)
+      ? (row.attendees as Array<{ email: string | null }>)
+      : [];
+    const emails = attendees
+      .map((a) => a.email?.toLowerCase())
+      .filter((e): e is string => Boolean(e));
+    if (emails.length === 0) continue; // can't judge — leave it
+    const belongsToMe = emails.some((e) => mine.has(e));
+    if (belongsToMe) continue;
+    // Only delete if a stored attendee UNIQUELY belongs to another
+    // engagement — a positive "this is someone else's" signal, not just
+    // "no overlap" (which could be a sparse attendee list).
+    const belongsElsewhere = emails.some((e) => {
+      const owner = attr.uniqueEmailToEngagement.get(e);
+      return owner && owner !== engagementId;
+    });
+    if (belongsElsewhere) toDelete.push(row.id);
+  }
+
+  if (toDelete.length > 0) {
+    await withSystemContext(async (tx) =>
+      tx
+        .delete(engagementMeetings)
+        .where(inArray(engagementMeetings.id, toDelete)),
+    );
+    console.warn(
+      `[fireflies-sync] removed ${toDelete.length} mis-filed meeting(s) from engagement ${engagementId}`,
+    );
+  }
+  return toDelete.length;
 }
 
 export async function syncEngagementMeetings(
@@ -227,11 +284,14 @@ export async function syncAllEngagementMeetings(): Promise<{
       .from(engagements)
       .where(isNull(engagements.archivedAt)),
   );
+  // Compute attribution once and reuse across all engagements — both for
+  // efficiency and so every engagement matches against the same snapshot.
+  const attribution = await getEmailAttribution();
   let inserted = 0;
   let updated = 0;
   for (const { id } of ids) {
     try {
-      const r = await syncMeetingsCore(id);
+      const r = await syncMeetingsCore(id, attribution);
       if (r.ok) {
         inserted += r.data.inserted;
         updated += r.data.updated;

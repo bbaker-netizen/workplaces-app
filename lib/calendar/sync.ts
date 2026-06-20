@@ -35,6 +35,7 @@ import {
   GoogleReconnectRequiredError,
   listEventsForSync,
 } from "@/lib/integrations/google-calendar";
+import { getEmailAttribution } from "@/lib/sync/match-emails";
 
 export type CalendarSyncResult = {
   created: number;
@@ -73,8 +74,15 @@ export async function syncCoachCalendar(
   }
   if (!token) return EMPTY("not-connected");
 
+  // Only match on emails that belong to exactly ONE client — never the
+  // coach's own email (they attend every client's meetings) or any email
+  // shared across engagements. Otherwise calendar events land under the
+  // wrong client (the cross-client bug).
+  const attribution = await getEmailAttribution();
+
   // Build a lowercased email → engagement map across this coach's active
-  // engagements (their members + the originating prospect contact).
+  // engagements (their members + the originating prospect contact),
+  // skipping any excluded (coach / ambiguous) email.
   const emailMap = await withSystemContext(async (tx) => {
     const [coach] = await tx
       .select({ id: coaches.id })
@@ -91,26 +99,26 @@ export async function syncCoachCalendar(
       );
 
     const map = new Map<string, { engagementId: string; orgId: string }>();
+    const tryAdd = (
+      email: string | null | undefined,
+      e: { id: string; orgId: string },
+    ) => {
+      const key = email?.toLowerCase();
+      if (!key || attribution.excluded.has(key) || map.has(key)) return;
+      map.set(key, { engagementId: e.id, orgId: e.orgId });
+    };
     for (const e of engs) {
       const members = await tx
         .select({ email: userProfiles.email })
         .from(userProfiles)
         .where(eq(userProfiles.orgId, e.orgId));
-      for (const m of members) {
-        const key = m.email.toLowerCase();
-        if (key && !map.has(key))
-          map.set(key, { engagementId: e.id, orgId: e.orgId });
-      }
+      for (const m of members) tryAdd(m.email, e);
       const [pros] = await tx
         .select({ email: prospects.contactEmail })
         .from(prospects)
         .where(eq(prospects.convertedEngagementId, e.id))
         .limit(1);
-      if (pros?.email) {
-        const key = pros.email.toLowerCase();
-        if (!map.has(key))
-          map.set(key, { engagementId: e.id, orgId: e.orgId });
-      }
+      tryAdd(pros?.email, e);
     }
     return map;
   });
@@ -187,9 +195,16 @@ export async function syncCoachCalendar(
         continue;
       }
 
-      const match = ev.attendeeEmails
-        .map((e) => emailMap.get(e))
-        .find((x): x is { engagementId: string; orgId: string } => Boolean(x));
+      // Resolve every attendee that maps to a client; require the match to
+      // be unambiguous (all matched attendees point at the SAME engagement)
+      // so a stray shared attendee can't pull the event to another client.
+      const matches = ev.attendeeEmails
+        .map((e) => emailMap.get(e.toLowerCase()))
+        .filter((x): x is { engagementId: string; orgId: string } =>
+          Boolean(x),
+        );
+      const distinct = new Set(matches.map((m) => m.engagementId));
+      const match = distinct.size === 1 ? matches[0] : undefined;
       // No client attendee → not a session; leave it (and any prior
       // mapping) untouched.
       if (!match) continue;
