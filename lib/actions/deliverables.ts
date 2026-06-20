@@ -11,13 +11,13 @@ import {
 } from "@/lib/db/tenant";
 
 type Role = UserProfile["role"];
+// Deliverables are the nine Workplaces-defined artifacts the Business
+// Builder produces FOR the client — they're outputs of the methodology,
+// not client to-dos. So only Business Builders create/edit/delete them;
+// clients see them read-only and track their own commitments as action
+// items instead.
 function canEdit(role: Role): boolean {
-  return (
-    role === "master_admin" ||
-    role === "coach" ||
-    role === "client_lead" ||
-    role === "client_manager"
-  );
+  return role === "master_admin" || role === "coach";
 }
 
 export type ActionResult<T = void> =

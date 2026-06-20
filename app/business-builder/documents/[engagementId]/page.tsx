@@ -168,7 +168,10 @@ export default async function CoachDocumentsPage({
         hasDriveWrite={hasDriveWrite}
       />
 
-      <DocumentUploadForm engagementId={engagement.id} />
+      <DocumentUploadForm
+        engagementId={engagement.id}
+        hasSharedDriveFolder={Boolean(linkedFolderId)}
+      />
 
       <DocumentSigningPanel
         engagementId={engagement.id}

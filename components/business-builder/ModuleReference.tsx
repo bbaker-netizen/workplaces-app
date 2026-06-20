@@ -15,7 +15,6 @@ import {
   MessagesSquare,
   PenSquare,
   Puzzle,
-  ShieldCheck,
   Target,
   UserCheck,
   Users,
@@ -135,15 +134,6 @@ export function ModuleReference() {
         replaces={`The TTI PDF files in Drive + scattered notes about scores.`}
         link="/portal/people"
         linkLabel="Open person profiles (pick an engagement)"
-      />
-      <ModuleCard
-        icon={<ShieldCheck />}
-        name="Methodology"
-        what="The Workplaces methodology reference: the four pillars (Money / Systems / Time / People), the quality gate, the nine deliverable types, the Stages of Growth framework. Read-only summary; proprietary numbers stay internal."
-        when="When you or a client leader need to remember why we're doing it this way."
-        replaces={`Your training docs and the framework explanations you carry verbally.`}
-        link="/portal/methodology"
-        linkLabel="Open methodology reference"
       />
       <ModuleCard
         icon={<GraduationCap />}

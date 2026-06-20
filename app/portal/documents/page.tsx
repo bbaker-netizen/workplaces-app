@@ -104,7 +104,10 @@ export default async function PortalDocumentsPage() {
             unavailable={driveUnavailable}
           />
         )}
-        <DocumentUploadForm engagementId={engagement.id} />
+        <DocumentUploadForm
+          engagementId={engagement.id}
+          hasSharedDriveFolder={Boolean(driveFolderId)}
+        />
         <section className="space-y-3">
           <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             All documents
