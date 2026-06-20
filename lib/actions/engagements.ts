@@ -13,7 +13,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { engagements } from "@/lib/db/schema";
+import { engagements, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -105,26 +105,39 @@ export async function deleteEngagementPermanently(
   }
   try {
     const deleted = await withSystemContext(async (tx) => {
-      const rows = await tx
-        .delete(engagements)
+      // Only archived engagements can be hard-deleted — prevents nuking an
+      // active client by mistake (the archive-first safety rail).
+      const [eng] = await tx
+        .select({ id: engagements.id })
+        .from(engagements)
         .where(
           and(
             eq(engagements.id, engagementId),
-            // Only archived engagements can be hard-deleted — prevents
-            // nuking an active client by mistake.
             isNotNull(engagements.archivedAt),
           ),
         )
-        .returning({ id: engagements.id });
-      return rows.length;
+        .limit(1);
+      if (!eng) return false;
+      // Remove the originating prospect/lead FIRST. Deleting the
+      // engagement would otherwise null out prospects.converted_engagement_id
+      // (FK set null), orphaning the lead in the Pipeline — the "client
+      // still persists everywhere" bug. Its activities + communications
+      // cascade; signature envelopes null out. Then delete the engagement,
+      // which cascades all of its workspace data.
+      await tx
+        .delete(prospects)
+        .where(eq(prospects.convertedEngagementId, engagementId));
+      await tx.delete(engagements).where(eq(engagements.id, engagementId));
+      return true;
     });
-    if (deleted === 0) {
+    if (!deleted) {
       return {
         ok: false,
         error: "Archive the client first, then delete it from the Archived list.",
       };
     }
     revalidatePath("/business-builder/engagements");
+    revalidatePath("/business-builder/pipeline");
     revalidatePath("/portal");
     return { ok: true };
   } catch (e) {

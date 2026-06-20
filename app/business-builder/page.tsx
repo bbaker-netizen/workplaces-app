@@ -38,6 +38,7 @@ import {
 import { listProspects } from "@/lib/db/queries/prospects";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { formatSessionTime } from "@/components/sessions/utils";
+import { DateTime } from "luxon";
 import {
   HomeDashboard,
   type DashboardCard,
@@ -647,7 +648,9 @@ export default async function CoachConsole() {
 
   // Time-of-day greeting + a small encouraging line based on the day's
   // shape. Keeps the dashboard from feeling like a clinical readout.
-  const hour = new Date().getHours();
+  // Computed in Mountain Time (Bruce's zone) — the server clock is UTC,
+  // so getHours() would read ~6h ahead and call mid-morning "evening".
+  const hour = DateTime.now().setZone("America/Edmonton").hour;
   const timeBucket =
     hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
   const greetingEmoji =
@@ -775,12 +778,14 @@ function buildEncouragements(input: {
   upcomingSessionsCount: number;
   negotiationCount: number;
 }): string {
-  const now = new Date();
-  const dow = now.getDay(); // 0 = Sun, 5 = Fri, 6 = Sat
-  const hour = now.getHours();
+  // Mountain Time — the server clock is UTC, so a Friday-evening MT moment
+  // could otherwise read as Saturday, and morning as evening.
+  const now = DateTime.now().setZone("America/Edmonton");
+  const dow = now.weekday % 7; // Luxon 1=Mon..7=Sun → JS 0=Sun..6=Sat
+  const hour = now.hour;
   // Deterministic rotation index so the line is stable for the day but
   // different tomorrow.
-  const dayKey = now.getFullYear() * 366 + now.getMonth() * 31 + now.getDate();
+  const dayKey = now.year * 366 + now.month * 31 + now.day;
   const pick = <T,>(arr: T[]) => arr[dayKey % arr.length];
 
   // Day/time tone overrides — these stomp the data-driven picks for moments
