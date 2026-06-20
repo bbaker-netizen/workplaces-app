@@ -164,4 +164,27 @@ export const calendarSync = inngest.createFunction(
   },
 );
 
-export const allFunctions = [dueSoonFlush, firefliesExtract, calendarSync];
+/* ------------------------- Fireflies sync ------------------------- */
+
+export const firefliesSync = inngest.createFunction(
+  { id: "fireflies-sync" },
+  // Hourly — pulls every active engagement's Fireflies meeting notes
+  // (recaps + recording links) into engagement_meetings so each client's
+  // "Meeting notes" module stays current, including recurring BBS calls.
+  { cron: "0 * * * *" },
+  async ({ step }) => {
+    return step.run("sync", async () => {
+      const { syncAllEngagementMeetings } = await import(
+        "@/lib/actions/sync-engagement-meetings"
+      );
+      return syncAllEngagementMeetings();
+    });
+  },
+);
+
+export const allFunctions = [
+  dueSoonFlush,
+  firefliesExtract,
+  calendarSync,
+  firefliesSync,
+];

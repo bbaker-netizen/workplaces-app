@@ -14,7 +14,7 @@
  */
 
 import { useRef, useState, useTransition } from "react";
-import { Loader2, Upload } from "lucide-react";
+import { HardDrive, Info, Loader2, Upload } from "lucide-react";
 import {
   uploadDocument,
   type UploadDocumentResult,
@@ -26,10 +26,15 @@ const MAX_BYTES_HINT = "25 MB";
 export function DocumentUploadForm({
   engagementId,
   onUploaded,
+  hasSharedDriveFolder = false,
 }: {
   engagementId: string;
   /** Called after a successful upload — page may refresh server data. */
   onUploaded?: (doc: UploadDocumentResult) => void;
+  /** When a Google Drive folder is linked to this engagement, the copy
+   *  steers Drive-bound files to the shared folder and frames this upload
+   *  as the in-app store. */
+  hasSharedDriveFolder?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -77,13 +82,36 @@ export function DocumentUploadForm({
       aria-busy={isPending}
     >
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <h2 className="font-bold text-foreground text-lg tracking-tight">
-          Upload a document
+        <h2 className="font-bold text-foreground text-lg tracking-tight flex items-center gap-2">
+          <HardDrive className="w-4 h-4 text-tbb-ink-3" aria-hidden />
+          Upload to The Builder
         </h2>
         <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
           Up to {MAX_BYTES_HINT}
         </span>
       </div>
+
+      <p className="flex items-start gap-2 text-xs text-muted-foreground border border-tbb-line rounded-md bg-tbb-cream-50 px-3 py-2">
+        <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-tbb-ink-3" aria-hidden />
+        <span>
+          Files added here are stored <strong>inside The Builder</strong> — they
+          are <strong>not</strong> copied to{" "}
+          {hasSharedDriveFolder ? "the shared Google Drive folder above" : "Google Drive"}.
+          {hasSharedDriveFolder ? (
+            <>
+              {" "}
+              To keep something in the shared Drive folder, add it in Google
+              Drive instead. Use this for quick, portal-only files (and anything
+              attached to messages).
+            </>
+          ) : (
+            <>
+              {" "}
+              Use this for files you want to live in the portal itself.
+            </>
+          )}
+        </span>
+      </p>
 
       <label className="block">
         <span className="sr-only">Choose a file</span>
