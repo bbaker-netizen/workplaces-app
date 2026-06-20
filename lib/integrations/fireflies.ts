@@ -242,6 +242,79 @@ export async function searchTranscriptsByAttendee(
 }
 
 /**
+ * List the workspace's most recent transcripts with their titles AND
+ * attendees, newest first. Used by the engagement-meetings sync to
+ * attribute each meeting to a client by TITLE (Bruce names BBS recordings
+ * "<Client> - Business Building Session …") or by a client-unique attendee
+ * email. Title matching is essential because in-person sessions often
+ * capture only the coach as an attendee.
+ */
+export async function listRecentTranscripts(
+  opts: { limit?: number } = {},
+): Promise<
+  Array<
+    FirefliesTranscriptSummary & {
+      meeting_attendees: Array<{ email: string | null; displayName: string | null }>;
+    }
+  >
+> {
+  const limit = Math.min(opts.limit ?? 50, 50);
+  const query = /* GraphQL */ `
+    query RecentTranscripts($limit: Int!) {
+      transcripts(limit: $limit) {
+        id
+        title
+        date
+        duration
+        organizer_email
+        meeting_attendees {
+          email
+          displayName
+        }
+      }
+    }
+  `;
+  const resp = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables: { limit } }),
+    cache: "no-store",
+  });
+  if (!resp.ok) {
+    throw new Error(
+      `Fireflies recent transcripts failed (${resp.status}): ${await resp.text()}`,
+    );
+  }
+  const json = (await resp.json()) as {
+    data?: {
+      transcripts:
+        | Array<
+            FirefliesTranscriptSummary & {
+              meeting_attendees: Array<{
+                email: string | null;
+                displayName: string | null;
+              }>;
+            }
+          >
+        | null;
+    };
+    errors?: Array<{ message: string }>;
+  };
+  if (json.errors?.length) {
+    throw new Error(
+      `Fireflies recent transcripts: ${json.errors
+        .map((e) => e.message)
+        .join("; ")}`,
+    );
+  }
+  const list = json.data?.transcripts ?? [];
+  return list.sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
+}
+
+/**
  * Flatten a transcript's sentences into a plain text block tagged
  * with speaker names. The output goes into the LLM action-item
  * extractor.

@@ -651,8 +651,9 @@ export default async function CoachConsole() {
   // Computed in Mountain Time (Bruce's zone) — the server clock is UTC,
   // so getHours() would read ~6h ahead and call mid-morning "evening".
   const hour = DateTime.now().setZone("America/Edmonton").hour;
+  // Evening starts at 6 PM (end of the workday) — 5 PM is still afternoon.
   const timeBucket =
-    hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
   const greetingEmoji =
     timeBucket === "morning" ? "☀️" : timeBucket === "afternoon" ? "👋" : "🌙";
   const firstName = profile.fullName.split(" ")[0] ?? profile.fullName;

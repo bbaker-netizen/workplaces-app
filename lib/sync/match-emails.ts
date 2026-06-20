@@ -28,7 +28,20 @@ const COACH_ROLES: readonly string[] = ["coach", "master_admin"];
 export type EmailAttribution = {
   excluded: Set<string>;
   uniqueEmailToEngagement: Map<string, string>;
+  /** Active engagements with their normalized name, for title matching
+   *  (Fireflies BBS titles are "<Client> - Business Building Session …"). */
+  engagementNames: Array<{ id: string; norm: string }>;
 };
+
+/** Normalize a name for fuzzy title/name matching: lowercase, strip
+ *  punctuation to spaces, collapse runs. */
+export function normalizeName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export async function getEmailAttribution(): Promise<EmailAttribution> {
   return withSystemContext(async (tx) => {
@@ -42,7 +55,11 @@ export async function getEmailAttribution(): Promise<EmailAttribution> {
       })
       .from(userProfiles);
     const engRows = await tx
-      .select({ id: engagements.id, orgId: engagements.orgId })
+      .select({
+        id: engagements.id,
+        orgId: engagements.orgId,
+        name: engagements.name,
+      })
       .from(engagements);
     const leadRows = await tx
       .select({
@@ -86,7 +103,14 @@ export async function getEmailAttribution(): Promise<EmailAttribution> {
         uniqueEmailToEngagement.set(email, Array.from(set)[0]);
       }
     }
-    return { excluded, uniqueEmailToEngagement };
+
+    // Engagement names for title matching — only those specific enough
+    // (>= 4 normalized chars) to avoid over-matching short tokens.
+    const engagementNames = engRows
+      .map((e) => ({ id: e.id, norm: normalizeName(e.name ?? "") }))
+      .filter((e) => e.norm.length >= 4);
+
+    return { excluded, uniqueEmailToEngagement, engagementNames };
   });
 }
 
