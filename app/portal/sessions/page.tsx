@@ -1,11 +1,10 @@
 import { redirect } from "next/navigation";
+import { CalendarPlus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementSessions } from "@/lib/db/queries/bbs-sessions";
-import { listEngagementMeetings } from "@/lib/db/queries/meetings";
 import { ScheduleSessionForm } from "@/components/sessions/ScheduleSessionForm";
 import { SessionList } from "@/components/sessions/SessionList";
-import { MeetingRecaps } from "@/components/meetings/MeetingRecaps";
 
 export default async function PortalSessionsPage() {
   const profile = await ensureUserProfile();
@@ -32,10 +31,7 @@ export default async function PortalSessionsPage() {
     profile.role === "client_lead" ||
     profile.role === "client_manager";
 
-  const [{ upcoming, past }, meetings] = await Promise.all([
-    listEngagementSessions(engagement.id),
-    listEngagementMeetings(engagement.id),
-  ]);
+  const { upcoming, past } = await listEngagementSessions(engagement.id);
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12">
@@ -47,34 +43,44 @@ export default async function PortalSessionsPage() {
           Sessions
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
-          Business Building Sessions for this engagement. Twice-monthly,
-          two hours — one in person, one virtual.
+          Your scheduled Business Building Sessions are listed below — these are
+          set up by us, so there&apos;s nothing you need to do to keep the
+          rhythm going. Need <strong>extra time</strong> on top of your regular
+          sessions? Request an additional one further down. Recaps from
+          completed sessions live under <strong>Meeting notes</strong>.
         </p>
       </header>
 
-      <div className="space-y-8">
-        {canSchedule && <ScheduleSessionForm engagementId={engagement.id} />}
-        <SessionList
-          upcoming={upcoming}
-          past={past}
-          hrefBase="/portal/sessions"
-          emptyHeadline="Calendar's wide open."
-          emptyDescription={
-            canSchedule
-              ? "Schedule the first session above and the rhythm starts."
-              : "Your Business Builder is lining up sessions. They'll land here with a real Google Calendar invite."
-          }
-        />
-        <MeetingRecaps
-          meetings={meetings.map((m) => ({
-            id: m.id,
-            title: m.title,
-            occurredAt: m.occurredAt,
-            summaryOverview: m.summaryOverview,
-            summaryBullets: m.summaryBullets,
-            transcriptUrl: m.transcriptUrl,
-          }))}
-        />
+      <div className="space-y-10">
+        <section className="space-y-3">
+          <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
+            Your scheduled sessions
+          </h2>
+          <SessionList
+            upcoming={upcoming}
+            past={past}
+            hrefBase="/portal/sessions"
+            emptyHeadline="No sessions scheduled yet."
+            emptyDescription="Your Business Builder schedules your recurring sessions. Once they're on the calendar they'll appear here with the date and time."
+          />
+        </section>
+
+        {canSchedule && (
+          <section className="border border-tbb-line rounded-lg bg-white p-5 shadow-tbb-xs space-y-3">
+            <div className="flex items-center gap-2">
+              <CalendarPlus className="w-4 h-4 text-tbb-blue" aria-hidden />
+              <h2 className="font-bold text-tbb-navy text-lg tracking-tight">
+                Need more time? Request an additional session
+              </h2>
+            </div>
+            <p className="text-sm text-tbb-ink-3">
+              This is only for booking time <strong>on top of</strong> your
+              regular sessions. Pick a date and time that works for you and
+              we&apos;ll confirm it and send a calendar invite.
+            </p>
+            <ScheduleSessionForm engagementId={engagement.id} />
+          </section>
+        )}
       </div>
     </main>
   );

@@ -35,7 +35,7 @@ import {
   GoogleReconnectRequiredError,
   listEventsForSync,
 } from "@/lib/integrations/google-calendar";
-import { getEmailAttribution } from "@/lib/sync/match-emails";
+import { getEmailAttribution, normalizeName } from "@/lib/sync/match-emails";
 
 export type CalendarSyncResult = {
   created: number;
@@ -80,10 +80,13 @@ export async function syncCoachCalendar(
   // wrong client (the cross-client bug).
   const attribution = await getEmailAttribution();
 
-  // Build a lowercased email → engagement map across this coach's active
-  // engagements (their members + the originating prospect contact),
-  // skipping any excluded (coach / ambiguous) email.
-  const emailMap = await withSystemContext(async (tx) => {
+  // Build, for this coach's active engagements:
+  //  - emailMap: lowercased client-unique email → engagement (members +
+  //    lead), skipping excluded (coach / ambiguous) emails.
+  //  - nameMatchers: normalized engagement name → engagement, so a
+  //    recurring BBS calendar event titled "<Client> - Business Building
+  //    Session" matches even when the client isn't an attendee (in-person).
+  const maps = await withSystemContext(async (tx) => {
     const [coach] = await tx
       .select({ id: coaches.id })
       .from(coaches)
@@ -92,20 +95,24 @@ export async function syncCoachCalendar(
     if (!coach) return null;
 
     const engs = await tx
-      .select({ id: engagements.id, orgId: engagements.orgId })
+      .select({
+        id: engagements.id,
+        orgId: engagements.orgId,
+        name: engagements.name,
+      })
       .from(engagements)
       .where(
         and(eq(engagements.coachId, coach.id), isNull(engagements.archivedAt)),
       );
 
-    const map = new Map<string, { engagementId: string; orgId: string }>();
+    const emailMap = new Map<string, { engagementId: string; orgId: string }>();
     const tryAdd = (
       email: string | null | undefined,
       e: { id: string; orgId: string },
     ) => {
       const key = email?.toLowerCase();
-      if (!key || attribution.excluded.has(key) || map.has(key)) return;
-      map.set(key, { engagementId: e.id, orgId: e.orgId });
+      if (!key || attribution.excluded.has(key) || emailMap.has(key)) return;
+      emailMap.set(key, { engagementId: e.id, orgId: e.orgId });
     };
     for (const e of engs) {
       const members = await tx
@@ -120,11 +127,21 @@ export async function syncCoachCalendar(
         .limit(1);
       tryAdd(pros?.email, e);
     }
-    return map;
+
+    const nameMatchers = engs
+      .map((e) => ({
+        engagementId: e.id,
+        orgId: e.orgId,
+        norm: normalizeName(e.name ?? ""),
+      }))
+      .filter((e) => e.norm.length >= 4);
+
+    return { emailMap, nameMatchers, engagementCount: engs.length };
   });
 
-  if (!emailMap) return EMPTY("not-a-coach");
-  if (emailMap.size === 0) return EMPTY("no-engagements");
+  if (!maps) return EMPTY("not-a-coach");
+  if (maps.engagementCount === 0) return EMPTY("no-engagements");
+  const { emailMap, nameMatchers } = maps;
 
   const now = new Date();
   const end = new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -195,17 +212,28 @@ export async function syncCoachCalendar(
         continue;
       }
 
-      // Resolve every attendee that maps to a client; require the match to
-      // be unambiguous (all matched attendees point at the SAME engagement)
-      // so a stray shared attendee can't pull the event to another client.
-      const matches = ev.attendeeEmails
-        .map((e) => emailMap.get(e.toLowerCase()))
-        .filter((x): x is { engagementId: string; orgId: string } =>
-          Boolean(x),
-        );
-      const distinct = new Set(matches.map((m) => m.engagementId));
-      const match = distinct.size === 1 ? matches[0] : undefined;
-      // No client attendee → not a session; leave it (and any prior
+      // Resolve the event to a single client by TITLE (event named after
+      // the client — works for in-person sessions with no client attendee)
+      // and/or a client-unique attendee email. Require the result to be
+      // unambiguous (one engagement) so a stray shared attendee or a title
+      // collision can't pull the event to the wrong client.
+      const candidates = new Map<string, { engagementId: string; orgId: string }>();
+      const titleNorm = normalizeName(ev.summary ?? "");
+      for (const nm of nameMatchers) {
+        if (titleNorm.includes(nm.norm)) {
+          candidates.set(nm.engagementId, {
+            engagementId: nm.engagementId,
+            orgId: nm.orgId,
+          });
+        }
+      }
+      for (const e of ev.attendeeEmails) {
+        const hit = emailMap.get(e.toLowerCase());
+        if (hit) candidates.set(hit.engagementId, hit);
+      }
+      const match =
+        candidates.size === 1 ? Array.from(candidates.values())[0] : undefined;
+      // Couldn't attribute to exactly one client → leave it (and any prior
       // mapping) untouched.
       if (!match) continue;
 
