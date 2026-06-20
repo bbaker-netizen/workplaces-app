@@ -22,13 +22,46 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import {
   fetchMeetingDetail,
-  searchTranscriptsByAttendee,
+  listRecentTranscripts,
 } from "@/lib/integrations/fireflies";
 import {
   getEmailAttribution,
-  getEngagementMatchEmails,
+  normalizeName,
   type EmailAttribution,
 } from "@/lib/sync/match-emails";
+
+type RecentTranscript = Awaited<
+  ReturnType<typeof listRecentTranscripts>
+>[number];
+
+type SharedSyncContext = {
+  attribution: EmailAttribution;
+  transcripts: RecentTranscript[];
+};
+
+/**
+ * Which engagement(s) a transcript belongs to. A BBS recording is titled
+ * "<Client> - Business Building Session …", so the title naming the client
+ * is the primary (and most reliable) signal — in-person sessions often
+ * capture only the coach as an attendee. A client-unique attendee email is
+ * the secondary signal. The coach's own email and any shared email are
+ * never used (they'd pull every client's meetings into one).
+ */
+function engagementsForTranscript(
+  titleNorm: string,
+  attendeeEmails: string[],
+  attr: EmailAttribution,
+): Set<string> {
+  const out = new Set<string>();
+  for (const { id, norm } of attr.engagementNames) {
+    if (norm.length >= 4 && titleNorm.includes(norm)) out.add(id);
+  }
+  for (const e of attendeeEmails) {
+    const owner = attr.uniqueEmailToEngagement.get(e.toLowerCase());
+    if (owner) out.add(owner);
+  }
+  return out;
+}
 
 export type SyncResult =
   | { ok: true; data: { inserted: number; updated: number; skipped: number } }
@@ -42,66 +75,54 @@ export type SyncResult =
  */
 async function syncMeetingsCore(
   engagementId: string,
-  attribution?: EmailAttribution,
+  shared?: SharedSyncContext,
 ): Promise<SyncResult> {
-  // Step 0: email attribution across all engagements. The coach attends
-  // every client's meetings, and contact emails get reused, so we only
-  // ever match on emails that belong to exactly ONE client — never the
-  // coach's email or any email shared across engagements. Otherwise one
-  // client's meetings get filed under another (the cross-client bug).
-  const attr = attribution ?? (await getEmailAttribution());
+  // Attribution (email exclusions + unique-email map + engagement names)
+  // and the recent transcript list. Both are reused across engagements by
+  // the cron; the manual single-engagement sync fetches them itself.
+  const attr = shared?.attribution ?? (await getEmailAttribution());
+  const transcripts =
+    shared?.transcripts ?? (await listRecentTranscripts({ limit: 50 }));
 
-  const orgRow = await withSystemContext(async (tx) => {
-    const [eng] = await tx
-      .select({ orgId: engagements.orgId })
+  const eng = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({ orgId: engagements.orgId, name: engagements.name })
       .from(engagements)
       .where(eq(engagements.id, engagementId))
       .limit(1);
-    return eng ?? null;
+    return row ?? null;
   });
-  if (orgRow === null) return { ok: false, error: "Engagement not found." };
-  const orgId = orgRow.orgId;
+  if (eng === null) return { ok: false, error: "Engagement not found." };
+  const orgId = eng.orgId;
 
-  const emails = await getEngagementMatchEmails(engagementId, attr.excluded);
-  if (emails.length === 0) {
-    // Always reconcile, even with no match emails — this is how a client
-    // whose only "email" was the coach's gets its mis-filed rows cleared.
-    await reconcileMisfiledMeetings(engagementId, emails, attr);
-    return {
-      ok: false,
-      error:
-        "No client-specific email on this engagement yet. Add the client's " +
-        "own email on their lead/Pipeline record (not the coach's), then sync.",
-    };
-  }
-
-  // Step 2: query Fireflies once per unique email; dedupe by transcript id.
+  // Match transcripts to THIS engagement by title (primary) or a
+  // client-unique attendee email (secondary).
   const transcriptSummaries = new Map<
     string,
     { id: string; title: string; date: number; duration: number }
   >();
-  for (const email of Array.from(new Set(emails))) {
-    try {
-      const list = await searchTranscriptsByAttendee(email, { limit: 50 });
-      for (const t of list) {
-        if (!transcriptSummaries.has(t.id)) {
-          transcriptSummaries.set(t.id, {
-            id: t.id,
-            title: t.title,
-            date: t.date,
-            duration: t.duration,
-          });
-        }
-      }
-    } catch (e) {
-      console.error(
-        `Fireflies search failed for ${email}:`,
-        e instanceof Error ? e.message : e,
-      );
+  for (const t of transcripts) {
+    const emails = (t.meeting_attendees ?? [])
+      .map((a) => a.email)
+      .filter((e): e is string => Boolean(e));
+    const owners = engagementsForTranscript(
+      normalizeName(t.title ?? ""),
+      emails,
+      attr,
+    );
+    if (owners.has(engagementId)) {
+      transcriptSummaries.set(t.id, {
+        id: t.id,
+        title: t.title,
+        date: t.date,
+        duration: t.duration,
+      });
     }
   }
 
   if (transcriptSummaries.size === 0) {
+    // Still reconcile so any previously mis-filed rows get cleared.
+    await reconcileMisfiledMeetings(engagementId, attr);
     return { ok: true, data: { inserted: 0, updated: 0, skipped: 0 } };
   }
 
@@ -189,29 +210,28 @@ async function syncMeetingsCore(
     });
   }
 
-  // Step 4: clean up any meetings previously mis-filed under this client
-  // (e.g. another client's call that matched on the coach's shared email).
-  await reconcileMisfiledMeetings(engagementId, emails, attr);
+  // Step 4: clean up any meetings previously mis-filed under this client.
+  await reconcileMisfiledMeetings(engagementId, attr);
 
   return { ok: true, data: { inserted, updated, skipped } };
 }
 
 /**
  * Remove meetings filed under `engagementId` that provably belong to a
- * DIFFERENT client — i.e. a stored attendee email uniquely identifies
- * another engagement, and none of this engagement's own match emails are
- * present. Self-heals the cross-client contamination on every sync.
+ * DIFFERENT client — judged by the same title/unique-email attribution
+ * used for matching. If a stored row's title names another client (or a
+ * unique attendee maps elsewhere) and NOT this engagement, it's deleted.
+ * Self-heals the cross-client contamination on every sync.
  */
 async function reconcileMisfiledMeetings(
   engagementId: string,
-  matchEmails: string[],
   attr: EmailAttribution,
 ): Promise<number> {
-  const mine = new Set(matchEmails.map((e) => e.toLowerCase()));
   const rows = await withSystemContext(async (tx) =>
     tx
       .select({
         id: engagementMeetings.id,
+        title: engagementMeetings.title,
         attendees: engagementMeetings.attendees,
       })
       .from(engagementMeetings)
@@ -224,19 +244,17 @@ async function reconcileMisfiledMeetings(
       ? (row.attendees as Array<{ email: string | null }>)
       : [];
     const emails = attendees
-      .map((a) => a.email?.toLowerCase())
+      .map((a) => a.email)
       .filter((e): e is string => Boolean(e));
-    if (emails.length === 0) continue; // can't judge — leave it
-    const belongsToMe = emails.some((e) => mine.has(e));
-    if (belongsToMe) continue;
-    // Only delete if a stored attendee UNIQUELY belongs to another
-    // engagement — a positive "this is someone else's" signal, not just
-    // "no overlap" (which could be a sparse attendee list).
-    const belongsElsewhere = emails.some((e) => {
-      const owner = attr.uniqueEmailToEngagement.get(e);
-      return owner && owner !== engagementId;
-    });
-    if (belongsElsewhere) toDelete.push(row.id);
+    const owners = engagementsForTranscript(
+      normalizeName(row.title ?? ""),
+      emails,
+      attr,
+    );
+    // Belongs here → keep. Can't attribute at all → keep (don't guess).
+    // Attributable, but to someone else only → delete.
+    if (owners.has(engagementId) || owners.size === 0) continue;
+    toDelete.push(row.id);
   }
 
   if (toDelete.length > 0) {
@@ -293,14 +311,17 @@ export async function syncAllEngagementMeetings(): Promise<{
       .from(engagements)
       .where(isNull(engagements.archivedAt)),
   );
-  // Compute attribution once and reuse across all engagements — both for
-  // efficiency and so every engagement matches against the same snapshot.
-  const attribution = await getEmailAttribution();
+  // Compute attribution + fetch the recent transcript list ONCE and reuse
+  // across all engagements — efficient and a single consistent snapshot.
+  const shared: SharedSyncContext = {
+    attribution: await getEmailAttribution(),
+    transcripts: await listRecentTranscripts({ limit: 50 }),
+  };
   let inserted = 0;
   let updated = 0;
   for (const { id } of ids) {
     try {
-      const r = await syncMeetingsCore(id, attribution);
+      const r = await syncMeetingsCore(id, shared);
       if (r.ok) {
         inserted += r.data.inserted;
         updated += r.data.updated;
