@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { DateTime } from "luxon";
 import {
   CheckCircle2,
   MessageSquare,
@@ -517,7 +518,9 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
 }
 
 function greetingFor(d: Date): string {
-  const hour = d.getHours();
+  // Mountain Time — the server clock is UTC, so getHours() would read ~6h
+  // ahead and call mid-morning "evening".
+  const hour = DateTime.fromJSDate(d).setZone("America/Edmonton").hour;
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
