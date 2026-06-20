@@ -32,6 +32,9 @@ export function SyncFromGoogleButton() {
       if (res.skipped) {
         if (res.reason === "not-connected") {
           setNeedsConnect(true);
+        } else if (res.reason === "reconnect-required") {
+          setNeedsConnect(true);
+          setMsg("Google access expired — reconnect to resume syncing.");
         } else if (res.reason === "no-engagements") {
           setMsg("No active clients to match calendar events to yet.");
         } else {
@@ -63,16 +66,15 @@ export function SyncFromGoogleButton() {
         )}
         Sync from Google
       </button>
-      {needsConnect ? (
+      {msg && <span className="text-xs text-tbb-ink-3">{msg}</span>}
+      {needsConnect && (
         <Link
           href="/business-builder/profile/google-calendar"
           className="text-xs font-bold text-tbb-blue hover:underline"
         >
-          Connect Google Calendar →
+          Reconnect Google →
         </Link>
-      ) : msg ? (
-        <span className="text-xs text-tbb-ink-3">{msg}</span>
-      ) : null}
+      )}
     </div>
   );
 }

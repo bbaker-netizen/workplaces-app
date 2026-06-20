@@ -121,6 +121,19 @@ export async function exchangeCodeForTokens(
   };
 }
 
+/**
+ * Thrown when Google's refresh token is dead (invalid_grant). The only
+ * fix is for the user to reconnect Google — callers should surface a
+ * "Reconnect Google" prompt rather than a raw error.
+ */
+export class GoogleReconnectRequiredError extends Error {
+  readonly reconnectRequired = true as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "GoogleReconnectRequiredError";
+  }
+}
+
 async function refreshAccessToken(
   refreshToken: string,
 ): Promise<{ accessToken: string; expiresIn: number }> {
@@ -137,6 +150,14 @@ async function refreshAccessToken(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    // invalid_grant = the refresh token itself is dead (revoked, expired,
+    // or issued by a different OAuth client). No retry fixes this — the
+    // user has to reconnect Google. Signal that distinctly.
+    if (text.includes("invalid_grant")) {
+      throw new GoogleReconnectRequiredError(
+        `Google refresh token is no longer valid: ${res.status} ${text}`,
+      );
+    }
     throw new Error(
       `Google Calendar token refresh failed: ${res.status} ${text}`,
     );
@@ -192,6 +213,7 @@ export async function storeUserTokens(args: {
  */
 export async function getValidAccessToken(
   userProfileId: string,
+  opts: { forceRefresh?: boolean } = {},
 ): Promise<{ token: string; calendarId: string; orgId: string } | null> {
   const row = await withSystemContext(async (tx) => {
     const [r] = await tx
@@ -205,8 +227,14 @@ export async function getValidAccessToken(
 
   const now = Date.now();
   const expiresAt = row.accessTokenExpiresAt?.getTime() ?? 0;
-  // Refresh 60s before expiry to avoid edge-case 401s.
-  if (row.accessTokenEncrypted && expiresAt - now > 60 * 1000) {
+  // Refresh 60s before expiry to avoid edge-case 401s. forceRefresh skips
+  // the cache when Google rejected a token we still thought was valid
+  // (revoked / superseded server-side).
+  if (
+    !opts.forceRefresh &&
+    row.accessTokenEncrypted &&
+    expiresAt - now > 60 * 1000
+  ) {
     return {
       token: decryptSecret(row.accessTokenEncrypted),
       calendarId: row.calendarId,

@@ -32,6 +32,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import {
   getValidAccessToken,
+  GoogleReconnectRequiredError,
   listEventsForSync,
 } from "@/lib/integrations/google-calendar";
 
@@ -62,7 +63,14 @@ const EMPTY = (reason: string): CalendarSyncResult => ({
 export async function syncCoachCalendar(
   userProfileId: string,
 ): Promise<CalendarSyncResult> {
-  const token = await getValidAccessToken(userProfileId);
+  let token;
+  try {
+    token = await getValidAccessToken(userProfileId);
+  } catch (e) {
+    if (e instanceof GoogleReconnectRequiredError)
+      return EMPTY("reconnect-required");
+    throw e;
+  }
   if (!token) return EMPTY("not-connected");
 
   // Build a lowercased email → engagement map across this coach's active
@@ -112,7 +120,33 @@ export async function syncCoachCalendar(
 
   const now = new Date();
   const end = new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const events = await listEventsForSync(token.token, token.calendarId, now, end);
+
+  // Google sometimes rejects a token we still believe is valid (revoked
+  // or superseded server-side) with a 401. Force a fresh token and retry
+  // once. If the refresh token itself is dead, the user must reconnect.
+  let events;
+  try {
+    events = await listEventsForSync(token.token, token.calendarId, now, end);
+  } catch (e) {
+    const is401 = e instanceof Error && / 401:/.test(e.message);
+    if (!is401) throw e;
+    try {
+      const fresh = await getValidAccessToken(userProfileId, {
+        forceRefresh: true,
+      });
+      if (!fresh) return EMPTY("reconnect-required");
+      events = await listEventsForSync(
+        fresh.token,
+        fresh.calendarId,
+        now,
+        end,
+      );
+    } catch (e2) {
+      if (e2 instanceof GoogleReconnectRequiredError)
+        return EMPTY("reconnect-required");
+      throw e2;
+    }
+  }
 
   let created = 0;
   let updated = 0;
