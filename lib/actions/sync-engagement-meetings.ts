@@ -18,6 +18,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   engagementMeetings,
   engagements,
+  prospects,
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -45,13 +46,22 @@ async function syncMeetingsCore(engagementId: string): Promise<SyncResult> {
       .where(eq(engagements.id, engagementId))
       .limit(1);
     if (!eng) return null;
+    // Match targets = every email we know for this client. Signed-up
+    // users live in user_profiles, but a client that hasn't accepted
+    // their invite yet only has an email on the originating lead record —
+    // so include the prospect's contact email too. Without this, a fresh
+    // engagement reports "no client emails" and Fireflies can't match.
     const profiles = await tx
       .select({ email: userProfiles.email })
       .from(userProfiles)
       .where(eq(userProfiles.orgId, eng.orgId));
+    const leads = await tx
+      .select({ email: prospects.contactEmail })
+      .from(prospects)
+      .where(eq(prospects.convertedEngagementId, engagementId));
     return {
       orgId: eng.orgId,
-      emails: profiles
+      emails: [...profiles, ...leads]
         .map((p) => p.email)
         .filter((e): e is string => Boolean(e)),
     };
@@ -59,7 +69,12 @@ async function syncMeetingsCore(engagementId: string): Promise<SyncResult> {
 
   if (lookup === null) return { ok: false, error: "Engagement not found." };
   if (lookup.emails.length === 0) {
-    return { ok: false, error: "No client emails on this engagement yet." };
+    return {
+      ok: false,
+      error:
+        "No client email on this engagement yet. Add the client's email on " +
+        "their lead/Pipeline record, then sync again.",
+    };
   }
   const { orgId, emails } = lookup;
 

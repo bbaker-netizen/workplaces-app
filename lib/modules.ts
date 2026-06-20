@@ -110,7 +110,8 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   { key: "projects",     label: "Projects",     href: "/portal/projects",     visibleTo: ALL_ROLES, sortOrder: 60, phase: "plan" },
   { key: "deliverables", label: "Deliverables", href: "/portal/deliverables", visibleTo: ALL_ROLES, sortOrder: 70, phase: "plan" },
   { key: "courses",      label: "Courses",      href: "/portal/courses",      visibleTo: ALL_ROLES, sortOrder: 90, phase: "plan" },
-  { key: "forms",        label: "Forms",        href: "/portal/forms",        visibleTo: ALL_ROLES, sortOrder: 100, phase: "plan" },
+  // Forms removed from the client portal per Bruce — not part of the
+  // client-facing flow. The enum value stays for any existing data.
 
   // People.
   { key: "team",   label: "My Team", href: "/portal/team",   visibleTo: ALL_ROLES, sortOrder: 110, phase: "people" },
