@@ -24,9 +24,10 @@ export function DeleteEngagementButton({
 
   function onDelete() {
     const ok = window.confirm(
-      `Permanently delete "${engagementName}" and everything in it ` +
-        `(sessions, action items, projects, documents, deliverables, ` +
-        `messages)?\n\nThis cannot be undone.`,
+      `Permanently delete "${engagementName}" everywhere?\n\n` +
+        `This removes the engagement and everything in it (sessions, action ` +
+        `items, projects, documents, deliverables, messages) AND the ` +
+        `originating lead from the Pipeline.\n\nThis cannot be undone.`,
     );
     if (!ok) return;
     setError(null);

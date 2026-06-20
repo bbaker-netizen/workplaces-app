@@ -12,11 +12,15 @@ import { ChevronDown } from "lucide-react";
 export function CollapsibleSection({
   title,
   children,
+  defaultOpen = false,
 }: {
   title: string;
   children: React.ReactNode;
+  /** Start expanded. Used for the archived-clients list so the Delete
+   *  button is visible without an extra click. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <section className="space-y-2">
       <button

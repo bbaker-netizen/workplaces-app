@@ -150,7 +150,10 @@ export default async function EngagementsListPage() {
       )}
 
       {archived.length > 0 && (
-        <CollapsibleSection title={`Show archived clients (${archived.length})`}>
+        <CollapsibleSection
+          title={`Archived clients (${archived.length}) — restore or delete`}
+          defaultOpen
+        >
           <ul className="mt-2 border border-tbb-line rounded-lg bg-tbb-cream-50 divide-y divide-tbb-line-soft overflow-hidden">
             {archived.map((e) => (
               <li key={e.id} className="flex items-center gap-2 px-5 py-3">
