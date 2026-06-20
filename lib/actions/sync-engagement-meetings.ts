@@ -82,7 +82,7 @@ async function syncMeetingsCore(
   // the cron; the manual single-engagement sync fetches them itself.
   const attr = shared?.attribution ?? (await getEmailAttribution());
   const transcripts =
-    shared?.transcripts ?? (await listRecentTranscripts({ limit: 50 }));
+    shared?.transcripts ?? (await listRecentTranscripts({ maxTotal: 1000 }));
 
   const eng = await withSystemContext(async (tx) => {
     const [row] = await tx
@@ -179,7 +179,8 @@ async function syncMeetingsCore(
           .set({
             title: detail!.title,
             occurredAt: new Date(detail!.date),
-            durationMin: detail!.duration ?? null,
+            durationMin:
+              detail!.duration != null ? Math.round(detail!.duration) : null,
             organizerEmail: detail!.organizer_email ?? null,
             attendees,
             summaryOverview: detail!.summary?.overview ?? null,
@@ -197,7 +198,8 @@ async function syncMeetingsCore(
           firefliesTranscriptId: detail!.id,
           title: detail!.title,
           occurredAt: new Date(detail!.date),
-          durationMin: detail!.duration ?? null,
+          durationMin:
+              detail!.duration != null ? Math.round(detail!.duration) : null,
           organizerEmail: detail!.organizer_email ?? null,
           attendees,
           summaryOverview: detail!.summary?.overview ?? null,
@@ -315,7 +317,7 @@ export async function syncAllEngagementMeetings(): Promise<{
   // across all engagements — efficient and a single consistent snapshot.
   const shared: SharedSyncContext = {
     attribution: await getEmailAttribution(),
-    transcripts: await listRecentTranscripts({ limit: 50 }),
+    transcripts: await listRecentTranscripts({ maxTotal: 1000 }),
   };
   let inserted = 0;
   let updated = 0;

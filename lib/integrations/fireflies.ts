@@ -242,26 +242,28 @@ export async function searchTranscriptsByAttendee(
 }
 
 /**
- * List the workspace's most recent transcripts with their titles AND
- * attendees, newest first. Used by the engagement-meetings sync to
- * attribute each meeting to a client by TITLE (Bruce names BBS recordings
+ * List the workspace's transcripts with their titles AND attendees,
+ * newest first. Used by the engagement-meetings sync to attribute each
+ * meeting to a client by TITLE (Bruce names BBS recordings
  * "<Client> - Business Building Session …") or by a client-unique attendee
  * email. Title matching is essential because in-person sessions often
  * capture only the coach as an attendee.
+ *
+ * Fireflies caps each query at 50, so we paginate with `skip` up to
+ * `maxTotal` (default 1000) to cover the full meeting history.
  */
+export type RecentTranscript = FirefliesTranscriptSummary & {
+  meeting_attendees: Array<{ email: string | null; displayName: string | null }>;
+};
+
 export async function listRecentTranscripts(
-  opts: { limit?: number } = {},
-): Promise<
-  Array<
-    FirefliesTranscriptSummary & {
-      meeting_attendees: Array<{ email: string | null; displayName: string | null }>;
-    }
-  >
-> {
-  const limit = Math.min(opts.limit ?? 50, 50);
+  opts: { maxTotal?: number } = {},
+): Promise<RecentTranscript[]> {
+  const maxTotal = opts.maxTotal ?? 1000;
+  const PAGE = 50;
   const query = /* GraphQL */ `
-    query RecentTranscripts($limit: Int!) {
-      transcripts(limit: $limit) {
+    query RecentTranscripts($limit: Int!, $skip: Int!) {
+      transcripts(limit: $limit, skip: $skip) {
         id
         title
         date
@@ -274,44 +276,43 @@ export async function listRecentTranscripts(
       }
     }
   `;
-  const resp = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query, variables: { limit } }),
-    cache: "no-store",
-  });
-  if (!resp.ok) {
-    throw new Error(
-      `Fireflies recent transcripts failed (${resp.status}): ${await resp.text()}`,
-    );
-  }
-  const json = (await resp.json()) as {
-    data?: {
-      transcripts:
-        | Array<
-            FirefliesTranscriptSummary & {
-              meeting_attendees: Array<{
-                email: string | null;
-                displayName: string | null;
-              }>;
-            }
-          >
-        | null;
+  const all: RecentTranscript[] = [];
+  for (let skip = 0; skip < maxTotal; skip += PAGE) {
+    const resp = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query, variables: { limit: PAGE, skip } }),
+      cache: "no-store",
+    });
+    if (!resp.ok) {
+      // First page failing is fatal; later pages — return what we have.
+      if (skip === 0) {
+        throw new Error(
+          `Fireflies transcripts failed (${resp.status}): ${await resp.text()}`,
+        );
+      }
+      break;
+    }
+    const json = (await resp.json()) as {
+      data?: { transcripts: RecentTranscript[] | null };
+      errors?: Array<{ message: string }>;
     };
-    errors?: Array<{ message: string }>;
-  };
-  if (json.errors?.length) {
-    throw new Error(
-      `Fireflies recent transcripts: ${json.errors
-        .map((e) => e.message)
-        .join("; ")}`,
-    );
+    if (json.errors?.length) {
+      if (skip === 0) {
+        throw new Error(
+          `Fireflies transcripts: ${json.errors.map((e) => e.message).join("; ")}`,
+        );
+      }
+      break;
+    }
+    const page = json.data?.transcripts ?? [];
+    all.push(...page);
+    if (page.length < PAGE) break; // last page reached
   }
-  const list = json.data?.transcripts ?? [];
-  return list.sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
+  return all.sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
 }
 
 /**
