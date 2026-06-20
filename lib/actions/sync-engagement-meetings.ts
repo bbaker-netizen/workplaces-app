@@ -261,11 +261,20 @@ export async function syncEngagementMeetings(
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     return { ok: false, error: "Business Builders only." };
   }
-  const result = await syncMeetingsCore(engagementId);
-  revalidatePath(`/business-builder/engagements/${engagementId}`);
-  revalidatePath(`/business-builder/engagements/${engagementId}/meetings`);
-  revalidatePath("/portal/meetings");
-  return result;
+  try {
+    const result = await syncMeetingsCore(engagementId);
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
+    revalidatePath(`/business-builder/engagements/${engagementId}/meetings`);
+    revalidatePath("/portal/meetings");
+    return result;
+  } catch (e) {
+    // Never throw to the page (would show the generic error boundary).
+    console.error("[fireflies-sync] failed for", engagementId, e);
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Sync failed unexpectedly.",
+    };
+  }
 }
 
 /**

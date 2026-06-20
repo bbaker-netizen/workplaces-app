@@ -32,24 +32,24 @@ export type EmailAttribution = {
 
 export async function getEmailAttribution(): Promise<EmailAttribution> {
   return withSystemContext(async (tx) => {
-    const [profileRows, engRows, leadRows] = await Promise.all([
-      tx
-        .select({
-          email: userProfiles.email,
-          orgId: userProfiles.orgId,
-          role: userProfiles.role,
-        })
-        .from(userProfiles),
-      tx
-        .select({ id: engagements.id, orgId: engagements.orgId })
-        .from(engagements),
-      tx
-        .select({
-          email: prospects.contactEmail,
-          engId: prospects.convertedEngagementId,
-        })
-        .from(prospects),
-    ]);
+    // NOTE: these run sequentially, not via Promise.all — a single pg
+    // connection (one tx) cannot run concurrent queries.
+    const profileRows = await tx
+      .select({
+        email: userProfiles.email,
+        orgId: userProfiles.orgId,
+        role: userProfiles.role,
+      })
+      .from(userProfiles);
+    const engRows = await tx
+      .select({ id: engagements.id, orgId: engagements.orgId })
+      .from(engagements);
+    const leadRows = await tx
+      .select({
+        email: prospects.contactEmail,
+        engId: prospects.convertedEngagementId,
+      })
+      .from(prospects);
 
     const excluded = new Set<string>();
     for (const p of profileRows) {
