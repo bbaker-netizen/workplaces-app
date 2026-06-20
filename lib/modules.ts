@@ -71,7 +71,7 @@ export const PORTAL_PHASES: ReadonlyArray<{
   { key: "today",         label: "Today",         caption: "What's on the plate" },
   { key: "conversations", label: "Conversations", caption: "Stay in touch between sessions" },
   { key: "files",         label: "Files",         caption: "Every document for this engagement" },
-  { key: "plan",          label: "The plan",      caption: "Projects, deliverables, methodology" },
+  { key: "plan",          label: "The plan",      caption: "Projects and deliverables" },
   { key: "people",        label: "People",        caption: "Team and assessments" },
 ];
 
@@ -103,9 +103,12 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   // context written/managed at /business-builder/soul-file; it never
   // appears in the client portal menu (or coach preview).
   // Goals removed per Bruce — redundant with Projects in practice.
+  // Methodology (standalone client page) removed per Bruce — a generic
+  // educational page reads as a brochure clients ignore. The methodology
+  // is better delivered contextually (callouts inside the relevant
+  // module) and on-demand via Buddy. Revisit when that lands.
   { key: "projects",     label: "Projects",     href: "/portal/projects",     visibleTo: ALL_ROLES, sortOrder: 60, phase: "plan" },
   { key: "deliverables", label: "Deliverables", href: "/portal/deliverables", visibleTo: ALL_ROLES, sortOrder: 70, phase: "plan" },
-  { key: "methodology",  label: "Methodology",  href: "/portal/methodology",  visibleTo: ALL_ROLES, sortOrder: 80, phase: "plan" },
   { key: "courses",      label: "Courses",      href: "/portal/courses",      visibleTo: ALL_ROLES, sortOrder: 90, phase: "plan" },
   { key: "forms",        label: "Forms",        href: "/portal/forms",        visibleTo: ALL_ROLES, sortOrder: 100, phase: "plan" },
 
