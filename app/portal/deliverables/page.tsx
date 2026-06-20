@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementDeliverables } from "@/lib/db/queries/deliverables";
@@ -11,11 +13,9 @@ export default async function PortalDeliverablesPage() {
   if (!engagement) redirect("/portal");
 
   const items = await listEngagementDeliverables(engagement.id);
-  const canEdit =
-    profile.role === "master_admin" ||
-    profile.role === "coach" ||
-    profile.role === "client_lead" ||
-    profile.role === "client_manager";
+  // Deliverables are produced by Workplaces, not the client. Clients view
+  // them read-only; their own to-dos live in Action Items.
+  const canEdit = profile.role === "master_admin" || profile.role === "coach";
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12 space-y-6">
@@ -27,9 +27,26 @@ export default async function PortalDeliverablesPage() {
           Deliverables
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
-          The 9 methodology-defined deliverable types. Each tracks status from not started → delivered.
+          The 9 methodology-defined artifacts Workplaces builds for you over
+          the engagement. Each tracks status from not started → delivered.
         </p>
       </header>
+
+      {!canEdit && (
+        <div className="border border-tbb-line rounded-md bg-tbb-cream-50 px-4 py-3 flex items-start gap-2">
+          <p className="font-sans text-sm text-muted-foreground">
+            These are produced by your Business Builder. Got a to-do of your
+            own? Track it in{" "}
+            <Link
+              href="/portal/action-items"
+              className="text-tbb-navy font-bold underline underline-offset-2 inline-flex items-center gap-0.5"
+            >
+              Action Items <ArrowRight className="w-3 h-3" aria-hidden />
+            </Link>
+            .
+          </p>
+        </div>
+      )}
 
       <DeliverablesBoard
         engagementId={engagement.id}
