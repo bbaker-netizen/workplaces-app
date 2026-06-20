@@ -65,6 +65,7 @@ import {
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
+import { EngagementRename } from "@/components/business-builder/EngagementRename";
 import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
 
 export default async function EngagementDetailPage({
@@ -256,9 +257,10 @@ export default async function EngagementDetailPage({
           <ArrowLeft className="w-3 h-3" aria-hidden /> Engagements
         </Link>
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <h1 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-            {data.eng.name ?? "Engagement"}
-          </h1>
+          <EngagementRename
+            engagementId={id}
+            name={data.eng.name ?? "Engagement"}
+          />
           <div className="flex items-center gap-3 flex-wrap">
             <Link
               href={data.eng.slug ? `/portal/e/${data.eng.slug}` : "/portal/preview"}

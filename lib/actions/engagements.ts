@@ -13,10 +13,56 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { engagements, prospects } from "@/lib/db/schema";
+import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
 type Result = { ok: true } | { ok: false; error: string };
+
+/**
+ * Rename a client/engagement. The engagement name is the client's portal
+ * branding, so this fixes cases where it ended up as a person's first
+ * name instead of the business name. Updates BOTH the engagement and its
+ * client org (the tenant) plus any originating prospect's company name so
+ * every surface — portal header, Engagements list, Pipeline — agrees.
+ * Coach-only.
+ */
+export async function renameEngagement(
+  engagementId: string,
+  rawName: string,
+): Promise<Result> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  const name = rawName.trim();
+  if (name.length < 2) return { ok: false, error: "Name is too short." };
+  if (name.length > 200) return { ok: false, error: "Name is too long." };
+  try {
+    const found = await withSystemContext(async (tx) => {
+      const [eng] = await tx
+        .update(engagements)
+        .set({ name })
+        .where(eq(engagements.id, engagementId))
+        .returning({ orgId: engagements.orgId });
+      if (!eng) return false;
+      await tx.update(orgs).set({ name }).where(eq(orgs.id, eng.orgId));
+      await tx
+        .update(prospects)
+        .set({ companyName: name })
+        .where(eq(prospects.convertedEngagementId, engagementId));
+      return true;
+    });
+    if (!found) return { ok: false, error: "Engagement not found." };
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
+    revalidatePath("/business-builder/engagements");
+    revalidatePath("/business-builder/pipeline");
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 /** Statuses a coach can set by hand from the engagement page. */
 export type SettableEngagementStatus = "active" | "paused" | "completed";
