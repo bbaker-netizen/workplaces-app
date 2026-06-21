@@ -11,6 +11,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
+import { EngagementProgramControl } from "@/components/business-builder/EngagementProgramControl";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { CollapsibleSection } from "@/components/business-builder/CollapsibleSection";
 import { SeedDemoButton } from "@/components/business-builder/SeedDemoButton";
@@ -130,8 +131,7 @@ export default async function EngagementsListPage() {
                     {e.name ?? e.orgName ?? "Untitled engagement"}
                   </span>
                   <span className="block text-xs text-tbb-ink-3 mt-0.5">
-                    {e.prospect?.contactName && `${e.prospect.contactName} · `}
-                    <span className="capitalize">{e.type}</span>
+                    {e.prospect?.contactName || "—"}
                     {e.status !== "active" && (
                       <> · <span className="capitalize">{e.status}</span></>
                     )}
@@ -139,6 +139,11 @@ export default async function EngagementsListPage() {
                 </span>
                 <ArrowRight className="w-4 h-4 text-tbb-ink-3 shrink-0" aria-hidden />
               </Link>
+              <EngagementProgramControl
+                engagementId={e.id}
+                current={e.type}
+                compact
+              />
               <Link
                 href={`/portal/e/${e.id}`}
                 title="See this client's portal exactly as they see it"

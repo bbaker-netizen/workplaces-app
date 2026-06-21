@@ -8,7 +8,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import {
   setEngagementStatus,
   type SettableEngagementStatus,
@@ -58,18 +58,24 @@ export function EngagementStatusControl({
       <label className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
         Status
       </label>
-      <select
-        value={value}
-        disabled={isPending}
-        onChange={(e) => onChange(e.target.value as SettableEngagementStatus)}
-        className="bg-white border border-tbb-line rounded-md px-2.5 py-1.5 text-sm font-bold text-tbb-navy focus:outline-none focus:ring-2 focus:ring-tbb-blue disabled:opacity-50"
-      >
-        {OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          value={value}
+          disabled={isPending}
+          onChange={(e) => onChange(e.target.value as SettableEngagementStatus)}
+          className="appearance-none bg-white border border-tbb-line rounded-pill pl-3 pr-8 py-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-navy cursor-pointer focus:outline-none focus:ring-2 focus:ring-tbb-blue disabled:opacity-50"
+        >
+          {OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tbb-ink-3"
+          aria-hidden
+        />
+      </div>
       {isPending && (
         <Loader2 className="w-3.5 h-3.5 animate-spin text-tbb-ink-3" aria-hidden />
       )}
