@@ -4,6 +4,7 @@ import {
   getCurrentEngagement,
   PORTAL_PREVIEW_COOKIE,
 } from "@/lib/db/queries/engagements";
+import { PreviewRefresh } from "@/components/portal/PreviewRefresh";
 
 /**
  * /portal template — re-renders on EVERY navigation (unlike layout.tsx,
@@ -36,6 +37,7 @@ export default async function PortalTemplate({
 
   return (
     <>
+      {isCoachRole && inPreview && <PreviewRefresh />}
       {isCoachRole && inPreview && (
         <div className="border-b border-tbb-blue/30 bg-tbb-blue-50 px-6 py-2.5 text-sm flex items-center gap-x-4 gap-y-1 flex-wrap">
           <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
