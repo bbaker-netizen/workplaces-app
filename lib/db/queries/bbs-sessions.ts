@@ -4,7 +4,7 @@
  * Mutations live in `lib/actions/bbs-sessions.ts`.
  */
 
-import { and, asc, desc, eq, gt, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lte, ne } from "drizzle-orm";
 import {
   actionItems,
   bbsSessions,
@@ -38,6 +38,8 @@ export async function listEngagementSessions(
         .where(
           and(
             eq(bbsSessions.engagementId, engagementId),
+            // Cancelled sessions are removed from every list/calendar view.
+            ne(bbsSessions.status, "cancelled"),
             gt(bbsSessions.scheduledAt, now),
           ),
         )
@@ -48,6 +50,7 @@ export async function listEngagementSessions(
         .where(
           and(
             eq(bbsSessions.engagementId, engagementId),
+            ne(bbsSessions.status, "cancelled"),
             lte(bbsSessions.scheduledAt, now),
           ),
         )
