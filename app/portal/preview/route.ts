@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     if (!alreadySelected) {
       const [latest] = await withSystemContext(async (tx) =>
         tx
-          .select({ slug: engagements.slug })
+          .select({ id: engagements.id })
           .from(engagements)
           // Skip archived clients — previewing one of those binds the
           // portal to a closed engagement and every module reads empty.
@@ -55,8 +55,8 @@ export async function GET(req: Request) {
           .orderBy(desc(engagements.createdAt))
           .limit(1),
       );
-      if (latest?.slug) {
-        res.cookies.set(SELECTED_ENGAGEMENT_COOKIE, latest.slug, {
+      if (latest?.id) {
+        res.cookies.set(SELECTED_ENGAGEMENT_COOKIE, latest.id, {
           httpOnly: true,
           sameSite: "lax",
           secure: process.env.NODE_ENV === "production",
