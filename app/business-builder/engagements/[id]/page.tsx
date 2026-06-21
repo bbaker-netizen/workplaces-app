@@ -264,7 +264,8 @@ export default async function EngagementDetailPage({
           />
           <div className="flex items-center gap-3 flex-wrap">
             <Link
-              href={data.eng.slug ? `/portal/e/${data.eng.slug}` : "/portal/preview"}
+              href={`/portal/e/${id}`}
+              prefetch={false}
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
               title="See this client's portal exactly as they do"
             >

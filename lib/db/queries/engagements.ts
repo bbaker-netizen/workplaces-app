@@ -36,10 +36,12 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
   if (profile.status !== "ok") return null;
 
   // 1. Selected-engagement cookie wins — but only if the caller can
-  //    actually see that engagement.
-  const slug = cookies().get(SELECTED_ENGAGEMENT_COOKIE)?.value;
-  if (slug) {
-    const selected = await getEngagementBySlug(slug);
+  //    actually see that engagement. The cookie holds the engagement's
+  //    UUID (collision-proof); older cookies may hold a slug, so we
+  //    resolve either via getEngagementByIdOrSlug.
+  const selectedKey = cookies().get(SELECTED_ENGAGEMENT_COOKIE)?.value;
+  if (selectedKey) {
+    const selected = await getEngagementByIdOrSlug(selectedKey);
     if (selected) {
       const isCoach =
         profile.role === "master_admin" || profile.role === "coach";
@@ -107,6 +109,32 @@ export async function getEngagementBySlug(
       .limit(1);
     return row ?? null;
   });
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve an engagement by its UUID id OR slug. Prefer the id (the
+ * primary key — always unique). This is the collision-proof entry point
+ * for preview selection: slugs can be duplicated or wrong, ids cannot.
+ * Skips RLS via system context; the caller verifies access separately.
+ */
+export async function getEngagementByIdOrSlug(
+  value: string,
+): Promise<Engagement | null> {
+  if (!value) return null;
+  if (UUID_RE.test(value)) {
+    return withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(engagements)
+        .where(eq(engagements.id, value))
+        .limit(1);
+      return row ?? null;
+    });
+  }
+  return getEngagementBySlug(value);
 }
 
 export async function listCoachEngagements(): Promise<Engagement[]> {

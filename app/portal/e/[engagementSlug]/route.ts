@@ -12,7 +12,7 @@
 import { NextResponse } from "next/server";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
-  getEngagementBySlug,
+  getEngagementByIdOrSlug,
   PORTAL_PREVIEW_COOKIE,
   SELECTED_ENGAGEMENT_COOKIE,
 } from "@/lib/db/queries/engagements";
@@ -29,7 +29,10 @@ export async function GET(
     return NextResponse.redirect(new URL("/no-invitation", base));
   }
 
-  const engagement = await getEngagementBySlug(params.engagementSlug);
+  // The path segment may be the engagement's UUID (preferred — unique) or
+  // a slug (legacy). Resolve, then store the canonical ID in the cookie so
+  // every later read is collision-proof.
+  const engagement = await getEngagementByIdOrSlug(params.engagementSlug);
   const isCoach =
     profile.role === "master_admin" || profile.role === "coach";
   if (!engagement || (!isCoach && engagement.orgId !== profile.orgId)) {
@@ -40,7 +43,7 @@ export async function GET(
   }
 
   const res = NextResponse.redirect(new URL("/portal", base));
-  res.cookies.set(SELECTED_ENGAGEMENT_COOKIE, params.engagementSlug, {
+  res.cookies.set(SELECTED_ENGAGEMENT_COOKIE, engagement.id, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

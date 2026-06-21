@@ -139,15 +139,14 @@ export default async function EngagementsListPage() {
                 </span>
                 <ArrowRight className="w-4 h-4 text-tbb-ink-3 shrink-0" aria-hidden />
               </Link>
-              {e.slug && (
-                <Link
-                  href={`/portal/e/${e.slug}`}
-                  title="See this client's portal exactly as they see it"
-                  className="shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill border border-tbb-line text-tbb-blue hover:border-tbb-blue hover:bg-white transition-colors"
-                >
-                  <Eye className="w-3 h-3" aria-hidden /> View portal
-                </Link>
-              )}
+              <Link
+                href={`/portal/e/${e.id}`}
+                prefetch={false}
+                title="See this client's portal exactly as they see it"
+                className="shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill border border-tbb-line text-tbb-blue hover:border-tbb-blue hover:bg-white transition-colors"
+              >
+                <Eye className="w-3 h-3" aria-hidden /> View portal
+              </Link>
               <EngagementArchiveButton
                 engagementId={e.id}
                 engagementName={e.name ?? e.orgName ?? "this client"}
