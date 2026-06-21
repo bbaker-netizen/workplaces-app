@@ -214,6 +214,43 @@ export function newMessageEmail(input: MentionEmailInput): EmailEnvelope {
   return { to: input.to, subject, html, text };
 }
 
+/* ------------------------ document shared ------------------------ */
+
+export type DocumentSharedEmailInput = {
+  to: string;
+  recipientName: string;
+  uploaderName: string;
+  filename: string;
+  url: string;
+};
+
+export function documentSharedEmail(
+  input: DocumentSharedEmailInput,
+): EmailEnvelope {
+  const url = input.url.startsWith("http") ? input.url : appUrl() + input.url;
+  const subject = `${input.uploaderName} shared a document — ${input.filename}`;
+
+  const html = shell({
+    preheader: `${input.uploaderName} shared ${input.filename}`,
+    heading: "A new document was shared",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.recipientName.split(" ")[0] ?? input.recipientName)},</p>
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.uploaderName)}</strong> shared a new document with you:</p>
+      <p style="margin:0 0 12px 0;font-size:15px;"><strong>${escapeHtml(input.filename)}</strong></p>
+    `,
+    buttonHref: url,
+    buttonLabel: "View documents",
+  });
+
+  const text = [
+    `${input.uploaderName} shared a new document: ${input.filename}`,
+    "",
+    `View: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
 /* ---------------------------- assigned ---------------------------- */
 
 export type ActionItemAssignedEmailInput = {
