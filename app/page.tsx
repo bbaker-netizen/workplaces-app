@@ -35,12 +35,15 @@ export default function Home() {
           {/* Diagnostic intentionally NOT linked here — it's a prospect
               conversion tool sent directly to prospects, not a public
               self-serve on the sign-in page (#19). */}
-          <Link
+          {/* Route Handler that redirects + (for coaches) clears client-context
+              cookies — must be a full-navigation <a>, never a prefetched <Link>
+              (prefetch would fire the cookie side-effects in the background). */}
+          <a
             href="/home"
             className="inline-flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-tbb-caps px-6 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base shadow-tbb-cta"
           >
             Sign in
-          </Link>
+          </a>
         </div>
         <p className="font-mono text-tbb-cream/40 text-[11px] sm:text-xs pt-12">
           © Workplaces — HR All-In Inc., Edmonton, Alberta

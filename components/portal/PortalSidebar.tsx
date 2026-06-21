@@ -338,14 +338,14 @@ export function PortalSidebar({
                 {fullName}
               </p>
               {isCoach && (
-                <Link
+                <a
                   href="/home"
                   title="Leave this client's portal and return to your Business Builder console"
                   className="inline-flex items-center gap-1.5 mt-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base"
                 >
                   <ArrowLeft className="w-3 h-3" aria-hidden />
                   My console
-                </Link>
+                </a>
               )}
               <div className="flex gap-3 mt-1">
                 <SignOutButton redirectUrl="/">
@@ -364,14 +364,14 @@ export function PortalSidebar({
         ) : (
           <>
             {isCoach && (
-              <Link
+              <a
                 href="/home"
                 title="Back to my Business Builder console"
                 aria-label="Back to my Business Builder console"
                 className="grid place-items-center w-9 h-9 rounded-md bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" aria-hidden />
-              </Link>
+              </a>
             )}
             <NotificationBell unreadCount={unreadCount} onDark />
           </>
