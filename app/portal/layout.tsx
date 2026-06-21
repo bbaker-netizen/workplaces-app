@@ -87,6 +87,11 @@ export default async function PortalLayout({
         // cached across navigation and would go stale when switching
         // clients. Real clients (one fixed engagement) keep their branding.
         engagementName={isCoachRole ? null : (engagement?.name ?? null)}
+        // Stamp the selected engagement onto every nav URL so Next's
+        // URL-keyed Router Cache can't serve one client's module page while
+        // previewing another (portal content is cookie-scoped, but the
+        // cache keys on URL — the id makes each client a distinct entry).
+        engagementId={engagement?.id ?? null}
         pinnedNavItems={prefs.pinnedNavItems}
         collapsedInitial={prefs.sidebarCollapsed}
         isCoach={profile.role === "master_admin" || profile.role === "coach"}

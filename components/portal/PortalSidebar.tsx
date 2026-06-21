@@ -80,6 +80,7 @@ export function PortalSidebar({
   unreadCount,
   modules,
   engagementName,
+  engagementId,
   pinnedNavItems,
   collapsedInitial,
   isCoach,
@@ -88,12 +89,22 @@ export function PortalSidebar({
   unreadCount: number;
   modules: PortalModule[];
   engagementName?: string | null;
+  engagementId?: string | null;
   pinnedNavItems: string[];
   collapsedInitial: boolean;
   isCoach: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
+
+  // Append the selected engagement id to every nav URL. Portal pages scope
+  // their data by a cookie, but Next's client Router Cache keys on the URL —
+  // so without this, /portal/calendar has ONE cached entry shared across
+  // every previewed client, and switching clients could serve the prior
+  // client's page. The id makes each client a distinct cache key; the pages
+  // still read the cookie and ignore the param. Pin keys keep the clean path.
+  const navHref = (href: string) =>
+    engagementId ? `${href}?e=${encodeURIComponent(engagementId)}` : href;
   const [collapsed, setCollapsed] = useState(collapsedInitial);
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
@@ -181,7 +192,7 @@ export function PortalSidebar({
       >
         <div className="flex items-center justify-between gap-2">
           <Link
-            href="/portal"
+            href={navHref("/portal")}
             className="block"
             aria-label="Business Builder Portal home"
           >
@@ -230,7 +241,7 @@ export function PortalSidebar({
       >
         {/* Home — always first, returns to the portal dashboard. */}
         <Link
-          href="/portal"
+          href={navHref("/portal")}
           aria-current={isActiveHref("/portal") ? "page" : undefined}
           className={
             "flex items-center gap-2.5 rounded-md transition-colors " +
@@ -263,6 +274,7 @@ export function PortalSidebar({
                 <ModuleRow
                   key={"fav-" + m.href}
                   module={m}
+                  href={navHref(m.href)}
                   collapsed={collapsed}
                   isPinned
                   isActive={isActiveHref(m.href)}
@@ -299,6 +311,7 @@ export function PortalSidebar({
                   <ModuleRow
                     key={m.key}
                     module={m}
+                    href={navHref(m.href)}
                     collapsed={collapsed}
                     isPinned={pins.includes(m.href)}
                     isActive={isActiveHref(m.href)}
@@ -370,12 +383,14 @@ export function PortalSidebar({
 
 function ModuleRow({
   module,
+  href,
   collapsed,
   isPinned,
   isActive,
   onTogglePin,
 }: {
   module: PortalModule;
+  href: string;
   collapsed: boolean;
   isPinned: boolean;
   isActive: boolean;
@@ -386,7 +401,7 @@ function ModuleRow({
   if (collapsed) {
     return (
       <Link
-        href={module.href}
+        href={href}
         data-tour={`module-${module.key}`}
         title={module.label}
         aria-label={module.label}
@@ -412,7 +427,7 @@ function ModuleRow({
         />
       )}
       <Link
-        href={module.href}
+        href={href}
         data-tour={`module-${module.key}`}
         aria-current={isActive ? "page" : undefined}
         className={
