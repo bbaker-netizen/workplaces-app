@@ -10,6 +10,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, BarChart3 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getEngagementByIdOrSlug } from "@/lib/db/queries/engagements";
 import { listEngagementGoals } from "@/lib/db/queries/goals";
 import { getProjectWithTasks } from "@/lib/db/queries/projects";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
@@ -31,19 +32,22 @@ export default async function CoachProjectDetailPage({
   const project = await getProjectWithTasks(id);
   if (!project) notFound();
 
-  const [members, goals] = await Promise.all([
+  const [members, goals, projectEngagement] = await Promise.all([
     listEngagementMembers(project.engagementId),
     listEngagementGoals(project.engagementId),
+    getEngagementByIdOrSlug(project.engagementId),
   ]);
+  const clientName = projectEngagement?.name ?? null;
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-10">
       <header className="space-y-2">
         <Link
-          href="/business-builder/projects"
+          href={`/business-builder/engagements/${project.engagementId}`}
           className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="w-3 h-3" aria-hidden /> All projects
+          <ArrowLeft className="w-3 h-3" aria-hidden />
+          {clientName ? `${clientName} · Workspace` : "All projects"}
         </Link>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">

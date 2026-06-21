@@ -20,7 +20,10 @@ export default async function PortalProjectDetailPage({
   if (!engagement) redirect("/portal");
 
   const project = await getProjectWithTasks(params.id);
-  if (!project) notFound();
+  // Cross-client guard: only show a project that belongs to the engagement
+  // this portal is currently bound to. Without this, opening a project id
+  // from a different client would render it under this client's portal.
+  if (!project || project.engagementId !== engagement.id) notFound();
 
   const canEdit =
     profile.role === "master_admin" ||
