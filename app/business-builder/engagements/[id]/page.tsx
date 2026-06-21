@@ -64,7 +64,6 @@ import {
 } from "@/components/business-builder/EmbeddedAppManager";
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
-import { EngagementProgramControl } from "@/components/business-builder/EngagementProgramControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { EngagementRename } from "@/components/business-builder/EngagementRename";
@@ -264,13 +263,17 @@ export default async function EngagementDetailPage({
             name={data.eng.name ?? "Engagement"}
           />
           <div className="flex items-center gap-3 flex-wrap">
-            <Link
+            {/* Plain <a> (full-document nav): /portal/e/[id] is a Route
+                Handler that sets a cookie + redirects; Next's <Link>
+                client-side navigation can't follow it, so the click did
+                nothing. */}
+            <a
               href={`/portal/e/${id}`}
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
               title="See this client's portal exactly as they do"
             >
               <Eye className="w-3.5 h-3.5" aria-hidden /> Preview portal
-            </Link>
+            </a>
             <Link
               href={`/business-builder/documents/${id}`}
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
@@ -285,10 +288,6 @@ export default async function EngagementDetailPage({
             >
               <Video className="w-3.5 h-3.5" aria-hidden /> Meeting transcripts
             </Link>
-            <EngagementProgramControl
-              engagementId={id}
-              current={data.eng.type}
-            />
             <EngagementStatusControl
               engagementId={id}
               current={data.eng.status}
