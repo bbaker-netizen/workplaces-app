@@ -14,9 +14,14 @@ import { deleteEngagementPermanently } from "@/lib/actions/engagements";
 export function DeleteEngagementButton({
   engagementId,
   engagementName,
+  redirectTo,
 }: {
   engagementId: string;
   engagementName: string;
+  /** Where to go after a successful delete. Defaults to refreshing in
+   *  place (list view); pass a path when deleting from the engagement's
+   *  own page, which no longer exists afterward. */
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +42,8 @@ export function DeleteEngagementButton({
         setError(r.error);
         return;
       }
-      router.refresh();
+      if (redirectTo) router.push(redirectTo);
+      else router.refresh();
     });
   }
 

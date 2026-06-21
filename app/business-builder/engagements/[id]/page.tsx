@@ -65,6 +65,7 @@ import {
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
+import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { EngagementRename } from "@/components/business-builder/EngagementRename";
 import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
 
@@ -293,6 +294,13 @@ export default async function EngagementDetailPage({
               archived={Boolean(data.eng.archivedAt)}
               variant="full"
             />
+            {data.eng.archivedAt && (
+              <DeleteEngagementButton
+                engagementId={id}
+                engagementName={data.eng.name ?? "this client"}
+                redirectTo="/business-builder/engagements"
+              />
+            )}
           </div>
         </div>
         <p className="text-sm text-tbb-ink-3 max-w-2xl">
