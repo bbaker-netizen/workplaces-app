@@ -18,6 +18,10 @@ export default async function PortalSessionDetailPage({
   const session = await getSession(params.id);
   if (!session) notFound();
 
+  // Only Business Builders manage sessions; clients view read-only.
+  const canManage =
+    profile.role === "master_admin" || profile.role === "coach";
+
   const actionItems = await listSessionActionItems(session.id);
 
   return (
@@ -32,6 +36,7 @@ export default async function PortalSessionDetailPage({
           firefliesRecordingId: session.firefliesRecordingId,
         }}
         backHref="/portal/sessions"
+        canManage={canManage}
       />
 
       {actionItems.length > 0 && (

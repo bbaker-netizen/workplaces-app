@@ -46,7 +46,22 @@ export function SyncFromGoogleButton() {
       if (res.created) parts.push(`${res.created} added`);
       if (res.updated) parts.push(`${res.updated} updated`);
       if (res.cancelled) parts.push(`${res.cancelled} cancelled`);
-      setMsg(parts.length ? `Synced — ${parts.join(", ")}.` : "Already up to date.");
+      if (parts.length) {
+        setMsg(`Synced — ${parts.join(", ")}.`);
+      } else if (typeof res.scanned === "number") {
+        // Nothing created — tell the coach why so they can self-diagnose:
+        // were events even seen, and did any match a client?
+        setMsg(
+          res.scanned === 0
+            ? "No calendar events found in the next 120 days."
+            : res.matched && res.matched > 0
+              ? `Up to date — ${res.matched} of ${res.scanned} events already synced.`
+              : `Read ${res.scanned} calendar events, but none matched a client. ` +
+                `Make sure your session events include the client as a guest or have the client's name in the title.`,
+        );
+      } else {
+        setMsg("Already up to date.");
+      }
       router.refresh();
     });
   }

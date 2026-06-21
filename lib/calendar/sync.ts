@@ -43,6 +43,10 @@ export type CalendarSyncResult = {
   cancelled: number;
   skipped: boolean;
   reason?: string;
+  /** How many calendar events were read in the window. */
+  scanned?: number;
+  /** How many of those matched a client (by title or attendee email). */
+  matched?: number;
 };
 
 /** How far ahead to pull events. Two-touch-a-month BBS rhythm × a few
@@ -176,6 +180,7 @@ export async function syncCoachCalendar(
   let created = 0;
   let updated = 0;
   let cancelled = 0;
+  let matched = 0;
 
   await withSystemContext(async (tx) => {
     for (const ev of events) {
@@ -236,6 +241,7 @@ export async function syncCoachCalendar(
       // Couldn't attribute to exactly one client → leave it (and any prior
       // mapping) untouched.
       if (!match) continue;
+      matched++;
 
       if (existing) {
         // Keep the time in step with Google; preserve the coach's chosen
@@ -275,7 +281,14 @@ export async function syncCoachCalendar(
     }
   });
 
-  return { created, updated, cancelled, skipped: false };
+  return {
+    created,
+    updated,
+    cancelled,
+    skipped: false,
+    scanned: events.length,
+    matched,
+  };
 }
 
 /**

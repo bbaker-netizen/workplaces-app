@@ -39,11 +39,10 @@ import { actionItemAssignedEmail } from "@/lib/email/templates";
 
 type Role = UserProfile["role"];
 
-const FULL_EDITOR_ROLES: ReadonlyArray<Role> = [
-  "master_admin",
-  "coach",
-  "client_lead",
-];
+// The Business Builder controls action-item creation and assignment.
+// Clients (including client_lead) can only update the status of items
+// assigned to them — they can't create, reassign, or edit content.
+const FULL_EDITOR_ROLES: ReadonlyArray<Role> = ["master_admin", "coach"];
 
 function canEditAnything(role: Role): boolean {
   return (FULL_EDITOR_ROLES as readonly string[]).includes(role);

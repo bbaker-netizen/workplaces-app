@@ -351,6 +351,31 @@ export async function updateProspect(
         console.error("[updateProspect] company-name propagation failed:", e);
       }
     }
+
+    // Same idea for the program: keep the converted engagement's type in
+    // step with the prospect's programType so the Pipeline and the
+    // Engagements/Client-Portal list always agree. Best-effort.
+    if (
+      data.programType === "accelerator" ||
+      data.programType === "implementer"
+    ) {
+      try {
+        await withSystemContext(async (tx) => {
+          const [linked] = await tx
+            .select({ engagementId: prospects.convertedEngagementId })
+            .from(prospects)
+            .where(eq(prospects.id, data.id))
+            .limit(1);
+          if (!linked?.engagementId) return;
+          await tx
+            .update(engagements)
+            .set({ type: data.programType as "accelerator" | "implementer" })
+            .where(eq(engagements.id, linked.engagementId));
+        });
+      } catch (e) {
+        console.error("[updateProspect] program propagation failed:", e);
+      }
+    }
     revalidatePath("/business-builder/pipeline");
     revalidatePath(`/business-builder/pipeline/${data.id}`);
     revalidatePath("/business-builder/engagements");

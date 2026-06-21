@@ -97,6 +97,48 @@ export async function setEngagementStatus(
   }
 }
 
+/** The program a client is signed up for. */
+export type EngagementProgram = "accelerator" | "implementer";
+
+/**
+ * Set the engagement's program (Accelerator / Implementer) and keep the
+ * originating Pipeline lead's programType in step, so the Engagements
+ * list, the Client Portal list, and the Pipeline all show the same thing.
+ * Coach-only.
+ */
+export async function setEngagementProgram(
+  engagementId: string,
+  program: EngagementProgram,
+): Promise<Result> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  if (program !== "accelerator" && program !== "implementer") {
+    return { ok: false, error: "Invalid program." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(engagements)
+        .set({ type: program })
+        .where(eq(engagements.id, engagementId));
+      // Sync the originating lead's programType so the Pipeline agrees.
+      await tx
+        .update(prospects)
+        .set({ programType: program })
+        .where(eq(prospects.convertedEngagementId, engagementId));
+    });
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
+    revalidatePath("/business-builder/engagements");
+    revalidatePath("/business-builder/pipeline");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * Archive (soft-delete) an entire engagement — removes the client from
  * the Engagements list and closes their portal. Reversible via
