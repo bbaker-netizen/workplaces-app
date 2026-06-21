@@ -43,12 +43,9 @@ import {
 
 type Role = UserProfile["role"];
 function canEdit(role: Role): boolean {
-  return (
-    role === "master_admin" ||
-    role === "coach" ||
-    role === "client_lead" ||
-    role === "client_manager"
-  );
+  // Business Builders only — the coach controls action-item extraction,
+  // creation, and assignment. Clients can't pull drafts from a meeting.
+  return role === "master_admin" || role === "coach";
 }
 
 export type ActionResult<T = void> =

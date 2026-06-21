@@ -52,6 +52,7 @@ export default async function CoachSessionDetailPage({
           firefliesRecordingId: session.firefliesRecordingId,
         }}
         backHref={`/business-builder/sessions/${engagement.id}`}
+        canManage
       />
 
       {actionItems.length > 0 && (

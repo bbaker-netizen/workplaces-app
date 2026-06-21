@@ -43,21 +43,16 @@ export default async function PortalActionItemsPage() {
     ? STATUSES_VISIBLE_TO_COACH
     : STATUSES_VISIBLE_TO_CLIENT;
 
-  // Roles allowed to create from the portal: master_admin, Coach,
-  // client_lead. Lower roles get no New button.
+  // The Business Builder controls action-item creation and assignment, so
+  // only master_admin / Coach get the New button. Clients update status on
+  // items assigned to them.
   const canCreate =
-    profile.role === "master_admin" ||
-    profile.role === "coach" ||
-    profile.role === "client_lead";
+    profile.role === "master_admin" || profile.role === "coach";
 
-  // For non-full-editor roles, the status pill is also restricted —
-  // they can only update items assigned to them. Phase 1.2 simplifies:
-  // disable the pill for these roles unless we add per-card logic.
-  // Acceptable for now; refine in Phase 2 if it bites.
+  // Full edit (content/assignee) is Business-Builder-only too; clients are
+  // limited to status updates on their own items.
   const fullEditor =
-    profile.role === "master_admin" ||
-    profile.role === "coach" ||
-    profile.role === "client_lead";
+    profile.role === "master_admin" || profile.role === "coach";
 
   const items = visibleItems.map((it) => ({
     id: it.id,

@@ -17,6 +17,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import {
   cancelSession,
@@ -48,12 +49,15 @@ export type SessionDetailData = {
 export function SessionDetail({
   session,
   backHref,
-  onAfterDelete,
+  canManage = true,
 }: {
   session: SessionDetailData;
   backHref: string;
-  onAfterDelete?: () => void;
+  /** Only Business Builders manage sessions (edit, complete/cancel,
+   *  extract action items, delete). Clients view read-only. */
+  canManage?: boolean;
 }) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [editingTime, setEditingTime] = useState(false);
@@ -106,7 +110,9 @@ export function SessionDetail({
       if (!result.ok) {
         setError(result.error);
       } else {
-        onAfterDelete?.();
+        // Navigate to the list — the session no longer exists, so staying
+        // on this route would render a 404.
+        router.push(backHref);
       }
     });
   };
@@ -187,18 +193,20 @@ export function SessionDetail({
             >
               {statusLabel}
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                setTimeDraft(toDateTimeLocalValue(session.scheduledAt));
-                setTypeDraft(session.type);
-                setEditingTime(true);
-              }}
-              className="ml-auto p-1 rounded text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50"
-              aria-label="Edit time and format"
-            >
-              <Pencil className="w-3.5 h-3.5" aria-hidden />
-            </button>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTimeDraft(toDateTimeLocalValue(session.scheduledAt));
+                  setTypeDraft(session.type);
+                  setEditingTime(true);
+                }}
+                className="ml-auto p-1 rounded text-muted-foreground hover:text-foreground hover:bg-tbb-cream-50"
+                aria-label="Edit time and format"
+              >
+                <Pencil className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -244,6 +252,7 @@ export function SessionDetail({
           </div>
         )}
 
+        {canManage && (
         <div className="flex flex-wrap gap-2">
           {session.status !== "completed" ? (
             <button
@@ -298,6 +307,7 @@ export function SessionDetail({
             Delete
           </button>
         </div>
+        )}
         {error && (
           <p
             role="alert"
@@ -318,7 +328,7 @@ export function SessionDetail({
           <h2 className="font-bold text-foreground text-lg tracking-tight">
             Notes
           </h2>
-          {!editingNotes && (
+          {canManage && !editingNotes && (
             <button
               type="button"
               onClick={() => {
