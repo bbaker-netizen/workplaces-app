@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getActionItem } from "@/lib/db/queries/action-items";
+import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementProjects } from "@/lib/db/queries/projects";
 import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { ActionItemForm } from "@/components/action-items/ActionItemForm";
@@ -21,8 +22,11 @@ export default async function EditPortalActionItemPage({
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
 
+  const engagement = await getCurrentEngagement();
   const item = await getActionItem(params.id);
-  if (!item) notFound();
+  // Cross-client guard: only show an item that belongs to the engagement
+  // this portal is currently bound to.
+  if (!item || !engagement || item.engagementId !== engagement.id) notFound();
 
   const [members, projects] = await Promise.all([
     listEngagementMembers(item.engagementId),
