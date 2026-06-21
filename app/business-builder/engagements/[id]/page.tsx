@@ -266,7 +266,6 @@ export default async function EngagementDetailPage({
           <div className="flex items-center gap-3 flex-wrap">
             <Link
               href={`/portal/e/${id}`}
-              prefetch={false}
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
               title="See this client's portal exactly as they do"
             >
@@ -284,7 +283,7 @@ export default async function EngagementDetailPage({
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
               title="Fireflies meeting notes — sync the latest"
             >
-              <Video className="w-3.5 h-3.5" aria-hidden /> Meetings &amp; sync
+              <Video className="w-3.5 h-3.5" aria-hidden /> Meeting transcripts
             </Link>
             <EngagementProgramControl
               engagementId={id}
