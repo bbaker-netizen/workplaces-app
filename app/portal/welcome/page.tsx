@@ -57,7 +57,7 @@ export default async function PortalWelcomePage() {
         title="Action items"
       >
         <p>
-          Action items are the commitments coming out of our coaching.
+          Action items are the commitments coming out of our Business Building Sessions.
           Each one has an owner, a due date, and a status. You&apos;ll
           see the ones assigned to you on your dashboard.
         </p>

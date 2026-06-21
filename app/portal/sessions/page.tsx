@@ -51,7 +51,7 @@ export default async function PortalSessionsPage() {
           {engagement.name ?? "Engagement"}
         </p>
         <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
-          Sessions
+          Business Building Sessions
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
           Your scheduled Business Building Sessions are listed below — these are
