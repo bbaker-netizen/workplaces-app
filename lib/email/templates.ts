@@ -178,6 +178,42 @@ export function mentionEmail(input: MentionEmailInput): EmailEnvelope {
   return { to: input.to, subject, html, text };
 }
 
+/* -------------------------- new message -------------------------- */
+
+/** Sent to a thread's participants (other than the author / mentioned
+ *  users) when a new message is posted — the "you have a new message"
+ *  notification by email. Reuses MentionEmailInput's shape. */
+export function newMessageEmail(input: MentionEmailInput): EmailEnvelope {
+  const url = input.url.startsWith("http") ? input.url : appUrl() + input.url;
+  const subject = `New message from ${input.authorName} — ${input.contextLabel}`;
+  const preheader = flattenMarkdown(input.messageBody, 120);
+  const safeQuote = escapeHtml(flattenMarkdown(input.messageBody, 600));
+
+  const html = shell({
+    preheader,
+    heading: `New message from ${input.authorName}`,
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.recipientName.split(" ")[0] ?? input.recipientName)},</p>
+      <p style="margin:0 0 12px 0;">There's a new message in <strong>${escapeHtml(input.contextLabel)}</strong>.</p>
+      <blockquote style="margin:16px 0;padding:12px 14px;border-left:3px solid #2E4057;background:#F5F1E8;font-size:14px;line-height:1.5;color:#1A1A1A;">
+        ${safeQuote}
+      </blockquote>
+    `,
+    buttonHref: url,
+    buttonLabel: "View thread",
+  });
+
+  const text = [
+    `New message from ${input.authorName} in ${input.contextLabel}.`,
+    "",
+    flattenMarkdown(input.messageBody, 600),
+    "",
+    `View: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
 /* ---------------------------- assigned ---------------------------- */
 
 export type ActionItemAssignedEmailInput = {

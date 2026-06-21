@@ -22,6 +22,10 @@ export type PipelineProspect = Prospect & {
    *  (a direct link) takes precedence; this is the fallback for clients
    *  linked via an engagement instead. */
   engagementQboLifetimePaymentsCents: number | null;
+  /** The converted engagement's program/type ("accelerator" |
+   *  "implementer"), used as the fallback for the Program column when the
+   *  prospect's own programType isn't set. */
+  engagementType: string | null;
 };
 
 export async function listProspects(): Promise<PipelineProspect[]> {
@@ -40,6 +44,7 @@ export async function listProspects(): Promise<PipelineProspect[]> {
         ownerName: userProfiles.fullName,
         engagementQboLifetimePaymentsCents:
           engagements.qboLifetimePaymentsCents,
+        engagementType: engagements.type,
       })
       .from(prospects)
       .leftJoin(
@@ -56,6 +61,7 @@ export async function listProspects(): Promise<PipelineProspect[]> {
       ...r.prospect,
       ownerName: r.ownerName,
       engagementQboLifetimePaymentsCents: r.engagementQboLifetimePaymentsCents,
+      engagementType: r.engagementType,
     }));
   });
 }
@@ -68,6 +74,7 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
         ownerName: userProfiles.fullName,
         engagementQboLifetimePaymentsCents:
           engagements.qboLifetimePaymentsCents,
+        engagementType: engagements.type,
       })
       .from(prospects)
       .leftJoin(
@@ -86,6 +93,7 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
       ownerName: row.ownerName,
       engagementQboLifetimePaymentsCents:
         row.engagementQboLifetimePaymentsCents,
+      engagementType: row.engagementType,
     };
   });
 }
