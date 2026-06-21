@@ -90,6 +90,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "action_item_assigned",
   "action_item_due_soon",
   "message",
+  "document",
 ]);
 
 export const notificationSentViaEnum = pgEnum("notification_sent_via", [

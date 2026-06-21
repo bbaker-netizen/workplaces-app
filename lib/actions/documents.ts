@@ -34,6 +34,8 @@ import {
   documentTags,
   documents,
   engagements,
+  notifications,
+  userProfiles,
 } from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
@@ -45,6 +47,8 @@ import {
   uploadDocumentBlob,
 } from "@/lib/storage/blobs";
 import { uploadFileToDrive } from "@/lib/integrations/google-drive";
+import { sendEmailQuietly } from "@/lib/email/send";
+import { documentSharedEmail } from "@/lib/email/templates";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -222,6 +226,56 @@ export async function uploadDocument(
       } catch (e) {
         console.error("[uploadDocument] Drive mirror failed:", e);
       }
+    }
+
+    // Per-event notify + email: everyone else in the engagement gets a
+    // "document shared" notification and email. Best-effort — never fails
+    // the upload. Members live in the engagement's org (boundOrgId).
+    try {
+      const recipients = await withSystemContext(async (tx) =>
+        tx
+          .select({
+            id: userProfiles.id,
+            email: userProfiles.email,
+            fullName: userProfiles.fullName,
+          })
+          .from(userProfiles)
+          .where(eq(userProfiles.orgId, boundOrgId)),
+      );
+      const others = recipients.filter(
+        (r) => r.id !== profile.userProfileId,
+      );
+      if (others.length > 0) {
+        await withSystemContext(async (tx) =>
+          tx.insert(notifications).values(
+            others.map((r) => ({
+              orgId: boundOrgId,
+              userProfileId: r.id,
+              type: "document" as const,
+              parentEntityType: "document",
+              parentEntityId: created.id,
+              sentVia: "in_app" as const,
+            })),
+          ),
+        );
+        await Promise.all(
+          others
+            .filter((r): r is typeof r & { email: string } => Boolean(r.email))
+            .map((r) =>
+              sendEmailQuietly(
+                documentSharedEmail({
+                  to: r.email,
+                  recipientName: r.fullName,
+                  uploaderName: profile.fullName,
+                  filename: created.filename,
+                  url: "/portal/documents",
+                }),
+              ),
+            ),
+        );
+      }
+    } catch (e) {
+      console.error("[uploadDocument] notify failed:", e);
     }
 
     revalidatePath("/portal/documents");
