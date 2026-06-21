@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { SyncFromGoogleButton } from "@/components/calendar/SyncFromGoogleButton";
+import { GoogleConnectionBanner } from "@/components/calendar/GoogleConnectionBanner";
 import {
   actionItems,
   bbsSessions,
@@ -43,7 +44,10 @@ import {
   projects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
-import { listExternalEvents } from "@/lib/integrations/google-calendar";
+import {
+  getCalendarConnectionHealth,
+  listExternalEvents,
+} from "@/lib/integrations/google-calendar";
 import { SuggestSlotsPanel } from "./SuggestSlotsPanel";
 
 type ViewMode = "week" | "month";
@@ -384,8 +388,15 @@ export default async function CalendarPage({
   }
   void inArray;
 
+  // Live connection health — a dead Google token surfaces here instead of
+  // silently producing zero synced sessions.
+  const calendarHealth = await getCalendarConnectionHealth(
+    profile.userProfileId,
+  );
+
   return (
     <main className="max-w-6xl mx-auto px-6 py-12 space-y-6">
+      <GoogleConnectionBanner health={calendarHealth} />
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div className="space-y-1">
           <p className="tbb-eyebrow">Schedule</p>

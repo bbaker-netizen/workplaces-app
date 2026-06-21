@@ -10,6 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   getEngagementByIdOrSlug,
@@ -64,5 +65,11 @@ export async function GET(
       maxAge: 60 * 60 * 24 * 30,
     });
   }
+  // The selected engagement is the cookie that scopes every /portal/*
+  // module. Changing it must invalidate ALL cached portal routes, or a
+  // sibling page (e.g. /portal/sessions) keeps showing the previously
+  // previewed client while the layout banner shows the new one. Explicit
+  // bust, independent of the experimental router-cache staleTimes flag.
+  revalidatePath("/portal", "layout");
   return res;
 }
