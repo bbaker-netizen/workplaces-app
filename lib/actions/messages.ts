@@ -50,7 +50,7 @@ import {
 } from "@/lib/communication/audience";
 import { TOMBSTONE_BODY } from "@/lib/communication/tombstone";
 import { sendEmailQuietly } from "@/lib/email/send";
-import { mentionEmail } from "@/lib/email/templates";
+import { mentionEmail, newMessageEmail } from "@/lib/email/templates";
 import { emitEngagementEvent } from "@/lib/realtime";
 
 type Role = UserProfile["role"];
@@ -192,6 +192,12 @@ export async function createMessage(
           fullName: string;
           role: UserProfile["role"];
         }> = [];
+        let messageRecipients: Array<{
+          id: string;
+          email: string | null;
+          fullName: string;
+          role: UserProfile["role"];
+        }> = [];
         const requested = data.mentions.filter(
           (id) => id !== profile.userProfileId,
         );
@@ -267,6 +273,40 @@ export async function createMessage(
           );
         }
 
+        // Every other participant who can see this thread gets a plain
+        // "new message" notification + email (per-event). Excludes the
+        // author and anyone already getting a mention email so nobody is
+        // double-notified. Members live in the engagement's (client) org.
+        const mentionSet = new Set(mentionIds);
+        const orgMembers = await tx
+          .select({
+            id: userProfiles.id,
+            email: userProfiles.email,
+            fullName: userProfiles.fullName,
+            role: userProfiles.role,
+          })
+          .from(userProfiles)
+          .where(eq(userProfiles.orgId, boundOrgId));
+        messageRecipients = orgMembers.filter(
+          (m) =>
+            m.id !== profile.userProfileId &&
+            !mentionSet.has(m.id) &&
+            Boolean(m.email) &&
+            canViewThread(data.parentEntityType, m.role),
+        );
+        if (messageRecipients.length > 0) {
+          await tx.insert(notifications).values(
+            messageRecipients.map((m) => ({
+              orgId: boundOrgId,
+              userProfileId: m.id,
+              type: "message" as const,
+              parentEntityType: data.parentEntityType,
+              parentEntityId: row.id,
+              sentVia: "in_app" as const,
+            })),
+          );
+        }
+
         // Realtime: notify any SSE subscribers on this engagement.
         await emitEngagementEvent(tx, data.engagementId, "message_created", {
           messageId: row.id,
@@ -274,14 +314,22 @@ export async function createMessage(
           parentEntityId: data.parentEntityId,
         });
 
-        return { messageId: row.id, parentTitle, validMentionRecipients };
+        return {
+          messageId: row.id,
+          parentTitle,
+          validMentionRecipients,
+          messageRecipients,
+        };
       },
     );
 
     // Send mention emails outside the transaction. Best-effort —
     // failures log, don't surface to the user. Working-hours guard
     // inside `sendEmailQuietly` handles outside-hours queueing.
-    if (txResult.validMentionRecipients.length > 0) {
+    if (
+      txResult.validMentionRecipients.length > 0 ||
+      txResult.messageRecipients.length > 0
+    ) {
       const authorName = await loadAuthorName(profile);
       const contextLabel =
         data.parentEntityType === THREAD_TYPE.actionItem
@@ -295,8 +343,9 @@ export async function createMessage(
                 ? "leadership"
                 : "team"
             }`;
-      await Promise.all(
-        txResult.validMentionRecipients.map((r) =>
+      await Promise.all([
+        // Mentioned users get the "you were mentioned" email…
+        ...txResult.validMentionRecipients.map((r) =>
           sendEmailQuietly(
             mentionEmail({
               to: r.email,
@@ -308,7 +357,22 @@ export async function createMessage(
             }),
           ),
         ),
-      );
+        // …everyone else in the thread gets a "new message" email.
+        ...txResult.messageRecipients
+          .filter((r): r is typeof r & { email: string } => Boolean(r.email))
+          .map((r) =>
+            sendEmailQuietly(
+              newMessageEmail({
+                to: r.email,
+                recipientName: r.fullName,
+                authorName,
+                contextLabel,
+                messageBody: data.body,
+                url,
+              }),
+            ),
+          ),
+      ]);
     }
 
     revalidateForParent(

@@ -43,6 +43,7 @@ type ColumnKey =
   | "email"
   | "phone"
   | "stage"
+  | "program"
   | "value"
   | "monthly"
   | "next_action"
@@ -71,6 +72,7 @@ const COLUMNS: ColumnDef[] = [
   // Stage column has a 164px chip + 32px cell padding = needs 196 to
   // never clip. 210 gives a tiny bit of breathing room.
   { key: "stage", label: "Stage", defaultWidth: 210, defaultVisible: true },
+  { key: "program", label: "Program", defaultWidth: 130, defaultVisible: false },
   { key: "value", label: "Total value", defaultWidth: 110, defaultVisible: true, alignRight: true },
   { key: "monthly", label: "Monthly", defaultWidth: 110, defaultVisible: true, alignRight: true },
   { key: "next_action", label: "Next action", defaultWidth: 160, defaultVisible: true },
@@ -858,6 +860,25 @@ function CellByKey({
           />
         </Td>
       );
+    case "program": {
+      // The program the client is signed up for. The prospect's own
+      // programType wins; fall back to the converted engagement's type.
+      const raw = prospect.programType ?? prospect.engagementType ?? null;
+      const label = raw
+        ? raw.charAt(0).toUpperCase() + raw.slice(1)
+        : null;
+      return (
+        <Td>
+          {label ? (
+            <span className="inline-flex items-center text-[11px] font-bold uppercase tracking-tbb-caps px-2 py-0.5 rounded-pill bg-tbb-blue-50 text-tbb-navy border border-tbb-line whitespace-nowrap">
+              {label}
+            </span>
+          ) : (
+            <Dash />
+          )}
+        </Td>
+      );
+    }
     case "value": {
       // The client's lifetime payments from QuickBooks — a direct customer
       // link on the prospect, else a link via the converted engagement.
