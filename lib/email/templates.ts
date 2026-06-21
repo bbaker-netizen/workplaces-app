@@ -703,7 +703,7 @@ export function engagementWelcomeEmail(
       </p>
 
       <p style="margin:0 0 24px 0;padding:16px 20px;background:#F5F1E8;border-left:4px solid #E87722;font-size:15px;line-height:1.55;">
-        The Business Building Program is a structured coaching engagement
+        The Business Building Program is a structured Business Building engagement
         designed to move two needles in your business: <strong>top-line
         revenue</strong> and <strong>margin</strong>. Twice-monthly
         sessions, a focused set of deliverables (SOPs, org charts,
@@ -768,7 +768,7 @@ export function engagementWelcomeEmail(
     "",
     `I'm thrilled you've decided to join us. This email is your formal welcome to the ${programLabel} — and the start of the work we're going to do together.`,
     "",
-    `The Business Building Program is a structured coaching engagement designed to move two needles in your business: top-line revenue and margin. Twice-monthly sessions, a focused set of deliverables, and a private portal where every piece of the work lives in one place.`,
+    `The Business Building Program is a structured Business Building engagement designed to move two needles in your business: top-line revenue and margin. Twice-monthly sessions, a focused set of deliverables, and a private portal where every piece of the work lives in one place.`,
     "",
     "What happens next:",
     "  1. Accept your invitation with the link below. You'll set up your secure login and land in your private portal.",
