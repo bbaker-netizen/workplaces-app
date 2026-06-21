@@ -3,8 +3,10 @@ import { CalendarPlus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementSessions } from "@/lib/db/queries/bbs-sessions";
+import { getAvailability } from "@/lib/scheduling/availability";
 import { ScheduleSessionForm } from "@/components/sessions/ScheduleSessionForm";
 import { SessionList } from "@/components/sessions/SessionList";
+import { BookAvailability } from "@/components/sessions/BookAvailability";
 
 export default async function PortalSessionsPage() {
   const profile = await ensureUserProfile();
@@ -32,6 +34,15 @@ export default async function PortalSessionsPage() {
     profile.role === "client_manager";
 
   const { upcoming, past } = await listEngagementSessions(engagement.id);
+  // Cross-Builder availability for the booking picker (only needed when the
+  // viewer can book). Best-effort — if Google isn't connected we fall back
+  // to the manual request form.
+  const availability = canSchedule
+    ? await getAvailability({ days: 14 }).catch(() => ({
+        days: [],
+        anyConnected: false,
+      }))
+    : { days: [], anyConnected: false };
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12">
@@ -70,15 +81,32 @@ export default async function PortalSessionsPage() {
             <div className="flex items-center gap-2">
               <CalendarPlus className="w-4 h-4 text-tbb-blue" aria-hidden />
               <h2 className="font-bold text-tbb-navy text-lg tracking-tight">
-                Need more time? Request an additional session
+                Need more time? Book an additional session
               </h2>
             </div>
-            <p className="text-sm text-tbb-ink-3">
-              This is only for booking time <strong>on top of</strong> your
-              regular sessions. Pick a date and time that works for you and
-              we&apos;ll confirm it and send a calendar invite.
-            </p>
-            <ScheduleSessionForm engagementId={engagement.id} />
+            {availability.days.length > 0 ? (
+              <>
+                <p className="text-sm text-tbb-ink-3">
+                  Pick an open time that works for you — these are the slots
+                  your Business Builders are free. You&apos;ll get a calendar
+                  invite with a video link. This is for time{" "}
+                  <strong>on top of</strong> your regular sessions.
+                </p>
+                <BookAvailability
+                  engagementId={engagement.id}
+                  days={availability.days}
+                />
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-tbb-ink-3">
+                  This is only for booking time <strong>on top of</strong> your
+                  regular sessions. Pick a date and time that works for you and
+                  we&apos;ll confirm it and send a calendar invite.
+                </p>
+                <ScheduleSessionForm engagementId={engagement.id} />
+              </>
+            )}
           </section>
         )}
       </div>
