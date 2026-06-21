@@ -293,6 +293,68 @@ export async function getConnectionStatus(
   }
 }
 
+/**
+ * Health-aware connection status. Unlike `getConnectionStatus` (which only
+ * checks whether a token row exists), this actually exercises the refresh
+ * token so a SILENTLY dead connection (revoked / expired refresh token —
+ * the classic "it stopped syncing and nobody noticed" failure) surfaces as
+ * `needs-reconnect` instead of looking healthy. Does at most one token
+ * refresh, which is cached until expiry, so it's cheap to call per render.
+ */
+export type CalendarConnectionHealth =
+  | { state: "not-connected" }
+  | { state: "needs-reconnect"; email: string | null }
+  | {
+      state: "connected";
+      email: string | null;
+      connectedAt: Date | null;
+    };
+
+export async function getCalendarConnectionHealth(
+  userProfileId: string,
+): Promise<CalendarConnectionHealth> {
+  let row: { googleEmail: string | null; createdAt: Date } | null = null;
+  try {
+    row = await withSystemContext(async (tx) => {
+      const [r] = await tx
+        .select({
+          googleEmail: googleCalendarTokens.googleEmail,
+          createdAt: googleCalendarTokens.createdAt,
+        })
+        .from(googleCalendarTokens)
+        .where(eq(googleCalendarTokens.userProfileId, userProfileId))
+        .limit(1);
+      return r ?? null;
+    });
+  } catch (e) {
+    console.error("[google-calendar] health lookup failed:", e);
+    return { state: "not-connected" };
+  }
+  if (!row) return { state: "not-connected" };
+
+  try {
+    const token = await getValidAccessToken(userProfileId);
+    if (!token) return { state: "not-connected" };
+    return {
+      state: "connected",
+      email: row.googleEmail,
+      connectedAt: row.createdAt,
+    };
+  } catch (e) {
+    if (e instanceof GoogleReconnectRequiredError) {
+      return { state: "needs-reconnect", email: row.googleEmail };
+    }
+    // Transient (network/Google 5xx) — don't cry wolf; the stored
+    // connection is still presumed good.
+    console.error("[google-calendar] health refresh probe failed:", e);
+    return {
+      state: "connected",
+      email: row.googleEmail,
+      connectedAt: row.createdAt,
+    };
+  }
+}
+
 /* ------------------------------ Events ------------------------------ */
 
 export type GoogleEventPayload = {
