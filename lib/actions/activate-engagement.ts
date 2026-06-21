@@ -116,12 +116,19 @@ async function ensureCoachId(
   });
 }
 
-/** Build the orgs + engagements row values for a prospect (no Clerk). */
-function buildRows(prospect: Prospect, coachId: string) {
+/** Build the orgs + engagements row values for a prospect (no Clerk).
+ *  `programOverride`, when supplied, is the program chosen at the moment
+ *  of conversion — the single source of truth for the engagement's type. */
+function buildRows(
+  prospect: Prospect,
+  coachId: string,
+  programOverride?: "accelerator" | "implementer",
+) {
   const newOrgId = randomUUID();
   const newEngagementId = randomUUID();
   const type: "accelerator" | "implementer" =
-    prospect.programType === "implementer" ? "implementer" : "accelerator";
+    programOverride ??
+    (prospect.programType === "implementer" ? "implementer" : "accelerator");
   return {
     newEngagementId,
     org: {
@@ -145,9 +152,12 @@ function buildRows(prospect: Prospect, coachId: string) {
   };
 }
 
-/** Activate a single prospect (the one-click "Convert" CTA). */
+/** Activate a single prospect (the "Convert" CTA). The coach picks the
+ *  program at this moment; it's saved to the prospect AND used as the
+ *  engagement's type so every surface agrees from day one. */
 export async function activateProspectAsEngagement(
   prospectId: string,
+  program?: "accelerator" | "implementer",
 ): Promise<Result> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
@@ -166,7 +176,7 @@ export async function activateProspectAsEngagement(
       if (p.convertedEngagementId) {
         return { engagementId: p.convertedEngagementId, reward: null };
       }
-      const rows = buildRows(p, coachId);
+      const rows = buildRows(p, coachId, program);
       await tx.insert(orgs).values(rows.org);
       await tx.insert(engagements).values(rows.engagement);
       await tx
@@ -174,6 +184,10 @@ export async function activateProspectAsEngagement(
         .set({
           convertedEngagementId: rows.newEngagementId,
           status: "onboarded",
+          // Persist the program chosen at conversion so the prospect (the
+          // single source the Engagements + Portal lists read) matches the
+          // engagement. Falls through to whatever was already set otherwise.
+          ...(program ? { programType: program } : {}),
         })
         .where(eq(prospects.id, p.id));
       const reward = await insertReferralReward(tx, {

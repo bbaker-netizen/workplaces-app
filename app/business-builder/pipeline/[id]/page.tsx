@@ -314,7 +314,10 @@ export default async function ProspectDetailPage({
                   the client to their portal separately when you&apos;re
                   ready.
                 </p>
-                <ActivateEngagementButton prospectId={prospect.id} />
+                <ActivateEngagementButton
+                  prospectId={prospect.id}
+                  currentProgram={prospect.programType}
+                />
               </div>
             )}
             {prospect.convertedEngagementId && (
