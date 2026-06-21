@@ -23,6 +23,7 @@ import {
   gte,
   isNotNull,
   lte,
+  ne,
 } from "drizzle-orm";
 import {
   Briefcase,
@@ -158,6 +159,8 @@ export default async function PortalCalendarPage({
               .where(
                 and(
                   eq(bbsSessions.engagementId, engagement.id),
+                  // Cancelled sessions come off the calendar entirely.
+                  ne(bbsSessions.status, "cancelled"),
                   gte(bbsSessions.scheduledAt, rangeStart),
                   lte(bbsSessions.scheduledAt, rangeEnd),
                 ),
@@ -450,7 +453,7 @@ export default async function PortalCalendarPage({
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
             <div
               key={d}
-              className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 text-center py-2"
+              className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 text-center py-2"
             >
               {d}
             </div>
@@ -470,14 +473,14 @@ export default async function PortalCalendarPage({
               <div
                 key={i}
                 className={
-                  "border-b border-r border-tbb-line-soft p-2 min-h-[110px] " +
+                  "border-b border-r border-tbb-line-soft p-2 min-h-[130px] " +
                   (c.inRange ? "bg-white" : "bg-tbb-cream-50/40")
                 }
               >
                 <div className="flex items-baseline justify-between mb-1.5">
                   <span
                     className={
-                      "text-xs font-bold " +
+                      "text-sm font-bold " +
                       (isToday
                         ? "bg-tbb-blue text-white px-1.5 py-0.5 rounded-pill"
                         : c.inRange
@@ -488,7 +491,7 @@ export default async function PortalCalendarPage({
                     {c.date.getDate()}
                   </span>
                   {dayEvents.length > 3 && (
-                    <span className="text-[10px] text-tbb-ink-3">
+                    <span className="text-xs text-tbb-ink-3">
                       {dayEvents.length}
                     </span>
                   )}
@@ -500,7 +503,7 @@ export default async function PortalCalendarPage({
                     </li>
                   ))}
                   {dayEvents.length > 3 && (
-                    <li className="text-[10px] text-tbb-ink-3 italic">
+                    <li className="text-xs text-tbb-ink-3 italic">
                       +{dayEvents.length - 3} more
                     </li>
                   )}
@@ -582,7 +585,7 @@ function EventChip({ event }: { event: CalendarEvent }) {
     <Link
       href={event.href}
       className={
-        "block px-1.5 py-1 rounded text-[10px] leading-snug border-l-2 hover:opacity-80 " +
+        "block px-2 py-1.5 rounded text-sm leading-snug border-l-2 hover:opacity-80 " +
         (isSession
           ? "bg-tbb-blue-50 border-tbb-blue text-tbb-navy"
           : isAction
