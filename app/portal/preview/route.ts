@@ -8,6 +8,7 @@
 import { cookies } from "next/headers";
 import { desc, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   PORTAL_PREVIEW_COOKIE,
@@ -65,6 +66,10 @@ export async function GET(req: Request) {
         });
       }
     }
+    // Entering preview (and possibly defaulting the selected engagement)
+    // changes what every /portal/* module renders — invalidate the cached
+    // portal routes so no sibling page shows a stale client.
+    revalidatePath("/portal", "layout");
   }
   return res;
 }
