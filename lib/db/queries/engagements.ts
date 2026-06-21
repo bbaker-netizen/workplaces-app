@@ -122,7 +122,7 @@ export async function listCoachEngagements(): Promise<Engagement[]> {
       .limit(1);
     if (!Coach) return [];
 
-    return tx
+    const rows = await tx
       .select()
       .from(engagements)
       .where(
@@ -131,5 +131,12 @@ export async function listCoachEngagements(): Promise<Engagement[]> {
           isNull(engagements.archivedAt),
         ),
       );
+    // Alphabetical by client name (case-insensitive) so the switcher and
+    // any list reads A→Z.
+    return rows.sort((a, b) =>
+      (a.name ?? "").localeCompare(b.name ?? "", undefined, {
+        sensitivity: "base",
+      }),
+    );
   });
 }
