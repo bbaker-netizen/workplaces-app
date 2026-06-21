@@ -31,6 +31,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
+import { formatMeetingSummary } from "@/lib/meetings/format";
 
 export default async function EngagementMeetingsPage({
   params,
@@ -185,7 +186,7 @@ function MeetingCard({
               <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
                 Highlights
               </p>
-              <MarkdownBody body={meeting.summaryBullets} />
+              <MarkdownBody body={formatMeetingSummary(meeting.summaryBullets)} />
             </section>
           )}
           {meeting.summaryKeywords && (
