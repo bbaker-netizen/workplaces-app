@@ -102,6 +102,32 @@ export default async function PortalLayout({
         <div className="sticky top-0 z-20 border-b border-tbb-line bg-background/95 backdrop-blur px-6 py-2.5 flex items-center gap-3">
           <PortalHomeLink />
         </div>
+        {isCoachRole && (
+          <div className="border-b border-tbb-blue/30 bg-tbb-blue-50 px-6 py-2.5 text-sm flex items-center gap-x-4 gap-y-1 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
+              Coach preview
+            </span>
+            <span className="text-tbb-ink-2">
+              You&apos;re previewing{" "}
+              <strong className="text-tbb-navy">
+                {engagement?.name ?? "a client portal"}
+              </strong>
+              . This is what they see.
+            </span>
+            <a
+              href="/business-builder/engagements"
+              className="ml-auto inline-flex items-center text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              Switch client
+            </a>
+            <a
+              href="/home"
+              className="inline-flex items-center text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
+            >
+              Exit preview
+            </a>
+          </div>
+        )}
         {readOnly && (
           <div className="border-b border-tbb-warning/40 bg-tbb-warning/10 px-6 py-3 text-sm text-tbb-ink-2 flex items-center gap-3 flex-wrap">
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-warning">
