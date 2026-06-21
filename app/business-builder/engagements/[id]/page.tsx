@@ -64,6 +64,7 @@ import {
 } from "@/components/business-builder/EmbeddedAppManager";
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
+import { EngagementProgramControl } from "@/components/business-builder/EngagementProgramControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { EngagementRename } from "@/components/business-builder/EngagementRename";
@@ -285,6 +286,10 @@ export default async function EngagementDetailPage({
             >
               <Video className="w-3.5 h-3.5" aria-hidden /> Meetings &amp; sync
             </Link>
+            <EngagementProgramControl
+              engagementId={id}
+              current={data.eng.type}
+            />
             <EngagementStatusControl
               engagementId={id}
               current={data.eng.status}
