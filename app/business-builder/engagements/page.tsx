@@ -51,6 +51,7 @@ export default async function EngagementsListPage() {
         engagementId: prospects.convertedEngagementId,
         contactName: prospects.contactName,
         companyName: prospects.companyName,
+        programType: prospects.programType,
         archivedAt: prospects.archivedAt,
       })
       .from(prospects)
@@ -141,7 +142,7 @@ export default async function EngagementsListPage() {
               </Link>
               <EngagementProgramControl
                 engagementId={e.id}
-                current={e.type}
+                current={e.prospect?.programType ?? e.type}
                 compact
               />
               <Link
