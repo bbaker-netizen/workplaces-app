@@ -17,9 +17,12 @@ import {
 export function EngagementProgramControl({
   engagementId,
   current,
+  compact = false,
 }: {
   engagementId: string;
   current: string | null;
+  /** Hide the "Program" label — for tight rows like the Engagements list. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [value, setValue] = useState<EngagementProgram>(
@@ -45,9 +48,11 @@ export function EngagementProgramControl({
 
   return (
     <div className="inline-flex items-center gap-2">
-      <label className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-        Program
-      </label>
+      {!compact && (
+        <label className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+          Program
+        </label>
+      )}
       <div className="relative">
         <select
           value={value}
