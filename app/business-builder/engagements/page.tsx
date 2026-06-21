@@ -69,9 +69,18 @@ export default async function EngagementsListPage() {
 
   // Archived clients drop off the main list into a separate, restorable
   // section. Archive is the single source of truth — set directly or when
-  // the client's contact is archived.
-  const active = rows.filter((e) => !e.archivedAt);
-  const archived = rows.filter((e) => e.archivedAt);
+  // the client's contact is archived. Both lists read A→Z by client name.
+  const byName = (
+    a: { name: string | null; orgName: string | null },
+    b: { name: string | null; orgName: string | null },
+  ) =>
+    (a.name ?? a.orgName ?? "").localeCompare(
+      b.name ?? b.orgName ?? "",
+      undefined,
+      { sensitivity: "base" },
+    );
+  const active = rows.filter((e) => !e.archivedAt).sort(byName);
+  const archived = rows.filter((e) => e.archivedAt).sort(byName);
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">

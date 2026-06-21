@@ -235,6 +235,12 @@ export async function scanDriveFolderMatches(
       suggestion,
     };
   });
+  // A→Z by client name so the matcher reads the same as the Engagements list.
+  matches.sort((a, b) =>
+    a.engagementName.localeCompare(b.engagementName, undefined, {
+      sensitivity: "base",
+    }),
+  );
 
   const folderOptions: DriveFolderOption[] = [...folders]
     .sort((a, b) => a.name.localeCompare(b.name))
