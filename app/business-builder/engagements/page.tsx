@@ -11,7 +11,6 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
-import { EngagementProgramControl } from "@/components/business-builder/EngagementProgramControl";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { CollapsibleSection } from "@/components/business-builder/CollapsibleSection";
 import { SeedDemoButton } from "@/components/business-builder/SeedDemoButton";
@@ -140,18 +139,27 @@ export default async function EngagementsListPage() {
                 </span>
                 <ArrowRight className="w-4 h-4 text-tbb-ink-3 shrink-0" aria-hidden />
               </Link>
-              <EngagementProgramControl
-                engagementId={e.id}
-                current={e.prospect?.programType ?? e.type}
-                compact
-              />
-              <Link
+              {/* Program is set at conversion and lives on the prospect —
+                  shown here read-only (no selector) since the two are now
+                  connected end to end. */}
+              <span
+                className="shrink-0 inline-flex items-center text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill bg-tbb-cream-100 text-tbb-ink-2 capitalize"
+                title="The program this client is signed up for (set at conversion)"
+              >
+                {(e.prospect?.programType ?? e.type) === "implementer"
+                  ? "Implementer"
+                  : "Accelerator"}
+              </span>
+              {/* Plain <a> (full-document nav) — this target is a Route
+                  Handler that sets a cookie + redirects; Next's <Link>
+                  client-side navigation can't follow it. */}
+              <a
                 href={`/portal/e/${e.id}`}
                 title="See this client's portal exactly as they see it"
                 className="shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill border border-tbb-line text-tbb-blue hover:border-tbb-blue hover:bg-white transition-colors"
               >
                 <Eye className="w-3 h-3" aria-hidden /> View portal
-              </Link>
+              </a>
               <EngagementArchiveButton
                 engagementId={e.id}
                 engagementName={e.name ?? e.orgName ?? "this client"}
