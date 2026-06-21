@@ -103,6 +103,7 @@ export async function syncCoachCalendar(
         id: engagements.id,
         orgId: engagements.orgId,
         name: engagements.name,
+        createdAt: engagements.createdAt,
       })
       .from(engagements)
       .where(
@@ -140,12 +141,27 @@ export async function syncCoachCalendar(
       }))
       .filter((e) => e.norm.length >= 4);
 
-    return { emailMap, nameMatchers, engagementCount: engs.length };
+    // Per-engagement metadata so we can collapse DUPLICATE engagement rows
+    // for the same client (same normalized name) instead of bailing on an
+    // "ambiguous" match.
+    const engMeta = new Map<
+      string,
+      { norm: string; orgId: string; createdAt: Date }
+    >();
+    for (const e of engs) {
+      engMeta.set(e.id, {
+        norm: normalizeName(e.name ?? ""),
+        orgId: e.orgId,
+        createdAt: e.createdAt,
+      });
+    }
+
+    return { emailMap, nameMatchers, engMeta, engagementCount: engs.length };
   });
 
   if (!maps) return EMPTY("not-a-coach");
   if (maps.engagementCount === 0) return EMPTY("no-engagements");
-  const { emailMap, nameMatchers } = maps;
+  const { emailMap, nameMatchers, engMeta } = maps;
 
   const now = new Date();
   const end = new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -236,10 +252,27 @@ export async function syncCoachCalendar(
         const hit = emailMap.get(e.toLowerCase());
         if (hit) candidates.set(hit.engagementId, hit);
       }
-      const match =
-        candidates.size === 1 ? Array.from(candidates.values())[0] : undefined;
-      // Couldn't attribute to exactly one client → leave it (and any prior
-      // mapping) untouched.
+      // Collapse duplicate engagement ROWS for the same client (same
+      // normalized name) — pick the most recently-created one — so a
+      // duplicated client record doesn't make every event "ambiguous".
+      const candidateList = Array.from(candidates.values());
+      const distinctNorms = new Set(
+        candidateList.map((c) => engMeta.get(c.engagementId)?.norm ?? c.engagementId),
+      );
+      let match: { engagementId: string; orgId: string } | undefined;
+      if (candidateList.length === 1) {
+        match = candidateList[0];
+      } else if (candidateList.length > 1 && distinctNorms.size === 1) {
+        // All candidates are the same client (duplicate rows) → newest wins.
+        match = candidateList
+          .slice()
+          .sort(
+            (a, b) =>
+              (engMeta.get(b.engagementId)?.createdAt?.getTime() ?? 0) -
+              (engMeta.get(a.engagementId)?.createdAt?.getTime() ?? 0),
+          )[0];
+      }
+      // Genuinely ambiguous (different clients) or no match → skip.
       if (!match) continue;
       matched++;
 

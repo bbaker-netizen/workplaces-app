@@ -72,12 +72,26 @@ export default async function PortalMeetingsPage() {
             >
               {/* Collapsed by default so the list stays scannable. */}
               <details className="group">
-                <summary className="cursor-pointer list-none px-5 py-3 flex items-center justify-between gap-3 hover:bg-tbb-cream-50">
-                  <div className="min-w-0">
-                    <h2 className="font-bold text-tbb-navy text-base sm:text-lg truncate">
+                <summary className="cursor-pointer list-none px-4 py-3 flex items-center gap-3.5 hover:bg-tbb-cream-50 transition-colors">
+                  <div className="shrink-0 w-12 rounded-lg bg-tbb-blue/10 text-tbb-blue flex flex-col items-center justify-center py-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-tbb-caps leading-none">
+                      {new Date(m.occurredAt).toLocaleDateString("en-CA", {
+                        month: "short",
+                        timeZone: "America/Edmonton",
+                      })}
+                    </span>
+                    <span className="text-lg font-black leading-tight tabular-nums">
+                      {new Date(m.occurredAt).toLocaleDateString("en-CA", {
+                        day: "numeric",
+                        timeZone: "America/Edmonton",
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="font-semibold text-tbb-navy text-[15px] leading-snug truncate">
                       {m.title}
                     </h2>
-                    <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {formatMeetingDate(m.occurredAt)}
                       {m.durationMin ? ` · ${m.durationMin} min` : ""}
                     </p>

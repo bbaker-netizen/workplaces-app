@@ -8,7 +8,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import {
   setEngagementProgram,
   type EngagementProgram,
@@ -44,21 +44,30 @@ export function EngagementProgramControl({
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <div className="inline-flex items-center gap-2">
+      <label className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+        Program
+      </label>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => change(e.target.value as EngagementProgram)}
+          disabled={isPending}
+          title="The program this client is signed up for"
+          className="appearance-none bg-white border border-tbb-line rounded-pill pl-3 pr-8 py-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-navy cursor-pointer focus:outline-none focus:ring-2 focus:ring-tbb-blue disabled:opacity-50"
+        >
+          <option value="accelerator">Accelerator</option>
+          <option value="implementer">Implementer</option>
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tbb-ink-3"
+          aria-hidden
+        />
+      </div>
       {isPending && (
         <Loader2 className="w-3.5 h-3.5 animate-spin text-tbb-ink-3" aria-hidden />
       )}
-      <select
-        value={value}
-        onChange={(e) => change(e.target.value as EngagementProgram)}
-        disabled={isPending}
-        title="The program this client is signed up for"
-        className="text-xs font-bold uppercase tracking-tbb-caps bg-white border border-tbb-line rounded-pill px-3 py-1.5 text-tbb-navy cursor-pointer focus:outline-none focus:ring-2 focus:ring-tbb-blue disabled:opacity-50"
-      >
-        <option value="accelerator">Accelerator</option>
-        <option value="implementer">Implementer</option>
-      </select>
       {error && <span className="text-[11px] text-tbb-danger">{error}</span>}
-    </span>
+    </div>
   );
 }
