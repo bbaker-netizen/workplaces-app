@@ -5,10 +5,15 @@
  * cron route, where the real work lives (full app/db context). Mirrors
  * the `email-due-soon` setup so there's one pattern to maintain.
  *
- * Schedule: `*/30 * * * *` — every 30 minutes, around the clock. The
+ * Schedule: `*\/30 * * * *` — every 30 minutes, around the clock. The
  * sync only reads Google and writes session rows; it sends no email or
  * notification, so there's no working-hours window to respect, and
  * newly-booked client meetings surface in the portal within half an hour.
+ *
+ * NOTE: the slash above is escaped (`*\/30`) on purpose. An unescaped
+ * star-slash inside this JSDoc block closes the comment early, which
+ * corrupts the file so Netlify never registers the schedule — the
+ * function then deploys but never fires. Same gotcha as `gmail-sync.mts`.
  */
 
 import { schedule } from "@netlify/functions";
