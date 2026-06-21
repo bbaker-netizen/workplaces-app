@@ -198,6 +198,18 @@ export async function scanDriveFolderMatches(
       .where(isNull(engagements.archivedAt)),
   );
 
+  // Drop hidden/system folders that pollute the picker — dotfolders
+  // (.bin, .android-*, .claude, .darwin, …) synced from dev/build caches,
+  // empty names, and duplicate ids. These are never client folders.
+  const seen = new Set<string>();
+  folders = folders.filter((f) => {
+    const name = (f.name ?? "").trim();
+    if (!name || name.startsWith(".")) return false;
+    if (seen.has(f.id)) return false;
+    seen.add(f.id);
+    return true;
+  });
+
   const normedFolders = folders.map((f) => ({ ...f, n: norm(f.name) }));
 
   const matches: DriveFolderMatch[] = engs.map((e) => {

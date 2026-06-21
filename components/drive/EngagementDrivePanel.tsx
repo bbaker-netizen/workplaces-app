@@ -46,6 +46,7 @@ export function EngagementDrivePanel({
 }) {
   const router = useRouter();
   const [linkInput, setLinkInput] = useState("");
+  const [changing, setChanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -73,6 +74,7 @@ export function EngagementDrivePanel({
         return;
       }
       setLinkInput("");
+      setChanging(false);
       router.refresh();
     });
   }
@@ -145,14 +147,29 @@ export function EngagementDrivePanel({
           Google Drive
         </h2>
         {linkedFolderId && (
-          <button
-            type="button"
-            onClick={unlink}
-            disabled={isPending}
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-danger"
-          >
-            <Unlink className="w-3 h-3" aria-hidden /> Unlink
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setChanging((c) => !c);
+                setError(null);
+                setLinkInput("");
+              }}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-blue"
+            >
+              <LinkIcon className="w-3 h-3" aria-hidden />
+              {changing ? "Cancel" : "Change folder"}
+            </button>
+            <button
+              type="button"
+              onClick={unlink}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-danger"
+            >
+              <Unlink className="w-3 h-3" aria-hidden /> Unlink
+            </button>
+          </div>
         )}
       </div>
 
@@ -252,6 +269,45 @@ export function EngagementDrivePanel({
               <ExternalLink className="w-3 h-3" aria-hidden />
             </a>
           </div>
+
+          {changing && (
+            <div className="rounded-md border border-tbb-line bg-tbb-cream-50 p-3 space-y-2">
+              <p className="text-sm text-tbb-ink-2">
+                Point this client at a different folder (or a specific
+                <strong> sub-folder</strong>). In Drive, open the sub-folder,
+                then copy its URL from the address bar (or right-click → Share →
+                Copy link) and paste it here.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={linkInput}
+                  onChange={(e) => setLinkInput(e.target.value)}
+                  disabled={isPending}
+                  placeholder="https://drive.google.com/drive/folders/…"
+                  className="flex-1 bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                />
+                <button
+                  type="button"
+                  onClick={submitLink}
+                  disabled={isPending || linkInput.trim().length < 8}
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 shadow-tbb-cta"
+                >
+                  {isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                  ) : (
+                    <LinkIcon className="w-3.5 h-3.5" aria-hidden />
+                  )}
+                  Re-link
+                </button>
+              </div>
+              {error && (
+                <p className="text-xs text-tbb-danger border border-tbb-danger rounded px-2 py-1.5 bg-white">
+                  {error}
+                </p>
+              )}
+            </div>
+          )}
 
           {fileFetchError ? (
             <p className="text-xs text-tbb-danger border border-tbb-danger rounded px-2 py-1.5 bg-tbb-cream-50">

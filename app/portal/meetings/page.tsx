@@ -14,6 +14,8 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementMeetings } from "@/lib/db/queries/meetings";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
+import { MeetingSearch } from "@/components/meetings/MeetingSearch";
+import { formatMeetingSummary } from "@/lib/meetings/format";
 
 function formatMeetingDate(d: Date): string {
   return new Date(d).toLocaleString("en-CA", {
@@ -60,7 +62,9 @@ export default async function PortalMeetingsPage() {
           </p>
         </div>
       ) : (
-        <ul className="space-y-3">
+        <div className="space-y-6">
+          <MeetingSearch />
+          <ul className="space-y-3">
           {meetings.map((m) => (
             <li
               key={m.id}
@@ -96,7 +100,9 @@ export default async function PortalMeetingsPage() {
                     </a>
                   )}
                   {m.summaryOverview && <MarkdownBody body={m.summaryOverview} />}
-                  {m.summaryBullets && <MarkdownBody body={m.summaryBullets} />}
+                  {m.summaryBullets && (
+                    <MarkdownBody body={formatMeetingSummary(m.summaryBullets)} />
+                  )}
                   {!m.summaryOverview && !m.summaryBullets && (
                     <p className="text-sm text-tbb-ink-3 italic">
                       {m.transcriptUrl
@@ -108,7 +114,8 @@ export default async function PortalMeetingsPage() {
               </details>
             </li>
           ))}
-        </ul>
+          </ul>
+        </div>
       )}
     </main>
   );
