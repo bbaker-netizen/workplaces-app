@@ -162,7 +162,7 @@ export function ModuleReference() {
         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ExternalToolCard
             name="QuickBooks Online"
-            why="Accounting, tax, and payments. The portal posts invoices to QBO and reads payments back. Connect at Settings → Integrations."
+            why="Accounting, tax, and payments. You invoice clients directly in QBO; The Builder doesn't create invoices — it reads each client's payments back and shows them as pipeline Value. Connect under Practice → QuickBooks."
             url="https://qbo.intuit.com"
           />
           <ExternalToolCard
@@ -177,7 +177,7 @@ export function ModuleReference() {
           />
           <ExternalToolCard
             name="Resend"
-            why="Transactional email — notifications, mentions, signing requests, invoices. You don't touch it directly."
+            why="Transactional email — notifications, mentions, and signing requests. You don't touch it directly."
             url="https://resend.com"
           />
           <ExternalToolCard

@@ -87,9 +87,13 @@ const STEPS: Step[] = [
 
 export function PortalTour({
   forceOpen = false,
+  suppressAuto = false,
   onClose,
 }: {
   forceOpen?: boolean;
+  /** When true, skip the first-visit auto-run (e.g. the welcome checklist
+   *  overlay is up). Manual replay via forceOpen still works. */
+  suppressAuto?: boolean;
   onClose?: () => void;
 }) {
   const [run, setRun] = useState<boolean>(false);
@@ -101,6 +105,7 @@ export function PortalTour({
       setRun(true);
       return;
     }
+    if (suppressAuto) return;
     if (typeof window === "undefined") return;
     try {
       const seen = window.localStorage.getItem(STORAGE_KEY);
@@ -108,7 +113,7 @@ export function PortalTour({
     } catch {
       // localStorage may be unavailable in private mode.
     }
-  }, [forceOpen]);
+  }, [forceOpen, suppressAuto]);
 
   function handleEvent(data: EventData): void {
     const { status, type } = data;

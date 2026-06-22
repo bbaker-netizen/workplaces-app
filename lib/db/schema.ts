@@ -355,6 +355,11 @@ export const userProfiles = pgTable(
     // master_admin always bypasses both checks in app logic.
     allClientsAccess: boolean("all_clients_access").notNull().default(true),
     allowedConsoleModules: jsonb("allowed_console_modules").$type<string[] | null>(),
+    // First-login onboarding (migration 0066). NULL = show the welcome +
+    // setup checklist on next console visit; set = already welcomed.
+    onboardingCompletedAt: timestamp("onboarding_completed_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
