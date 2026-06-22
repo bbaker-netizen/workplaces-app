@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listInternalUsers } from "@/lib/db/queries/business-builders";
+import { listBusinessBuildersForAdmin } from "@/lib/db/queries/bb-access";
 import { BusinessBuildersManager } from "@/components/business-builder/BusinessBuildersManager";
 
 export default async function BusinessBuildersSettingsPage() {
@@ -21,7 +22,22 @@ export default async function BusinessBuildersSettingsPage() {
     redirect("/business-builder");
   }
 
-  const users = await listInternalUsers();
+  const [users, accessData] = await Promise.all([
+    listInternalUsers(),
+    listBusinessBuildersForAdmin(),
+  ]);
+
+  // Map userProfileId -> their client/module access settings.
+  const accessByUser = Object.fromEntries(
+    (accessData?.users ?? []).map((u) => [
+      u.userProfileId,
+      {
+        allClientsAccess: u.allClientsAccess,
+        allowedConsoleModules: u.allowedConsoleModules,
+        grantedEngagementIds: u.grantedEngagementIds,
+      },
+    ]),
+  );
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-8">
@@ -39,13 +55,16 @@ export default async function BusinessBuildersSettingsPage() {
           The people who run the practice. Standard Business Builders get
           the full coaching console but can&apos;t reach system settings
           (integrations, company info, pricing, this page). Master admins
-          get everything.
+          get everything. Expand a teammate to limit which clients and
+          modules they can reach.
         </p>
       </header>
 
       <BusinessBuildersManager
         users={users}
         currentUserProfileId={profile.userProfileId}
+        clients={accessData?.clients ?? []}
+        accessByUser={accessByUser}
       />
     </main>
   );

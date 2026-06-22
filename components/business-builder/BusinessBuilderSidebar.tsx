@@ -130,7 +130,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
       { href: "/business-builder/library", label: "Client tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
-      { href: "/business-builder/settings/access", label: "Team access", icon: Settings, masterAdminOnly: true },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },
     ],
   },
