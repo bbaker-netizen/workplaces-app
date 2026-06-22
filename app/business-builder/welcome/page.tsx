@@ -481,6 +481,36 @@ export default async function CoachWelcomePage() {
         </Step>
       </Phase>
 
+      {profile.role === "master_admin" && (
+        <section className="border-t border-tbb-line-soft pt-8 space-y-4">
+          <h2 className="text-tbb-h2 font-bold text-tbb-navy tracking-tbb-tight">
+            Managing your team
+          </h2>
+          <p className="text-tbb-ink-2 max-w-prose">
+            As the practice grows, invite other Business Builders from{" "}
+            <Link
+              href="/business-builder/settings/team"
+              className="text-tbb-blue underline"
+            >
+              Settings → Business Builders
+            </Link>
+            . Add them as a <strong>Standard Business Builder</strong> (full
+            coaching console, no system settings) or a{" "}
+            <strong>Master admin</strong> (everything). They get an email
+            invitation and land in the console on sign-in.
+          </p>
+          <p className="text-tbb-ink-2 max-w-prose">
+            For each standard Business Builder you can scope their reach:
+            expand the <strong>Access</strong> control on their row to limit
+            which <strong>clients</strong> they see (all, or only selected
+            ones) and which <strong>console modules</strong> they can use.
+            Everyone has full access by default — the controls only appear
+            once a standard Business Builder is on the team, and master
+            admins always keep full access.
+          </p>
+        </section>
+      )}
+
       <section className="border-t border-tbb-line-soft pt-8 space-y-4">
         <h2 className="text-tbb-h2 font-bold text-tbb-navy tracking-tbb-tight">
           Where things live

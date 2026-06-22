@@ -71,7 +71,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Phase 04 — Bill.",
     content:
-      "Issue invoices through QuickBooks Online (your default) or Stripe (for the rare cases). The portal posts the invoice to QBO; QBO handles tax, payment, accounting; webhooks bring paid status back automatically. Subscriptions tracks the external services you maintain on the client's behalf — your Model C inventory.",
+      "Billing happens directly in QuickBooks Online — you invoice clients there as you always have. The Builder doesn't create invoices; it reads each client's lifetime payments back from QBO and shows them as the 'Value' on your Pipeline, refreshed nightly or on demand. Connect QBO once under Practice.",
   },
   {
     target: '[data-tour="Coach-phase-practice"]',
@@ -101,9 +101,13 @@ const STEPS: Step[] = [
 
 export function BusinessBuilderTour({
   forceOpen = false,
+  suppressAuto = false,
   onClose,
 }: {
   forceOpen?: boolean;
+  /** When true, don't auto-run on first visit (e.g. the welcome checklist
+   *  overlay is showing). `forceOpen` still works for manual replay. */
+  suppressAuto?: boolean;
   onClose?: () => void;
 }) {
   const [run, setRun] = useState<boolean>(false);
@@ -115,6 +119,7 @@ export function BusinessBuilderTour({
       setRun(true);
       return;
     }
+    if (suppressAuto) return;
     if (typeof window === "undefined") return;
     try {
       const seen = window.localStorage.getItem(STORAGE_KEY);
@@ -122,7 +127,7 @@ export function BusinessBuilderTour({
     } catch {
       // ignore
     }
-  }, [forceOpen]);
+  }, [forceOpen, suppressAuto]);
 
   function handleEvent(data: EventData): void {
     const { status, type } = data;
