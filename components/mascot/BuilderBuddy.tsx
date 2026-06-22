@@ -33,7 +33,9 @@ import { askBuddy, type BuddyMessage } from "@/lib/actions/ask-buddy";
 
 const STORAGE_MUTED = "tbb_buddy_muted_v2";
 
-const STARTERS: { label: string; text: string }[] = [
+type Starter = { label: string; text: string };
+
+const STARTERS: Starter[] = [
   {
     label: "How do I add a prospect?",
     text: "How do I add a new prospect to the pipeline?",
@@ -48,7 +50,24 @@ const STARTERS: { label: string; text: string }[] = [
   },
 ];
 
-export function BuilderBuddy() {
+type AskFn = (
+  messages: BuddyMessage[],
+  currentPath: string,
+) => Promise<{ ok: true; reply: string } | { ok: false; error: string }>;
+
+/**
+ * Shared assistant UI. Defaults to the coach-side Buddy; pass `ask`,
+ * `starters`, and `subtitle` to reuse it as the client-portal Buddy.
+ */
+export function BuilderBuddy({
+  ask = askBuddy,
+  starters = STARTERS,
+  subtitle = "Your in-app assistant",
+}: {
+  ask?: AskFn;
+  starters?: Starter[];
+  subtitle?: string;
+} = {}) {
   const pathname = usePathname() ?? "";
   const [muted, setMuted] = useState<boolean>(false);
   const [open, setOpen] = useState(false);
@@ -121,7 +140,7 @@ export function BuilderBuddy() {
       setError(null);
       setIsThinking(true);
       try {
-        const r = await askBuddy(next, pathname);
+        const r = await ask(next, pathname);
         if (!r.ok) {
           setError(r.error);
         } else {
@@ -133,7 +152,7 @@ export function BuilderBuddy() {
         setIsThinking(false);
       }
     },
-    [messages, pathname],
+    [messages, pathname, ask],
   );
 
   function onSubmit(e: React.FormEvent) {
@@ -203,9 +222,7 @@ export function BuilderBuddy() {
             </div>
             <div className="flex-1 min-w-0 leading-tight">
               <p className="text-base font-bold">Builder Buddy</p>
-              <p className="text-[11px] text-white/70 mt-0.5">
-                Your in-app assistant
-              </p>
+              <p className="text-[11px] text-white/70 mt-0.5">{subtitle}</p>
             </div>
             <button
               type="button"
@@ -230,7 +247,7 @@ export function BuilderBuddy() {
                   it short. Try one of these to start, or just type:
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {STARTERS.map((s, i) => (
+                  {starters.map((s, i) => (
                     <button
                       key={i}
                       type="button"

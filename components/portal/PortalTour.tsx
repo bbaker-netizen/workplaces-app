@@ -73,7 +73,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Need help?",
     content:
-      "Reach me through Communication, or the contact link in the footer. I'm on Monday–Friday, 8:30 AM – 6:00 PM Mountain Time.",
+      "Two ways: click Builder Buddy (the orange beacon, bottom-right) — an assistant that can answer questions about your portal anytime — or reach me directly through Communication. I'm on Monday–Friday, 8:30 AM – 6:00 PM Mountain Time.",
   },
   {
     target: "body",

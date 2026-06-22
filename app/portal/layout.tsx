@@ -18,6 +18,14 @@ import { PortalSidebar } from "@/components/portal/PortalSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { PortalTour } from "@/components/portal/PortalTour";
 import { PortalOnboarding } from "@/components/portal/PortalOnboarding";
+import { BuilderBuddy } from "@/components/mascot/BuilderBuddy";
+import { askClientBuddy } from "@/lib/actions/ask-client-buddy";
+
+const CLIENT_BUDDY_STARTERS = [
+  { label: "Where are my action items?", text: "Where do I find my action items and how do I mark one done?" },
+  { label: "When's my next session?", text: "How do I see my next Business Building Session?" },
+  { label: "How do I send a message?", text: "How do I message my Business Builder between sessions?" },
+];
 
 /**
  * /portal/* layout shell. Auth + role gate plus the new lifecycle
@@ -143,6 +151,14 @@ export default async function PortalLayout({
           from re-firing on every visit. Suppressed while the welcome
           checklist is up so they don't collide. */}
       <PortalTour suppressAuto={!isCoachRole && onboarding.needsOnboarding} />
+      {/* Client-facing Builder Buddy — same assistant UI as the console,
+          with a client-perspective brain that respects the methodology
+          IP rules. */}
+      <BuilderBuddy
+        ask={askClientBuddy}
+        starters={CLIENT_BUDDY_STARTERS}
+        subtitle="Your portal guide"
+      />
     </div>
   );
 }
