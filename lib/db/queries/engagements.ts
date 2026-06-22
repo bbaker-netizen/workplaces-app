@@ -14,11 +14,15 @@
  * orgs; Coach session is in master org). Uses withSystemContext.
  */
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { coaches, engagements, type Engagement } from "../schema";
 import { withSystemContext, withTenantContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
+import {
+  canCurrentBbAccessEngagement,
+  getCurrentBbAccess,
+} from "./bb-access";
 
 export const SELECTED_ENGAGEMENT_COOKIE = "selected_engagement_slug";
 
@@ -45,7 +49,12 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
     if (selected) {
       const isCoach =
         profile.role === "master_admin" || profile.role === "coach";
-      if (isCoach || selected.orgId === profile.orgId) {
+      if (isCoach) {
+        // Business Builders can preview any client they're allowed to
+        // reach. Restricted Builders are denied ungranted clients even by
+        // direct URL — fall through to their default below.
+        if (await canCurrentBbAccessEngagement(selected.id)) return selected;
+      } else if (selected.orgId === profile.orgId) {
         return selected;
       }
     }
@@ -75,12 +84,24 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
   //    engagements live in client orgs. So with nothing selected, fall
   //    back to the most recent engagement across all clients. Without
   //    this a coach previewing the portal sees "No engagement yet".
+  //    A restricted Business Builder falls back only within their grants.
   if (isCoach) {
+    const access = await getCurrentBbAccess();
+    const restricted =
+      !access.isMasterAdmin && !access.allClientsAccess;
+    if (restricted && access.grantedEngagementIds.length === 0) return null;
     return withSystemContext(async (tx) => {
       const [row] = await tx
         .select()
         .from(engagements)
-        .where(isNull(engagements.archivedAt))
+        .where(
+          restricted
+            ? and(
+                isNull(engagements.archivedAt),
+                inArray(engagements.id, access.grantedEngagementIds),
+              )
+            : isNull(engagements.archivedAt),
+        )
         .orderBy(desc(engagements.createdAt))
         .limit(1);
       return row ?? null;
@@ -142,23 +163,49 @@ export async function listCoachEngagements(): Promise<Engagement[]> {
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
 
-  return withSystemContext(async (tx) => {
-    const [Coach] = await tx
-      .select({ id: coaches.id })
-      .from(coaches)
-      .where(eq(coaches.userProfileId, profile.userProfileId))
-      .limit(1);
-    if (!Coach) return [];
+  const access = await getCurrentBbAccess();
 
-    const rows = await tx
-      .select()
-      .from(engagements)
-      .where(
-        and(
-          eq(engagements.coachId, Coach.id),
-          isNull(engagements.archivedAt),
-        ),
-      );
+  return withSystemContext(async (tx) => {
+    let rows: Engagement[];
+
+    if (access.isMasterAdmin) {
+      // master_admin sees every active client, regardless of coach.
+      rows = await tx
+        .select()
+        .from(engagements)
+        .where(isNull(engagements.archivedAt));
+    } else if (!access.allClientsAccess) {
+      // Restricted Business Builder: only explicitly-granted clients.
+      if (access.grantedEngagementIds.length === 0) return [];
+      rows = await tx
+        .select()
+        .from(engagements)
+        .where(
+          and(
+            inArray(engagements.id, access.grantedEngagementIds),
+            isNull(engagements.archivedAt),
+          ),
+        );
+    } else {
+      // Default Business Builder: clients they're the assigned coach on
+      // (unchanged from the prior behaviour).
+      const [Coach] = await tx
+        .select({ id: coaches.id })
+        .from(coaches)
+        .where(eq(coaches.userProfileId, profile.userProfileId))
+        .limit(1);
+      if (!Coach) return [];
+      rows = await tx
+        .select()
+        .from(engagements)
+        .where(
+          and(
+            eq(engagements.coachId, Coach.id),
+            isNull(engagements.archivedAt),
+          ),
+        );
+    }
+
     // Alphabetical by client name (case-insensitive) so the switcher and
     // any list reads A→Z.
     return rows.sort((a, b) =>

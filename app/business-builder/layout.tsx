@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { getBusinessBuilderPulse } from "@/lib/db/queries/business-builder-pulse";
+import { getCurrentBbAccess } from "@/lib/db/queries/bb-access";
 import { BusinessBuilderSidebar } from "@/components/business-builder/BusinessBuilderSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { BusinessBuilderTour } from "@/components/business-builder/BusinessBuilderTour";
@@ -24,9 +25,10 @@ export default async function BusinessBuilderLayout({
     redirect("/portal");
   }
 
-  const [prefs, pulse] = await Promise.all([
+  const [prefs, pulse, access] = await Promise.all([
     getCurrentUserPrefs(),
     getBusinessBuilderPulse(),
+    getCurrentBbAccess(),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function BusinessBuilderLayout({
       <BusinessBuilderSidebar
         fullName={result.fullName}
         isMasterAdmin={result.role === "master_admin"}
+        allowedConsoleModules={access.allowedConsoleModules}
         pinnedNavItems={prefs.pinnedNavItems}
         collapsedInitial={prefs.sidebarCollapsed}
         pulse={pulse}

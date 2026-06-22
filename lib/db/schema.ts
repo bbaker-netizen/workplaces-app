@@ -347,11 +347,53 @@ export const userProfiles = pgTable(
     sidebarCollapsed: boolean("sidebar_collapsed").notNull().default(false),
     pipelineColumnPrefs: jsonb("pipeline_column_prefs"),
     homeDashboardLayout: jsonb("home_dashboard_layout"),
+    // Business Builder access control. master_admin configures other
+    // Business Builders' reach. `allClientsAccess` true (default) = sees
+    // every client, preserving prior behaviour; false = limited to the
+    // explicit grants in `bb_client_access`. `allowedConsoleModules` lists
+    // the console nav hrefs the user may use; null = all of them.
+    // master_admin always bypasses both checks in app logic.
+    allClientsAccess: boolean("all_clients_access").notNull().default(true),
+    allowedConsoleModules: jsonb("allowed_console_modules").$type<string[] | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     orgIdx: index("user_profiles_org_idx").on(t.orgId),
+  })
+);
+
+/**
+ * `bb_client_access` — explicit per-client grants for a Business Builder
+ * whose `user_profiles.all_clients_access` is false. One row = "this
+ * Business Builder may access this engagement." Lives in the master org
+ * (org_id = the Business Builder's home/master org). master_admin manages
+ * these; enforcement reads them when resolving which clients a restricted
+ * Business Builder can see.
+ */
+export const bbClientAccess = pgTable(
+  "bb_client_access",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    coachUserProfileId: uuid("coach_user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("bb_client_access_org_idx").on(t.orgId),
+    coachIdx: index("bb_client_access_coach_idx").on(t.coachUserProfileId),
+    uniqueGrant: uniqueIndex("bb_client_access_coach_engagement_unique").on(
+      t.coachUserProfileId,
+      t.engagementId,
+    ),
   })
 );
 

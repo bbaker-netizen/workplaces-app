@@ -18,6 +18,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { isConsoleModuleVisible } from "@/lib/console-modules";
 import { SignOutButton } from "@clerk/nextjs";
 import {
   AlertTriangle,
@@ -129,6 +130,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
       { href: "/business-builder/library", label: "Client tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
+      { href: "/business-builder/settings/access", label: "Team access", icon: Settings, masterAdminOnly: true },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },
     ],
   },
@@ -143,6 +145,7 @@ for (const phase of BUSINESS_BUILDER_PHASES) {
 export function BusinessBuilderSidebar({
   fullName,
   isMasterAdmin = false,
+  allowedConsoleModules = null,
   unreadCount,
   pinnedNavItems,
   collapsedInitial,
@@ -152,6 +155,9 @@ export function BusinessBuilderSidebar({
   /** Master admins see system-settings nav entries; standard Business
    *  Builders (coach role) don't. */
   isMasterAdmin?: boolean;
+  /** Console module hrefs this Business Builder may use; null = all. Set
+   *  by a master_admin via the Team access page. */
+  allowedConsoleModules?: string[] | null;
   unreadCount?: number;
   pinnedNavItems: string[];
   collapsedInitial: boolean;
@@ -280,20 +286,27 @@ export function BusinessBuilderSidebar({
     });
   }
 
-  // Hide master-admin-only entries from standard Business Builders.
+  // Hide master-admin-only entries from standard Business Builders, and
+  // hide any console module a master_admin hasn't granted this Builder.
+  const canSee = (it: BusinessBuilderNavItem) =>
+    isMasterAdmin ||
+    (!it.masterAdminOnly &&
+      isConsoleModuleVisible(it.href, allowedConsoleModules));
+
   const visiblePhases = useMemo(
     () =>
       BUSINESS_BUILDER_PHASES.map((p) => ({
         ...p,
-        items: p.items.filter((it) => isMasterAdmin || !it.masterAdminOnly),
+        items: p.items.filter(canSee),
       })).filter((p) => p.items.length > 0),
-    [isMasterAdmin],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isMasterAdmin, allowedConsoleModules],
   );
 
   const pinnedItems = pins
     .map((href) => ALL_ITEMS_BY_HREF.get(href))
     .filter((it): it is BusinessBuilderNavItem => Boolean(it))
-    .filter((it) => isMasterAdmin || !it.masterAdminOnly);
+    .filter(canSee);
 
   return (
     <aside
