@@ -9,7 +9,7 @@
  * Business Builder's Google token and passed in.
  */
 
-import { ExternalLink, FileText, Folder, FolderOpen } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 import type { DriveFile } from "@/lib/integrations/google-drive";
 
 export function SharedDriveFolder({
@@ -73,44 +73,10 @@ export function SharedDriveFolder({
         <p className="text-sm text-muted-foreground italic border border-tbb-line rounded-md bg-white px-4 py-3">
           The shared folder is empty right now.
         </p>
-      ) : (
-        <ul className="border border-tbb-line rounded-md bg-white divide-y divide-tbb-line-soft overflow-hidden">
-          {files.map((f) => (
-            <li key={f.id} className="flex items-center gap-3 px-4 py-2.5">
-              {f.isFolder ? (
-                <Folder className="w-4 h-4 text-tbb-ink-3 shrink-0" aria-hidden />
-              ) : (
-                <FileText className="w-4 h-4 text-tbb-ink-3 shrink-0" aria-hidden />
-              )}
-              {f.webViewLink ? (
-                <a
-                  href={f.webViewLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 min-w-0 truncate text-sm text-foreground hover:text-tbb-blue hover:underline underline-offset-4"
-                >
-                  {f.name}
-                </a>
-              ) : (
-                <span className="flex-1 min-w-0 truncate text-sm text-foreground">
-                  {f.name}
-                </span>
-              )}
-              {f.webViewLink && (
-                <a
-                  href={f.webViewLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open ${f.name} in Google Drive`}
-                  className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline shrink-0"
-                >
-                  Open <ExternalLink className="w-3 h-3" aria-hidden />
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      ) : null}
+      {/* The custom file/folder list that used to render here was a
+          duplicate of the embedded Drive view above, so it was removed.
+          The iframe is the single source of the folder's contents. */}
     </section>
   );
 }

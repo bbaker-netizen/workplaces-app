@@ -53,8 +53,17 @@ export default async function PortalTeamPage() {
       a.fullName.localeCompare(b.fullName),
   );
 
+  // Keep the client's Business Builder(s) in their own labelled section so
+  // they're clearly distinguished from the client's own staff.
+  const builders = members.filter(
+    (m) => m.role === "master_admin" || m.role === "coach",
+  );
+  const team = members.filter(
+    (m) => m.role !== "master_admin" && m.role !== "coach",
+  );
+
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12 space-y-6">
+    <main className="max-w-3xl mx-auto px-6 py-12 space-y-8">
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           {engagement.name ?? "Engagement"}
@@ -67,44 +76,78 @@ export default async function PortalTeamPage() {
         </p>
       </header>
 
-      <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
-        {members.map((m) => (
-          <li key={m.id} className="py-4 flex items-center gap-4">
-            <span
-              aria-hidden
-              className="shrink-0 w-10 h-10 rounded-full border border-tbb-line bg-tbb-cream-50 grid place-items-center font-mono text-xs uppercase tracking-wider text-tbb-ink-3"
-            >
-              {initials(m.fullName) || "?"}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="font-sans text-base font-bold text-foreground">
-                {m.fullName}
-                {m.id === profile.userProfileId && (
-                  <span className="ml-2 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                    (you)
-                  </span>
-                )}
-              </p>
-              <p className="font-mono text-[11px] text-muted-foreground">
-                {m.email}
-              </p>
-            </div>
-            <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-              {ROLE_LABEL[m.role] ?? m.role}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {profile.role === "client_lead" ? (
-        <InviteTeammateForm />
-      ) : (
-        <p className="font-sans text-xs text-muted-foreground italic">
-          To add a teammate, ask your engagement lead or your Business Builder
-          to send them an invite — they&apos;ll get an email to join this
-          engagement.
-        </p>
+      {builders.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-tbb-blue">
+            Your Business Builder
+          </h2>
+          <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
+            {builders.map((m) => (
+              <MemberRow key={m.id} m={m} youId={profile.userProfileId} />
+            ))}
+          </ul>
+        </section>
       )}
+
+      <section className="space-y-3">
+        <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
+          Your team
+        </h2>
+        {team.length > 0 ? (
+          <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
+            {team.map((m) => (
+              <MemberRow key={m.id} m={m} youId={profile.userProfileId} />
+            ))}
+          </ul>
+        ) : (
+          <p className="font-sans text-sm text-muted-foreground italic">
+            No teammates added yet.
+          </p>
+        )}
+
+        {profile.role === "client_lead" ? (
+          <InviteTeammateForm />
+        ) : (
+          <p className="font-sans text-xs text-muted-foreground italic">
+            To add a teammate, ask your engagement lead or your Business Builder
+            to send them an invite — they&apos;ll get an email to join this
+            engagement.
+          </p>
+        )}
+      </section>
     </main>
+  );
+}
+
+function MemberRow({
+  m,
+  youId,
+}: {
+  m: { id: string; role: string; fullName: string; email: string };
+  youId: string;
+}) {
+  return (
+    <li className="py-4 flex items-center gap-4">
+      <span
+        aria-hidden
+        className="shrink-0 w-10 h-10 rounded-full border border-tbb-line bg-tbb-cream-50 grid place-items-center font-mono text-xs uppercase tracking-wider text-tbb-ink-3"
+      >
+        {initials(m.fullName) || "?"}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-sans text-base font-bold text-foreground">
+          {m.fullName}
+          {m.id === youId && (
+            <span className="ml-2 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+              (you)
+            </span>
+          )}
+        </p>
+        <p className="font-mono text-[11px] text-muted-foreground">{m.email}</p>
+      </div>
+      <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+        {ROLE_LABEL[m.role] ?? m.role}
+      </span>
+    </li>
   );
 }

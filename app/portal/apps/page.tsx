@@ -75,7 +75,12 @@ export default async function PortalAppsPage() {
           authMode: a.authMode,
           isVisible: a.isVisible,
         }))}
-        isCoach={isCoach}
+        // Apps are assigned from the Business Builder console (engagement
+        // detail → "Add an app"), never from inside the client portal — so
+        // this list is always read-only here, even when a Business Builder
+        // is previewing. `isCoach` above still controls which apps the query
+        // returns (hidden ones included for the previewing Builder).
+        isCoach={false}
       />
     </main>
   );
