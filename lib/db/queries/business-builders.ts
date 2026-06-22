@@ -9,7 +9,7 @@
 
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { clerkClient } from "@clerk/nextjs/server";
-import { orgs, userProfiles } from "@/lib/db/schema";
+import { bbInviteAccess, orgs, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
 export type InternalUser = {
@@ -67,12 +67,20 @@ export async function listInternalUsers(): Promise<InternalUser[]> {
   });
 }
 
+export type InviteAccess = {
+  allClientsAccess: boolean;
+  allowedConsoleModules: string[] | null;
+  grantedEngagementIds: string[];
+};
+
 export type PendingInvite = {
   id: string;
   email: string;
   fullName: string | null;
   role: "master_admin" | "coach";
   createdAt: number;
+  /** Pre-set access stored for this invite (null = full access default). */
+  access: InviteAccess | null;
 };
 
 /**
@@ -84,20 +92,43 @@ export type PendingInvite = {
 export async function listPendingBusinessBuilderInvites(): Promise<
   PendingInvite[]
 > {
-  const clerkOrgId = await withSystemContext(async (tx) => {
-    const [master] = await tx
-      .select({ clerkOrgId: orgs.clerkOrgId })
+  const master = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({ id: orgs.id, clerkOrgId: orgs.clerkOrgId })
       .from(orgs)
       .where(eq(orgs.type, "master"))
       .limit(1);
-    return master?.clerkOrgId ?? null;
+    return row ?? null;
   });
-  if (!clerkOrgId) return [];
+  if (!master) return [];
 
   try {
+    // Pre-set access rows, keyed by lowercased email.
+    const accessRows = await withSystemContext((tx) =>
+      tx
+        .select({
+          email: bbInviteAccess.email,
+          allClientsAccess: bbInviteAccess.allClientsAccess,
+          allowedConsoleModules: bbInviteAccess.allowedConsoleModules,
+          grantedEngagementIds: bbInviteAccess.grantedEngagementIds,
+        })
+        .from(bbInviteAccess)
+        .where(eq(bbInviteAccess.orgId, master.id)),
+    );
+    const accessByEmail = new Map<string, InviteAccess>(
+      accessRows.map((r) => [
+        r.email.toLowerCase(),
+        {
+          allClientsAccess: r.allClientsAccess,
+          allowedConsoleModules: (r.allowedConsoleModules as string[] | null) ?? null,
+          grantedEngagementIds: (r.grantedEngagementIds as string[] | null) ?? [],
+        },
+      ]),
+    );
+
     const clerk = await clerkClient();
     const res = await clerk.organizations.getOrganizationInvitationList({
-      organizationId: clerkOrgId,
+      organizationId: master.clerkOrgId,
       status: ["pending"],
     });
     return res.data.map((inv) => {
@@ -113,6 +144,7 @@ export async function listPendingBusinessBuilderInvites(): Promise<
         fullName,
         role: appRole as "master_admin" | "coach",
         createdAt: inv.createdAt,
+        access: accessByEmail.get(inv.emailAddress.toLowerCase()) ?? null,
       };
     });
   } catch (e) {

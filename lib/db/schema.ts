@@ -427,6 +427,33 @@ export const coaches = pgTable(
 );
 
 /**
+ * `bb_invite_access` — access a master admin pre-sets for an invited
+ * Business Builder, keyed by email. Applied to their user_profile +
+ * bb_client_access grants when they accept and sign up, then deleted.
+ */
+export const bbInviteAccess = pgTable(
+  "bb_invite_access",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    allClientsAccess: boolean("all_clients_access").notNull().default(true),
+    allowedConsoleModules: jsonb("allowed_console_modules").$type<string[] | null>(),
+    grantedEngagementIds: jsonb("granted_engagement_ids")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("bb_invite_access_org_idx").on(t.orgId),
+  })
+);
+
+/**
  * `engagements` — the active coaching relationship.
  *
  * `started_at` (Phase 1.1) is the moment the engagement actually became

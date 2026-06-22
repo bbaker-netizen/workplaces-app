@@ -12,19 +12,66 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { orgs, userProfiles } from "@/lib/db/schema";
+import { bbInviteAccess, orgs, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
 type Result = { ok: true; email: string } | { ok: false; error: string };
 type RoleResult = { ok: true } | { ok: false; error: string };
 
+const accessSchema = z.object({
+  allClientsAccess: z.boolean(),
+  allowedConsoleModules: z.array(z.string()).nullable(),
+  grantedEngagementIds: z.array(z.string().uuid()),
+});
+
 const schema = z.object({
   fullName: z.string().min(2, "Full name is required").max(200),
   email: z.string().email("Enter a valid email").max(254),
   role: z.enum(["coach", "master_admin"]).default("coach"),
+  access: accessSchema.optional(),
 });
+
+type Access = z.infer<typeof accessSchema>;
+
+/** True when the access is an actual restriction worth storing (vs. the
+ *  default "everything"). master_admin and full access store nothing. */
+function isRestricted(access: Access | undefined): boolean {
+  if (!access) return false;
+  return !access.allClientsAccess || access.allowedConsoleModules !== null;
+}
+
+// Upsert/clear the pre-set access for an invited email (delete-then-insert,
+// matching the case-insensitive unique index). Runs in system context.
+async function writeInviteAccess(
+  orgId: string,
+  email: string,
+  role: "coach" | "master_admin",
+  access: Access | undefined,
+): Promise<void> {
+  await withSystemContext(async (tx) => {
+    await tx
+      .delete(bbInviteAccess)
+      .where(
+        and(
+          eq(bbInviteAccess.orgId, orgId),
+          sql`lower(${bbInviteAccess.email}) = lower(${email})`,
+        ),
+      );
+    if (role === "coach" && isRestricted(access) && access) {
+      await tx.insert(bbInviteAccess).values({
+        orgId,
+        email,
+        allClientsAccess: access.allClientsAccess,
+        allowedConsoleModules: access.allowedConsoleModules ?? null,
+        grantedEngagementIds: access.allClientsAccess
+          ? []
+          : access.grantedEngagementIds,
+      });
+    }
+  });
+}
 
 export async function inviteBusinessBuilder(
   input: z.input<typeof schema>,
@@ -44,7 +91,7 @@ export async function inviteBusinessBuilder(
 
   const orgRow = await withSystemContext(async (tx) => {
     const [row] = await tx
-      .select({ clerkOrgId: orgs.clerkOrgId })
+      .select({ id: orgs.id, clerkOrgId: orgs.clerkOrgId })
       .from(orgs)
       .where(eq(orgs.type, "master"))
       .limit(1);
@@ -74,8 +121,60 @@ export async function inviteBusinessBuilder(
         invited_full_name: parsed.data.fullName,
       },
     });
+    // Persist the pre-set access (if any) so it applies when they accept.
+    await writeInviteAccess(
+      orgRow.id,
+      parsed.data.email,
+      parsed.data.role,
+      parsed.data.access,
+    );
     revalidatePath("/business-builder/settings/team");
     return { ok: true, email: parsed.data.email };
+  } catch (e) {
+    return {
+      ok: false,
+      error: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+    };
+  }
+}
+
+const setInviteAccessSchema = z.object({
+  email: z.string().email().max(254),
+  access: accessSchema,
+});
+
+/**
+ * Edit a pending invite's pre-set access (the "Access" control on a pending
+ * invitation row). Master-admin only. Stored by email; applied when they
+ * accept.
+ */
+export async function setInviteAccess(
+  input: z.input<typeof setInviteAccessSchema>,
+): Promise<RoleResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin") {
+    return { ok: false, error: "Only the account owner can change access." };
+  }
+  const parsed = setInviteAccessSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
+  }
+
+  const orgId = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({ id: orgs.id })
+      .from(orgs)
+      .where(eq(orgs.type, "master"))
+      .limit(1);
+    return row?.id ?? null;
+  });
+  if (!orgId) return { ok: false, error: "Master org isn't configured." };
+
+  try {
+    await writeInviteAccess(orgId, parsed.data.email, "coach", parsed.data.access);
+    revalidatePath("/business-builder/settings/team");
+    return { ok: true };
   } catch (e) {
     return {
       ok: false,
@@ -91,6 +190,7 @@ export async function inviteBusinessBuilder(
  */
 export async function revokeBusinessBuilderInvite(
   invitationId: string,
+  email?: string,
 ): Promise<RoleResult> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
@@ -106,23 +206,36 @@ export async function revokeBusinessBuilderInvite(
     return { ok: false, error: "Your session is missing — sign in again." };
   }
 
-  const clerkOrgId = await withSystemContext(async (tx) => {
+  const orgRow = await withSystemContext(async (tx) => {
     const [master] = await tx
-      .select({ clerkOrgId: orgs.clerkOrgId })
+      .select({ id: orgs.id, clerkOrgId: orgs.clerkOrgId })
       .from(orgs)
       .where(eq(orgs.type, "master"))
       .limit(1);
-    return master?.clerkOrgId ?? null;
+    return master ?? null;
   });
-  if (!clerkOrgId) return { ok: false, error: "Master org isn't configured." };
+  if (!orgRow) return { ok: false, error: "Master org isn't configured." };
 
   try {
     const clerk = await clerkClient();
     await clerk.organizations.revokeOrganizationInvitation({
-      organizationId: clerkOrgId,
+      organizationId: orgRow.clerkOrgId,
       invitationId,
       requestingUserId,
     });
+    // Drop any pre-set access we were holding for this email.
+    if (email) {
+      await withSystemContext(async (tx) => {
+        await tx
+          .delete(bbInviteAccess)
+          .where(
+            and(
+              eq(bbInviteAccess.orgId, orgRow.id),
+              sql`lower(${bbInviteAccess.email}) = lower(${email})`,
+            ),
+          );
+      });
+    }
     revalidatePath("/business-builder/settings/team");
     return { ok: true };
   } catch (e) {
