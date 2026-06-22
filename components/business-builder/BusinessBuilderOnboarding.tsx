@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Circle,
   Compass,
+  CreditCard,
   PenSquare,
   Signature,
   X,
@@ -89,6 +90,14 @@ export function BusinessBuilderOnboarding({
       blurb: "Calendar sync, Gmail capture, and Drive — all from one connection.",
       href: "/business-builder/profile/google-calendar",
       done: state.googleConnected,
+    },
+    {
+      key: "quickbooks",
+      icon: <CreditCard className="w-5 h-5" aria-hidden />,
+      title: "Connect QuickBooks",
+      blurb: "Reads each client's payments back as their pipeline value.",
+      href: "/business-builder/profile/quickbooks",
+      done: state.quickbooksConnected,
     },
     {
       key: "signature",

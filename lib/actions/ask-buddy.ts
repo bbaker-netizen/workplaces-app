@@ -82,6 +82,24 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 - Business Builder guide (/business-builder/welcome) — workflow walkthrough.
 - Module reference (/business-builder/welcome/modules) — full module cheat sheet.
 
+CONNECTING YOUR TOOLS (first-time setup — what each Business Builder does themselves):
+- **Google (Calendar + Gmail + Drive)** — connect YOUR OWN Google account at /business-builder/profile/google-calendar. This is per-person: every Business Builder connects their own. One connection powers calendar two-way sync (BBS sessions ↔ Google Calendar; any calendar event with a client attendee auto-creates a session), Gmail capture into the Inbox, and Google Drive folders per client.
+- **QuickBooks Online** — connect YOUR OWN QBO at /business-builder/profile/quickbooks. Per-person. The Builder reads client payments back as pipeline Value (it does not create invoices).
+- **Your e-signature image** — upload at /business-builder/profile/signature so contracts can auto-sign with your signature.
+- **Your email signature** — set at /business-builder/templates; auto-appended to every email you send.
+- A quick view of your connection status is at /business-builder/settings/integrations (master admins only).
+- **Text messaging (SMS / Twilio) and the Netlify "cloud" account for embedded apps are PLATFORM-LEVEL, not per-person.** They're configured once via environment variables by the master admin (Bruce) and then work for everyone — a standard Business Builder does NOT set up their own SMS or Netlify. If SMS isn't sending or apps won't sync, that's a master-admin/env-var setup task, not something Jen configures.
+
+SETTING UP A CLIENT'S PORTAL (this all lives on the engagement detail page, /business-builder/engagements/[id] — the per-client "workspace" hub):
+- **Invite the client** — the "Invite client" button on the engagement page sends the portal sign-up invitation. You can build out the engagement first (modules, apps, Soul File) and invite the client later — invitation is separate from creating the engagement.
+- **Choose which modules the client sees** — the engagement page has portal module toggles ("what this client sees"). Every module is on by default; turn off the ones a given client doesn't need. This tailors each client's portal.
+- **Add an app to a client's portal (Embedded Apps)** — TWO steps: (1) sync your Netlify projects under Client tools & tutorials (/business-builder/library); (2) on the engagement page, use the Embedded Apps manager to pick a Netlify project, name it for the client, and set its auth mode (public or token_passthrough). It then shows as an iframed widget in that client's portal under "Apps."
+- The engagement page is also where you reach Preview portal, Documents & Drive, Meeting transcripts, rename/archive, and quick deliverable adds.
+
+DAILY SURFACES worth knowing:
+- **Calendar** (/business-builder/calendar) — one cross-client view of every BBS session, action-item due date, and project target date; filter by client; backed by your Google sync.
+- **Inbox** (/business-builder/inbox) — every external email/SMS/call across all clients. You can REPLY and COMPOSE NEW messages here (email via your Gmail, SMS via the platform Twilio number), not just read.
+
 OTHER KEY CONCEPTS:
 
 **BBS Sessions** = the actual MEETINGS Bruce has with clients. Twice-monthly, 2 hours, one in-person and one virtual. Fireflies records them. Claude reads the transcript and drafts the action items. Per-engagement Fireflies recaps sync via the "Sync from Fireflies" button on the coach Meetings page (/business-builder/engagements/<id>/meetings); clients see their own recaps + a "View recording & notes" link in their portal's "Meeting notes" module (/portal/meetings).

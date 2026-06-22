@@ -122,6 +122,58 @@ export default async function CoachWelcomePage() {
         </ul>
       </section>
 
+      <section className="border-t border-tbb-line-soft pt-8 space-y-4">
+        <h2 className="text-tbb-h2 font-bold text-tbb-navy tracking-tbb-tight">
+          First — connect your tools
+        </h2>
+        <p className="text-tbb-ink-2 max-w-prose">
+          A few connections you make once, yourself. Each Business Builder
+          connects their own — this is how the app sends from <em>your</em>{" "}
+          Gmail, syncs <em>your</em> calendar, and signs with{" "}
+          <em>your</em> name.
+        </p>
+        <ul className="space-y-3 text-tbb-ink-2">
+          <li>
+            <strong className="text-tbb-navy">Google — Calendar, Gmail & Drive</strong>{" "}
+            —{" "}
+            <Link href="/business-builder/profile/google-calendar" className="text-tbb-blue underline">
+              connect your Google account
+            </Link>
+            . One connection powers three things: two-way Calendar sync (BBS
+            sessions sync both ways, and any calendar event with a client
+            attendee auto-creates a session), Gmail capture into your Inbox,
+            and Google Drive folders per client.
+          </li>
+          <li>
+            <strong className="text-tbb-navy">QuickBooks Online</strong> —{" "}
+            <Link href="/business-builder/profile/quickbooks" className="text-tbb-blue underline">
+              connect your QBO
+            </Link>{" "}
+            so the app reads each client&apos;s payments back as their pipeline
+            Value. You still invoice in QBO directly.
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Your signature</strong> — upload
+            your{" "}
+            <Link href="/business-builder/profile/signature" className="text-tbb-blue underline">
+              e-signature image
+            </Link>{" "}
+            (so contracts auto-sign with your name) and set your{" "}
+            <Link href="/business-builder/templates" className="text-tbb-blue underline">
+              email signature
+            </Link>
+            .
+          </li>
+        </ul>
+        <p className="text-sm text-tbb-ink-3 max-w-prose">
+          <strong>Text messaging (SMS) and the cloud account for embedded
+          apps are set up once for the whole practice</strong> by a master
+          admin (environment configuration) — not per person. If SMS isn&apos;t
+          sending or Netlify apps won&apos;t sync, that&apos;s a master-admin
+          setup item, not something you configure yourself.
+        </p>
+      </section>
+
       <Phase number="01" label="Pipeline" caption="Bring new prospects in">
         <Step
           icon={<Filter className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
@@ -228,6 +280,42 @@ export default async function CoachWelcomePage() {
             the client lead a sign-up invitation. Their first sign-in
             lands them on the client portal with the Welcome tour.
           </p>
+        </Step>
+
+        <Step
+          icon={<CheckSquare className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Set up the client's portal — modules, apps & invite"
+          href="/business-builder/engagements"
+          hrefLabel="Open your engagements"
+        >
+          <p>
+            Open the engagement to reach its <strong>workspace page</strong> —
+            the per-client command center. Three things you&apos;ll do here:
+          </p>
+          <ul className="list-disc pl-5 mt-2 space-y-1">
+            <li>
+              <strong>Choose what the client sees.</strong> The portal module
+              toggles let you turn modules on/off for this specific client.
+              Everything is on by default — switch off what they don&apos;t
+              need so their portal stays focused.
+            </li>
+            <li>
+              <strong>Add apps to their portal (Embedded Apps).</strong> Two
+              steps: first sync your Netlify projects under{" "}
+              <Link href="/business-builder/library" className="text-tbb-blue underline">
+                Client tools &amp; tutorials
+              </Link>
+              , then on the engagement page pick a project, name it for the
+              client, and set its auth mode. It shows up as a widget in their
+              portal under &quot;Apps.&quot;
+            </li>
+            <li>
+              <strong>Invite the client.</strong> The <strong>Invite client</strong>{" "}
+              button sends their portal sign-up email. You can prepare the
+              engagement first (modules, apps, Soul File) and invite later —
+              inviting is separate from creating the engagement.
+            </li>
+          </ul>
         </Step>
 
         <Step
@@ -553,8 +641,13 @@ export default async function CoachWelcomePage() {
           />
           <CheatSheetItem
             href="/business-builder/inbox"
-            label="Inbox — all email / SMS / call history"
+            label="Inbox — all email / SMS / call history (reply & compose)"
             icon={<MessagesSquare className="w-4 h-4 text-tbb-blue" aria-hidden />}
+          />
+          <CheatSheetItem
+            href="/business-builder/calendar"
+            label="Calendar — sessions, due dates & targets across clients"
+            icon={<CalendarClock className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
             href="/business-builder/soul-search"

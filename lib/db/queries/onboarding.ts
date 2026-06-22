@@ -12,7 +12,11 @@
  */
 
 import { eq } from "drizzle-orm";
-import { googleCalendarTokens, userProfiles } from "../schema";
+import {
+  googleCalendarTokens,
+  qboOauthTokens,
+  userProfiles,
+} from "../schema";
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
@@ -20,6 +24,7 @@ export type BuilderOnboardingState = {
   needsOnboarding: boolean;
   firstName: string;
   googleConnected: boolean;
+  quickbooksConnected: boolean;
   hasSignature: boolean;
   hasEmailSignature: boolean;
 };
@@ -28,6 +33,7 @@ const SKIP: BuilderOnboardingState = {
   needsOnboarding: false,
   firstName: "",
   googleConnected: false,
+  quickbooksConnected: false,
   hasSignature: false,
   hasEmailSignature: false,
 };
@@ -60,10 +66,17 @@ export async function getBuilderOnboardingState(): Promise<BuilderOnboardingStat
         .where(eq(googleCalendarTokens.userProfileId, profile.userProfileId))
         .limit(1);
 
+      const [qbo] = await tx
+        .select({ id: qboOauthTokens.id })
+        .from(qboOauthTokens)
+        .where(eq(qboOauthTokens.coachUserProfileId, profile.userProfileId))
+        .limit(1);
+
       return {
         needsOnboarding,
         firstName,
         googleConnected: !!google,
+        quickbooksConnected: !!qbo,
         hasSignature: !!row?.signatureImageData,
         hasEmailSignature: !!(row?.emailSignature && row.emailSignature.trim()),
       };
