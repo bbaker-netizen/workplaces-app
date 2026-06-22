@@ -13,9 +13,11 @@ import {
   isEngagementReadOnly,
   readOnlyReason,
 } from "@/lib/engagement-lifecycle";
+import { getClientOnboardingState } from "@/lib/db/queries/onboarding";
 import { PortalSidebar } from "@/components/portal/PortalSidebar";
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { PortalTour } from "@/components/portal/PortalTour";
+import { PortalOnboarding } from "@/components/portal/PortalOnboarding";
 
 /**
  * /portal/* layout shell. Auth + role gate plus the new lifecycle
@@ -45,10 +47,11 @@ export default async function PortalLayout({
     redirect("/business-builder");
   }
 
-  const [unreadCount, engagement, prefs] = await Promise.all([
+  const [unreadCount, engagement, prefs, onboarding] = await Promise.all([
     getUnreadNotificationCount(),
     getCurrentEngagement(),
     getCurrentUserPrefs(),
+    getClientOnboardingState(),
   ]);
 
   // Archived engagement = the client relationship is closed. Coaches
@@ -126,9 +129,20 @@ export default async function PortalLayout({
         <main className="flex-1">{children}</main>
         <PortalFooter />
       </div>
+      {/* First-login welcome + orientation checklist for newly-invited
+          clients. Shows once, gated server-side; adapts to enabled modules. */}
+      {!isCoachRole && (
+        <PortalOnboarding
+          needsOnboarding={onboarding.needsOnboarding}
+          firstName={onboarding.firstName}
+          enabledModuleKeys={modules.map((m) => m.key)}
+          engagementName={engagement?.name ?? null}
+        />
+      )}
       {/* First-visit interactive tour. localStorage flag keeps it
-          from re-firing on every visit. */}
-      <PortalTour />
+          from re-firing on every visit. Suppressed while the welcome
+          checklist is up so they don't collide. */}
+      <PortalTour suppressAuto={!isCoachRole && onboarding.needsOnboarding} />
     </div>
   );
 }

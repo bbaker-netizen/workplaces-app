@@ -73,3 +73,47 @@ export async function getBuilderOnboardingState(): Promise<BuilderOnboardingStat
     return SKIP;
   }
 }
+
+export type ClientOnboardingState = {
+  needsOnboarding: boolean;
+  firstName: string;
+};
+
+const CLIENT_SKIP: ClientOnboardingState = {
+  needsOnboarding: false,
+  firstName: "",
+};
+
+/**
+ * First-login state for a client portal user (any non-coach role). The
+ * checklist content adapts to the engagement's enabled modules, which the
+ * portal layout already resolves — so this only needs the "welcomed yet"
+ * flag + their first name. Fail-safe to "already onboarded".
+ */
+export async function getClientOnboardingState(): Promise<ClientOnboardingState> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return CLIENT_SKIP;
+  // Coaches get the Business Builder onboarding, not this one.
+  if (profile.role === "master_admin" || profile.role === "coach") {
+    return CLIENT_SKIP;
+  }
+
+  const firstName = profile.fullName.split(" ")[0] || profile.fullName;
+
+  try {
+    return await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({ onboardingCompletedAt: userProfiles.onboardingCompletedAt })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, profile.userProfileId))
+        .limit(1);
+      return {
+        needsOnboarding: !!row && row.onboardingCompletedAt === null,
+        firstName,
+      };
+    });
+  } catch (e) {
+    console.error("[onboarding] getClientOnboardingState failed", e);
+    return CLIENT_SKIP;
+  }
+}

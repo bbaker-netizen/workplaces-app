@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * First-login welcome + setup checklist for a newly-invited Business
- * Builder. Renders as a full-screen overlay the first time they land in
- * the console (gated server-side by user_profiles.onboarding_completed_at).
+ * First-login welcome + orientation checklist for a newly-invited client.
+ * Mirrors the Business Builder onboarding overlay, but the checklist is
+ * pure orientation (clients have no setup tasks) and adapts to the modules
+ * their engagement actually has enabled.
  *
- * It shows exactly once: any action — clicking a setup step or "Get
- * started" — marks onboarding complete so it never blocks them again.
- * Server-trackable steps (Google, signature, email signature) show real
- * completion; the walkthrough + guide steps track via localStorage.
+ * Shows exactly once, gated server-side by user_profiles.onboarding_completed_at.
+ * Any action marks it complete so it never blocks the portal.
  */
 
 import { useEffect, useState, useTransition } from "react";
@@ -19,40 +18,42 @@ import {
   CheckCircle2,
   Circle,
   Compass,
-  PenSquare,
-  Signature,
+  FileText,
+  ListChecks,
+  MessagesSquare,
   X,
 } from "lucide-react";
 import { completeOnboarding } from "@/lib/actions/onboarding";
-import type { BuilderOnboardingState } from "@/lib/db/queries/onboarding";
 
-const TOUR_SEEN_KEY = "bbp-Coach-tour-seen";
-const GUIDE_SEEN_KEY = "bbp-guide-seen";
+const TOUR_SEEN_KEY = "bbp-tour-seen";
 
 type Item = {
   key: string;
   icon: React.ReactNode;
   title: string;
   blurb: string;
-  href: string;
-  done: boolean;
+  href?: string;
 };
 
-export function BusinessBuilderOnboarding({
-  state,
+export function PortalOnboarding({
+  needsOnboarding,
+  firstName,
+  enabledModuleKeys,
+  engagementName,
 }: {
-  state: BuilderOnboardingState;
+  needsOnboarding: boolean;
+  firstName: string;
+  enabledModuleKeys: string[];
+  engagementName: string | null;
 }) {
   const router = useRouter();
-  const [visible, setVisible] = useState(state.needsOnboarding);
+  const [visible, setVisible] = useState(needsOnboarding);
   const [tourSeen, setTourSeen] = useState(false);
-  const [guideSeen, setGuideSeen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     try {
       setTourSeen(!!window.localStorage.getItem(TOUR_SEEN_KEY));
-      setGuideSeen(!!window.localStorage.getItem(GUIDE_SEEN_KEY));
     } catch {
       // ignore
     }
@@ -60,16 +61,7 @@ export function BusinessBuilderOnboarding({
 
   if (!visible) return null;
 
-  // Any interaction completes onboarding (so it shows only once), then
-  // either navigates to the chosen setup step or closes into the console.
-  function dismissThen(href?: string, markGuide?: boolean) {
-    if (markGuide) {
-      try {
-        window.localStorage.setItem(GUIDE_SEEN_KEY, new Date().toISOString());
-      } catch {
-        // ignore
-      }
-    }
+  function dismissThen(href?: string) {
     startTransition(async () => {
       await completeOnboarding();
       if (href) {
@@ -81,50 +73,62 @@ export function BusinessBuilderOnboarding({
     });
   }
 
+  const has = (k: string) => enabledModuleKeys.includes(k);
+
+  // The tour is always offered; the rest only appear if that module is on.
   const items: Item[] = [
     {
-      key: "google",
-      icon: <CalendarClock className="w-5 h-5" aria-hidden />,
-      title: "Connect your Google Workspace",
-      blurb: "Calendar sync, Gmail capture, and Drive — all from one connection.",
-      href: "/business-builder/profile/google-calendar",
-      done: state.googleConnected,
-    },
-    {
-      key: "signature",
-      icon: <Signature className="w-5 h-5" aria-hidden />,
-      title: "Upload your e-signature",
-      blurb: "So contracts can auto-sign with your name when you send them.",
-      href: "/business-builder/profile/signature",
-      done: state.hasSignature,
-    },
-    {
-      key: "email-sig",
-      icon: <PenSquare className="w-5 h-5" aria-hidden />,
-      title: "Set your email signature",
-      blurb: "Auto-appended to every email you send from the console.",
-      href: "/business-builder/templates",
-      done: state.hasEmailSignature,
-    },
-    {
-      key: "walkthrough",
+      key: "tour",
       icon: <Compass className="w-5 h-5" aria-hidden />,
-      title: "Take the 2-minute walkthrough",
-      blurb: "An interactive tour of the whole engagement lifecycle.",
-      href: "/business-builder/welcome",
-      done: tourSeen,
+      title: "Take the 2-minute tour",
+      blurb: "A quick guided look around your portal.",
+      // No href — closing the overlay lets the portal tour auto-run.
     },
-    {
-      key: "guide",
-      icon: <Compass className="w-5 h-5" aria-hidden />,
-      title: "Read the operating guide",
-      blurb: "The full playbook — every phase, every step, every URL.",
-      href: "/business-builder/welcome",
-      done: guideSeen,
-    },
+    ...(has("action_items")
+      ? [
+          {
+            key: "action_items",
+            icon: <ListChecks className="w-5 h-5" aria-hidden />,
+            title: "See your action items",
+            blurb: "The commitments you and your Business Builder are tracking.",
+            href: "/portal/action-items",
+          },
+        ]
+      : []),
+    ...(has("sessions")
+      ? [
+          {
+            key: "sessions",
+            icon: <CalendarClock className="w-5 h-5" aria-hidden />,
+            title: "Check your next session",
+            blurb: "Your upcoming Business Building Sessions.",
+            href: "/portal/sessions",
+          },
+        ]
+      : []),
+    ...(has("communication")
+      ? [
+          {
+            key: "communication",
+            icon: <MessagesSquare className="w-5 h-5" aria-hidden />,
+            title: "Send a message",
+            blurb: "Stay in touch between sessions.",
+            href: "/portal/communication",
+          },
+        ]
+      : []),
+    ...(has("documents")
+      ? [
+          {
+            key: "documents",
+            icon: <FileText className="w-5 h-5" aria-hidden />,
+            title: "Find your documents",
+            blurb: "Every file for your engagement, in one place.",
+            href: "/portal/documents",
+          },
+        ]
+      : []),
   ];
-
-  const doneCount = items.filter((i) => i.done).length;
 
   return (
     <div
@@ -132,7 +136,7 @@ export function BusinessBuilderOnboarding({
       style={{ backgroundColor: "rgba(20, 56, 91, 0.55)" }}
       role="dialog"
       aria-modal="true"
-      aria-label="Welcome to The Builder"
+      aria-label="Welcome to your portal"
     >
       <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-tbb-cream shadow-tbb-lg border border-tbb-line">
         <button
@@ -151,15 +155,13 @@ export function BusinessBuilderOnboarding({
               The Builder · By Workplaces
             </p>
             <h2 className="text-tbb-h2 font-black text-tbb-navy tracking-tbb-tight">
-              Welcome aboard, {state.firstName} 👋
+              Welcome, {firstName} 👋
             </h2>
             <p className="text-tbb-ink-2">
-              You&apos;ve been added as a Business Builder. Here&apos;s a quick
-              setup checklist to get you running — knock these out now or come
-              back to them anytime.
-            </p>
-            <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-ink-3">
-              {doneCount} of {items.length} done
+              This is your private workspace
+              {engagementName ? ` for ${engagementName}` : ""} — where you and
+              your Business Builder run the work together. Here&apos;s where to
+              start.
             </p>
           </header>
 
@@ -168,18 +170,18 @@ export function BusinessBuilderOnboarding({
               <li key={it.key}>
                 <button
                   type="button"
-                  onClick={() =>
-                    dismissThen(it.href, it.key === "guide")
-                  }
+                  onClick={() => dismissThen(it.href)}
                   disabled={pending}
                   className="w-full text-left flex items-start gap-3 p-3.5 rounded-lg border border-tbb-line bg-white hover:border-tbb-blue hover:bg-tbb-bg-soft transition-colors disabled:opacity-60"
                 >
                   <span
                     className={
-                      it.done ? "text-tbb-success mt-0.5" : "text-tbb-ink-3 mt-0.5"
+                      it.key === "tour" && tourSeen
+                        ? "text-tbb-success mt-0.5"
+                        : "text-tbb-ink-3 mt-0.5"
                     }
                   >
-                    {it.done ? (
+                    {it.key === "tour" && tourSeen ? (
                       <CheckCircle2 className="w-5 h-5" aria-hidden />
                     ) : (
                       <Circle className="w-5 h-5" aria-hidden />
@@ -203,15 +205,7 @@ export function BusinessBuilderOnboarding({
             ))}
           </ul>
 
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => dismissThen()}
-              disabled={pending}
-              className="text-sm font-bold text-tbb-ink-3 hover:text-tbb-navy disabled:opacity-50"
-            >
-              I&apos;ll set up later
-            </button>
+          <div className="flex items-center justify-end gap-3 pt-1">
             <button
               type="button"
               onClick={() => dismissThen()}
