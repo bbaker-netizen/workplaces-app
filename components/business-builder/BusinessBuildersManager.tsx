@@ -17,11 +17,15 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2, SlidersHorizontal, UserPlus } from "lucide-react";
 import {
   inviteBusinessBuilder,
+  revokeBusinessBuilderInvite,
   setBusinessBuilderRole,
 } from "@/lib/actions/business-builder-invites";
 import { setBbUserAccess } from "@/lib/actions/bb-access";
 import { CONSOLE_MODULES } from "@/lib/console-modules";
-import type { InternalUser } from "@/lib/db/queries/business-builders";
+import type {
+  InternalUser,
+  PendingInvite,
+} from "@/lib/db/queries/business-builders";
 
 const inputCls =
   "w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue";
@@ -44,15 +48,18 @@ export function BusinessBuildersManager({
   currentUserProfileId,
   clients,
   accessByUser,
+  pendingInvites,
 }: {
   users: InternalUser[];
   currentUserProfileId: string;
   clients: Client[];
   accessByUser: Record<string, BbUserAccess>;
+  pendingInvites: PendingInvite[];
 }) {
   return (
     <div className="space-y-8">
       <InviteForm />
+      <PendingInvitesList invites={pendingInvites} />
       <TeamList
         users={users}
         currentUserProfileId={currentUserProfileId}
@@ -60,6 +67,80 @@ export function BusinessBuildersManager({
         accessByUser={accessByUser}
       />
     </div>
+  );
+}
+
+function PendingInvitesList({ invites }: { invites: PendingInvite[] }) {
+  if (invites.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+        Pending invitations ({invites.length})
+      </h2>
+      <p className="text-xs text-tbb-ink-3 -mt-1">
+        Invited but haven&apos;t signed up yet. Once they accept, they move
+        to your team below and you can set their client &amp; module access.
+      </p>
+      <ul className="space-y-2">
+        {invites.map((inv) => (
+          <PendingInviteRow key={inv.id} invite={inv} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PendingInviteRow({ invite }: { invite: PendingInvite }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function revoke() {
+    if (
+      !window.confirm(
+        `Revoke the invitation to ${invite.email}? Their sign-up link will stop working.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await revokeBusinessBuilderInvite(invite.id);
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  return (
+    <li className="flex items-center gap-4 p-4 rounded-lg border border-dashed border-tbb-line bg-white/60">
+      <span className="grid place-items-center w-9 h-9 rounded-full bg-tbb-cream text-tbb-ink-3 font-bold text-sm shrink-0">
+        {(invite.fullName || invite.email).slice(0, 1).toUpperCase()}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-tbb-navy truncate">
+          {invite.fullName || invite.email}
+          <span className="ml-2 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-warning">
+            Pending
+          </span>
+        </p>
+        <p className="text-xs text-tbb-ink-3 truncate">
+          {invite.email} ·{" "}
+          {invite.role === "master_admin" ? "Master admin" : "Standard"}
+        </p>
+        {error && <p className="text-[11px] text-tbb-danger mt-1">{error}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={revoke}
+        disabled={isPending}
+        className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-danger disabled:opacity-50 shrink-0"
+      >
+        {isPending ? "Revoking…" : "Revoke"}
+      </button>
+    </li>
   );
 }
 

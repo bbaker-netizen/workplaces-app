@@ -11,7 +11,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { listInternalUsers } from "@/lib/db/queries/business-builders";
+import {
+  listInternalUsers,
+  listPendingBusinessBuilderInvites,
+} from "@/lib/db/queries/business-builders";
 import { listBusinessBuildersForAdmin } from "@/lib/db/queries/bb-access";
 import { BusinessBuildersManager } from "@/components/business-builder/BusinessBuildersManager";
 
@@ -22,9 +25,10 @@ export default async function BusinessBuildersSettingsPage() {
     redirect("/business-builder");
   }
 
-  const [users, accessData] = await Promise.all([
+  const [users, accessData, pendingInvites] = await Promise.all([
     listInternalUsers(),
     listBusinessBuildersForAdmin(),
+    listPendingBusinessBuilderInvites(),
   ]);
 
   // Map userProfileId -> their client/module access settings.
@@ -65,6 +69,7 @@ export default async function BusinessBuildersSettingsPage() {
         currentUserProfileId={profile.userProfileId}
         clients={accessData?.clients ?? []}
         accessByUser={accessByUser}
+        pendingInvites={pendingInvites}
       />
     </main>
   );
