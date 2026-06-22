@@ -54,37 +54,57 @@ export async function getCurrentBbAccess(): Promise<BbAccess> {
     return { ...FULL_ACCESS, isMasterAdmin: false, isBusinessBuilder: false };
   }
 
-  return withSystemContext(async (tx) => {
-    const [row] = await tx
-      .select({
-        allClientsAccess: userProfiles.allClientsAccess,
-        allowedConsoleModules: userProfiles.allowedConsoleModules,
-      })
-      .from(userProfiles)
-      .where(eq(userProfiles.id, profile.userProfileId))
-      .limit(1);
+  // Fail-safe: this read sits on the hot path for EVERY authenticated page
+  // (console layout + getCurrentEngagement). If it ever throws — a migration
+  // still landing, a transient DB error — we must not take the whole app
+  // down. Fall back to full access (the pre-feature default) so the app
+  // always loads; restrictions simply don't apply until the read recovers.
+  const coachFullAccess: BbAccess = {
+    isMasterAdmin: false,
+    isBusinessBuilder: true,
+    allClientsAccess: true,
+    allowedConsoleModules: null,
+    grantedEngagementIds: [],
+  };
 
-    const allClientsAccess = row?.allClientsAccess ?? true;
-    const allowedConsoleModules =
-      (row?.allowedConsoleModules as string[] | null) ?? null;
+  try {
+    return await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          allClientsAccess: userProfiles.allClientsAccess,
+          allowedConsoleModules: userProfiles.allowedConsoleModules,
+        })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, profile.userProfileId))
+        .limit(1);
 
-    const grantedEngagementIds = allClientsAccess
-      ? []
-      : (
-          await tx
-            .select({ engagementId: bbClientAccess.engagementId })
-            .from(bbClientAccess)
-            .where(eq(bbClientAccess.coachUserProfileId, profile.userProfileId))
-        ).map((g) => g.engagementId);
+      const allClientsAccess = row?.allClientsAccess ?? true;
+      const allowedConsoleModules =
+        (row?.allowedConsoleModules as string[] | null) ?? null;
 
-    return {
-      isMasterAdmin: false,
-      isBusinessBuilder: true,
-      allClientsAccess,
-      allowedConsoleModules,
-      grantedEngagementIds,
-    };
-  });
+      const grantedEngagementIds = allClientsAccess
+        ? []
+        : (
+            await tx
+              .select({ engagementId: bbClientAccess.engagementId })
+              .from(bbClientAccess)
+              .where(
+                eq(bbClientAccess.coachUserProfileId, profile.userProfileId),
+              )
+          ).map((g) => g.engagementId);
+
+      return {
+        isMasterAdmin: false,
+        isBusinessBuilder: true,
+        allClientsAccess,
+        allowedConsoleModules,
+        grantedEngagementIds,
+      };
+    });
+  } catch (e) {
+    console.error("[bb-access] getCurrentBbAccess read failed; defaulting to full access", e);
+    return coachFullAccess;
+  }
 }
 
 /**
@@ -124,7 +144,8 @@ export async function listBusinessBuildersForAdmin(): Promise<{
   if (profile.status !== "ok" || profile.role !== "master_admin") return null;
   const masterOrgId = profile.orgId;
 
-  return withSystemContext(async (tx) => {
+  try {
+    return await withSystemContext(async (tx) => {
     const users = await tx
       .select({
         userProfileId: userProfiles.id,
@@ -181,5 +202,9 @@ export async function listBusinessBuildersForAdmin(): Promise<{
       })),
       clients,
     };
-  });
+    });
+  } catch (e) {
+    console.error("[bb-access] listBusinessBuildersForAdmin failed", e);
+    return null;
+  }
 }
