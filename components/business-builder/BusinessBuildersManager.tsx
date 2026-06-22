@@ -18,6 +18,7 @@ import { ChevronDown, Loader2, SlidersHorizontal, UserPlus } from "lucide-react"
 import {
   inviteBusinessBuilder,
   revokeBusinessBuilderInvite,
+  setInviteAccess,
   setBusinessBuilderRole,
 } from "@/lib/actions/business-builder-invites";
 import { setBbUserAccess } from "@/lib/actions/bb-access";
@@ -26,6 +27,138 @@ import type {
   InternalUser,
   PendingInvite,
 } from "@/lib/db/queries/business-builders";
+
+type AccessValue = {
+  allClientsAccess: boolean;
+  allowedConsoleModules: string[] | null;
+  grantedEngagementIds: string[];
+};
+
+const FULL_ACCESS: AccessValue = {
+  allClientsAccess: true,
+  allowedConsoleModules: null,
+  grantedEngagementIds: [],
+};
+
+/** Controlled client + module access picker, shared by the invite form and
+ *  the pending-invite editor. */
+function AccessPicker({
+  value,
+  onChange,
+  clients,
+  idPrefix,
+}: {
+  value: AccessValue;
+  onChange: (v: AccessValue) => void;
+  clients: { id: string; name: string }[];
+  idPrefix: string;
+}) {
+  const allModules = value.allowedConsoleModules === null;
+  const moduleSet = new Set(
+    value.allowedConsoleModules ?? CONSOLE_MODULES.map((m) => m.href),
+  );
+  const grantedSet = new Set(value.grantedEngagementIds);
+
+  return (
+    <div className="space-y-5 rounded-lg border border-tbb-line bg-tbb-cream/40 p-4">
+      {/* Clients */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
+          Clients
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name={`clients-${idPrefix}`}
+            checked={value.allClientsAccess}
+            onChange={() => onChange({ ...value, allClientsAccess: true })}
+          />
+          All clients
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name={`clients-${idPrefix}`}
+            checked={!value.allClientsAccess}
+            onChange={() => onChange({ ...value, allClientsAccess: false })}
+          />
+          Only selected clients
+        </label>
+        {!value.allClientsAccess && (
+          <div className="pl-6 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {clients.map((c) => (
+              <label key={c.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={grantedSet.has(c.id)}
+                  onChange={() => {
+                    const next = new Set(grantedSet);
+                    if (next.has(c.id)) next.delete(c.id);
+                    else next.add(c.id);
+                    onChange({ ...value, grantedEngagementIds: Array.from(next) });
+                  }}
+                />
+                {c.name}
+              </label>
+            ))}
+            {clients.length === 0 && (
+              <p className="text-xs text-tbb-ink-3 italic">No clients yet.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Modules */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
+          Console modules
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name={`modules-${idPrefix}`}
+            checked={allModules}
+            onChange={() => onChange({ ...value, allowedConsoleModules: null })}
+          />
+          All modules
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name={`modules-${idPrefix}`}
+            checked={!allModules}
+            onChange={() =>
+              onChange({
+                ...value,
+                allowedConsoleModules: Array.from(moduleSet),
+              })
+            }
+          />
+          Only selected modules
+        </label>
+        {!allModules && (
+          <div className="pl-6 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {CONSOLE_MODULES.map((m) => (
+              <label key={m.href} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={moduleSet.has(m.href)}
+                  onChange={() => {
+                    const next = new Set(moduleSet);
+                    if (next.has(m.href)) next.delete(m.href);
+                    else next.add(m.href);
+                    onChange({ ...value, allowedConsoleModules: Array.from(next) });
+                  }}
+                />
+                {m.label}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const inputCls =
   "w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue";
@@ -58,8 +191,8 @@ export function BusinessBuildersManager({
 }) {
   return (
     <div className="space-y-8">
-      <InviteForm />
-      <PendingInvitesList invites={pendingInvites} />
+      <InviteForm clients={clients} />
+      <PendingInvitesList invites={pendingInvites} clients={clients} />
       <TeamList
         users={users}
         currentUserProfileId={currentUserProfileId}
@@ -70,7 +203,13 @@ export function BusinessBuildersManager({
   );
 }
 
-function PendingInvitesList({ invites }: { invites: PendingInvite[] }) {
+function PendingInvitesList({
+  invites,
+  clients,
+}: {
+  invites: PendingInvite[];
+  clients: Client[];
+}) {
   if (invites.length === 0) return null;
   return (
     <section className="space-y-3">
@@ -78,22 +217,43 @@ function PendingInvitesList({ invites }: { invites: PendingInvite[] }) {
         Pending invitations ({invites.length})
       </h2>
       <p className="text-xs text-tbb-ink-3 -mt-1">
-        Invited but haven&apos;t signed up yet. Once they accept, they move
-        to your team below and you can set their client &amp; module access.
+        Invited but haven&apos;t signed up yet. Their access applies
+        automatically when they accept — expand <strong>Access</strong> to
+        change it in the meantime.
       </p>
       <ul className="space-y-2">
         {invites.map((inv) => (
-          <PendingInviteRow key={inv.id} invite={inv} />
+          <PendingInviteRow key={inv.id} invite={inv} clients={clients} />
         ))}
       </ul>
     </section>
   );
 }
 
-function PendingInviteRow({ invite }: { invite: PendingInvite }) {
+function PendingInviteRow({
+  invite,
+  clients,
+}: {
+  invite: PendingInvite;
+  clients: Client[];
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [showAccess, setShowAccess] = useState(false);
+  const [access, setAccess] = useState<AccessValue>(
+    invite.access
+      ? {
+          allClientsAccess: invite.access.allClientsAccess,
+          allowedConsoleModules: invite.access.allowedConsoleModules,
+          grantedEngagementIds: invite.access.grantedEngagementIds,
+        }
+      : FULL_ACCESS,
+  );
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // Standard Business Builders can be scoped; a pending master admin can't.
+  const canConfigure = invite.role === "coach";
 
   function revoke() {
     if (
@@ -105,7 +265,7 @@ function PendingInviteRow({ invite }: { invite: PendingInvite }) {
     }
     setError(null);
     startTransition(async () => {
-      const r = await revokeBusinessBuilderInvite(invite.id);
+      const r = await revokeBusinessBuilderInvite(invite.id, invite.email);
       if (!r.ok) {
         setError(r.error);
         return;
@@ -114,41 +274,92 @@ function PendingInviteRow({ invite }: { invite: PendingInvite }) {
     });
   }
 
+  function saveAccess() {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await setInviteAccess({ email: invite.email, access });
+      setMsg(r.ok ? "Saved." : r.error);
+      if (r.ok) router.refresh();
+    });
+  }
+
   return (
-    <li className="flex items-center gap-4 p-4 rounded-lg border border-dashed border-tbb-line bg-white/60">
-      <span className="grid place-items-center w-9 h-9 rounded-full bg-tbb-cream text-tbb-ink-3 font-bold text-sm shrink-0">
-        {(invite.fullName || invite.email).slice(0, 1).toUpperCase()}
-      </span>
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-tbb-navy truncate">
-          {invite.fullName || invite.email}
-          <span className="ml-2 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-warning">
-            Pending
-          </span>
-        </p>
-        <p className="text-xs text-tbb-ink-3 truncate">
-          {invite.email} ·{" "}
-          {invite.role === "master_admin" ? "Master admin" : "Standard"}
-        </p>
-        {error && <p className="text-[11px] text-tbb-danger mt-1">{error}</p>}
+    <li className="rounded-lg border border-dashed border-tbb-line bg-white/60">
+      <div className="flex items-center gap-4 p-4">
+        <span className="grid place-items-center w-9 h-9 rounded-full bg-tbb-cream text-tbb-ink-3 font-bold text-sm shrink-0">
+          {(invite.fullName || invite.email).slice(0, 1).toUpperCase()}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-tbb-navy truncate">
+            {invite.fullName || invite.email}
+            <span className="ml-2 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-warning">
+              Pending
+            </span>
+          </p>
+          <p className="text-xs text-tbb-ink-3 truncate">
+            {invite.email} ·{" "}
+            {invite.role === "master_admin" ? "Master admin" : "Standard"}
+            {canConfigure && (
+              <>
+                {" · "}
+                {invite.access && !invite.access.allClientsAccess
+                  ? `${invite.access.grantedEngagementIds.length} client(s)`
+                  : "all clients"}
+              </>
+            )}
+          </p>
+          {error && <p className="text-[11px] text-tbb-danger mt-1">{error}</p>}
+        </div>
+        {canConfigure && (
+          <button
+            type="button"
+            onClick={() => setShowAccess((s) => !s)}
+            className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:text-tbb-blue-700 shrink-0"
+            aria-expanded={showAccess}
+          >
+            Access
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={revoke}
+          disabled={isPending}
+          className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-danger disabled:opacity-50 shrink-0"
+        >
+          {isPending ? "…" : "Revoke"}
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={revoke}
-        disabled={isPending}
-        className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-danger disabled:opacity-50 shrink-0"
-      >
-        {isPending ? "Revoking…" : "Revoke"}
-      </button>
+      {canConfigure && showAccess && (
+        <div className="border-t border-tbb-line px-4 py-4 space-y-3">
+          <AccessPicker
+            value={access}
+            onChange={setAccess}
+            clients={clients}
+            idPrefix={`inv-${invite.id}`}
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={saveAccess}
+              disabled={isPending}
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-60"
+            >
+              {isPending ? "Saving…" : "Save access"}
+            </button>
+            {msg && <span className="text-xs text-tbb-ink-3">{msg}</span>}
+          </div>
+        </div>
+      )}
     </li>
   );
 }
 
-function InviteForm() {
+function InviteForm({ clients }: { clients: Client[] }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InternalUser["role"]>("coach");
+  const [access, setAccess] = useState<AccessValue>(FULL_ACCESS);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -161,6 +372,7 @@ function InviteForm() {
         fullName: fullName.trim(),
         email: email.trim(),
         role,
+        access: role === "coach" ? access : undefined,
       });
       if (!r.ok) {
         setError(r.error);
@@ -170,6 +382,7 @@ function InviteForm() {
       setFullName("");
       setEmail("");
       setRole("coach");
+      setAccess(FULL_ACCESS);
       router.refresh();
     });
   }
@@ -234,6 +447,24 @@ function InviteForm() {
             <option value="master_admin">Master admin (full access)</option>
           </select>
         </label>
+        {role === "coach" && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Access (applies when they accept)
+            </p>
+            <AccessPicker
+              value={access}
+              onChange={setAccess}
+              clients={clients}
+              idPrefix="invite"
+            />
+            <p className="text-[11px] text-tbb-ink-3">
+              Leave as &quot;all&quot; to give full access, or scope them to
+              specific clients and modules now — you can also change this while
+              the invite is pending.
+            </p>
+          </div>
+        )}
         {error && <p className="text-sm text-tbb-danger">{error}</p>}
         {okMsg && <p className="text-sm text-tbb-success">{okMsg}</p>}
         <button

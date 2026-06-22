@@ -26,7 +26,7 @@ import { randomUUID } from "node:crypto";
 import { cache } from "react";
 import { and, eq } from "drizzle-orm";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
-import { orgs, userProfiles } from "./schema";
+import { bbClientAccess, bbInviteAccess, orgs, userProfiles } from "./schema";
 import type { UserProfile } from "./schema";
 import { withSystemContext, withTenantContext } from "./tenant";
 
@@ -180,6 +180,54 @@ async function _ensureUserProfile(): Promise<ProvisionResult> {
       role,
     });
   });
+
+  // If a master admin pre-set this Business Builder's access at invite time
+  // (bb_invite_access, keyed by email), apply it now and clear the pending
+  // row. Best-effort — never let it break sign-in.
+  if (role === "coach") {
+    try {
+      await withSystemContext(async (tx) => {
+        const rows = await tx
+          .select()
+          .from(bbInviteAccess)
+          .where(eq(bbInviteAccess.orgId, orgRow.id));
+        const match = rows.find(
+          (r) => r.email.toLowerCase() === email.toLowerCase(),
+        );
+        if (!match) return;
+
+        await tx
+          .update(userProfiles)
+          .set({
+            allClientsAccess: match.allClientsAccess,
+            allowedConsoleModules: match.allowedConsoleModules ?? null,
+          })
+          .where(eq(userProfiles.id, newUserProfileId));
+
+        const ids = Array.isArray(match.grantedEngagementIds)
+          ? match.grantedEngagementIds
+          : [];
+        if (!match.allClientsAccess && ids.length > 0) {
+          await tx
+            .insert(bbClientAccess)
+            .values(
+              ids.map((engagementId) => ({
+                orgId: orgRow.id,
+                coachUserProfileId: newUserProfileId,
+                engagementId,
+              })),
+            )
+            .onConflictDoNothing();
+        }
+
+        await tx
+          .delete(bbInviteAccess)
+          .where(eq(bbInviteAccess.id, match.id));
+      });
+    } catch (e) {
+      console.error("[provisioning] applying invite access failed", e);
+    }
+  }
 
   return {
     status: "ok",
