@@ -84,6 +84,55 @@ export async function inviteBusinessBuilder(
   }
 }
 
+/**
+ * Revoke an outstanding (not-yet-accepted) Clerk invitation. Master-admin
+ * only. After this the invitee's sign-up link stops working and they drop
+ * off the pending list.
+ */
+export async function revokeBusinessBuilderInvite(
+  invitationId: string,
+): Promise<RoleResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin") {
+    return { ok: false, error: "Only the account owner can revoke invites." };
+  }
+  if (!invitationId || typeof invitationId !== "string") {
+    return { ok: false, error: "Missing invitation." };
+  }
+
+  const { userId: requestingUserId } = await auth();
+  if (!requestingUserId) {
+    return { ok: false, error: "Your session is missing — sign in again." };
+  }
+
+  const clerkOrgId = await withSystemContext(async (tx) => {
+    const [master] = await tx
+      .select({ clerkOrgId: orgs.clerkOrgId })
+      .from(orgs)
+      .where(eq(orgs.type, "master"))
+      .limit(1);
+    return master?.clerkOrgId ?? null;
+  });
+  if (!clerkOrgId) return { ok: false, error: "Master org isn't configured." };
+
+  try {
+    const clerk = await clerkClient();
+    await clerk.organizations.revokeOrganizationInvitation({
+      organizationId: clerkOrgId,
+      invitationId,
+      requestingUserId,
+    });
+    revalidatePath("/business-builder/settings/team");
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+    };
+  }
+}
+
 const roleSchema = z.object({
   userProfileId: z.string().uuid(),
   role: z.enum(["coach", "master_admin"]),

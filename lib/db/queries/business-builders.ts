@@ -8,6 +8,7 @@
  */
 
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { clerkClient } from "@clerk/nextjs/server";
 import { orgs, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
@@ -64,4 +65,58 @@ export async function listInternalUsers(): Promise<InternalUser[]> {
         return a.fullName.localeCompare(b.fullName);
       });
   });
+}
+
+export type PendingInvite = {
+  id: string;
+  email: string;
+  fullName: string | null;
+  role: "master_admin" | "coach";
+  createdAt: number;
+};
+
+/**
+ * Outstanding Clerk invitations to the master org that haven't been
+ * accepted yet — i.e. Business Builders you've invited who haven't signed
+ * up. Distinct from listInternalUsers (those have already joined). Returns
+ * [] on any error so the team page never breaks over it.
+ */
+export async function listPendingBusinessBuilderInvites(): Promise<
+  PendingInvite[]
+> {
+  const clerkOrgId = await withSystemContext(async (tx) => {
+    const [master] = await tx
+      .select({ clerkOrgId: orgs.clerkOrgId })
+      .from(orgs)
+      .where(eq(orgs.type, "master"))
+      .limit(1);
+    return master?.clerkOrgId ?? null;
+  });
+  if (!clerkOrgId) return [];
+
+  try {
+    const clerk = await clerkClient();
+    const res = await clerk.organizations.getOrganizationInvitationList({
+      organizationId: clerkOrgId,
+      status: ["pending"],
+    });
+    return res.data.map((inv) => {
+      const meta = (inv.publicMetadata ?? {}) as Record<string, unknown>;
+      const appRole = meta.app_role === "master_admin" ? "master_admin" : "coach";
+      const fullName =
+        typeof meta.invited_full_name === "string"
+          ? meta.invited_full_name
+          : null;
+      return {
+        id: inv.id,
+        email: inv.emailAddress,
+        fullName,
+        role: appRole as "master_admin" | "coach",
+        createdAt: inv.createdAt,
+      };
+    });
+  } catch (e) {
+    console.error("[business-builders] listPendingInvites failed", e);
+    return [];
+  }
 }
