@@ -36,44 +36,44 @@ const STEPS: Step[] = [
       "This is your private workspace for our Business Building engagement. I'll walk you through what's on screen — about a minute. You can click on anything to explore as we go.",
   },
   {
-    target: '[data-tour="action-items"]',
-    placement: "left",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
     title: "Your open action items.",
     content:
-      "Everything you've committed to is here, sorted overdue-first then by due date. Click any item to open it, add a comment, or mark it done. Coming out of a Business Building session, this is the list that grows.",
+      "Everything you've committed to is in Action items, sorted overdue-first then by due date. Click any item to open it, add a comment, or mark it done. Coming out of a Business Building session, this is the list that grows.",
   },
   {
-    target: '[data-tour="next-session"]',
-    placement: "right",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
     title: "Your next Business Building Session.",
     content:
-      "We meet twice a month — one in person, one virtual. The next one shows up here with the date, time, and any agenda I've started. Click All sessions to see history.",
+      "We meet twice a month — one in person, one virtual. Sessions shows your next one with the date, time, and any agenda I've started, plus the history of past ones.",
   },
   {
-    target: '[data-tour="communication"]',
-    placement: "left",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
-    title: "Latest messages.",
+    title: "Staying in touch.",
     content:
       "Use Communication for anything between sessions — questions, decisions, file shares, things you want me to see before we meet. Two thread types: Leadership (private to you + leaders) and Team (everyone you've invited). Mention with @name to email-notify.",
   },
   {
-    target: '[data-tour="documents"]',
-    placement: "top",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
     title: "Every file we touch.",
     content:
-      "SOPs, plans, signed contracts, assessments — everything lives here. Click any file to download. No more emailing attachments around or chasing down a Drive link.",
+      "SOPs, plans, signed contracts, assessments — everything lives in Documents. Click any file to download. No more emailing attachments around or chasing down a Drive link.",
   },
   {
-    target: '[data-tour="contact-support"]',
-    placement: "top",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
-    title: "Need help? Reach me here.",
+    title: "Need help?",
     content:
-      "I monitor this address Monday–Friday, 8:30 AM – 6:00 PM Mountain Time. For anything during business hours, this is the fastest path to me.",
+      "Reach me through Communication, or the contact link in the footer. I'm on Monday–Friday, 8:30 AM – 6:00 PM Mountain Time.",
   },
   {
     target: "body",

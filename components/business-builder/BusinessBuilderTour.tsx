@@ -29,65 +29,65 @@ const STEPS: Step[] = [
     target: "body",
     placement: "center",
     skipBeacon: true,
-    title: "The Business Builder Portal — your operating system as a Coach.",
+    title: "Welcome to your Business Builder console.",
     content:
-      "I'll walk you through the entire arc of running a client engagement here — from the moment a new prospect lands, all the way through to renewal. Each step in the sidebar represents a phase. We'll go through them in order. About two minutes total.",
+      "A two-minute orientation to how you run a client engagement here — from a new prospect landing, all the way to renewal. The left sidebar is grouped by lifecycle phase; I'll walk you through each. You can replay this anytime from the Business Builder guide.",
   },
   {
-    target: '[data-tour="Coach-phase-pipeline"]',
-    placement: "right",
+    target: "body",
+    placement: "center",
+    skipBeacon: true,
+    title: "First — connect your tools.",
+    content:
+      "A few one-time connections you make yourself, under your Profile: Google (Calendar + Gmail + Drive), QuickBooks, and your e-signature. These make the app send from YOUR Gmail, sync YOUR calendar, and sign with YOUR name. (Text messaging and the cloud account for embedded apps are set up once for the whole practice by a master admin — not per person.)",
+  },
+  {
+    target: "body",
+    placement: "center",
     skipBeacon: true,
     title: "Phase 01 — Pipeline.",
     content:
-      "Every new prospect starts here. The Pipeline view groups them by stage: Diagnostic pending → Complete → Proposal sent → Contract sent → Signed → Onboarded. Two ways prospects land: (a) someone submits the public diagnostic at /diagnostic (auto-creates the record), or (b) you add them manually from the Pipeline page.",
+      "Every prospect starts here — your CRM, grouped by stage. Add them by scanning a business card on your phone, manually, or let them land automatically when someone fills out your public diagnostic. Click the stage chip to move a prospect; open them to email, schedule, send the diagnostic, or send a contract for signature.",
   },
   {
-    target: '[data-tour="Coach-diagnostic"]',
-    placement: "right",
-    skipBeacon: true,
-    title: "Your public diagnostic — your top-of-funnel.",
-    content:
-      "Share this URL anywhere you want to capture leads: social profile, email signature, business card. Submissions land in your Pipeline with their answers attached, ready for your follow-up call.",
-  },
-  {
-    target: '[data-tour="Coach-phase-engage"]',
-    placement: "right",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
     title: "Phase 02 — Engage.",
     content:
-      "Once a prospect is signed, you create the engagement and the rhythm starts. Two Business Building Sessions a month. Action items between each. Communication threads keep you in touch with the client's leadership and operating team. This is where most of your Business Building time lives.",
+      "Once they're signed, you open the engagement and the rhythm starts: two Business Building Sessions a month, action items between each, and Leadership/Team communication threads. Your Inbox collects every email/SMS/call across all clients (reply and compose right there), and the Calendar shows every session and due date in one view.",
   },
   {
-    target: '[data-tour="Coach-phase-deliver"]',
-    placement: "right",
+    target: "body",
+    placement: "center",
+    skipBeacon: true,
+    title: "Set up each client's portal.",
+    content:
+      "Open an engagement to reach its workspace page — the per-client hub. There you choose which modules the client sees, add apps to their portal (sync your Netlify projects under Client tools & tutorials first, then add them here), write the Soul File, and hit 'Invite client' to send their sign-up. You can prepare everything first and invite later.",
+  },
+  {
+    target: "body",
+    placement: "center",
     skipBeacon: true,
     title: "Phase 03 — Deliver.",
     content:
-      "The deeper work — the nine deliverable types (SOPs, org charts, job profiles, financial dashboards, plans, assessments). Projects for app builds and marketing pushes. Hiring for TTI-driven candidate work.",
+      "The deeper work: the nine deliverable types (SOPs, org charts, job profiles, financial dashboards, plans, assessments), Projects for larger initiatives with a task grid, Goals for SMART targets, and the Hiring pipeline for TTI-driven candidate work.",
   },
   {
-    target: '[data-tour="Coach-phase-bill"]',
-    placement: "right",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
     title: "Phase 04 — Bill.",
     content:
-      "Billing happens directly in QuickBooks Online — you invoice clients there as you always have. The Builder doesn't create invoices; it reads each client's lifetime payments back from QBO and shows them as the 'Value' on your Pipeline, refreshed nightly or on demand. Connect QBO once under Practice.",
+      "Billing happens directly in QuickBooks Online — you invoice clients there as always. The Builder doesn't create invoices; it reads each client's payments back from QBO and shows them as the 'Value' on your Pipeline.",
   },
   {
-    target: '[data-tour="Coach-phase-practice"]',
-    placement: "right",
+    target: "body",
+    placement: "center",
     skipBeacon: true,
-    title: "Phase 05 — Practice operations.",
+    title: "Help is always one click away.",
     content:
-      "Your own tools: create a new engagement, upload your stored signature (so contracts auto-sign with your name), connect QuickBooks, open this guide. These don't change client-by-client — they're your standing setup as a Coach.",
-  },
-  {
-    target: '[data-tour="Coach-guide"]',
-    placement: "right",
-    skipBeacon: true,
-    title: "The full guide is always one click away.",
-    content:
-      "Business Builder guide opens the comprehensive operating manual — every phase, every step, every URL, written out in depth. Use the interactive walkthrough (this one) for orientation; use the guide for reference. Both can be replayed any time.",
+      "Stuck on anything? Click Builder Buddy (the orange beacon, bottom-right) — it's an AI assistant that knows the app, the methodology, and the page you're on. The Business Builder guide in the sidebar is the full written reference.",
   },
   {
     target: "body",
@@ -95,7 +95,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "You're ready to run.",
     content:
-      "Start at the top of the sidebar (Pipeline) and work your way down. The first time you go through it, do it with a real prospect — sandbox usage is fine, but the system was built to be used. Build what compounds.",
+      "Start at the top of the sidebar and work down. Best way to learn it is to use it with a real client. Build what compounds.",
   },
 ];
 
