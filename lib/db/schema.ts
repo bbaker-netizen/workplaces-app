@@ -976,6 +976,10 @@ export const actionItems = pgTable(
     revenueImpact: boolean("revenue_impact").notNull().default(false),
     marginImpact: boolean("margin_impact").notNull().default(false),
     firefliesTranscriptId: text("fireflies_transcript_id"),
+    /** BB-#### id of the matching row in the EA Action Items sheet
+     *  (Command Central). Set when this item is pushed to the EA gateway;
+     *  null until pushed. Drives the two-way sync. */
+    eaExternalId: text("ea_external_id"),
     bbsSessionId: uuid("bbs_session_id").references(
       (): AnyPgColumn => bbsSessions.id,
       { onDelete: "set null" },
@@ -991,6 +995,7 @@ export const actionItems = pgTable(
     assigneeIdx: index("action_items_assignee_idx").on(t.assigneeUserProfileId),
     statusIdx: index("action_items_status_idx").on(t.status),
     projectIdx: index("action_items_project_idx").on(t.projectId),
+    eaExternalIdx: index("action_items_ea_external_id_idx").on(t.eaExternalId),
   })
 );
 
