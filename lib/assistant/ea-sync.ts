@@ -21,7 +21,7 @@
  * Secret + URL come from server env only (EA_GATEWAY_URL / EA_GATEWAY_SECRET).
  */
 
-import { eq } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import { actionItems, engagements } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
@@ -158,4 +158,76 @@ export async function expireInEa(externalId: string | null): Promise<void> {
   } catch (e) {
     console.error("[ea-sync] expireInEa failed:", e);
   }
+}
+
+
+/**
+ * Stage 2 — mirror sheet status changes BACK to the Builder.
+ *
+ * Reads every row from the EA sheet and, for each Builder action item that
+ * carries an ea_external_id, brings the Builder status into line with the
+ * sheet. Runs on a schedule (Netlify scheduled function -> cron route).
+ *
+ * Deliberately conservative so the two systems can't fight:
+ *   - sheet Done  -> Builder done   (close it here when closed there)
+ *   - sheet Open  -> Builder open   ONLY if the Builder copy is currently
+ *     done (i.e. it was reopened in Command Central). We never overwrite a
+ *     live in_progress / blocked state, since those both map to sheet Open.
+ *   - sheet Expired -> left alone. Expiry is an EA-side lifecycle with no
+ *     Builder equivalent; we don't auto-close or delete on a poll.
+ *
+ * Writes status directly (not through the action-item server action) so the
+ * outbound push hook doesn't re-fire — no ping-pong. Never throws to the
+ * caller in a way that breaks the cron; the route wraps it.
+ */
+export async function mirrorEaStatusesToBuilder(): Promise<{
+  checked: number;
+  updated: number;
+}> {
+  if (!gatewayConfig()) return { checked: 0, updated: 0 };
+
+  const json = (await post({ op: "read", status: "all" })) as {
+    items?: Array<{ id?: string; status?: string }>;
+  } | null;
+  const rows = json?.items ?? [];
+
+  const sheetStatusById = new Map<string, string>();
+  for (const r of rows) {
+    if (r.id) sheetStatusById.set(String(r.id), String(r.status ?? "").toLowerCase());
+  }
+
+  let checked = 0;
+  let updated = 0;
+
+  await withSystemContext(async (tx) => {
+    const builderRows = await tx
+      .select({
+        id: actionItems.id,
+        status: actionItems.status,
+        ext: actionItems.eaExternalId,
+      })
+      .from(actionItems)
+      .where(isNotNull(actionItems.eaExternalId));
+
+    for (const b of builderRows) {
+      if (!b.ext) continue;
+      const sheet = sheetStatusById.get(b.ext);
+      if (!sheet) continue;
+      checked++;
+
+      let next: "open" | "done" | null = null;
+      if (sheet === "done" && b.status !== "done") next = "done";
+      else if (sheet === "open" && b.status === "done") next = "open";
+
+      if (next) {
+        await tx
+          .update(actionItems)
+          .set({ status: next, updatedAt: new Date() })
+          .where(eq(actionItems.id, b.id));
+        updated++;
+      }
+    }
+  });
+
+  return { checked, updated };
 }
