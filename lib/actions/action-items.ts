@@ -36,6 +36,7 @@ import {
 } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { actionItemAssignedEmail } from "@/lib/email/templates";
+import { syncActionItemToEa, expireInEa } from "@/lib/assistant/ea-sync";
 
 type Role = UserProfile["role"];
 
@@ -197,6 +198,8 @@ export async function createActionItem(
     }
 
     revalidateActionItemPaths();
+    // Push the new item out to the EA Command Central sheet (best-effort).
+    await syncActionItemToEa(txResult.item.id);
     return { ok: true, data: txResult.item };
   } catch (e) {
     return {
@@ -374,6 +377,8 @@ export async function updateActionItem(
     }
 
     revalidateActionItemPaths();
+    // Mirror the change out to the EA Command Central sheet (best-effort).
+    await syncActionItemToEa(id);
     return { ok: true, data: undefined };
   } catch (e) {
     return {
@@ -408,15 +413,23 @@ export async function deleteActionItem(
     if (!engagementId) {
       return { ok: false, error: "Action item not found." };
     }
-    await withEngagementContext(
+    const externalId = await withEngagementContext(
       profile.orgId,
       profile.role,
       engagementId,
       async (tx) => {
+        const [existing] = await tx
+          .select({ ext: actionItems.eaExternalId })
+          .from(actionItems)
+          .where(eq(actionItems.id, id))
+          .limit(1);
         await tx.delete(actionItems).where(eq(actionItems.id, id));
+        return existing?.ext ?? null;
       },
     );
     revalidateActionItemPaths();
+    // Retire the matching EA sheet row (best-effort).
+    await expireInEa(externalId);
     return { ok: true, data: undefined };
   } catch (e) {
     return {
