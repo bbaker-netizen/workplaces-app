@@ -101,6 +101,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       { href: "/business-builder/engagements", label: "Client Portal", icon: Briefcase },
       { href: "/business-builder/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/business-builder/action-items", label: "Action items", icon: CheckSquare },
+      { href: "/business-builder/assistant-items", label: "From the AI Assistant", icon: Sparkles },
       { href: "/business-builder/inbox", label: "Inbox (email / SMS / calls)", icon: Inbox },
       { href: "/business-builder/communication", label: "Communication", icon: MessagesSquare },
     ],
