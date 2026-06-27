@@ -10,6 +10,7 @@ import {
   CalendarCheck,
   CreditCard,
   FileText,
+  Magnet,
   Plug,
   User,
   Users,
@@ -67,6 +68,15 @@ const CARDS: SettingsCard[] = [
     description:
       "Account-wide services: Twilio (SMS), Netlify, Fireflies, Resend, and the master Google/QuickBooks status. System config.",
     icon: Plug,
+    status: "ready",
+    masterAdminOnly: true,
+  },
+  {
+    href: "/business-builder/settings/lead-sources",
+    title: "Lead sources",
+    description:
+      "Connect your website form and ad channels (Meta, TikTok, YouTube, Google, LinkedIn) via Make.com so new leads land in your Pipeline automatically.",
+    icon: Magnet,
     status: "ready",
     masterAdminOnly: true,
   },
