@@ -304,6 +304,9 @@ export const orgs = pgTable("orgs", {
    *  the EU. Used on invoices. */
   taxId: text("tax_id"),
   type: orgTypeEnum("type").notNull().default("client"),
+  // Lead-capture webhook secret (migration 0068). Secures the public
+  // /api/leads/<token> endpoint that external channels POST leads to.
+  leadWebhookToken: text("lead_webhook_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
