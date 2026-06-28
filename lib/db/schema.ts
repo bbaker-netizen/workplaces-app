@@ -340,6 +340,9 @@ export const userProfiles = pgTable(
     // Phase 5: email signature appended to outbound emails sent from
     // the communications panel. Plain text.
     emailSignature: text("email_signature"),
+    // Per-user Anthropic API key for Ask Buddy (Builder Buddy). Each
+    // Business Builder supplies their own; stored encrypted via secret-vault.
+    anthropicApiKey: text("anthropic_api_key"),
     // Phase 5: per-user UI prefs (migration 0021). Follow the user across
     // devices so the system feels remembered. Pipeline columns + home
     // dashboard layout are owned by their respective features.

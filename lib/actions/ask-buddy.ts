@@ -13,17 +13,37 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { eq } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { userProfiles } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
+import { decryptSecret } from "@/lib/crypto/secret-vault";
 
-let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
-  if (cachedClient) return cachedClient;
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    throw new Error("ANTHROPIC_API_KEY is not set in Netlify env vars.");
+/**
+ * Resolve the Anthropic API key for THIS Business Builder. Each one
+ * supplies their own key (Settings > Profile), so Buddy usage bills to
+ * them. Falls back to the platform key (ANTHROPIC_API_KEY) if a user
+ * has not set their own yet, so the master admin keeps working.
+ */
+async function resolveAnthropicKey(
+  userProfileId: string,
+): Promise<string | null> {
+  const row = await withSystemContext(async (tx) => {
+    const [r] = await tx
+      .select({ key: userProfiles.anthropicApiKey })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, userProfileId))
+      .limit(1);
+    return r ?? null;
+  });
+  if (row?.key) {
+    try {
+      return decryptSecret(row.key);
+    } catch {
+      return null;
+    }
   }
-  cachedClient = new Anthropic({ apiKey: key });
-  return cachedClient;
+  return process.env.ANTHROPIC_API_KEY ?? null;
 }
 
 export type BuddyMessage = {
@@ -137,11 +157,21 @@ export async function askBuddy(
     return { ok: false, error: "Ask something first." };
   }
 
+  const apiKey = await resolveAnthropicKey(profile.userProfileId);
+  if (!apiKey) {
+    return {
+      ok: false,
+      error:
+        "Add your Anthropic API key in Settings \u2192 Profile to use Ask Buddy.",
+    };
+  }
+  const anthropic = new Anthropic({ apiKey });
+
   try {
     const ctx = `Current page: ${currentPath}\nBusiness Builder name: ${profile.fullName}`;
     const system = SYSTEM_PROMPT + "\n\n--- Live context ---\n" + ctx;
 
-    const response = await client().messages.create({
+    const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
       temperature: 0.4,
