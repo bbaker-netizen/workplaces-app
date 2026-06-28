@@ -12,7 +12,7 @@
  *     "last contact" column stays accurate without manual updates)
  */
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -538,4 +538,103 @@ export async function touchLastContact(prospectId: string): Promise<void> {
       .set({ lastContactAt: new Date() })
       .where(eq(prospects.id, prospectId));
   });
+}
+
+
+/**
+ * Permanently delete an archived LEAD (hard delete). Irreversible.
+ *
+ * Guarded three ways so it can only ever remove a true throwaway lead:
+ *   1. The row must already be archived (archivedAt IS NOT NULL) — you
+ *      archive first, then delete, so a mis-click is never one step.
+ *   2. The row must NOT be a converted client (convertedEngagementId IS
+ *      NULL). Clients keep their engagement, portal, documents and
+ *      invoices, so they're archive-only and can't be destroyed here.
+ *   3. Scoped to the caller's org.
+ * The DB foreign keys cascade-delete prospect_activities and the alias
+ * row, and null out any booking references, so no orphans are left.
+ */
+export async function permanentlyDeleteProspect(
+  id: string,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+  try {
+    const result = await withSystemContext(async (tx) => {
+      return await tx
+        .delete(prospects)
+        .where(
+          and(
+            eq(prospects.id, id),
+            eq(prospects.orgId, profile.orgId),
+            isNotNull(prospects.archivedAt),
+            isNull(prospects.convertedEngagementId),
+          ),
+        )
+        .returning({ id: prospects.id });
+    });
+    if (result.length === 0) {
+      return {
+        ok: false,
+        error:
+          "Can't permanently delete this record. Only archived leads can be " +
+          "deleted — converted clients are archive-only.",
+      };
+    }
+    revalidatePath("/business-builder/pipeline");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Bulk permanent-delete for the Archived view. Same guards as
+ * permanentlyDeleteProspect, applied set-wide: only archived,
+ * non-client rows in the caller's org are removed. Returns how many
+ * were deleted and how many were skipped (clients / not archived) so
+ * the UI can be honest about a partial result.
+ */
+export async function bulkPermanentlyDeleteProspects(
+  ids: string[],
+): Promise<ActionResult<{ deleted: number; skipped: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+  if (!Array.isArray(ids) || ids.length === 0)
+    return { ok: false, error: "Pick at least one record to delete." };
+  if (ids.length > 200)
+    return {
+      ok: false,
+      error: "Delete in smaller batches — 200 max at a time.",
+    };
+  for (const id of ids) {
+    if (typeof id !== "string" || id.length > 100)
+      return { ok: false, error: "Invalid prospect id in selection." };
+  }
+  try {
+    const deleted = await withSystemContext(async (tx) => {
+      const result = await tx
+        .delete(prospects)
+        .where(
+          and(
+            inArray(prospects.id, ids),
+            eq(prospects.orgId, profile.orgId),
+            isNotNull(prospects.archivedAt),
+            isNull(prospects.convertedEngagementId),
+          ),
+        )
+        .returning({ id: prospects.id });
+      return result.length;
+    });
+    revalidatePath("/business-builder/pipeline");
+    return { ok: true, data: { deleted, skipped: ids.length - deleted } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }

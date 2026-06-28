@@ -18,9 +18,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Archive, ArchiveRestore, Columns3, Loader2, Search, X } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  Columns3,
+  Loader2,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { ProspectStatusSelect } from "./ProspectStatusSelect";
 import {
+  LEAD_SOURCES,
   STAGE_ORDER,
   STAGE_STYLES,
   type ProspectStatus,
@@ -29,7 +39,11 @@ import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
 import { formatCad, formatPhone, normalizeWebsite } from "@/lib/format";
 import { setPipelineColumnPrefs } from "@/lib/actions/user-prefs";
-import { bulkDeleteProspects, unarchiveProspect } from "@/lib/actions/prospects";
+import {
+  bulkDeleteProspects,
+  bulkPermanentlyDeleteProspects,
+  unarchiveProspect,
+} from "@/lib/actions/prospects";
 import {
   hidePendingFeedback,
   showPendingFeedback,
@@ -111,6 +125,10 @@ export function ProspectTable({
   const [stageFilter, setStageFilter] = useState<
     ProspectStatus | "all" | "prospects" | "clients" | "archived"
   >("prospects");
+  // Lead-source filter — "all" shows every source. Sits alongside the
+  // stage filter so the board can be sliced by channel (Facebook Ads,
+  // Website Form, Referral, …).
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<
     "company" | "updated" | "owner" | "signed"
   >("company");
@@ -172,6 +190,9 @@ export function ProspectTable({
       } else if (stageFilter !== "all" && p.status !== stageFilter) {
         return false;
       }
+      if (sourceFilter !== "all" && (p.leadSource ?? "") !== sourceFilter) {
+        return false;
+      }
       if (!q) return true;
       return (
         p.companyName.toLowerCase().includes(q) ||
@@ -212,7 +233,7 @@ export function ProspectTable({
       }
       return a.companyName.localeCompare(b.companyName);
     });
-  }, [prospects, query, stageFilter, sortBy]);
+  }, [prospects, query, stageFilter, sourceFilter, sortBy]);
 
   // Total monthly program fee across the rows currently shown — i.e. the
   // monthly revenue this view represents (respects the stage filter).
@@ -227,6 +248,14 @@ export function ProspectTable({
   );
   const viewingArchived = stageFilter === "archived";
 
+  // Source dropdown options: the canonical list plus any legacy values
+  // actually present on rows (so an old source isn't silently un-filterable).
+  const sourceOptions = useMemo(() => {
+    const set = new Set<string>(LEAD_SOURCES as readonly string[]);
+    for (const p of prospects) if (p.leadSource) set.add(p.leadSource);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [prospects]);
+
   /* Persist the chosen view (filter + search + sort) across reloads and
      navigations until the coach resets it. Hydrate from localStorage on
      mount (after first paint, to avoid an SSR mismatch), then mirror any
@@ -239,11 +268,14 @@ export function ProspectTable({
       if (raw) {
         const v = JSON.parse(raw) as {
           stageFilter?: string;
+          sourceFilter?: string;
           query?: string;
           sortBy?: string;
         };
         if (typeof v.stageFilter === "string")
           setStageFilter(v.stageFilter as typeof stageFilter);
+        if (typeof v.sourceFilter === "string")
+          setSourceFilter(v.sourceFilter);
         if (typeof v.query === "string") setQuery(v.query);
         if (
           v.sortBy === "company" ||
@@ -263,17 +295,21 @@ export function ProspectTable({
     try {
       localStorage.setItem(
         VIEW_KEY,
-        JSON.stringify({ stageFilter, query, sortBy }),
+        JSON.stringify({ stageFilter, sourceFilter, query, sortBy }),
       );
     } catch {
       /* ignore */
     }
-  }, [stageFilter, query, sortBy]);
+  }, [stageFilter, sourceFilter, query, sortBy]);
 
   const viewIsDefault =
-    stageFilter === "prospects" && query === "" && sortBy === "company";
+    stageFilter === "prospects" &&
+    sourceFilter === "all" &&
+    query === "" &&
+    sortBy === "company";
   function resetView() {
     setStageFilter("prospects");
+    setSourceFilter("all");
     setQuery("");
     setSortBy("company");
     try {
@@ -430,6 +466,39 @@ export function ProspectTable({
     });
   }
 
+  function bulkPermanentDelete() {
+    if (selected.size === 0) return;
+    const count = selected.size;
+    if (
+      !window.confirm(
+        `Permanently delete ${count} archived lead${count === 1 ? "" : "s"}?\n\n` +
+          `This removes them and their activity logs from the app for good. ` +
+          `It cannot be undone. Any converted clients in the selection are ` +
+          `skipped (clients are archive-only).`,
+      )
+    )
+      return;
+    setBulkError(null);
+    showPendingFeedback(`Deleting ${count} record${count === 1 ? "" : "s"}…`);
+    startBulkTransition(async () => {
+      const ids = Array.from(selected);
+      const r = await bulkPermanentlyDeleteProspects(ids);
+      hidePendingFeedback();
+      if (!r.ok) {
+        setBulkError(r.error);
+        return;
+      }
+      if (r.data.skipped > 0) {
+        setBulkError(
+          `${r.data.deleted} deleted. ${r.data.skipped} skipped ` +
+            `(clients or not archived).`,
+        );
+      }
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
   const visibleColumns = visible
     .map((k) => COLUMN_BY_KEY[k])
     .filter((c): c is ColumnDef => Boolean(c));
@@ -471,6 +540,19 @@ export function ProspectTable({
           {archivedCount > 0 && (
             <option value="archived">Archived ({archivedCount})</option>
           )}
+        </select>
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+          className="bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+          aria-label="Filter by lead source"
+        >
+          <option value="all">All sources</option>
+          {sourceOptions.map((src) => (
+            <option key={src} value={src}>
+              {src}
+            </option>
+          ))}
         </select>
         <select
           value={sortBy}
@@ -588,6 +670,24 @@ export function ProspectTable({
         </span>
       </div>
 
+      {/* Archived view — a clear way back so you're never stuck in the
+          Archived list (the filter dropdown alone wasn't obvious). */}
+      {viewingArchived && (
+        <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2 rounded-md border border-tbb-line bg-tbb-cream-50">
+          <span className="text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-2">
+            Viewing archived records
+          </span>
+          <button
+            type="button"
+            onClick={() => setStageFilter("prospects")}
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
+            Back to Prospects &amp; Clients
+          </button>
+        </div>
+      )}
+
       {/* Bulk-action toolbar — appears whenever any rows are ticked. */}
       {selected.size > 0 && (
         <div
@@ -599,19 +699,34 @@ export function ProspectTable({
             {selected.size} selected
           </span>
           {viewingArchived ? (
-            <button
-              type="button"
-              onClick={bulkRestore}
-              disabled={isBulkPending}
-              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors disabled:opacity-50"
-            >
-              {isBulkPending ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-              ) : (
-                <ArchiveRestore className="w-3.5 h-3.5" aria-hidden />
-              )}
-              Restore selected
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={bulkRestore}
+                disabled={isBulkPending}
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors disabled:opacity-50"
+              >
+                {isBulkPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <ArchiveRestore className="w-3.5 h-3.5" aria-hidden />
+                )}
+                Restore selected
+              </button>
+              <button
+                type="button"
+                onClick={bulkPermanentDelete}
+                disabled={isBulkPending}
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-danger text-white hover:bg-tbb-danger/90 transition-colors disabled:opacity-50"
+              >
+                {isBulkPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden />
+                )}
+                Delete permanently
+              </button>
+            </>
           ) : (
             <button
               type="button"

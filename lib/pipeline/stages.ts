@@ -143,10 +143,17 @@ export const STAGE_ORDER: ProspectStatus[] = [
 
 /** Common lead-source values for the dropdown. */
 export const LEAD_SOURCES = [
+  // Automatic channels — written verbatim by the Make scenarios that
+  // POST to /api/leads, so these MUST match the source string each
+  // scenario sends (e.g. the Meta scenario sends "Facebook Ads").
+  "Facebook Ads",
+  "Website Form",
+  // Manual / mixed channels.
   "Referral",
   "Repeat Client",
   "Google Ads Campaign",
   "Google Search",
+  "LinkedIn",
   "Networking event",
   "Social media",
   "Conference",
