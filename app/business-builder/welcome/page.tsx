@@ -187,11 +187,19 @@ export default async function CoachWelcomePage() {
           </li>
         </ul>
         <p className="text-sm text-tbb-ink-3 max-w-prose">
-          <strong>Text messaging (SMS) and the cloud account for embedded
-          apps are set up once for the whole practice</strong> by a master
-          admin (environment configuration) — not per person. If SMS isn&apos;t
-          sending or Netlify apps won&apos;t sync, that&apos;s a master-admin
-          setup item, not something you configure yourself.
+          <strong>Text messaging (SMS):</strong> the texting service is set up
+          once for the practice by the master admin, but each Business Builder
+          has their own number so clients see <em>you</em>, not someone else.
+          Add the Twilio number assigned to you under{" "}
+          <Link
+            href="/business-builder/settings/profile#sms-number"
+            className="text-tbb-blue underline"
+          >
+            Settings &rarr; Profile &rarr; Your text (SMS) number
+          </Link>
+          . You send and reply to texts right in the app from the Inbox, and
+          every message is logged on the client. (The Netlify cloud account for
+          embedded apps is still a master-admin, practice-wide setup.)
         </p>
       </section>
 
