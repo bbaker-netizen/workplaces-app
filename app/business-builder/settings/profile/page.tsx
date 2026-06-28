@@ -14,6 +14,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ProfileClerkButton } from "@/components/settings/ProfileClerkButton";
+import { EmailSignatureEditor } from "@/components/templates/EmailSignatureEditor";
 
 export default async function ProfileSettingsPage() {
   const profile = await ensureUserProfile();
@@ -38,7 +39,6 @@ export default async function ProfileSettingsPage() {
     return u ?? null;
   });
 
-  const hasEmailSig = Boolean(me?.emailSignature?.trim().length);
   const hasESig = Boolean(me?.signatureImageData);
 
   return (
@@ -97,7 +97,10 @@ export default async function ProfileSettingsPage() {
         </div>
       </section>
 
-      <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
+      <section
+        id="email-signature"
+        className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm"
+      >
         <div className="flex items-center gap-3">
           <span className="grid place-items-center w-10 h-10 rounded-md bg-tbb-blue-50 text-tbb-blue shrink-0">
             <Mail className="w-5 h-5" aria-hidden />
@@ -107,19 +110,12 @@ export default async function ProfileSettingsPage() {
               Email signature
             </h2>
             <p className="text-xs text-tbb-ink-3">
-              {hasEmailSig
-                ? "Currently set — appears on every email you send through the app."
-                : "Not set yet. Add one to brand outbound email."}
+              Appears on every email you send through the app. Each Business
+              Builder sets their own — edit yours below.
             </p>
           </div>
-          <Link
-            href="/business-builder/templates#email-signature"
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-2 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue shrink-0"
-          >
-            {hasEmailSig ? "Edit" : "Set up"}
-            <ArrowRight className="w-3.5 h-3.5" aria-hidden />
-          </Link>
         </div>
+        <EmailSignatureEditor initial={me?.emailSignature ?? ""} />
       </section>
 
       <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">

@@ -372,6 +372,33 @@ async function sumEntityTotalsCents(
   return totalCents;
 }
 
+/* --------------------------- diagnostics --------------------------- */
+
+/**
+ * Master-admin diagnostic. Makes a live CompanyInfo call (the lightest
+ * authenticated read) and returns the raw outcome WITHOUT throwing, so a
+ * 401/403 surfaces its real Intuit fault + intuit_tid instead of a 500.
+ * Used by the QBO diagnostics page to pinpoint ApplicationAuthorizationFailed
+ * (3100) causes: env/base mismatch, wrong app keys, or a stale token.
+ */
+export async function qboCompanyInfoProbe(
+  accessToken: string,
+  realmId: string,
+): Promise<{ status: number; intuitTid: string | null; bodySnippet: string }> {
+  const resp = await qboFetch(
+    accessToken,
+    realmId,
+    `/companyinfo/${realmId}`,
+  );
+  const text = await resp.text();
+  return {
+    status: resp.status,
+    intuitTid:
+      resp.headers.get("intuit_tid") ?? resp.headers.get("intuit-tid"),
+    bodySnippet: text.slice(0, 800),
+  };
+}
+
 /* ----------------------------- helpers ----------------------------- */
 
 function requireEnv(key: string): string {
