@@ -73,6 +73,10 @@ type TwilioMessageResponse = {
 export async function sendSms(args: {
   to: string;
   body: string;
+  /** Optional explicit E.164 "From" number. When provided it overrides the
+   *  platform default (Messaging Service / TWILIO_PHONE_NUMBER) so a specific
+   *  Business Builder's number is used as the sender. */
+  from?: string;
 }): Promise<{ messageSid: string }> {
   const { accountSid, authToken } = creds();
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
@@ -80,11 +84,17 @@ export async function sendSms(args: {
   params.set("To", args.to);
   params.set("Body", args.body);
 
-  const sender = smsSender();
-  if (sender.kind === "service") {
-    params.set("MessagingServiceSid", sender.sid);
+  if (args.from && args.from.trim().length > 0) {
+    // Explicit per-Builder sender number takes precedence over the
+    // platform Messaging Service / default number.
+    params.set("From", args.from.trim());
   } else {
-    params.set("From", sender.from);
+    const sender = smsSender();
+    if (sender.kind === "service") {
+      params.set("MessagingServiceSid", sender.sid);
+    } else {
+      params.set("From", sender.from);
+    }
   }
 
   const res = await fetch(`${TWILIO_BASE}/Accounts/${accountSid}/Messages.json`, {

@@ -105,6 +105,7 @@ export async function sendClientMessage(
       .select({
         email: userProfiles.email,
         emailSignature: userProfiles.emailSignature,
+        smsFromNumber: userProfiles.smsFromNumber,
       })
       .from(userProfiles)
       .where(eq(userProfiles.id, profile.userProfileId))
@@ -113,6 +114,7 @@ export async function sendClientMessage(
   });
   const senderEmail = sender?.email ?? null;
   const emailSignature = sender?.emailSignature ?? null;
+  const smsFromNumber = sender?.smsFromNumber ?? null;
 
   let externalId: string | null = null;
   let threadKey: string | null = null;
@@ -151,7 +153,11 @@ export async function sendClientMessage(
             "Twilio SMS isn't configured yet. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and EITHER TWILIO_MESSAGING_SERVICE_SID (preferred) OR TWILIO_PHONE_NUMBER in Netlify.",
         };
       }
-      const r = await sendSms({ to: data.to[0], body: data.body });
+      const r = await sendSms({
+        to: data.to[0],
+        body: data.body,
+        from: smsFromNumber ?? undefined,
+      });
       externalId = r.messageSid;
     }
   } catch (e) {
