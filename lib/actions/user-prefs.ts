@@ -14,6 +14,7 @@ import { and, eq } from "drizzle-orm";
 import { userProfiles } from "@/lib/db/schema";
 import { withTenantContext } from "@/lib/db/tenant";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { encryptSecret } from "@/lib/crypto/secret-vault";
 import type {
   HomeDashboardLayout,
   PipelineColumnPrefs,
@@ -167,3 +168,41 @@ export async function setHomeDashboardLayout(
 
 // `and` exported for parity with other actions; keep the import live.
 void and;
+
+
+/**
+ * Persist the caller's own Anthropic API key for Ask Buddy. Stored
+ * encrypted at rest. Pass an empty string to clear it. Per-user: Buddy
+ * usage bills to each Business Builder's own Anthropic account.
+ */
+export async function setAnthropicApiKey(
+  key: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof key !== "string" || key.length > 300) {
+    return { ok: false, error: "That doesn't look like a valid key." };
+  }
+  const trimmed = key.trim();
+  if (trimmed.length > 0 && !trimmed.startsWith("sk-ant-")) {
+    return {
+      ok: false,
+      error: "Anthropic keys start with \"sk-ant-\". Paste the full key.",
+    };
+  }
+  try {
+    const result = await withCaller(async (orgId, userProfileId) => {
+      await withTenantContext(orgId, async (tx) => {
+        await tx
+          .update(userProfiles)
+          .set({
+            anthropicApiKey: trimmed.length > 0 ? encryptSecret(trimmed) : null,
+            updatedAt: new Date(),
+          })
+          .where(eq(userProfiles.id, userProfileId));
+      });
+    });
+    if (result === null) return { ok: false, error: "Not authenticated." };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Server error." };
+  }
+}

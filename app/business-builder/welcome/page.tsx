@@ -159,10 +159,31 @@ export default async function CoachWelcomePage() {
               e-signature image
             </Link>{" "}
             (so contracts auto-sign with your name) and set your{" "}
-            <Link href="/business-builder/templates" className="text-tbb-blue underline">
+            <Link href="/business-builder/settings/profile#email-signature" className="text-tbb-blue underline">
               email signature
+            </Link>{" "}
+            (Settings &rarr; Profile).
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Ask Buddy &mdash; your Claude key</strong>{" "}
+            &mdash; Ask Buddy is your in-app assistant, and it runs on your own
+            Anthropic (Claude) API key so usage bills to you. Create a key at{" "}
+            <a
+              href="https://console.anthropic.com/settings/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-tbb-blue underline"
+            >
+              console.anthropic.com
+            </a>{" "}
+            (API keys &rarr; Create key), then paste it under{" "}
+            <Link
+              href="/business-builder/settings/profile#ask-buddy"
+              className="text-tbb-blue underline"
+            >
+              Settings &rarr; Profile &rarr; Ask Buddy
             </Link>
-            .
+            . Until you add a key, Ask Buddy will prompt you to set one.
           </li>
         </ul>
         <p className="text-sm text-tbb-ink-3 max-w-prose">
