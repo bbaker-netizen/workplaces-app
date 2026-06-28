@@ -461,7 +461,7 @@ export default async function ProspectDetailPage({
           </p>
           <p className="text-sm text-tbb-ink-2 mt-1">
             {prospect.archivedAt
-              ? "This prospect is archived and hidden from the pipeline. Restore it to bring it back."
+              ? "This prospect is archived and hidden from the pipeline. Restore it to bring it back, or — for a lead you\u2019re sure about — delete it permanently. Converted clients are archive-only."
               : "Archive removes this prospect from the pipeline but keeps the record, activity log, and communications — restore it anytime. For deals that didn't close, set Stage = Lost instead so they stay in the funnel history."}
           </p>
         </div>
@@ -469,6 +469,7 @@ export default async function ProspectDetailPage({
           prospectId={prospect.id}
           prospectLabel={prospect.companyName}
           archived={Boolean(prospect.archivedAt)}
+          isClient={Boolean(prospect.convertedEngagementId)}
         />
       </section>
     </main>
