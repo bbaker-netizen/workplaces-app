@@ -10,6 +10,7 @@
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   clientCommunications,
+  coaches,
   engagements,
   prospects,
   userProfiles,
@@ -103,10 +104,23 @@ export type InboxFilters = {
 export async function listInbox(
   masterOrgId: string,
   filters: InboxFilters = {},
+  viewer?: { role: string; userProfileId: string },
 ): Promise<CommunicationRow[]> {
   const limit = filters.limit ?? 200;
   return withSystemContext(async (tx) => {
     const conditions = [eq(clientCommunications.orgId, masterOrgId)];
+    // Privacy scoping: the master admin sees every conversation; any other
+    // Business Builder sees only conversations they own — the prospect is
+    // assigned to them, they are the engagement's coach, or they sent the
+    // message. Unowned/unknown-inbound stays visible to the master only.
+    if (viewer && viewer.role !== "master_admin") {
+      const mine = or(
+        eq(prospects.ownerUserProfileId, viewer.userProfileId),
+        eq(coaches.userProfileId, viewer.userProfileId),
+        eq(clientCommunications.createdByUserProfileId, viewer.userProfileId),
+      );
+      if (mine) conditions.push(mine);
+    }
     if (filters.q && filters.q.trim().length > 0) {
       const q = `%${filters.q.trim()}%`;
       const m = or(
@@ -144,6 +158,7 @@ export async function listInbox(
         engagements,
         eq(engagements.id, clientCommunications.engagementId),
       )
+      .leftJoin(coaches, eq(coaches.id, engagements.coachId))
       .where(and(...conditions))
       .orderBy(desc(clientCommunications.occurredAt))
       .limit(limit);

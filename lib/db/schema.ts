@@ -343,6 +343,10 @@ export const userProfiles = pgTable(
     // Per-user Anthropic API key for Ask Buddy (Builder Buddy). Each
     // Business Builder supplies their own; stored encrypted via secret-vault.
     anthropicApiKey: text("anthropic_api_key"),
+    // Per-user Twilio "from" number (E.164). When set, this Business
+    // Builder's outbound SMS sends from this number so clients see them,
+    // not the shared practice number.
+    smsFromNumber: text("sms_from_number"),
     // Phase 5: per-user UI prefs (migration 0021). Follow the user across
     // devices so the system feels remembered. Pipeline columns + home
     // dashboard layout are owned by their respective features.
