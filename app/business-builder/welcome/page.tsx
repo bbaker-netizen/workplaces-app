@@ -243,6 +243,35 @@ export default async function CoachWelcomePage() {
             answers to the diagnostic questions on their detail page.
           </p>
         </Step>
+
+        <Step
+          icon={<Sparkles className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Lead sources — leads land automatically"
+          href="/business-builder/pipeline"
+          hrefLabel="Open the Pipeline"
+        >
+          <p>
+            Leads from your marketing now flow straight into the Pipeline on
+            their own. Your website contact form (Formidable on
+            4workplaces.com) and your Facebook / Instagram lead ads both post
+            into the app through Make.com, creating a New lead the moment
+            someone fills them out. No copy-pasting.
+          </p>
+          <p className="mt-2">
+            Every lead is tagged with where it came from. Turn on the{" "}
+            <strong>Lead source</strong> column (the Columns button) and use
+            the <strong>All sources</strong> filter to slice the board by
+            channel &mdash; Facebook Ads, Website Form, Referral, and so on
+            &mdash; so you can see which channel is actually producing.
+          </p>
+          <p className="mt-2 text-sm text-tbb-ink-3">
+            Cleaning up: archive a lead or client from their detail page, and
+            in the Archived view (the filter dropdown) you can permanently
+            delete archived leads you&apos;re sure about. Use the &quot;Back to
+            Prospects &amp; Clients&quot; button to step out of the Archived
+            view.
+          </p>
+        </Step>
       </Phase>
 
       <Phase number="02" label="Sign" caption="Lock the engagement in writing">
