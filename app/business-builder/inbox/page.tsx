@@ -74,7 +74,10 @@ export default async function CoachInboxPage({
   };
 
   const [rows, knownTags, contacts] = await Promise.all([
-    listInbox(masterOrgId, filters),
+    listInbox(masterOrgId, filters, {
+      role: profile.role,
+      userProfileId: profile.userProfileId,
+    }),
     listKnownTags(masterOrgId),
     listComposeContacts(),
   ]);

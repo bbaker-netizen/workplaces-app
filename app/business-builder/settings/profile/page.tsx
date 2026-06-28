@@ -9,13 +9,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, ArrowRight, Bot, Mail, PenTool, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Mail, MessageSquare, PenTool, UserRound } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ProfileClerkButton } from "@/components/settings/ProfileClerkButton";
 import { EmailSignatureEditor } from "@/components/templates/EmailSignatureEditor";
 import { AnthropicKeyEditor } from "@/components/settings/AnthropicKeyEditor";
+import { SmsNumberEditor } from "@/components/settings/SmsNumberEditor";
 
 export default async function ProfileSettingsPage() {
   const profile = await ensureUserProfile();
@@ -34,6 +35,7 @@ export default async function ProfileSettingsPage() {
         emailSignature: userProfiles.emailSignature,
         signatureImageData: userProfiles.signatureImageData,
         anthropicApiKey: userProfiles.anthropicApiKey,
+        smsFromNumber: userProfiles.smsFromNumber,
       })
       .from(userProfiles)
       .where(eq(userProfiles.id, profile.userProfileId))
@@ -151,6 +153,30 @@ export default async function ProfileSettingsPage() {
           </div>
         </div>
         <AnthropicKeyEditor hasKey={hasAnthropicKey} />
+      </section>
+
+      <section
+        id="sms-number"
+        className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid place-items-center w-10 h-10 rounded-md bg-tbb-blue-50 text-tbb-blue shrink-0">
+            <MessageSquare className="w-5 h-5" aria-hidden />
+          </span>
+          <div className="flex-1">
+            <h2 className="font-bold text-tbb-navy text-base">
+              Your text (SMS) number
+            </h2>
+            <p className="text-xs text-tbb-ink-3">
+              The Twilio number assigned to you. Texts you send from the app
+              go out from this number, so your clients see you, not the shared
+              practice number. Use full international format (e.g. +17809830722).
+              You reply right here in the app from the Inbox; everything is
+              logged on the client.
+            </p>
+          </div>
+        </div>
+        <SmsNumberEditor initial={me?.smsFromNumber ?? ""} />
       </section>
 
       <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">

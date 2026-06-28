@@ -206,3 +206,45 @@ export async function setAnthropicApiKey(
     return { ok: false, error: e instanceof Error ? e.message : "Server error." };
   }
 }
+
+
+/**
+ * Persist this Business Builder's own SMS "from" number (their Twilio
+ * number). Outbound texts they send then come from this number so their
+ * clients see them, not the shared practice number. E.164 format. Pass
+ * an empty string to clear (falls back to the platform default).
+ */
+export async function setSmsFromNumber(
+  raw: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof raw !== "string" || raw.length > 32) {
+    return { ok: false, error: "That doesn't look like a valid number." };
+  }
+  let value: string | null = null;
+  const trimmed = raw.trim();
+  if (trimmed.length > 0) {
+    const digits = trimmed.replace(/[^0-9+]/g, "");
+    if (!/^\+[1-9]\d{7,14}$/.test(digits)) {
+      return {
+        ok: false,
+        error:
+          "Use full international format, e.g. +17809830722 (a + then country code and number).",
+      };
+    }
+    value = digits;
+  }
+  try {
+    const result = await withCaller(async (orgId, userProfileId) => {
+      await withTenantContext(orgId, async (tx) => {
+        await tx
+          .update(userProfiles)
+          .set({ smsFromNumber: value, updatedAt: new Date() })
+          .where(eq(userProfiles.id, userProfileId));
+      });
+    });
+    if (result === null) return { ok: false, error: "Not authenticated." };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Server error." };
+  }
+}
