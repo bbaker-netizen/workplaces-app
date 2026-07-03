@@ -108,6 +108,7 @@ export async function submitDiagnosticIntake(
           contactName: data.contactName,
           contactEmail: data.contactEmail,
           status: "diagnostic_complete",
+          leadSource: "Diagnostic",
           notes,
         })
         .returning({ id: prospects.id });

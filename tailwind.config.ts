@@ -12,6 +12,10 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    // lib holds class-name string literals too (e.g. the pipeline stage
+    // chip colours in lib/pipeline/stages.ts). Without this glob those
+    // classes get purged — white-text stage pills rendered invisible.
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     container: {

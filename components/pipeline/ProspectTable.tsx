@@ -131,7 +131,7 @@ export function ProspectTable({
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<
     "company" | "updated" | "owner" | "signed"
-  >("company");
+  >("updated");
   const [visible, setVisible] = useState<ColumnKey[]>(() => {
     const fromPrefs = (initialPrefs?.visible ?? []) as ColumnKey[];
     // Make sure non-optional columns are always present + only known keys.
@@ -306,12 +306,12 @@ export function ProspectTable({
     stageFilter === "prospects" &&
     sourceFilter === "all" &&
     query === "" &&
-    sortBy === "company";
+    sortBy === "updated";
   function resetView() {
     setStageFilter("prospects");
     setSourceFilter("all");
     setQuery("");
-    setSortBy("company");
+    setSortBy("updated");
     try {
       localStorage.removeItem(VIEW_KEY);
     } catch {

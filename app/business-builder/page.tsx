@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listCoachEngagements } from "@/lib/db/queries/engagements";
+import { ClientQuickSearch } from "@/components/business-builder/ClientQuickSearch";
 import { listCoachActionItems } from "@/lib/db/queries/action-items";
 import {
   listCoachDeliverables,
@@ -698,6 +699,15 @@ export default async function CoachConsole() {
             </a>
           </div>
         </header>
+
+        {engagements.length > 0 && (
+          <ClientQuickSearch
+            clients={engagements.map((e) => ({
+              id: e.id,
+              name: e.name ?? "Untitled client",
+            }))}
+          />
+        )}
 
         <HomeDashboard
           availableCards={cards}

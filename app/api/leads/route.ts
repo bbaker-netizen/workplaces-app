@@ -29,7 +29,7 @@
  * site may not be on the same domain as the portal).
  */
 
-import { eq, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -61,6 +61,10 @@ const intakeSchema = z.object({
   leadSource: z.string().max(200).optional().nullable(),
   message: z.string().max(8000).optional().nullable(),
   industry: z.string().max(200).optional().nullable(),
+  // Honeypot: a hidden field bots fill and humans never see. If it arrives
+  // non-empty, we silently drop the submission. Add a hidden <input
+  // name="honeypot"> to your form to activate it.
+  honeypot: z.string().max(300).optional().nullable(),
 });
 
 export async function OPTIONS(): Promise<Response> {
@@ -114,6 +118,22 @@ export async function POST(req: Request): Promise<Response> {
   }
   const data = parsed.data;
 
+  // Honeypot tripped → a bot filled the hidden field. Pretend success so it
+  // doesn't retry, but create nothing.
+  if (data.honeypot && data.honeypot.trim().length > 0) {
+    return NextResponse.json(
+      { ok: true, prospectId: null },
+      { status: 201, headers: corsHeaders },
+    );
+  }
+
+  // Never store a blank source: an integration that posts an empty/whitespace
+  // leadSource should still land as "Web form", not an untagged lead.
+  const leadSource =
+    data.leadSource && data.leadSource.trim().length > 0
+      ? data.leadSource.trim()
+      : "Web form";
+
   // Insert + activity + collect recipients.
   let prospectId: string;
   let recipientEmails: string[] = [];
@@ -126,6 +146,36 @@ export async function POST(req: Request): Promise<Response> {
         .limit(1);
       if (!master) throw new Error("Master org not configured.");
 
+      // De-dupe by email: a repeat submission (or a bot hammering the
+      // endpoint) shouldn't spawn a new pipeline card. Touch the existing
+      // prospect, log the activity, and skip the notification email.
+      const [existing] = await tx
+        .select({ id: prospects.id })
+        .from(prospects)
+        .where(
+          and(
+            eq(prospects.orgId, master.id),
+            isNull(prospects.archivedAt),
+            sql`lower(${prospects.contactEmail}) = lower(${data.contactEmail})`,
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        await tx
+          .update(prospects)
+          .set({ lastContactAt: new Date() })
+          .where(eq(prospects.id, existing.id));
+        await tx.insert(prospectActivities).values({
+          prospectId: existing.id,
+          orgId: master.id,
+          type: "web_lead",
+          subject: `Repeat lead from ${leadSource}`,
+          body: data.message ?? null,
+        });
+        return { id: existing.id, recipients: [], deduped: true };
+      }
+
       const [created] = await tx
         .insert(prospects)
         .values({
@@ -136,9 +186,10 @@ export async function POST(req: Request): Promise<Response> {
           phone: data.phone ?? null,
           companyWebsite: data.companyWebsite ?? null,
           industry: data.industry ?? null,
-          leadSource: data.leadSource ?? "Web form",
+          leadSource,
           status: "new_lead",
           notes: data.message ?? null,
+          lastContactAt: new Date(),
         })
         .returning({ id: prospects.id });
 
@@ -146,7 +197,7 @@ export async function POST(req: Request): Promise<Response> {
         prospectId: created.id,
         orgId: master.id,
         type: "web_lead",
-        subject: `New lead from ${data.leadSource ?? "web form"}`,
+        subject: `New lead from ${leadSource}`,
         body: data.message ?? null,
       });
 
@@ -161,7 +212,7 @@ export async function POST(req: Request): Promise<Response> {
             eq(userProfiles.role, "coach"),
           ),
         );
-      return { id: created.id, recipients };
+      return { id: created.id, recipients, deduped: false };
     });
     prospectId = result.id;
     recipientEmails = result.recipients.map((r) => r.email);
@@ -186,7 +237,7 @@ export async function POST(req: Request): Promise<Response> {
         contactName: data.contactName ?? null,
         contactEmail: data.contactEmail,
         phone: data.phone ?? null,
-        leadSource: data.leadSource ?? "Web form",
+        leadSource,
         message: data.message ?? null,
         prospectUrl: `/business-builder/pipeline/${prospectId}`,
       }),

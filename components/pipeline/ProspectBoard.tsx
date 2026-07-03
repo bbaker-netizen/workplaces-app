@@ -1,0 +1,193 @@
+"use client";
+
+/**
+ * Pipedrive-style Kanban board for the Pipeline. A column per working
+ * stage; prospect cards drag between columns and dropping a card changes
+ * its stage (via updateProspect). Native HTML5 drag-and-drop — no extra
+ * dependency. Optimistic move with revert on failure.
+ */
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { GripVertical } from "lucide-react";
+import { updateProspect } from "@/lib/actions/prospects";
+import {
+  STAGE_ORDER,
+  STAGE_STYLES,
+  type ProspectStatus,
+} from "@/lib/pipeline/stages";
+import type { PipelineProspect } from "@/lib/db/queries/prospects";
+
+// Retired / off-board statuses map onto the nearest working column so every
+// prospect lands somewhere. Dropping a card sets the column's real status.
+const STATUS_TO_COLUMN: Record<string, ProspectStatus> = {
+  diagnostic_pending: "first_contact",
+  meeting_scheduled: "first_contact",
+  diagnostic_complete: "first_contact",
+  negotiation: "proposal_sent",
+};
+
+function columnFor(status: ProspectStatus): ProspectStatus {
+  if (STAGE_ORDER.includes(status)) return status;
+  return STATUS_TO_COLUMN[status] ?? "new_lead";
+}
+
+function money(cents: number | null | undefined): string | null {
+  if (!cents || cents <= 0) return null;
+  return `$${Math.round(cents / 100).toLocaleString()}`;
+}
+
+export function ProspectBoard({
+  prospects,
+}: {
+  prospects: PipelineProspect[];
+}) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  // Local status overrides so a drop reflects instantly (optimistic).
+  const [overrides, setOverrides] = useState<Record<string, ProspectStatus>>(
+    {},
+  );
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<ProspectStatus | null>(null);
+
+  const statusOf = (p: PipelineProspect): ProspectStatus =>
+    overrides[p.id] ?? (p.status as ProspectStatus);
+
+  const columns = useMemo(() => {
+    const byCol = new Map<ProspectStatus, PipelineProspect[]>();
+    for (const s of STAGE_ORDER) byCol.set(s, []);
+    for (const p of prospects) {
+      const col = columnFor(statusOf(p));
+      byCol.get(col)?.push(p);
+    }
+    return STAGE_ORDER.map((s) => ({ status: s, items: byCol.get(s) ?? [] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prospects, overrides]);
+
+  function drop(target: ProspectStatus) {
+    setDragOverCol(null);
+    const id = dragId;
+    setDragId(null);
+    if (!id) return;
+    const prospect = prospects.find((p) => p.id === id);
+    if (!prospect) return;
+    const currentCol = columnFor(statusOf(prospect));
+    if (currentCol === target) return;
+
+    const prev = statusOf(prospect);
+    setOverrides((o) => ({ ...o, [id]: target }));
+    startTransition(async () => {
+      const r = await updateProspect({ id, status: target });
+      if (!r.ok) {
+        // Revert.
+        setOverrides((o) => ({ ...o, [id]: prev }));
+      } else {
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className="overflow-x-auto pb-4">
+      <div className="flex gap-3 min-w-max">
+        {columns.map(({ status, items }) => {
+          const style = STAGE_STYLES[status];
+          const active = dragOverCol === status;
+          return (
+            <div
+              key={status}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverCol(status);
+              }}
+              onDragLeave={() => setDragOverCol((c) => (c === status ? null : c))}
+              onDrop={() => drop(status)}
+              className={
+                "w-[264px] shrink-0 rounded-lg border p-2 transition-colors " +
+                (active
+                  ? "border-tbb-blue bg-tbb-blue-50"
+                  : "border-tbb-line bg-tbb-cream/40")
+              }
+            >
+              <div className="flex items-center justify-between gap-2 px-1.5 py-1.5">
+                <span
+                  className={
+                    "inline-flex items-center px-2 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-tbb-caps ring-1 ring-inset ring-black/10 " +
+                    style.chipClass
+                  }
+                >
+                  {style.label}
+                </span>
+                <span className="text-[11px] font-mono text-tbb-ink-3">
+                  {items.length}
+                </span>
+              </div>
+
+              <div className="space-y-2 min-h-[60px]">
+                {items.map((p) => {
+                  const value = money(p.monthlyFeeCents)
+                    ? `${money(p.monthlyFeeCents)}/mo`
+                    : money(p.expectedValueCents);
+                  return (
+                    <div
+                      key={p.id}
+                      draggable
+                      onDragStart={() => setDragId(p.id)}
+                      onDragEnd={() => setDragId(null)}
+                      className={
+                        "group relative rounded-md border border-tbb-line bg-white p-3 shadow-tbb-sm cursor-grab active:cursor-grabbing " +
+                        (dragId === p.id ? "opacity-50" : "hover:border-tbb-blue")
+                      }
+                    >
+                      <GripVertical
+                        className="absolute right-1.5 top-2 w-3.5 h-3.5 text-tbb-line group-hover:text-tbb-ink-3"
+                        aria-hidden
+                      />
+                      <Link
+                        href={`/business-builder/pipeline/${p.id}`}
+                        className="block pr-4"
+                      >
+                        <p className="font-bold text-tbb-navy text-sm leading-tight truncate">
+                          {p.companyName}
+                        </p>
+                        {p.contactName && (
+                          <p className="text-xs text-tbb-ink-3 truncate mt-0.5">
+                            {p.contactName}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 flex-wrap mt-2">
+                          {value && (
+                            <span className="text-[11px] font-bold text-tbb-navy">
+                              {value}
+                            </span>
+                          )}
+                          {p.leadSource && (
+                            <span className="text-[10px] font-mono text-tbb-ink-3 truncate">
+                              {p.leadSource}
+                            </span>
+                          )}
+                        </div>
+                        {p.ownerName && (
+                          <p className="text-[10px] uppercase tracking-tbb-caps text-tbb-ink-3 mt-1.5">
+                            {p.ownerName}
+                          </p>
+                        )}
+                      </Link>
+                    </div>
+                  );
+                })}
+                {items.length === 0 && (
+                  <p className="text-[11px] text-tbb-ink-3 italic px-1.5 py-3 text-center">
+                    Drop here
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

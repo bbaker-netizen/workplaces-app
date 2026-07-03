@@ -93,13 +93,16 @@ export function validateProspect(
   const warnings: ValidationIssue[] = [];
 
   // Structural name rules (2-word contact, contact ≠ company, entity
-  // suffix) are a quality gate when CREATING a prospect, but must not
-  // hard-block EDITS — legacy/imported contacts often have a single-word
-  // name, and the coach should still be able to save a phone or website.
-  // On update they become non-blocking warnings.
-  const structBucket = mode === "update" ? warnings : errors;
-  const structLevel: "error" | "warning" =
-    mode === "update" ? "warning" : "error";
+  // suffix) are ADVISORY only — they must never block a save, in either
+  // mode. Many legitimate SMB/trade clients are named after their owner
+  // (company == contact) or use a single-word trading name, and web/ad
+  // leads arrive with the person's name in both fields. Blocking those
+  // stopped coaches from saving a phone or other details. Now they're
+  // always non-blocking warnings; the required + format rules below
+  // (company/contact present, valid email, valid phone) still block.
+  void mode;
+  const structBucket = warnings;
+  const structLevel: "error" | "warning" = "warning";
 
   const company = (input.companyName ?? "").trim();
   const contact = (input.contactName ?? "").trim();
