@@ -972,6 +972,7 @@ function CellByKey({
           <ProspectStatusSelect
             prospectId={prospect.id}
             current={prospect.status as ProspectStatus}
+            alreadyConverted={Boolean(prospect.convertedEngagementId)}
           />
         </Td>
       );
