@@ -93,8 +93,11 @@ export function ProspectBoard({
   }
 
   return (
+    // Columns flex to fill the width so the board fits the screen with no
+    // horizontal scroll on desktop. On very narrow screens they hit their
+    // min-width and the container scrolls as a graceful fallback.
     <div className="overflow-x-auto pb-4">
-      <div className="flex gap-3 min-w-max">
+      <div className="flex gap-2 items-start">
         {columns.map(({ status, items }) => {
           const style = STAGE_STYLES[status];
           const active = dragOverCol === status;
@@ -108,7 +111,7 @@ export function ProspectBoard({
               onDragLeave={() => setDragOverCol((c) => (c === status ? null : c))}
               onDrop={() => drop(status)}
               className={
-                "w-[264px] shrink-0 rounded-lg border p-2 transition-colors " +
+                "flex-1 min-w-[132px] rounded-lg border p-1.5 transition-colors " +
                 (active
                   ? "border-tbb-blue bg-tbb-blue-50"
                   : "border-tbb-line bg-tbb-cream/40")
@@ -140,17 +143,17 @@ export function ProspectBoard({
                       onDragStart={() => setDragId(p.id)}
                       onDragEnd={() => setDragId(null)}
                       className={
-                        "group relative rounded-md border border-tbb-line bg-white p-3 shadow-tbb-sm cursor-grab active:cursor-grabbing " +
+                        "group relative rounded-md border border-tbb-line bg-white p-2 shadow-tbb-sm cursor-grab active:cursor-grabbing " +
                         (dragId === p.id ? "opacity-50" : "hover:border-tbb-blue")
                       }
                     >
                       <GripVertical
-                        className="absolute right-1.5 top-2 w-3.5 h-3.5 text-tbb-line group-hover:text-tbb-ink-3"
+                        className="absolute right-1 top-1.5 w-3 h-3 text-tbb-line group-hover:text-tbb-ink-3"
                         aria-hidden
                       />
                       <Link
                         href={`/business-builder/pipeline/${p.id}`}
-                        className="block pr-4"
+                        className="block pr-3"
                       >
                         <p className="font-bold text-tbb-navy text-sm leading-tight truncate">
                           {p.companyName}
