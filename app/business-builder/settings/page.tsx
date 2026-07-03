@@ -11,6 +11,7 @@ import {
   CreditCard,
   FileText,
   Magnet,
+  MessageSquare,
   Plug,
   User,
   Users,
@@ -79,6 +80,14 @@ const CARDS: SettingsCard[] = [
     icon: Magnet,
     status: "ready",
     masterAdminOnly: true,
+  },
+  {
+    href: "/business-builder/settings/sms",
+    title: "Text messaging (SMS)",
+    description:
+      "Check whether texting is working for your account and send yourself a test message.",
+    icon: MessageSquare,
+    status: "ready",
   },
   {
     href: "/business-builder/profile/google-calendar",

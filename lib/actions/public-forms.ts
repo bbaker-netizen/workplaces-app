@@ -144,7 +144,7 @@ export async function submitPublicForm(
           companyName: String(companyGuess).slice(0, 200),
           contactName: data.respondentName ?? null,
           contactEmail: data.respondentEmail,
-          status: "diagnostic_complete",
+          status: "first_contact",
           leadSource: "Diagnostic",
           diagnosticSubmissionId: row.id,
         });

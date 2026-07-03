@@ -47,37 +47,50 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     textClass: "text-tbb-navy",
     dotHex: "#9CA3AF", // neutral grey — un-touched lead
   },
-  // diagnostic_pending was a stage but is really an action (send the
-  // diagnostic from the prospect detail page). Style kept for any
-  // legacy rows still carrying the value; STAGE_ORDER below omits it
-  // so it never appears as a selectable option.
-  diagnostic_pending: {
-    label: "Diagnostic sent",
-    caption: "Ball's in their court",
+  contact_attempted: {
+    label: "Contact attempted",
+    caption: "Reached out — waiting to hear back",
     chipClass: "bg-tbb-cream-200 text-tbb-navy",
     textClass: "text-tbb-navy",
-    dotHex: "#D89F2F", // warning yellow — waiting on them
+    dotHex: "#C9A66B", // warm tan
   },
   first_contact: {
-    label: "First contact",
+    label: "First contact made",
     caption: "Hello said",
     chipClass: "bg-tbb-blue-light text-white",
     textClass: "text-tbb-blue-light",
     dotHex: "#E59568", // light orange
   },
   meeting_scheduled: {
-    label: "Meeting scheduled",
+    label: "Appt booked",
     caption: "On the books",
     chipClass: "bg-tbb-blue text-white",
     textClass: "text-tbb-blue",
     dotHex: "#CC6A20", // safety vest orange
   },
-  diagnostic_complete: {
-    label: "Diagnostic complete",
-    caption: "Their cards on the table",
+  appt_completed_followup: {
+    label: "Appt completed – follow-up",
+    caption: "Met — needs a follow-up",
     chipClass: "bg-tbb-blue-100 text-tbb-blue-700",
     textClass: "text-tbb-blue-700",
     dotHex: "#9C4A0E", // deep orange
+  },
+  // diagnostic_pending / diagnostic_complete are retired — remapped by
+  // migration 0070. Styles kept only so the Record stays exhaustive for
+  // any stragglers; STAGE_ORDER omits them.
+  diagnostic_pending: {
+    label: "Contact attempted",
+    caption: "Ball's in their court",
+    chipClass: "bg-tbb-cream-200 text-tbb-navy",
+    textClass: "text-tbb-navy",
+    dotHex: "#C9A66B",
+  },
+  diagnostic_complete: {
+    label: "First contact made",
+    caption: "Their cards on the table",
+    chipClass: "bg-tbb-blue-light text-white",
+    textClass: "text-tbb-blue-light",
+    dotHex: "#E59568",
   },
   proposal_sent: {
     label: "Proposal sent",
@@ -108,8 +121,8 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     dotHex: "#2E8B57", // success green
   },
   onboarded: {
-    label: "Active engagement",
-    caption: "Live and building",
+    label: "Won",
+    caption: "Won. Live and building.",
     chipClass: "bg-tbb-success text-white",
     textClass: "text-tbb-success",
     dotHex: "#1F6B41", // deeper green
@@ -120,6 +133,13 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     chipClass: "bg-tbb-danger text-white",
     textClass: "text-tbb-danger",
     dotHex: "#C0392B", // danger red
+  },
+  not_qualified: {
+    label: "Not qualified",
+    caption: "Not a fit",
+    chipClass: "bg-tbb-cream-200 text-tbb-ink-3",
+    textClass: "text-tbb-ink-3",
+    dotHex: "#808080", // neutral grey
   },
 };
 
@@ -133,12 +153,16 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
  */
 export const STAGE_ORDER: ProspectStatus[] = [
   "new_lead",
-  "first_contact",
+  "contact_attempted",
+  "first_contact", // "First contact made"
+  "meeting_scheduled", // "Appt booked"
+  "appt_completed_followup",
   "proposal_sent",
   "contract_sent",
   "contract_signed",
-  "onboarded",
+  "onboarded", // "Won"
   "lost",
+  "not_qualified",
 ];
 
 /** Common lead-source values for the dropdown. */
@@ -199,6 +223,7 @@ export type ActivityType = (typeof ACTIVITY_TYPES)[number]["value"];
 const SYSTEM_ACTIVITY_LABELS: Record<string, string> = {
   diagnostic_sent: "Diagnostic sent",
   qbo_linked: "QuickBooks linked",
+  follow_up: "Follow-up",
 };
 
 export function activityTypeLabel(type: string): string {

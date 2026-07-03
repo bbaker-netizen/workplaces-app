@@ -50,6 +50,7 @@ import { ClientCommunicationsPanel } from "@/components/communications/ClientCom
 import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
 import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButton";
 import { ProspectNextStep } from "@/components/pipeline/ProspectNextStep";
+import { ScheduleFollowupPanel } from "@/components/pipeline/ScheduleFollowupPanel";
 import { SoulFilePreviewButton } from "@/components/pipeline/SoulFilePreviewButton";
 import { DeleteProspectButton } from "@/components/pipeline/DeleteProspectButton";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
@@ -255,6 +256,17 @@ export default async function ProspectDetailPage({
           {/* What's next — surfaces the obvious next move based on the
               current stage so Bruce always sees a clear suggested action. */}
           <ProspectNextStep status={prospect.status as ProspectStatus} />
+
+          {/* Schedule a follow-up — sets the next-action date + logs it. */}
+          <ScheduleFollowupPanel
+            prospectId={prospect.id}
+            currentDate={
+              prospect.nextActionDate
+                ? new Date(prospect.nextActionDate).toISOString().slice(0, 10)
+                : null
+            }
+            currentNote={prospect.nextActionNote}
+          />
 
           {/* Quick actions — Schedule a meeting + send the diagnostic. */}
           <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-4 shadow-tbb-sm">

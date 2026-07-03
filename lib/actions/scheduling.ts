@@ -286,7 +286,7 @@ export async function createBooking(
             companyName: data.bookerCompany ?? data.bookerName,
             contactName: data.bookerName,
             contactEmail: data.bookerEmail,
-            status: "diagnostic_pending",
+            status: "meeting_scheduled",
             leadSource: "Discovery booking",
             notes: data.notes ?? null,
           })
