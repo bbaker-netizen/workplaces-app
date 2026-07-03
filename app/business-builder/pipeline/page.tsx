@@ -13,7 +13,7 @@ import { Plus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listProspects } from "@/lib/db/queries/prospects";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
-import { ProspectTable } from "@/components/pipeline/ProspectTable";
+import { PipelineViews } from "@/components/pipeline/PipelineViews";
 import { STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 
 export default async function PipelinePage() {
@@ -109,7 +109,7 @@ export default async function PipelinePage() {
           </div>
         </div>
       ) : (
-        <ProspectTable
+        <PipelineViews
           prospects={prospects}
           initialPrefs={prefs.pipelineColumnPrefs}
         />
