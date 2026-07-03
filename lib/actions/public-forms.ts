@@ -145,6 +145,7 @@ export async function submitPublicForm(
           contactName: data.respondentName ?? null,
           contactEmail: data.respondentEmail,
           status: "diagnostic_complete",
+          leadSource: "Diagnostic",
           diagnosticSubmissionId: row.id,
         });
       }

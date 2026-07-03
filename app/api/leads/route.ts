@@ -113,6 +113,12 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
   const data = parsed.data;
+  // Never store a blank source: an integration that posts an empty/whitespace
+  // leadSource should still land as "Web form", not an untagged lead.
+  const leadSource =
+    data.leadSource && data.leadSource.trim().length > 0
+      ? data.leadSource.trim()
+      : "Web form";
 
   // Insert + activity + collect recipients.
   let prospectId: string;
@@ -136,7 +142,7 @@ export async function POST(req: Request): Promise<Response> {
           phone: data.phone ?? null,
           companyWebsite: data.companyWebsite ?? null,
           industry: data.industry ?? null,
-          leadSource: data.leadSource ?? "Web form",
+          leadSource,
           status: "new_lead",
           notes: data.message ?? null,
         })
@@ -146,7 +152,7 @@ export async function POST(req: Request): Promise<Response> {
         prospectId: created.id,
         orgId: master.id,
         type: "web_lead",
-        subject: `New lead from ${data.leadSource ?? "web form"}`,
+        subject: `New lead from ${leadSource}`,
         body: data.message ?? null,
       });
 
@@ -186,7 +192,7 @@ export async function POST(req: Request): Promise<Response> {
         contactName: data.contactName ?? null,
         contactEmail: data.contactEmail,
         phone: data.phone ?? null,
-        leadSource: data.leadSource ?? "Web form",
+        leadSource,
         message: data.message ?? null,
         prospectUrl: `/business-builder/pipeline/${prospectId}`,
       }),

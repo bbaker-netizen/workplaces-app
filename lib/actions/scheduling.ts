@@ -287,6 +287,7 @@ export async function createBooking(
             contactName: data.bookerName,
             contactEmail: data.bookerEmail,
             status: "diagnostic_pending",
+            leadSource: "Discovery booking",
             notes: data.notes ?? null,
           })
           .returning({ id: prospects.id });
