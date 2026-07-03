@@ -48,14 +48,14 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     dotHex: "#9CA3AF", // neutral grey — un-touched lead
   },
   contact_attempted: {
-    label: "Contact attempted",
+    label: "Contact attempt",
     caption: "Reached out — waiting to hear back",
     chipClass: "bg-tbb-cream-200 text-tbb-navy",
     textClass: "text-tbb-navy",
     dotHex: "#C9A66B", // warm tan
   },
   first_contact: {
-    label: "First contact made",
+    label: "First contact",
     caption: "Hello said",
     chipClass: "bg-tbb-blue-light text-white",
     textClass: "text-tbb-blue-light",
@@ -69,7 +69,7 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     dotHex: "#CC6A20", // safety vest orange
   },
   appt_completed_followup: {
-    label: "Appt completed – follow-up",
+    label: "Appt complete",
     caption: "Met — needs a follow-up",
     chipClass: "bg-tbb-blue-100 text-tbb-blue-700",
     textClass: "text-tbb-blue-700",

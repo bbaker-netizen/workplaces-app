@@ -7,11 +7,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Building2,
-  CalendarCheck,
   CreditCard,
   FileText,
-  Magnet,
-  MessageSquare,
   Plug,
   User,
   Users,
@@ -67,34 +64,8 @@ const CARDS: SettingsCard[] = [
     href: "/business-builder/settings/integrations",
     title: "Integrations & connections",
     description:
-      "Account-wide services: Twilio (SMS), Netlify, Fireflies, Resend, and the master Google/QuickBooks status. System config.",
+      "One place for all connections: your Google (Calendar + Gmail), QuickBooks, and text messaging (SMS) — plus account-wide service status.",
     icon: Plug,
-    status: "ready",
-    masterAdminOnly: true,
-  },
-  {
-    href: "/business-builder/settings/lead-sources",
-    title: "Lead sources",
-    description:
-      "Connect your website form and ad channels (Meta, TikTok, YouTube, Google, LinkedIn) via Make.com so new leads land in your Pipeline automatically.",
-    icon: Magnet,
-    status: "ready",
-    masterAdminOnly: true,
-  },
-  {
-    href: "/business-builder/settings/sms",
-    title: "Text messaging (SMS)",
-    description:
-      "Check whether texting is working for your account and send yourself a test message.",
-    icon: MessageSquare,
-    status: "ready",
-  },
-  {
-    href: "/business-builder/profile/google-calendar",
-    title: "My calendar & email",
-    description:
-      "Connect your own Google Calendar + Gmail so your sessions sync and client emails are captured. Personal to you.",
-    icon: CalendarCheck,
     status: "ready",
   },
   {

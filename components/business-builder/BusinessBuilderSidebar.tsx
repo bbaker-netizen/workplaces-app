@@ -129,7 +129,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       // "New engagement" link removed — you start a client from their
       // prospect's "Convert to engagement" button (one obvious path).
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
-      { href: "/business-builder/tools", label: "Quick send", icon: Send },
+      { href: "/business-builder/tools", label: "Quick send: diagnostic & review", icon: Send },
       { href: "/business-builder/library", label: "Client tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },
@@ -348,7 +348,14 @@ export function BusinessBuilderSidebar({
             type="button"
             onClick={onToggleCollapse}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="shrink-0 grid place-items-center w-7 h-7 rounded-md text-white/85 hover:bg-tbb-cream/8 hover:text-white transition-colors"
+            className={
+              "shrink-0 grid place-items-center w-7 h-7 rounded-md transition-colors " +
+              (collapsed
+                ? // Collapsed: the toggle sits over the light page background,
+                  // so a dark arrow is needed to be visible.
+                  "text-tbb-navy hover:bg-tbb-navy/10 hover:text-tbb-navy ring-1 ring-tbb-line"
+                : "text-white/85 hover:bg-tbb-cream/8 hover:text-white")
+            }
           >
             {collapsed ? (
               <ChevronRight className="w-4 h-4" aria-hidden />
