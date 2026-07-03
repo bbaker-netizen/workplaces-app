@@ -53,6 +53,10 @@ export type CalendarSyncResult = {
  *  months of lookahead is plenty. */
 const WINDOW_DAYS = 120;
 
+/** How far BACK to pull events, so a new connection imports recent history
+ *  (past client meetings become sessions), not just what's upcoming. */
+const PAST_WINDOW_DAYS = 180;
+
 const EMPTY = (reason: string): CalendarSyncResult => ({
   created: 0,
   updated: 0,
@@ -164,6 +168,7 @@ export async function syncCoachCalendar(
   const { emailMap, nameMatchers, engMeta } = maps;
 
   const now = new Date();
+  const start = new Date(now.getTime() - PAST_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const end = new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   // Google sometimes rejects a token we still believe is valid (revoked
@@ -171,7 +176,7 @@ export async function syncCoachCalendar(
   // once. If the refresh token itself is dead, the user must reconnect.
   let events;
   try {
-    events = await listEventsForSync(token.token, token.calendarId, now, end);
+    events = await listEventsForSync(token.token, token.calendarId, start, end);
   } catch (e) {
     const is401 = e instanceof Error && / 401:/.test(e.message);
     if (!is401) throw e;
@@ -183,7 +188,7 @@ export async function syncCoachCalendar(
       events = await listEventsForSync(
         fresh.token,
         fresh.calendarId,
-        now,
+        start,
         end,
       );
     } catch (e2) {
