@@ -88,6 +88,32 @@ export default async function CoachConsole() {
   const negotiationProspects = prospects.filter(
     (p) => p.status === "negotiation",
   );
+  // Follow-ups whose "Next action" date has arrived (today or overdue) on
+  // an open prospect — the app's built-in follow-up reminder.
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0, 0, 0, 0,
+  );
+  const endOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23, 59, 59, 999,
+  );
+  const dueFollowups = activeProspects
+    .filter(
+      (p) =>
+        p.nextActionDate != null &&
+        !p.archivedAt &&
+        new Date(p.nextActionDate) <= endOfToday,
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.nextActionDate as Date).getTime() -
+        new Date(b.nextActionDate as Date).getTime(),
+    );
   const pipelineValue = activeProspects.reduce(
     (s, p) => s + (p.expectedValueCents ?? 0),
     0,
@@ -368,6 +394,61 @@ export default async function CoachConsole() {
                   </span>
                 </li>
               ))}
+            </ul>
+          )}
+        </CardShell>
+      ),
+    },
+    {
+      type: "followups_due",
+      label: "Follow-ups due",
+      defaultSize: "small",
+      node: (
+        <CardShell
+          icon={<Calendar className="w-4 h-4" aria-hidden />}
+          title={`Follow-ups due · ${dueFollowups.length}`}
+          href="/business-builder/pipeline"
+          cta="Open pipeline"
+          accent="orange"
+        >
+          {dueFollowups.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">
+              No follow-ups due. Nice.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {dueFollowups.slice(0, 6).map((p) => {
+                const d = new Date(p.nextActionDate as Date);
+                const overdue = d < startOfToday;
+                return (
+                  <li
+                    key={p.id}
+                    className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap"
+                  >
+                    <Link
+                      href={`/business-builder/pipeline/${p.id}`}
+                      className="text-sm font-bold text-foreground hover:underline underline-offset-4"
+                    >
+                      {p.companyName}
+                    </Link>
+                    <span
+                      className={
+                        "text-[10px] uppercase tracking-tbb-caps " +
+                        (overdue
+                          ? "text-tbb-warning font-bold"
+                          : "text-muted-foreground")
+                      }
+                    >
+                      {overdue ? "Overdue" : "Today"}
+                    </span>
+                    {p.nextActionNote && (
+                      <span className="text-xs text-muted-foreground truncate max-w-full">
+                        {p.nextActionNote}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardShell>
