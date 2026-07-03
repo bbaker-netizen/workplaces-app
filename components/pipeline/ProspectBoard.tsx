@@ -22,8 +22,7 @@ import type { PipelineProspect } from "@/lib/db/queries/prospects";
 // Retired / off-board statuses map onto the nearest working column so every
 // prospect lands somewhere. Dropping a card sets the column's real status.
 const STATUS_TO_COLUMN: Record<string, ProspectStatus> = {
-  diagnostic_pending: "first_contact",
-  meeting_scheduled: "first_contact",
+  diagnostic_pending: "contact_attempted",
   diagnostic_complete: "first_contact",
   negotiation: "proposal_sent",
 };
@@ -117,16 +116,25 @@ export function ProspectBoard({
                   : "border-tbb-line bg-tbb-cream/40")
               }
             >
-              <div className="flex items-center justify-between gap-2 px-1.5 py-1.5">
+              {/* Header on a single line — dot + truncating label + count —
+                  so long stage names (e.g. "Appt completed – follow-up")
+                  never wrap to two rows in a narrow column. */}
+              <div className="flex items-center gap-1.5 px-1.5 py-1.5 min-w-0">
                 <span
+                  aria-hidden
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: style.dotHex }}
+                />
+                <span
+                  title={style.label}
                   className={
-                    "inline-flex items-center px-2 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-tbb-caps ring-1 ring-inset ring-black/10 " +
-                    style.chipClass
+                    "flex-1 min-w-0 truncate whitespace-nowrap text-[10px] font-bold uppercase tracking-tbb-caps " +
+                    style.textClass
                   }
                 >
                   {style.label}
                 </span>
-                <span className="text-[11px] font-mono text-tbb-ink-3">
+                <span className="text-[11px] font-mono text-tbb-ink-3 shrink-0">
                   {items.length}
                 </span>
               </div>

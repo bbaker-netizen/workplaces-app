@@ -148,16 +148,19 @@ export const portalModuleEnum = pgEnum("portal_module", [
 
 export const prospectStatusEnum = pgEnum("prospect_status", [
   "new_lead",            // Just came in, no contact yet
-  "diagnostic_pending",  // Legacy: prospect started but didn't finish diagnostic
-  "first_contact",       // Initial outreach done
-  "meeting_scheduled",   // Intro call booked
-  "diagnostic_complete", // Filled out the diagnostic
+  "diagnostic_pending",  // Legacy (retired) — remapped to contact_attempted
+  "contact_attempted",   // Reached out, no reply yet
+  "first_contact",       // First contact made
+  "meeting_scheduled",   // "Appt booked"
+  "appt_completed_followup", // Appt completed — follow-up required
+  "diagnostic_complete", // Legacy (retired) — remapped to first_contact
   "proposal_sent",
-  "negotiation",
+  "negotiation",         // Legacy (retired) — remapped to proposal_sent
   "contract_sent",
   "contract_signed",
-  "onboarded",
+  "onboarded",           // "Won"
   "lost",
+  "not_qualified",       // Disqualified
 ]);
 
 export const personProfileSourceEnum = pgEnum("person_profile_source", [

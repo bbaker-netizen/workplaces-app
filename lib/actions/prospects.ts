@@ -25,11 +25,14 @@ export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
+// Keep in sync with prospectStatusEnum in schema.ts.
 const statusEnum = z.enum([
   "new_lead",
   "diagnostic_pending",
+  "contact_attempted",
   "first_contact",
   "meeting_scheduled",
+  "appt_completed_followup",
   "diagnostic_complete",
   "proposal_sent",
   "negotiation",
@@ -37,6 +40,7 @@ const statusEnum = z.enum([
   "contract_signed",
   "onboarded",
   "lost",
+  "not_qualified",
 ]);
 
 const optionalString = z

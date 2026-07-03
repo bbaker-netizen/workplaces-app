@@ -85,7 +85,7 @@ export async function submitDiagnosticIntake(
           .set({
             companyName: data.companyName,
             contactName: data.contactName,
-            status: "diagnostic_complete",
+            status: "first_contact",
             notes: mergedNotes,
             updatedAt: new Date(),
           })
@@ -107,7 +107,7 @@ export async function submitDiagnosticIntake(
           companyName: data.companyName,
           contactName: data.contactName,
           contactEmail: data.contactEmail,
-          status: "diagnostic_complete",
+          status: "first_contact",
           leadSource: "Diagnostic",
           notes,
         })

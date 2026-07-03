@@ -23,7 +23,10 @@ type NextStep = {
   prompts: { icon: React.ReactNode; label: string }[];
 };
 
-const STEPS_BY_STATUS: Record<ProspectStatus, NextStep> = {
+// Partial: stages without a bespoke "next step" panel simply don't render
+// one (the lookup below returns null). New ladder stages can get entries
+// later without a type break.
+const STEPS_BY_STATUS: Partial<Record<ProspectStatus, NextStep>> = {
   new_lead: {
     emoji: "👋",
     heading: "Fresh lead — say hi before they cool off",
