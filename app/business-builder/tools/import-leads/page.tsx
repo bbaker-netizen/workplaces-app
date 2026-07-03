@@ -5,9 +5,9 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { LeadImporter } from "@/components/business-builder/LeadImporter";
 
 /**
- * Bulk lead reconcile/import — paste rows to fill in missing phones/names on
- * existing prospects (never overwrites, never touches notes) and add new
- * ones. Reachable by direct link; kept off the nav to avoid clutter.
+ * Bulk lead reconcile/import — upload a spreadsheet (.xlsx) or CSV to fill in
+ * missing phones/names on existing prospects (never overwrites, never touches
+ * notes) and add new ones. Linked from the Tools group in the sidebar.
  */
 export default async function ImportLeadsPage() {
   const profile = await ensureUserProfile();
