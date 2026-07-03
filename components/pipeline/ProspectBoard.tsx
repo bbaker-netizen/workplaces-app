@@ -59,6 +59,9 @@ export function ProspectBoard({
     const byCol = new Map<ProspectStatus, PipelineProspect[]>();
     for (const s of STAGE_ORDER) byCol.set(s, []);
     for (const p of prospects) {
+      // Archived prospects are removed from the pipeline — never show them
+      // on the board (matches the Table view's default).
+      if (p.archivedAt) continue;
       const col = columnFor(statusOf(p));
       byCol.get(col)?.push(p);
     }
