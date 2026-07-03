@@ -3,7 +3,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { QuickSendTools } from "@/components/business-builder/QuickSendTools";
 
 /**
- * Quick send — stand-alone tools any Business Builder can use: send the
+ * Send — stand-alone tools any Business Builder can use: send the
  * diagnostic link, or ask a client for a Google review, by email or text.
  */
 export default async function QuickSendPage() {
@@ -20,7 +20,7 @@ export default async function QuickSendPage() {
           Tools
         </p>
         <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
-          Quick send — diagnostic &amp; Google review
+          Send — diagnostic &amp; Google review
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
           Fire off a diagnostic or a Google-review request to anyone — by email
