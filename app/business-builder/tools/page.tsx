@@ -20,7 +20,7 @@ export default async function QuickSendPage() {
           Tools
         </p>
         <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
-          Quick send
+          Quick send — diagnostic &amp; Google review
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
           Fire off a diagnostic or a Google-review request to anyone — by email

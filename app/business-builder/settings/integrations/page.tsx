@@ -71,8 +71,10 @@ function StatusPill({ status }: { status: Status }) {
 export default async function IntegrationsHubPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-  if (profile.role !== "master_admin") {
-    redirect("/business-builder");
+  // Coach-accessible: this is now the single connections hub, so a standard
+  // Business Builder can connect their own Google / QuickBooks and check SMS.
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    redirect("/portal");
   }
 
   // Load connection state for each integration in parallel.
@@ -126,10 +128,10 @@ export default async function IntegrationsHubPage() {
       icon: MessageSquare,
       status: smsOk ? "env_configured" : "missing",
       detail: smsOk
-        ? "TWILIO_* env vars detected. Sends go through your configured number."
-        : "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER on Netlify to enable SMS.",
-      manageHref: "https://app.netlify.com/projects/workplaces-the-builder/configuration/env",
-      manageLabel: "Netlify env vars ↗",
+        ? "Texting is connected. Open it to send yourself a test message."
+        : "Texting isn't set up yet — a master admin configures Twilio once for the whole account.",
+      manageHref: "/business-builder/settings/sms",
+      manageLabel: smsOk ? "Check / test SMS" : "SMS status",
     },
     {
       key: "netlify",

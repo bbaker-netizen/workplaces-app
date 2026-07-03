@@ -96,7 +96,7 @@ export function ProspectBoard({
     // horizontal scroll on desktop. On very narrow screens they hit their
     // min-width and the container scrolls as a graceful fallback.
     <div className="overflow-x-auto pb-4">
-      <div className="flex gap-2 items-start">
+      <div className="flex gap-1.5 items-start">
         {columns.map(({ status, items }) => {
           const style = STAGE_STYLES[status];
           const active = dragOverCol === status;
@@ -110,7 +110,7 @@ export function ProspectBoard({
               onDragLeave={() => setDragOverCol((c) => (c === status ? null : c))}
               onDrop={() => drop(status)}
               className={
-                "flex-1 min-w-[132px] rounded-lg border p-1.5 transition-colors " +
+                "flex-1 min-w-[104px] rounded-lg border p-1.5 transition-colors " +
                 (active
                   ? "border-tbb-blue bg-tbb-blue-50"
                   : "border-tbb-line bg-tbb-cream/40")

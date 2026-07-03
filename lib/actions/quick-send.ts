@@ -47,6 +47,11 @@ const phoneRe = /^\+?[0-9()\-\s]{7,20}$/;
 function emailShell(heading: string, body: string, buttonLabel: string, url: string): string {
   return `<div style="background:#F5F1E8;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1A1A1A">
     <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #E8E2D4;border-radius:12px;padding:28px">
+      <div style="text-align:left;margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid #EFEADD">
+        <span style="font-size:19px;font-weight:800;letter-spacing:0.3px;color:#2E4057">Workplaces</span>
+        <span style="display:inline-block;width:8px;height:8px;border-radius:9999px;background:#E87722;margin-left:4px;vertical-align:middle"></span>
+        <span style="display:block;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#9A9A9A;margin-top:3px">The Builder</span>
+      </div>
       <h1 style="font-size:20px;margin:0 0 12px;color:#14385B">${heading}</h1>
       <div style="font-size:15px;line-height:1.55;color:#2A323B">${body}</div>
       <p style="margin:22px 0 6px">
