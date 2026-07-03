@@ -212,14 +212,27 @@ export default async function CoachWelcomePage() {
         >
           <p>
             Your Pipeline is the CRM. Every prospect with their contact
-            info, deal value, owner, and next action — in one sortable
-            table. Stages run: New lead → First contact → Meeting
-            scheduled → Diagnostic complete → Proposal sent → Negotiation
-            → Contract sent → Contract signed → Onboarded → Lost. Click
-            the stage chip on any row to move it. Click the company name
-            to open the full prospect page where you can email, schedule
+            info, deal value, owner, and next action — in one place. The
+            eleven stages run: New lead → Contact attempt → First contact
+            → Appt booked → Appt complete → Proposal sent → Contract sent
+            → Contract signed → <strong>Won</strong> → Lost → Not
+            qualified. Switch between the <strong>Table</strong> view
+            (sortable rows) and the <strong>Board</strong> view (drag a
+            card between stage columns) with the toggle at the top — the
+            app remembers whichever you prefer.
+          </p>
+          <p className="mt-2">
+            Move a prospect by clicking the stage chip on any row (or
+            dragging its card on the board). Click the company name to
+            open the full prospect page where you can email, schedule
             meetings, send the diagnostic, and send for signature — all
             from one place.
+          </p>
+          <p className="mt-2 text-sm text-tbb-ink-3">
+            <strong>Won starts onboarding automatically.</strong> The
+            moment you move a prospect to <strong>Won</strong>, the app
+            asks if you want to start onboarding — one click spins up
+            their engagement workspace. More on that in Phase 03.
           </p>
         </Step>
 
@@ -235,8 +248,8 @@ export default async function CoachWelcomePage() {
             </code>{" "}
             is your public intake form. Share it on social, in cold
             email signatures, or after a sales call. Submissions
-            auto-create a prospect record in your Pipeline with status{" "}
-            <strong>Diagnostic complete</strong>.
+            auto-create a prospect record in your Pipeline at{" "}
+            <strong>First contact</strong>.
           </p>
           <p className="mt-2 text-sm text-tbb-ink-3">
             You&apos;ll see the company, contact, and the prospect&apos;s
@@ -305,13 +318,40 @@ export default async function CoachWelcomePage() {
 
       <Phase number="03" label="Open the engagement" caption="Provision the portal">
         <Step
+          icon={<CheckSquare className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Won → onboarding, in one click"
+          href="/business-builder/pipeline"
+          hrefLabel="Open the Pipeline"
+        >
+          <p>
+            The fastest way to open an engagement is straight from the
+            Pipeline. When you move a prospect to <strong>Won</strong> —
+            by clicking the stage chip or dragging their card into the Won
+            column — the app asks{" "}
+            <em>&quot;Mark this client as Won and start onboarding
+            now?&quot;</em>. Say yes and it spins up the client&apos;s
+            engagement workspace immediately, so you can start setting up
+            their portal.
+          </p>
+          <p className="mt-2 text-sm text-tbb-ink-3">
+            The confirm is there so a stray drag never provisions a
+            workspace by accident. Starting onboarding creates the
+            workspace only — it does <strong>not</strong> email or invite
+            the client. That stays a deliberate step you take when
+            you&apos;re ready (the <strong>Invite client</strong> button,
+            below).
+          </p>
+        </Step>
+
+        <Step
           icon={<Sparkles className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Create the engagement"
+          title="Or create the engagement by hand"
           href="/business-builder/engagements/new"
           hrefLabel="Open new engagement form"
         >
           <p>
-            Once the contract is signed, open{" "}
+            Prefer to set it up manually (or spinning up an engagement
+            that didn&apos;t come through the Pipeline)? Open{" "}
             <Link href="/business-builder/engagements/new" className="text-tbb-blue underline">
               /business-builder/engagements/new
             </Link>
@@ -711,6 +751,16 @@ export default async function CoachWelcomePage() {
             href="/business-builder/soul-search"
             label="Soul File semantic search"
             icon={<Folder className="w-4 h-4 text-tbb-blue" aria-hidden />}
+          />
+          <CheatSheetItem
+            href="/business-builder/tools"
+            label="Quick send — diagnostic & Google review by email or text"
+            icon={<Sparkles className="w-4 h-4 text-tbb-blue" aria-hidden />}
+          />
+          <CheatSheetItem
+            href="/business-builder/tools/import-leads"
+            label="Import / update leads — bulk-fill from a spreadsheet"
+            icon={<Filter className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
         </ul>
       </section>
