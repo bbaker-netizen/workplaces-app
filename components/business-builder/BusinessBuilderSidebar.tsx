@@ -42,6 +42,7 @@ import {
   Settings,
   Sparkles,
   Star,
+  Upload,
   Workflow,
 } from "lucide-react";
 import {
@@ -129,7 +130,8 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       // "New engagement" link removed — you start a client from their
       // prospect's "Convert to engagement" button (one obvious path).
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
-      { href: "/business-builder/tools", label: "Quick send: diagnostic & review", icon: Send },
+      { href: "/business-builder/tools", label: "Send: diagnostic & review", icon: Send },
+      { href: "/business-builder/tools/import-leads", label: "Import / update leads", icon: Upload },
       { href: "/business-builder/library", label: "Client tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },

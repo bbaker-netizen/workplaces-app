@@ -754,7 +754,7 @@ export default async function CoachWelcomePage() {
           />
           <CheatSheetItem
             href="/business-builder/tools"
-            label="Quick send — diagnostic & Google review by email or text"
+            label="Send — diagnostic & Google review by email or text"
             icon={<Sparkles className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
