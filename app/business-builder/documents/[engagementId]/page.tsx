@@ -12,7 +12,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { listCoachEngagements } from "@/lib/db/queries/engagements";
+import {
+  getEngagementByIdOrSlug,
+  listCoachEngagements,
+} from "@/lib/db/queries/engagements";
 import { listEngagementDocuments } from "@/lib/db/queries/documents";
 import { listEnvelopesForEngagement } from "@/lib/db/queries/signatures";
 import {
@@ -44,9 +47,13 @@ export default async function CoachDocumentsPage({
     redirect("/portal");
   }
 
-  const engagements = await listCoachEngagements();
-  const engagement = engagements.find((e) => e.id === params.engagementId);
+  // Resolve directly by id (like the engagement detail page) so this works
+  // for archived engagements too — listCoachEngagements excludes archived,
+  // which 404'd the Documents & Drive button for wrapped-up clients.
+  const engagement = await getEngagementByIdOrSlug(params.engagementId);
   if (!engagement) notFound();
+  // The "Switch engagement" dropdown still lists the active ones.
+  const engagements = await listCoachEngagements();
 
   const [docs, envelopes, hasStoredSig, googleState, engagementWithDrive] =
     await Promise.all([
