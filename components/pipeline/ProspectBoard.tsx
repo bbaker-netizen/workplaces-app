@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { GripVertical } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
+import { activateProspectAsEngagement } from "@/lib/actions/activate-engagement";
 import {
   STAGE_ORDER,
   STAGE_STYLES,
@@ -79,6 +80,31 @@ export function ProspectBoard({
     if (currentCol === target) return;
 
     const prev = statusOf(prospect);
+
+    // Dropping into "Won" (onboarded) on a prospect that isn't an engagement
+    // yet offers to start onboarding in one click — creating the client's
+    // workspace — guarded by a confirm so a stray drop never provisions.
+    if (target === "onboarded" && !prospect.convertedEngagementId) {
+      const go = window.confirm(
+        "Mark this client as Won and start onboarding now?\n\n" +
+          "This creates their engagement workspace so you can set up their " +
+          "portal. It does not email or invite the client yet — you'll do " +
+          "that when you're ready.",
+      );
+      if (!go) return; // Leave the card where it was.
+      setOverrides((o) => ({ ...o, [id]: target }));
+      startTransition(async () => {
+        const r = await activateProspectAsEngagement(id);
+        if (!r.ok) {
+          setOverrides((o) => ({ ...o, [id]: prev }));
+          window.alert(`Couldn't start onboarding: ${r.error}`);
+        } else {
+          router.refresh();
+        }
+      });
+      return;
+    }
+
     setOverrides((o) => ({ ...o, [id]: target }));
     startTransition(async () => {
       const r = await updateProspect({ id, status: target });

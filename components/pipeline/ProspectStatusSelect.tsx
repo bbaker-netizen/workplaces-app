@@ -15,8 +15,10 @@
  */
 
 import { useTransition, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
+import { activateProspectAsEngagement } from "@/lib/actions/activate-engagement";
 import {
   STAGE_STYLES,
   STAGE_ORDER,
@@ -31,16 +33,50 @@ import {
 export function ProspectStatusSelect({
   prospectId,
   current,
+  alreadyConverted = false,
 }: {
   prospectId: string;
   current: ProspectStatus;
+  /** True once this prospect already has an engagement workspace, so
+   *  moving to "Won" doesn't re-offer to start onboarding. */
+  alreadyConverted?: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [value, setValue] = useState<ProspectStatus>(current);
+  const [converted, setConverted] = useState(alreadyConverted);
   const [showConfetti, setShowConfetti] = useState(false);
   const style = STAGE_STYLES[value] ?? STAGE_STYLES.new_lead;
 
   function onChange(next: ProspectStatus) {
+    // Reaching "Won" (onboarded) on a prospect that isn't an engagement yet
+    // offers to start onboarding in one click — creating the client's
+    // workspace — but guarded by a confirm so a mis-click never provisions.
+    if (next === "onboarded" && !converted) {
+      const go = window.confirm(
+        "Mark this client as Won and start onboarding now?\n\n" +
+          "This creates their engagement workspace so you can set up their " +
+          "portal. It does not email or invite the client yet — you'll do " +
+          "that when you're ready.",
+      );
+      if (!go) return; // Leave the stage where it was.
+      setValue(next);
+      showPendingFeedback("Starting onboarding…");
+      startTransition(async () => {
+        const r = await activateProspectAsEngagement(prospectId);
+        hidePendingFeedback();
+        if (!r.ok) {
+          setValue(current);
+          window.alert(`Couldn't start onboarding: ${r.error}`);
+          return;
+        }
+        setConverted(true);
+        setShowConfetti(true);
+        router.refresh();
+      });
+      return;
+    }
+
     const wasNotSigned = value !== "contract_signed";
     setValue(next);
     showPendingFeedback("Updating stage…");

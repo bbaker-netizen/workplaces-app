@@ -171,6 +171,7 @@ export default async function ProspectDetailPage({
             <ProspectStatusSelect
               prospectId={prospect.id}
               current={prospect.status as ProspectStatus}
+              alreadyConverted={Boolean(prospect.convertedEngagementId)}
             />
           </span>
         </div>
