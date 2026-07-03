@@ -44,7 +44,7 @@ const PHASES: Phase[] = [
   {
     number: "02",
     label: "Sign",
-    blurb: "Proposal. Negotiation. Contract out for signature. Won.",
+    blurb: "Proposal. Contract out for signature. Signed, then Won.",
     href: "/business-builder/pipeline",
     icon: <Handshake className="w-5 h-5" aria-hidden />,
     accent: "text-tbb-warning",

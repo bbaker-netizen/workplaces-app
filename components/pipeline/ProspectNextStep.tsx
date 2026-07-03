@@ -12,7 +12,6 @@ import {
   Mail,
   PenSquare,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import type { ProspectStatus } from "@/lib/pipeline/stages";
 
@@ -34,6 +33,15 @@ const STEPS_BY_STATUS: Partial<Record<ProspectStatus, NextStep>> = {
     prompts: [
       { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Send a quick intro (Communications panel below)" },
       { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Or skip the dance — get them on the calendar" },
+    ],
+  },
+  contact_attempted: {
+    emoji: "📤",
+    heading: "You reached out — now stay on it",
+    body: "One touch rarely lands. It usually takes a few tries across a couple of channels before someone replies. Space them out, mix email and a call, and don't take silence personally.",
+    prompts: [
+      { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Try another channel — call if you emailed, email if you called" },
+      { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "When they answer, get a real conversation on the calendar" },
     ],
   },
   first_contact: {
@@ -72,13 +80,22 @@ const STEPS_BY_STATUS: Partial<Record<ProspectStatus, NextStep>> = {
       { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Book the walk-through call" },
     ],
   },
+  appt_completed_followup: {
+    emoji: "🤝",
+    heading: "Great meeting — now follow up before it fades",
+    body: "The energy of a good call has a short shelf life. Get the next thing out the door today: the proposal, the diagnostic, or a recap with a clear next step. Momentum closes deals.",
+    prompts: [
+      { icon: <FileText className="w-3.5 h-3.5" aria-hidden />, label: "Send the proposal while the conversation is fresh" },
+      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "Log a Note so nothing from the call gets lost" },
+    ],
+  },
   proposal_sent: {
     emoji: "📨",
     heading: "Proposal's out. Now we wait. (Briefly.)",
     body: "Most deals close in the follow-up, not the proposal. Give it 2–3 business days, then check in. If you hear crickets, the proposal probably needed to be shorter.",
     prompts: [
       { icon: <Mail className="w-3.5 h-3.5" aria-hidden />, label: "Friendly check-in if they go quiet" },
-      { icon: <TrendingUp className="w-3.5 h-3.5" aria-hidden />, label: "When they push back on something, move to Negotiation" },
+      { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "Once they're in, send the contract for signature" },
     ],
   },
   negotiation: {
@@ -103,7 +120,7 @@ const STEPS_BY_STATUS: Partial<Record<ProspectStatus, NextStep>> = {
     heading: "WON. Crack open something cold.",
     body: "Big one. Now: lock in the kickoff before they get distracted by their own business. Onboarding momentum sets the whole relationship.",
     prompts: [
-      { icon: <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />, label: "Spin up the engagement (turns them into a real client)" },
+      { icon: <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />, label: "Move them to Won — the app offers to start onboarding in one click" },
       { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Get the kickoff session on the calendar — this week if you can" },
     ],
   },
