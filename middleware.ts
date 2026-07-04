@@ -12,17 +12,28 @@ const isProtectedRoute = createRouteMatcher([
 // the production aliases to the canonical domain. We DON'T touch
 // `deploy-preview-*` aliases — those are used for PR preview builds.
 const CANONICAL_HOST = "builder.4workplaces.com";
-const REDIRECTED_ALIASES = new Set([
-  "main--workplaces-the-builder.netlify.app",
-  "workplaces-the-builder.netlify.app",
-]);
+// Every production Netlify alias for this site ends with this suffix: the
+// branch alias `main--…` and — crucially — the per-deploy permalink
+// `<deployid>--…`. A server-side redirect can briefly land the browser on
+// the deploy permalink, where Clerk renders blank, so all of these must
+// bounce to the canonical domain. Only `deploy-preview-*` (PR previews)
+// are left usable.
+const NETLIFY_ALIAS_SUFFIX = "--workplaces-the-builder.netlify.app";
+
+function isRedirectedAlias(host: string): boolean {
+  if (host === "workplaces-the-builder.netlify.app") return true;
+  if (host.endsWith(NETLIFY_ALIAS_SUFFIX)) {
+    return !host.startsWith("deploy-preview-");
+  }
+  return false;
+}
 
 export default clerkMiddleware(async (auth, req) => {
   // Canonical-domain redirect. Runs first so a blank Clerk page on an
   // alias never happens. Drops the query string on purpose — a stale
   // `redirect_url` pointing back at the alias would otherwise loop.
   const host = req.headers.get("host") ?? "";
-  if (REDIRECTED_ALIASES.has(host)) {
+  if (isRedirectedAlias(host)) {
     return NextResponse.redirect(
       new URL(req.nextUrl.pathname, `https://${CANONICAL_HOST}`),
       308,
