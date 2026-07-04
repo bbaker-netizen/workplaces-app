@@ -266,6 +266,16 @@ export default async function CoachWelcomePage() {
             note). It logs on the timeline and pops onto your console home
             when it comes due.
           </p>
+          <p className="mt-2">
+            Down the right side, the <strong>Team discussion</strong>{" "}
+            thread is a private space for Business Builders to talk about
+            the lead — the client never sees it. Post a comment and tick{" "}
+            <strong>Notify</strong> to pull Jen (or anyone) in; they get an
+            email and an in-app notification. And if a lead goes quiet, an
+            orange banner flags it as <strong>stale</strong> — you&apos;ll
+            also get a nudge in your Notifications feed so it doesn&apos;t
+            just sit there. Follow up, or move it to <strong>Lost</strong>.
+          </p>
         </Step>
 
         <Step
@@ -308,6 +318,14 @@ export default async function CoachWelcomePage() {
             the <strong>All sources</strong> filter to slice the board by
             channel &mdash; Facebook Ads, Website Form, Referral, and so on
             &mdash; so you can see which channel is actually producing.
+          </p>
+          <p className="mt-2">
+            Want the bigger picture? <strong>Reports</strong> (under Pipeline
+            in the sidebar) turns all of this into visual graphs — running
+            lead source with per-source conversion, your overall conversion
+            rate, median time to close, the funnel shape stage by stage, and
+            new leads per month. It&apos;s the fastest way to see which channel
+            is actually producing and where deals stall.
           </p>
           <p className="mt-2 text-sm text-tbb-ink-3">
             Cleaning up: archive a lead or client from their detail page, and

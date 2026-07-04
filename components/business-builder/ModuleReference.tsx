@@ -6,12 +6,15 @@
 
 import Link from "next/link";
 import {
+  BarChart3,
+  Bell,
   Briefcase,
   CalendarClock,
   CheckSquare,
   FileText,
   Folder,
   GraduationCap,
+  MessageCircle,
   MessagesSquare,
   PenSquare,
   Puzzle,
@@ -143,6 +146,33 @@ export function ModuleReference() {
         replaces={`No current Monday equivalent — the curriculum gets a home.`}
         link="/portal/courses"
         linkLabel="Open courses"
+      />
+      <ModuleCard
+        icon={<MessageCircle />}
+        name="Team discussion (on a lead)"
+        what="A private comment thread on every prospect and client, in the right column of the prospect page. Business Builders talk about the lead here — the client never sees it. Post a comment and tick any teammates to Notify; they get an email plus an in-app notification. It sits above the Activity log, which is the factual touchpoint record (calls, meetings, notes)."
+        when="Any time you want a colleague's read on a lead, or to hand context to whoever picks it up next. Use Notify to pull Jen (or anyone) in."
+        replaces={`The side conversations about a deal that used to live in email, texts, or Monday updates — now attached to the lead itself.`}
+        link="/business-builder/pipeline"
+        linkLabel="Open the Pipeline"
+      />
+      <ModuleCard
+        icon={<Bell />}
+        name="Notifications"
+        what="Your Business Builder feed — teammate comments that tagged you, stale-lead nudges, and other updates routed to you. The sidebar Today panel shows an unread count; opening the feed clears it. Stale-lead nudges fire automatically when an open lead has had no contact in 14 days, prompting you to follow up or move it to Lost."
+        when="Check it whenever the Today panel shows unread items. It's how the team keeps each other in the loop without email."
+        replaces={`Chasing Monday notifications and email threads to find what needs your attention.`}
+        link="/business-builder/notifications"
+        linkLabel="Open notifications"
+      />
+      <ModuleCard
+        icon={<BarChart3 />}
+        name="Reports"
+        what="The pipeline at a glance: running lead source with per-source conversion, overall conversion rate, median and average time to close, the funnel shape stage by stage, new leads per month over the last year, and open-vs-won deal value. All read-only, computed live from your prospects."
+        when="Weekly or monthly, to see what's working — which sources convert, where deals stall, how long closing takes."
+        replaces={`Manually tallying Monday boards or exporting to a spreadsheet to see how the pipeline is really doing.`}
+        link="/business-builder/reports"
+        linkLabel="Open reports"
       />
       <ModuleCard
         icon={<Puzzle />}
