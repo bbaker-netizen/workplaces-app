@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { LeadImporter } from "@/components/business-builder/LeadImporter";
+import { PhoneCleanup } from "@/components/business-builder/PhoneCleanup";
 
 /**
  * Bulk lead reconcile/import — upload a spreadsheet (.xlsx) or CSV to fill in
@@ -34,6 +35,7 @@ export default async function ImportLeadsPage() {
         </p>
       </header>
 
+      <PhoneCleanup />
       <LeadImporter />
     </main>
   );
