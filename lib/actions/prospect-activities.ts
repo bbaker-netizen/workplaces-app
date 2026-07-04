@@ -87,6 +87,51 @@ export async function logProspectActivity(
   return { ok: true, data: { id: inserted.id } };
 }
 
+const editSchema = z.object({
+  id: z.string().uuid(),
+  subject: z.string().trim().max(300).nullable(),
+  body: z.string().trim().max(20_000).nullable(),
+});
+
+/** Edit a logged activity's subject + body (fix a typo, add detail). */
+export async function updateProspectActivity(
+  input: z.input<typeof editSchema>,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+
+  const parsed = editSchema.safeParse(input);
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  const { id, subject, body } = parsed.data;
+  if (!subject && !body) {
+    return { ok: false, error: "A note needs a subject or a body." };
+  }
+
+  const prospectId = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({ prospectId: prospectActivities.prospectId })
+      .from(prospectActivities)
+      .where(eq(prospectActivities.id, id))
+      .limit(1);
+    if (!row) return null;
+    await tx
+      .update(prospectActivities)
+      .set({ subject: subject || null, body: body || null })
+      .where(eq(prospectActivities.id, id));
+    return row.prospectId;
+  });
+  if (!prospectId) return { ok: false, error: "Entry not found." };
+  revalidatePath(`/business-builder/pipeline/${prospectId}`);
+  return { ok: true, data: undefined };
+}
+
 const deleteSchema = z.object({ id: z.string().uuid() });
 
 export async function deleteProspectActivity(

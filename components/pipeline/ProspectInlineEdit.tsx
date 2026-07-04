@@ -327,8 +327,12 @@ function NotesEdit({
         onChange={(e) => setNotes(e.target.value)}
         placeholder="Anything to remember about this prospect (markdown supported)…"
         disabled={isPending}
+        spellCheck
         className={`${inputCls} resize-y`}
       />
+      <p className="text-[11px] text-tbb-ink-3">
+        Tip: check spelling &amp; grammar — teammates rely on these notes.
+      </p>
       {error && <p className="text-sm text-tbb-danger">{error}</p>}
       <div className="flex items-center gap-2">
         <button
