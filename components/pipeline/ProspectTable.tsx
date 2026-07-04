@@ -92,7 +92,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "next_action", label: "Next action", defaultWidth: 160, defaultVisible: true },
   { key: "owner", label: "Owner", defaultWidth: 140, defaultVisible: true },
   { key: "last_contact", label: "Last contact", defaultWidth: 120, defaultVisible: true },
-  { key: "lead_source", label: "Lead source", defaultWidth: 140, defaultVisible: false },
+  { key: "lead_source", label: "Lead source", defaultWidth: 140, defaultVisible: true },
   { key: "website", label: "Website", defaultWidth: 180, defaultVisible: false },
   { key: "industry", label: "Industry", defaultWidth: 140, defaultVisible: false },
   { key: "created", label: "Created", defaultWidth: 100, defaultVisible: true },
