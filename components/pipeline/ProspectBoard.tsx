@@ -14,7 +14,7 @@
  * revert on failure. Dropping into "Won" offers one-click onboarding.
  */
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, GripVertical } from "lucide-react";
@@ -70,6 +70,41 @@ export function ProspectBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ProspectStatus | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Click-and-drag to pan the board left/right, so you don't have to hunt
+  // for the horizontal scrollbar. Mouse only — touch devices already swipe
+  // natively — and it never starts on a card, header, or link, so card
+  // drag-and-drop and clicks keep working.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pan = useRef({ active: false, startX: 0, startScroll: 0 });
+  const [panning, setPanning] = useState(false);
+
+  function onPanPointerDown(e: React.PointerEvent) {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(
+        '[draggable="true"], button, a, input, select, textarea, [role="button"]',
+      )
+    ) {
+      return; // let cards, headers, and links do their own thing
+    }
+    const sc = scrollRef.current;
+    if (!sc || sc.scrollWidth <= sc.clientWidth) return; // nothing to pan
+    pan.current = { active: true, startX: e.clientX, startScroll: sc.scrollLeft };
+    setPanning(true);
+  }
+  function onPanPointerMove(e: React.PointerEvent) {
+    if (!pan.current.active || !scrollRef.current) return;
+    scrollRef.current.scrollLeft =
+      pan.current.startScroll - (e.clientX - pan.current.startX);
+  }
+  function endPan() {
+    if (pan.current.active) {
+      pan.current.active = false;
+      setPanning(false);
+    }
+  }
 
   // Restore collapsed columns from the last visit.
   useEffect(() => {
@@ -166,7 +201,17 @@ export function ProspectBoard({
     // gives `position: sticky` nothing to pin against. A capped height makes
     // the vertical scroll real, so each stage header stays visible while you
     // scroll a long column and drag a card into it.
-    <div className="overflow-auto max-h-[78vh] pb-3">
+    <div
+      ref={scrollRef}
+      onPointerDown={onPanPointerDown}
+      onPointerMove={onPanPointerMove}
+      onPointerUp={endPan}
+      onPointerLeave={endPan}
+      className={
+        "overflow-auto max-h-[78vh] pb-3 " +
+        (panning ? "cursor-grabbing select-none" : "cursor-grab")
+      }
+    >
       <div className="flex gap-3 items-start">
         {columns.map(({ status, items }) => {
           const style = STAGE_STYLES[status];

@@ -610,6 +610,36 @@ export function ProspectTable({
           <option value="signed">Sort: Date signed</option>
         </select>
 
+        {/* Archived toggle — a one-click way in and out of the Archived
+            view, so it isn't buried in the stage dropdown. */}
+        {(archivedCount > 0 || viewingArchived) && (
+          <button
+            type="button"
+            onClick={() =>
+              setStageFilter(viewingArchived ? "prospects" : "archived")
+            }
+            aria-pressed={viewingArchived}
+            className={
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-tbb-blue border " +
+              (viewingArchived
+                ? "bg-tbb-navy text-white border-tbb-navy hover:bg-tbb-navy/90"
+                : "bg-white text-tbb-navy border-tbb-line hover:bg-tbb-cream-50")
+            }
+          >
+            {viewingArchived ? (
+              <>
+                <ArchiveRestore className="w-4 h-4" aria-hidden />
+                Back to active
+              </>
+            ) : (
+              <>
+                <Archive className="w-4 h-4" aria-hidden />
+                Archived ({archivedCount})
+              </>
+            )}
+          </button>
+        )}
+
         {/* Columns menu */}
         <div className="relative">
           <button

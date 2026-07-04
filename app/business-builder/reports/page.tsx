@@ -4,10 +4,10 @@ import { getPipelineReport } from "@/lib/db/queries/reports";
 import { formatCad } from "@/lib/format";
 import {
   ColumnChart,
-  FunnelChart,
   HBarList,
   StatCard,
 } from "@/components/reports/Charts";
+import { SalesFunnel } from "@/components/reports/SalesFunnel";
 
 /**
  * Business Builder reports dashboard — the pipeline at a glance.
@@ -87,17 +87,13 @@ export default async function ReportsPage() {
           />
         </ReportCard>
 
-        {/* Funnel */}
+        {/* Sales funnel — the traditional top-wide / bottom-narrow shape */}
         <ReportCard
-          title="Pipeline funnel"
-          subtitle="How many leads sit at each stage right now"
+          title="Sales funnel"
+          subtitle="Every stage in the classic funnel — new leads down to Won"
         >
-          <FunnelChart
-            rows={r.funnel.map((f) => ({
-              label: f.label,
-              count: f.count,
-              won: f.status === "onboarded",
-            }))}
+          <SalesFunnel
+            stages={r.funnel.map((f) => ({ label: f.label, count: f.count }))}
           />
         </ReportCard>
 
