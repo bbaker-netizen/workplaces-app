@@ -1,0 +1,165 @@
+import { redirect } from "next/navigation";
+import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getPipelineReport } from "@/lib/db/queries/reports";
+import { formatCad } from "@/lib/format";
+import {
+  ColumnChart,
+  FunnelChart,
+  HBarList,
+  StatCard,
+} from "@/components/reports/Charts";
+
+/**
+ * Business Builder reports dashboard — the pipeline at a glance.
+ *
+ * Running lead source, conversion rate, time to close, funnel shape, and
+ * new leads over time. Read-only, server-rendered, Business Builder side
+ * only. Numbers come from getPipelineReport (master org prospects).
+ */
+export default async function ReportsPage() {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") redirect("/no-invitation");
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    redirect("/portal");
+  }
+
+  const r = await getPipelineReport();
+
+  return (
+    <main className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+      <header className="space-y-2">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
+          Business Builder
+        </p>
+        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+          Reports
+        </h1>
+        <p className="font-sans text-sm text-muted-foreground">
+          How the pipeline is really performing — where leads come from, how
+          many convert, and how long they take.
+        </p>
+      </header>
+
+      {/* Headline numbers */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total leads" value={String(r.totalLeads)} />
+        <StatCard
+          label="Active clients"
+          value={String(r.activeClients)}
+          hint={`${r.openCount} still open`}
+        />
+        <StatCard
+          label="Conversion rate"
+          value={`${r.conversionPct.toFixed(0)}%`}
+          hint={`${r.activeClients} won · ${r.lostCount} lost`}
+          accent
+        />
+        <StatCard
+          label="Median time to close"
+          value={
+            r.medianDaysToClose === null
+              ? "—"
+              : `${r.medianDaysToClose} days`
+          }
+          hint={
+            r.avgDaysToClose === null
+              ? "No closed deals yet"
+              : `${r.avgDaysToClose}-day average`
+          }
+        />
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Lead source */}
+        <ReportCard
+          title="Lead source"
+          subtitle="Where every lead came in — total, with wins in the label"
+        >
+          <HBarList
+            rows={r.leadSources.map((s) => ({
+              label: s.source,
+              value: s.total,
+              sub:
+                s.won > 0
+                  ? `${s.won} won (${s.conversionPct.toFixed(0)}%)`
+                  : undefined,
+            }))}
+          />
+        </ReportCard>
+
+        {/* Funnel */}
+        <ReportCard
+          title="Pipeline funnel"
+          subtitle="How many leads sit at each stage right now"
+        >
+          <FunnelChart
+            rows={r.funnel.map((f) => ({
+              label: f.label,
+              count: f.count,
+              won: f.status === "onboarded",
+            }))}
+          />
+        </ReportCard>
+
+        {/* New leads over time */}
+        <ReportCard
+          title="New leads over time"
+          subtitle="Fresh leads per month, trailing 12 months"
+        >
+          <ColumnChart
+            rows={r.monthly.map((m) => ({ label: m.label, count: m.count }))}
+          />
+        </ReportCard>
+
+        {/* Value */}
+        <ReportCard
+          title="Deal value"
+          subtitle="Expected value in the open pipeline vs. won"
+        >
+          <div className="grid grid-cols-2 gap-4 pt-2">
+            <div className="rounded-lg border border-tbb-line bg-tbb-cream-50 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Open pipeline
+              </p>
+              <p className="mt-1 font-display font-bold text-2xl text-tbb-navy">
+                {formatCad(r.totalPipelineValueCents)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-tbb-orange/40 bg-white p-4">
+              <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Won
+              </p>
+              <p className="mt-1 font-display font-bold text-2xl text-tbb-orange">
+                {formatCad(r.wonValueCents)}
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] text-tbb-ink-3">
+            Expected value is what you entered on each deal — set it on a
+            prospect&apos;s Deal card to sharpen this number.
+          </p>
+        </ReportCard>
+      </div>
+    </main>
+  );
+}
+
+function ReportCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
+      <header className="px-5 py-3 border-b border-tbb-line-soft">
+        <h2 className="font-bold text-tbb-navy">{title}</h2>
+        <p className="text-[11px] text-tbb-ink-3 mt-0.5">{subtitle}</p>
+      </header>
+      <div className="px-5 py-4">{children}</div>
+    </section>
+  );
+}
