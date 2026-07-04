@@ -169,8 +169,8 @@ export function ModuleReference() {
       <ModuleCard
         icon={<Megaphone />}
         name="Marketing list"
-        what="A list of contacts for marketing, kept completely separate from the sales pipeline — they never appear on the pipeline board or affect your Reports numbers. Import from a WordPress / Formidable CSV export (Tools → Import marketing list): it auto-detects Name / Email / Phone columns, skips rows without a valid email, and de-dupes by email so re-importing makes no duplicates. Anyone already in your pipeline is flagged. Search, export back to CSV, and delete."
-        when="When you want to bring old website/form leads in for marketing without cluttering the pipeline — or to pull a clean contact list for an email campaign."
+        what="A list of contacts for marketing, kept completely separate from the sales pipeline — they never appear on the pipeline board or affect your Reports numbers (the WordPress / Formidable leads were bulk-imported here as a one-time migration). Anyone already in your pipeline is flagged. Search, export back to CSV, delete, and — when a contact turns into a real lead — 'Move to pipeline' to promote them into the prospects list."
+        when="When you want a clean marketing contact list without cluttering the pipeline — or to pull a list for an email campaign."
         replaces={`The pile of old contact-form entries sitting in WordPress with nowhere to go.`}
         link="/business-builder/marketing"
         linkLabel="Open the marketing list"
