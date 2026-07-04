@@ -219,7 +219,10 @@ export default async function CoachWelcomePage() {
             qualified. Switch between the <strong>Table</strong> view
             (sortable rows) and the <strong>Board</strong> view (drag a
             card between stage columns) with the toggle at the top — the
-            app remembers whichever you prefer.
+            app remembers whichever you prefer. On the Board, click any
+            stage header to <strong>collapse</strong> that column to a
+            thin strip — handy for narrowing eleven stages down to the
+            ones you&apos;re working.
           </p>
           <p className="mt-2">
             Move a prospect by clicking the stage chip on any row (or
@@ -233,6 +236,35 @@ export default async function CoachWelcomePage() {
             moment you move a prospect to <strong>Won</strong>, the app
             asks if you want to start onboarding — one click spins up
             their engagement workspace. More on that in Phase 03.
+          </p>
+        </Step>
+
+        <Step
+          icon={<UserCheck className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Work a lead — the prospect page adapts to the stage"
+          href="/business-builder/pipeline"
+          hrefLabel="Open the Pipeline"
+        >
+          <p>
+            Open any prospect and the page shows only what matters at
+            their stage. A fresh lead stays lean; QuickBooks, Convert-to-
+            engagement, and the Signing tools only appear once the deal is
+            far enough along — so you&apos;re not wading through
+            active-client tooling on a brand-new lead.
+          </p>
+          <p className="mt-2">
+            At the top of every prospect, the <strong>Lead essentials</strong>{" "}
+            card lets you set three things from the very first lead:{" "}
+            <strong>Owner</strong> (which Business Builder), <strong>Program</strong>{" "}
+            (Accelerator or Implementer — what they might be a fit for),
+            and <strong>Lead source</strong>. No need to dig into the Deal
+            card anymore.
+          </p>
+          <p className="mt-2">
+            <strong>Schedule a follow-up</strong> takes a date, a{" "}
+            <strong>time</strong>, and a <strong>location</strong> (plus a
+            note). It logs on the timeline and pops onto your console home
+            when it comes due.
           </p>
         </Step>
 
