@@ -34,6 +34,41 @@ export type ImportResult =
 
 const emailRe = /[^\s,;"]+@[^\s,;"]+\.[^\s,;"]+/;
 
+/**
+ * Whether a cell looks like a date or time rather than data we want.
+ * Dates are the classic false-positive for phone detection — "2026-07-03"
+ * is eight digits, which used to slip through the old "7+ digits = phone"
+ * rule and land in the phone column. Anything matching here is never
+ * treated as a phone (or a name).
+ */
+function isDateOrTimeLike(s: string): boolean {
+  const t = s.trim();
+  if (!t) return false;
+  if (/\d{4}-\d{1,2}-\d{1,2}/.test(t)) return true; // 2026-07-03 (ISO)
+  if (/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(t)) return true; // 07/03/2026
+  if (/\d{1,2}:\d{2}/.test(t)) return true; // 14:30 time
+  if (/\bT\d{2}:\d{2}/.test(t)) return true; // ISO 2026-07-03T14:30
+  if (/\b(AM|PM|GMT|UTC)\b/i.test(t)) return true; // 2:30 PM / GMT
+  if (
+    /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/i.test(t) &&
+    /\d/.test(t)
+  ) {
+    return true; // "Jul 3, 2026"
+  }
+  return false;
+}
+
+/**
+ * A real phone number: 7–15 digits (local through E.164), and NOT a date
+ * or time. Longer digit runs (serials, concatenated timestamps) and any
+ * date/time string are rejected.
+ */
+function looksLikePhone(s: string): boolean {
+  if (isDateOrTimeLike(s)) return false;
+  const digits = s.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
+}
+
 function parseRows(text: string): Row[] {
   const rows: Row[] = [];
   const seen = new Set<string>();
@@ -50,7 +85,7 @@ function parseRows(text: string): Row[] {
     if (!email || seen.has(email)) continue;
     seen.add(email);
     const phoneCell = cells.find(
-      (c) => c !== emailCell && c.replace(/\D/g, "").length >= 7,
+      (c) => c !== emailCell && looksLikePhone(c),
     );
     const name =
       cells.find(
@@ -58,7 +93,8 @@ function parseRows(text: string): Row[] {
           c !== emailCell &&
           c !== phoneCell &&
           /[a-zA-Z]{2,}/.test(c) &&
-          !emailRe.test(c),
+          !emailRe.test(c) &&
+          !isDateOrTimeLike(c),
       ) ?? null;
     rows.push({
       name: name?.slice(0, 200) ?? null,
@@ -175,6 +211,80 @@ export async function importLeads(
     return {
       ok: false,
       error: (e instanceof Error ? e.message : "Import failed.").slice(0, 200),
+    };
+  }
+}
+
+export type PhoneCleanupResult =
+  | {
+      ok: true;
+      applied: boolean;
+      cleared: number;
+      samples: { company: string; badPhone: string }[];
+    }
+  | { ok: false; error: string };
+
+/** A stored phone value is junk if it's really a date/time or otherwise
+ *  contains words — the exact damage an earlier import bug could write into
+ *  the phone column. Real phone numbers never match this. */
+function isJunkPhone(phone: string): boolean {
+  return isDateOrTimeLike(phone) || /[A-Za-z]{2,}/.test(phone);
+}
+
+/**
+ * Repair pass for the phone column: finds prospects whose phone value is
+ * actually a date/time (or other non-phone text) and clears it back to
+ * empty. Never touches a legitimate phone number, and never touches notes
+ * or any other field. Preview first (apply=false), then apply=true.
+ */
+export async function cleanupImportedPhones(
+  apply: boolean,
+): Promise<PhoneCleanupResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  try {
+    return await withSystemContext(async (tx): Promise<PhoneCleanupResult> => {
+      const [master] = await tx
+        .select({ id: orgs.id })
+        .from(orgs)
+        .where(eq(orgs.type, "master"))
+        .limit(1);
+      if (!master) return { ok: false, error: "Master org isn't configured." };
+
+      const rows = await tx
+        .select({
+          id: prospects.id,
+          phone: prospects.phone,
+          companyName: prospects.companyName,
+        })
+        .from(prospects)
+        .where(eq(prospects.orgId, master.id));
+
+      const bad = rows.filter(
+        (r) => r.phone && r.phone.trim() && isJunkPhone(r.phone),
+      );
+      const samples = bad
+        .slice(0, 60)
+        .map((r) => ({ company: r.companyName, badPhone: r.phone ?? "" }));
+
+      if (apply) {
+        for (const r of bad) {
+          await tx
+            .update(prospects)
+            .set({ phone: null })
+            .where(eq(prospects.id, r.id));
+        }
+      }
+
+      return { ok: true, applied: apply, cleared: bad.length, samples };
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error: (e instanceof Error ? e.message : "Cleanup failed.").slice(0, 200),
     };
   }
 }
