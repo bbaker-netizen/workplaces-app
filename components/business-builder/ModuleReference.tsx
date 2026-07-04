@@ -14,6 +14,7 @@ import {
   FileText,
   Folder,
   GraduationCap,
+  Megaphone,
   MessageCircle,
   MessagesSquare,
   PenSquare,
@@ -164,6 +165,15 @@ export function ModuleReference() {
         replaces={`Chasing Monday notifications and email threads to find what needs your attention.`}
         link="/business-builder/notifications"
         linkLabel="Open notifications"
+      />
+      <ModuleCard
+        icon={<Megaphone />}
+        name="Marketing list"
+        what="A list of contacts for marketing, kept completely separate from the sales pipeline — they never appear on the pipeline board or affect your Reports numbers. Import from a WordPress / Formidable CSV export (Tools → Import marketing list): it auto-detects Name / Email / Phone columns, skips rows without a valid email, and de-dupes by email so re-importing makes no duplicates. Anyone already in your pipeline is flagged. Search, export back to CSV, and delete."
+        when="When you want to bring old website/form leads in for marketing without cluttering the pipeline — or to pull a clean contact list for an email campaign."
+        replaces={`The pile of old contact-form entries sitting in WordPress with nowhere to go.`}
+        link="/business-builder/marketing"
+        linkLabel="Open the marketing list"
       />
       <ModuleCard
         icon={<BarChart3 />}
