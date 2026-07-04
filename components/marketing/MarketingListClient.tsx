@@ -8,8 +8,9 @@
  */
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Loader2, Trash2 } from "lucide-react";
+import { Download, Loader2, Trash2, Upload } from "lucide-react";
 import { deleteMarketingContact } from "@/lib/actions/marketing-contacts";
 import type { MarketingContact } from "@/lib/db/schema";
 
@@ -41,9 +42,19 @@ export function MarketingListClient({
 
   if (contacts.length === 0) {
     return (
-      <p className="text-sm text-tbb-ink-4 italic py-8 text-center">
-        No marketing contacts yet. Import your WordPress list to get started.
-      </p>
+      <div className="rounded-lg border border-dashed border-tbb-line bg-white px-6 py-12 text-center space-y-3">
+        <p className="font-bold text-tbb-navy text-lg">No marketing contacts yet</p>
+        <p className="text-sm text-tbb-ink-3">
+          Upload your WordPress / Formidable export (XML or CSV) to build the
+          list.
+        </p>
+        <Link
+          href="/business-builder/tools/import-marketing"
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
+        >
+          <Upload className="w-3.5 h-3.5" aria-hidden /> Import list
+        </Link>
+      </div>
     );
   }
 

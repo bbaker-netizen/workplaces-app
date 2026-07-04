@@ -39,8 +39,8 @@ import {
   LogOut,
   Megaphone,
   MessagesSquare,
+  // (Phone icon removed with the retired Fix-Facebook tool link)
   PenLine,
-  Phone,
   Rocket,
   Send,
   Settings,
@@ -136,7 +136,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       // prospect's "Convert to engagement" button (one obvious path).
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
       { href: "/business-builder/tools", label: "Send: diagnostic & review", icon: Send },
-      { href: "/business-builder/tools/fix-facebook-leads", label: "Fix Facebook lead phones", icon: Phone },
       { href: "/business-builder/marketing", label: "Marketing list", icon: Megaphone },
       { href: "/business-builder/library", label: "Client tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
@@ -268,13 +267,27 @@ export function BusinessBuilderSidebar({
     });
   }
 
-  /** True when this nav item's href corresponds to the current page.
-   *  Exact match for the /business-builder root; prefix match for deeper routes
-   *  so /business-builder/pipeline/[id] still marks the Prospects link active. */
+  /** The single nav href that best matches the current page: the LONGEST
+   *  href that the pathname equals or sits under. Longest-wins means a
+   *  sub-route like /business-builder/tools/import-marketing lights up its
+   *  own item, not the shorter /business-builder/tools ("Send") that it
+   *  happens to sit under. */
+  const activeHref = useMemo(() => {
+    let best: string | null = null;
+    for (const item of Array.from(ALL_ITEMS_BY_HREF.values())) {
+      const h = item.href;
+      if (h === "/diagnostic") continue; // external preview link
+      const matches =
+        h === "/business-builder"
+          ? pathname === "/business-builder"
+          : pathname === h || pathname.startsWith(h + "/");
+      if (matches && (best === null || h.length > best.length)) best = h;
+    }
+    return best;
+  }, [pathname]);
+
   function isActiveHref(href: string): boolean {
-    if (href === "/business-builder") return pathname === "/business-builder";
-    if (href === "/diagnostic") return false; // external preview link
-    return pathname === href || pathname.startsWith(href + "/");
+    return href === activeHref;
   }
 
   function onToggleCollapse() {
