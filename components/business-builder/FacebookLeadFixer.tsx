@@ -114,6 +114,11 @@ export function FacebookLeadFixer() {
                     <td className="px-3 py-2">
                       <p className="font-bold text-tbb-navy">
                         {r.company ?? r.name}
+                        {r.matchedBy === "name" && (
+                          <span className="ml-2 text-[10px] font-normal uppercase tracking-tbb-caps text-tbb-warning">
+                            matched by name
+                          </span>
+                        )}
                       </p>
                       <p className="text-tbb-ink-3">{r.email}</p>
                     </td>
