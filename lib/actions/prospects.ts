@@ -298,7 +298,20 @@ export async function updateProspect(
           ? new Date(data.expectedStartDate)
           : null;
       if (Object.keys(updates).length === 0) return;
-      await tx.update(prospects).set(updates).where(eq(prospects.id, data.id));
+      // .returning() proves the row was actually written. If it comes back
+      // empty the UPDATE matched no row (bad id / not writable), which used
+      // to surface as a false "Saved" that vanished on reload — fail loudly
+      // instead so the real problem is visible.
+      const written = await tx
+        .update(prospects)
+        .set(updates)
+        .where(eq(prospects.id, data.id))
+        .returning({ id: prospects.id });
+      if (written.length === 0) {
+        throw new Error(
+          `Save didn't stick — no prospect row matched id ${data.id}.`,
+        );
+      }
     });
 
     // Keep the linked engagement (and its client org) in sync with the
