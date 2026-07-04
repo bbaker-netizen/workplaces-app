@@ -43,13 +43,20 @@ const statusEnum = z.enum([
   "not_qualified",
 ]);
 
+// A field that, when PRESENT, is trimmed and empty-string becomes null —
+// but when ABSENT (undefined) stays undefined so partial updates never
+// touch it. The previous order (.optional() before .transform()) ran the
+// transform on `undefined` and turned it into `null`, so a save that
+// omitted a field (e.g. Lead essentials sending only the lead source)
+// wrote null over the phone/website/etc. — silent data loss. Keeping
+// .optional() OUTERMOST means an omitted key is never transformed.
 const optionalString = z
   .string()
   .trim()
   .max(500)
-  .optional()
-  .transform((v) => (v && v.length > 0 ? v : null))
-  .nullable();
+  .transform((v) => (v.length > 0 ? v : null))
+  .nullable()
+  .optional();
 
 const createSchema = z.object({
   companyName: z.string().min(2).max(200),
