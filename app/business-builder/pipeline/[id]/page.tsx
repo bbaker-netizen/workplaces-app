@@ -63,6 +63,14 @@ import {
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
 
+// Always render fresh from the database. Without this the prospect page
+// can be served from a cached render, so a just-saved phone / lead source
+// appears to "disappear" (you're seeing a stale snapshot, not real data
+// loss). force-dynamic guarantees every load — and every router.refresh()
+// after a save — reflects the current row.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ProspectDetailPage({
   params,
 }: {
