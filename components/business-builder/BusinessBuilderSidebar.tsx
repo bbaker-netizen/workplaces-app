@@ -37,9 +37,8 @@ import {
   Hammer,
   Inbox,
   LogOut,
-  Megaphone,
   MessagesSquare,
-  // (Phone icon removed with the retired Fix-Facebook tool link)
+  // (Phone + Megaphone icons removed with the retired Fix-Facebook + Marketing tools)
   PenLine,
   Rocket,
   Send,
@@ -136,7 +135,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
       // prospect's "Convert to engagement" button (one obvious path).
       { href: "/business-builder/templates", label: "Templates & signatures", icon: FileText },
       { href: "/business-builder/tools", label: "Send: diagnostic & review", icon: Send },
-      { href: "/business-builder/marketing", label: "Marketing list", icon: Megaphone },
       { href: "/business-builder/library", label: "Client tools & tutorials", icon: Sparkles },
       { href: "/business-builder/settings", label: "Settings", icon: Settings },
       { href: "/business-builder/welcome", label: "Business Builder guide", icon: HelpCircle, tourId: "Coach-guide" },

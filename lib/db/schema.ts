@@ -2121,45 +2121,6 @@ export const prospectComments = pgTable(
 );
 
 /**
- * `marketing_contacts` — a marketing list kept SEPARATE from the sales
- * pipeline. Cold/old contacts (first source: the WordPress / Formidable
- * forms on 4workplaces.com) that Bruce markets to but that are not active
- * prospects. Living in their own table means they can never leak into the
- * pipeline board, the funnel, or the Reports conversion numbers. De-duped
- * by (org, lower(email)).
- */
-export const marketingContacts = pgTable(
-  "marketing_contacts",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    name: text("name"),
-    email: text("email").notNull(),
-    phone: text("phone"),
-    company: text("company"),
-    source: text("source").notNull().default("WordPress"),
-    tags: jsonb("tags").notNull().default(sql`'[]'::jsonb`),
-    notes: text("notes"),
-    subscribed: boolean("subscribed").notNull().default(true),
-    matchedProspectId: uuid("matched_prospect_id").references(
-      (): AnyPgColumn => prospects.id,
-      { onDelete: "set null" },
-    ),
-    createdByUserProfileId: uuid("created_by_user_profile_id").references(
-      () => userProfiles.id,
-      { onDelete: "set null" },
-    ),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    orgIdx: index("marketing_contacts_org_idx").on(t.orgId, t.createdAt),
-  }),
-);
-
-/**
  * `person_profiles` — TTI TriMetrix HD assessment per individual.
  * Per CLAUDE.md domain model, this is a first-class entity. Each row
  * captures the gap report PDF + extracted summary + raw scores
@@ -2556,8 +2517,6 @@ export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type ProspectComment = typeof prospectComments.$inferSelect;
 export type NewProspectComment = typeof prospectComments.$inferInsert;
-export type MarketingContact = typeof marketingContacts.$inferSelect;
-export type NewMarketingContact = typeof marketingContacts.$inferInsert;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type NewMessageReaction = typeof messageReactions.$inferInsert;
 export type MessageAttachment = typeof messageAttachments.$inferSelect;
