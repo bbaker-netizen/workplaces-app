@@ -159,7 +159,9 @@ export default async function ProspectDetailPage({
   const phase = prospectPhase(prospect.status as ProspectStatus);
   const isConverted = Boolean(prospect.convertedEngagementId);
   const showDeal = phase === "qualifying" || phase === "closing" || phase === "won";
-  const showSoulPreview = showDeal;
+  // Fireflies "Preview insights" is useful right through the initial
+  // prospect process, so keep it available at every live stage (not lost).
+  const showSoulPreview = phase !== "lost";
   const showSigning = showDeal;
   const showQbo = phase === "closing" || phase === "won" || isConverted;
   const showConvert = phase === "closing";
