@@ -23,6 +23,7 @@ import {
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
+import { listProspectComments } from "@/lib/db/queries/prospect-comments";
 import {
   getProspect,
   listProspectActivities,
@@ -42,6 +43,7 @@ import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect
 import { ProspectLeadEssentials } from "@/components/pipeline/ProspectLeadEssentials";
 import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
+import { ProspectComments } from "@/components/pipeline/ProspectComments";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
@@ -95,6 +97,7 @@ export default async function ProspectDetailPage({
     me,
     org,
     businessBuilders,
+    comments,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -152,6 +155,7 @@ export default async function ProspectDetailPage({
       return o ?? null;
     }),
     listBusinessBuilders(),
+    listProspectComments(prospect.id),
   ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
@@ -497,8 +501,17 @@ export default async function ProspectDetailPage({
           )}
         </div>
 
-        {/* Right column — activity timeline */}
-        <aside className="lg:col-span-1">
+        {/* Right column — internal team discussion + activity timeline */}
+        <aside className="lg:col-span-1 space-y-6">
+          <ProspectComments
+            prospectId={prospect.id}
+            comments={comments}
+            teammates={businessBuilders.filter(
+              (b) => b.id !== profile.userProfileId,
+            )}
+            currentUserId={profile.userProfileId}
+            isMasterAdmin={profile.role === "master_admin"}
+          />
           <ProspectActivityTimeline
             prospectId={prospect.id}
             activities={activities}

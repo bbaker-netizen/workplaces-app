@@ -38,6 +38,8 @@ export async function markAllNotificationsRead(): Promise<ActionResult> {
     });
     revalidatePath("/portal");
     revalidatePath("/portal/notifications");
+    // Business Builder side — refresh the sidebar unread badge + feed.
+    revalidatePath("/business-builder", "layout");
     return { ok: true };
   } catch (e) {
     return {

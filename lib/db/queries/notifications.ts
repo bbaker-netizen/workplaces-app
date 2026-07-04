@@ -10,9 +10,9 @@
  * notifications are scoped to whichever org his session is active in.
  */
 
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { notifications, type Notification } from "../schema";
-import { withTenantContext } from "../tenant";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { notifications, prospects, type Notification } from "../schema";
+import { withSystemContext, withTenantContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
 export async function getUnreadNotificationCount(): Promise<number> {
@@ -44,5 +44,74 @@ export async function listNotifications(): Promise<Notification[]> {
       .where(eq(notifications.userProfileId, profile.userProfileId))
       .orderBy(desc(notifications.createdAt))
       .limit(50);
+  });
+}
+
+export type BusinessBuilderNotification = Notification & {
+  /** Human label for the notification, e.g. the prospect it's about. */
+  contextLabel: string | null;
+  /** Where clicking the notification should go, or null if not linkable. */
+  href: string | null;
+};
+
+/**
+ * Notifications for a Business Builder, enriched with the context label +
+ * deep link for each kind. Currently resolves prospect names for the
+ * internal team-discussion (`prospect_comment`) notifications; other
+ * types fall back to a generic label + link.
+ */
+export async function listBusinessBuilderNotifications(): Promise<
+  BusinessBuilderNotification[]
+> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return [];
+  if (profile.role !== "master_admin" && profile.role !== "coach") return [];
+
+  const rows = await withTenantContext(profile.orgId, async (tx) =>
+    tx
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userProfileId, profile.userProfileId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50),
+  );
+
+  // Resolve prospect names for any prospect-scoped notifications in one
+  // batched read.
+  const prospectIds = Array.from(
+    new Set(
+      rows
+        .filter((r) => r.parentEntityType === "prospect_comment")
+        .map((r) => r.parentEntityId),
+    ),
+  );
+  const nameById = new Map<string, string>();
+  if (prospectIds.length > 0) {
+    const pRows = await withSystemContext((tx) =>
+      tx
+        .select({ id: prospects.id, companyName: prospects.companyName })
+        .from(prospects)
+        .where(inArray(prospects.id, prospectIds)),
+    );
+    for (const p of pRows) nameById.set(p.id, p.companyName);
+  }
+
+  return rows.map((n) => {
+    if (n.parentEntityType === "prospect_comment") {
+      const name = nameById.get(n.parentEntityId) ?? "a lead";
+      return {
+        ...n,
+        contextLabel: `New comment on ${name}`,
+        href: `/business-builder/pipeline/${n.parentEntityId}`,
+      };
+    }
+    if (n.parentEntityType === "action_item") {
+      return {
+        ...n,
+        contextLabel: "Action item update",
+        href: `/business-builder/action-items`,
+      };
+    }
+    return { ...n, contextLabel: null, href: null };
   });
 }

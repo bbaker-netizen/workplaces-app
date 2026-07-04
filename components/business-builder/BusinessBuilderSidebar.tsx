@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Bell,
   CheckSquare,
   Eye,
   FileText,
@@ -100,6 +101,7 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     icon: Rocket,
     items: [
       { href: "/business-builder", label: "My work", icon: CheckSquare, tourId: "Coach-home" },
+      { href: "/business-builder/notifications", label: "Notifications", icon: Bell },
       { href: "/business-builder/engagements", label: "Client Portal", icon: Briefcase },
       { href: "/business-builder/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/business-builder/action-items", label: "Action items", icon: CheckSquare },
@@ -689,9 +691,10 @@ function NavItemRow({
 function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
   const overdue = pulse.overdueActionsCount;
   const awaiting = pulse.awaitingSignatureCount;
+  const unread = pulse.unreadNotificationsCount;
   const next = pulse.nextSession;
   // Things that actually need attention drive the badge count.
-  const attention = overdue + awaiting;
+  const attention = overdue + awaiting + unread;
   const [open, setOpen] = useState(false);
 
   const nextTimeLabel = next
@@ -744,6 +747,32 @@ function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
 
       {open && (
         <div className="mt-1.5 space-y-1.5">
+          <Link
+            href="/business-builder/notifications"
+            className={
+              "block px-2.5 py-2 rounded-md transition-colors group " +
+              (unread > 0
+                ? "bg-tbb-orange/20 hover:bg-tbb-orange/30 border border-tbb-orange/40"
+                : "bg-tbb-cream/5 hover:bg-tbb-cream/12")
+            }
+          >
+            <p
+              className={
+                "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps " +
+                (unread > 0
+                  ? "text-tbb-orange"
+                  : "text-white/55 group-hover:text-white/70")
+              }
+            >
+              <Bell className="w-3 h-3" aria-hidden />
+              Notifications
+            </p>
+            <p className="text-[13px] font-bold text-white">
+              {unread === 0
+                ? "All caught up"
+                : `${unread} unread`}
+            </p>
+          </Link>
           <Link
             href="/business-builder/calendar"
             className="block px-2.5 py-2 rounded-md bg-tbb-cream/5 hover:bg-tbb-cream/12 transition-colors group"

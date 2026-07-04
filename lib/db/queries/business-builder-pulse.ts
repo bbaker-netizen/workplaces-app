@@ -17,14 +17,16 @@
  * layout's render fast.
  */
 
-import { and, asc, count, eq, gte, lt, ne, isNotNull } from "drizzle-orm";
+import { and, asc, count, eq, gte, lt, ne, isNotNull, isNull } from "drizzle-orm";
 import {
   actionItems,
   bbsSessions,
   engagements,
+  notifications,
   signatureEnvelopes,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { ensureUserProfile } from "@/lib/db/provisioning";
 
 export type BusinessBuilderPulse = {
   nextSession: {
@@ -34,13 +36,18 @@ export type BusinessBuilderPulse = {
   } | null;
   overdueActionsCount: number;
   awaitingSignatureCount: number;
+  /** Unread notifications for the signed-in Business Builder. */
+  unreadNotificationsCount: number;
 };
 
 export async function getBusinessBuilderPulse(): Promise<BusinessBuilderPulse> {
   const now = new Date();
+  const profile = await ensureUserProfile();
+  const userProfileId =
+    profile.status === "ok" ? profile.userProfileId : null;
   try {
-    const [next, overdue, awaiting] = await withSystemContext(async (tx) => {
-      const [nextRows, overdueRows, awaitingRows] = await Promise.all([
+    const [next, overdue, awaiting, unread] = await withSystemContext(async (tx) => {
+      const [nextRows, overdueRows, awaitingRows, unreadRows] = await Promise.all([
         tx
           .select({
             scheduledAt: bbsSessions.scheduledAt,
@@ -75,14 +82,31 @@ export async function getBusinessBuilderPulse(): Promise<BusinessBuilderPulse> {
           .select({ n: count() })
           .from(signatureEnvelopes)
           .where(eq(signatureEnvelopes.status, "in_progress")),
+        userProfileId
+          ? tx
+              .select({ n: count() })
+              .from(notifications)
+              .where(
+                and(
+                  eq(notifications.userProfileId, userProfileId),
+                  isNull(notifications.readAt),
+                ),
+              )
+          : Promise.resolve([{ n: 0 }]),
       ]);
-      return [nextRows[0] ?? null, overdueRows[0]?.n ?? 0, awaitingRows[0]?.n ?? 0] as const;
+      return [
+        nextRows[0] ?? null,
+        overdueRows[0]?.n ?? 0,
+        awaitingRows[0]?.n ?? 0,
+        unreadRows[0]?.n ?? 0,
+      ] as const;
     });
 
     return {
       nextSession: next,
       overdueActionsCount: Number(overdue),
       awaitingSignatureCount: Number(awaiting),
+      unreadNotificationsCount: Number(unread),
     };
   } catch {
     // Pulse failing should never break the sidebar render. Return
@@ -91,6 +115,7 @@ export async function getBusinessBuilderPulse(): Promise<BusinessBuilderPulse> {
       nextSession: null,
       overdueActionsCount: 0,
       awaitingSignatureCount: 0,
+      unreadNotificationsCount: 0,
     };
   }
 }
