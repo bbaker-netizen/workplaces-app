@@ -11,6 +11,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarPlus, Check, MapPin } from "lucide-react";
 import { scheduleProspectFollowup } from "@/lib/actions/prospect-followup";
+import { LocationInput } from "@/components/pipeline/LocationInput";
 
 export function ScheduleFollowupPanel({
   prospectId,
@@ -95,10 +96,10 @@ export function ScheduleFollowupPanel({
           <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
             <MapPin className="w-3 h-3" aria-hidden /> Location (optional)
           </span>
-          <input
+          <LocationInput
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Their office, a coffee shop, or a video link"
+            onChange={setLocation}
+            placeholder="Start typing an address, or a place / video link"
             disabled={pending}
             className={inputCls}
           />
