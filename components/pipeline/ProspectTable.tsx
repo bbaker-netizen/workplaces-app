@@ -804,7 +804,9 @@ export function ProspectTable({
       </div>
 
       <div className="border border-tbb-line rounded-lg bg-white overflow-hidden shadow-tbb-sm">
-        <div className="overflow-x-auto">
+        {/* Bounded scroll area so the header can stick while you scroll the
+            rows (and still drag columns to reorder). */}
+        <div className="overflow-auto max-h-[70vh]">
           <table
             className="text-sm"
             style={{
@@ -824,7 +826,7 @@ export function ProspectTable({
                 <col key={c.key} style={{ width: widths[c.key] ?? c.defaultWidth }} />
               ))}
             </colgroup>
-            <thead className="bg-tbb-bg-soft border-b border-tbb-line-soft">
+            <thead className="sticky top-0 z-20 bg-tbb-bg-soft border-b border-tbb-line-soft [&_th]:bg-tbb-bg-soft">
               <tr className="text-left">
                 <th
                   scope="col"
