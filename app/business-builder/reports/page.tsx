@@ -87,13 +87,16 @@ export default async function ReportsPage() {
           />
         </ReportCard>
 
-        {/* Sales funnel — the traditional top-wide / bottom-narrow shape */}
+        {/* Sales pyramid — the condensed 3-tier funnel we teach */}
         <ReportCard
-          title="Sales funnel"
-          subtitle="Every stage in the classic funnel — new leads down to Won"
+          title="Sales pyramid"
+          subtitle="New Lead → Prospects → Won"
         >
           <SalesFunnel
-            stages={r.funnel.map((f) => ({ label: f.label, count: f.count }))}
+            tiers={r.funnelTiers.map((t) => ({
+              label: t.label,
+              count: t.count,
+            }))}
           />
         </ReportCard>
 

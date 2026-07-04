@@ -37,6 +37,30 @@ export type FunnelStat = {
   count: number;
 };
 
+/** Condensed 3-tier funnel/pyramid the methodology teaches. */
+export type FunnelTier = {
+  label: string;
+  count: number;
+};
+
+// Which pipeline statuses roll up into each teaching tier. Legacy stages
+// (diagnostic_*, negotiation) map to their nearest current stage's tier.
+const TIER_NEW_LEAD: ProspectStatus[] = [
+  "new_lead",
+  "contact_attempted",
+  "first_contact",
+  "diagnostic_pending",
+  "diagnostic_complete",
+];
+const TIER_PROSPECTS: ProspectStatus[] = [
+  "meeting_scheduled",
+  "appt_completed_followup",
+  "proposal_sent",
+  "negotiation",
+  "contract_sent",
+];
+const TIER_WON: ProspectStatus[] = ["contract_signed", "onboarded"];
+
 export type MonthlyLeadStat = {
   month: string; // "2026-05"
   label: string; // "May"
@@ -55,6 +79,7 @@ export type PipelineReport = {
   avgDaysToClose: number | null;
   leadSources: LeadSourceStat[];
   funnel: FunnelStat[];
+  funnelTiers: FunnelTier[];
   monthly: MonthlyLeadStat[];
   totalPipelineValueCents: number;
   wonValueCents: number;
@@ -134,6 +159,18 @@ export async function getPipelineReport(): Promise<PipelineReport> {
     count: activeClients,
   });
 
+  // Condensed 3-tier pyramid: New Lead → Prospects → Won. Counts every
+  // non-archived prospect whose status rolls up into that tier.
+  const tierCount = (statuses: ProspectStatus[]) =>
+    rows.filter(
+      (r) => !r.archivedAt && statuses.includes(r.status as ProspectStatus),
+    ).length;
+  const funnelTiers: FunnelTier[] = [
+    { label: "New Lead", count: tierCount(TIER_NEW_LEAD) },
+    { label: "Prospects", count: tierCount(TIER_PROSPECTS) },
+    { label: "Won", count: tierCount(TIER_WON) },
+  ];
+
   // Time to close — days from created to contract signed.
   const durations = rows
     .filter((r) => r.contractSignedAt)
@@ -175,6 +212,7 @@ export async function getPipelineReport(): Promise<PipelineReport> {
     avgDaysToClose,
     leadSources,
     funnel,
+    funnelTiers,
     monthly,
     totalPipelineValueCents,
     wonValueCents,
