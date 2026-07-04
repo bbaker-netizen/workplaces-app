@@ -222,44 +222,22 @@ export async function updateProspect(
     };
   const data = parsed.data;
 
-  // Apply data-quality rules to any identity fields the caller is
-  // actually updating. We only validate fields that are being changed
-  // — partial updates that don't touch the name fields skip these
-  // checks. To validate completely we'd need to load the existing row
-  // first; the create-time validation already enforces the same rules,
-  // so this is a meaningful guard against bad edits without slowing
-  // partial-update calls (status changes, next-action-date changes,
-  // etc.) with an extra DB read.
+  // NOTE: updates deliberately do NOT re-run the identity validator.
+  // Editing one field (e.g. a phone) used to send the whole
+  // name/email/company bundle to the server, which re-validated it and
+  // rejected the ENTIRE save — phone included — if anything in the bundle
+  // tripped a rule. That silently dropped edits. The form already
+  // validates as the coach types, so on update we just persist exactly
+  // what changed. (Create still runs full validation.)
+  //
+  // Validate ONLY a field that is actually being set to an invalid value,
+  // so a genuinely malformed new email is still caught without blocking an
+  // unrelated field's save.
   if (
-    data.companyName !== undefined ||
-    data.contactName !== undefined ||
-    data.contactEmail !== undefined ||
-    data.phone !== undefined
+    data.contactEmail !== undefined &&
+    !/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(data.contactEmail.trim())
   ) {
-    // Only run the full validator when we have all three identity
-    // fields to compare. Otherwise pass-through.
-    if (
-      data.companyName !== undefined &&
-      data.contactName !== undefined &&
-      data.contactEmail !== undefined
-    ) {
-      const quality = validateProspect(
-        {
-          companyName: data.companyName,
-          contactName: data.contactName,
-          contactEmail: data.contactEmail,
-          phone: data.phone ?? null,
-          legalNameConfirmed: data.legalNameConfirmed ?? false,
-        },
-        "update",
-      );
-      if (!quality.ok) {
-        return {
-          ok: false,
-          error: quality.errors[0]?.message ?? "Validation failed.",
-        };
-      }
-    }
+    return { ok: false, error: "That email doesn't look right." };
   }
   // Referral leads must carry a referrer. Enforce whenever the lead
   // source is being set to Referral (the deal card sends both together).
