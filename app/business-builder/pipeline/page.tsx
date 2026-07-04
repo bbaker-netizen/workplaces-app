@@ -16,6 +16,11 @@ import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { PipelineViews } from "@/components/pipeline/PipelineViews";
 import { STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 
+// Always render fresh — never serve a cached list where a just-edited
+// phone / owner / lead source looks blank.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function PipelinePage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
