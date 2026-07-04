@@ -377,7 +377,7 @@ export function BusinessBuilderSidebar({
       <nav
         ref={navRef}
         className={
-          "flex-1 overflow-y-auto " + (collapsed ? "px-1.5 py-3 space-y-3" : "px-3 py-4 space-y-5")
+          "flex-1 overflow-y-auto no-scrollbar " + (collapsed ? "px-1.5 py-3 space-y-3" : "px-3 py-4 space-y-5")
         }
       >
         {/* Favourites — top section, only when pins exist. */}

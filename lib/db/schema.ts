@@ -1994,6 +1994,7 @@ export const prospects = pgTable(
     expectedStartDate: timestamp("expected_start_date", { withTimezone: true }),
     nextActionDate: timestamp("next_action_date", { withTimezone: false }),
     nextActionNote: text("next_action_note"),
+    nextActionLocation: text("next_action_location"),
     lastContactAt: timestamp("last_contact_at", { withTimezone: true }),
     ownerUserProfileId: uuid("owner_user_profile_id").references(
       () => userProfiles.id,

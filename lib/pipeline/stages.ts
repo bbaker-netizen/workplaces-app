@@ -165,6 +165,39 @@ export const STAGE_ORDER: ProspectStatus[] = [
   "not_qualified",
 ];
 
+/**
+ * Coarse pipeline phase, used to drive what the prospect detail page shows.
+ * Early leads stay lean; QuickBooks / Convert / Signing only surface once
+ * the deal is far enough along to need them.
+ */
+export type ProspectPhase = "lead" | "qualifying" | "closing" | "won" | "lost";
+
+export function prospectPhase(status: ProspectStatus): ProspectPhase {
+  switch (status) {
+    case "new_lead":
+    case "contact_attempted":
+    case "first_contact":
+    case "diagnostic_pending":
+    case "diagnostic_complete":
+      return "lead";
+    case "meeting_scheduled":
+    case "appt_completed_followup":
+    case "proposal_sent":
+    case "negotiation":
+      return "qualifying";
+    case "contract_sent":
+    case "contract_signed":
+      return "closing";
+    case "onboarded":
+      return "won";
+    case "lost":
+    case "not_qualified":
+      return "lost";
+    default:
+      return "lead";
+  }
+}
+
 /** Common lead-source values for the dropdown. */
 export const LEAD_SOURCES = [
   // Automatic channels — written verbatim by the Make scenarios that

@@ -427,3 +427,13 @@
     transition: none !important;
   }
 }
+
+/* Hide scrollbar chrome while keeping scroll ability — used on the
+   Business Builder sidebar nav so no bar shows when it barely overflows. */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE / old Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}

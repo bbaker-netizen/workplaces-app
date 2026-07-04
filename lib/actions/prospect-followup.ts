@@ -16,6 +16,14 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 const schema = z.object({
   prospectId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date."),
+  /** Optional 24h HH:MM. Blank keeps the follow-up as a whole-day reminder. */
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
+  location: z.string().max(500).nullable().optional(),
   note: z.string().max(2000).nullable().optional(),
 });
 
@@ -30,6 +38,12 @@ function prettyDate(ymd: string): string {
   });
 }
 
+function prettyTime(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const dt = new Date(2000, 0, 1, h, m);
+  return dt.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+}
+
 export async function scheduleProspectFollowup(
   input: z.input<typeof schema>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -42,7 +56,8 @@ export async function scheduleProspectFollowup(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
   }
-  const { prospectId, date, note } = parsed.data;
+  const { prospectId, date, time, note, location } = parsed.data;
+  const loc = location?.trim() || null;
 
   try {
     await withSystemContext(async (tx) => {
@@ -53,22 +68,28 @@ export async function scheduleProspectFollowup(
         .limit(1);
       if (!p) throw new Error("Prospect not found.");
 
-      // Noon local avoids the date sliding a day across time zones.
-      const when = new Date(`${date}T12:00:00`);
+      // Use the chosen time; with none, noon local avoids the date sliding
+      // a day across time zones.
+      const when = new Date(`${date}T${time ?? "12:00"}:00`);
       await tx
         .update(prospects)
         .set({
           nextActionDate: when,
           nextActionNote: note ?? null,
+          nextActionLocation: loc,
           lastContactAt: new Date(),
         })
         .where(eq(prospects.id, prospectId));
 
+      const subject =
+        `Follow-up scheduled for ${prettyDate(date)}` +
+        (time ? ` at ${prettyTime(time)}` : "") +
+        (loc ? ` · ${loc}` : "");
       await tx.insert(prospectActivities).values({
         prospectId,
         orgId: p.orgId,
         type: "follow_up",
-        subject: `Follow-up scheduled for ${prettyDate(date)}`,
+        subject,
         body: note ?? null,
       });
     });
