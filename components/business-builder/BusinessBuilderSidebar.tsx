@@ -269,9 +269,9 @@ export function BusinessBuilderSidebar({
 
   /** The single nav href that best matches the current page: the LONGEST
    *  href that the pathname equals or sits under. Longest-wins means a
-   *  sub-route like /business-builder/tools/import-marketing lights up its
-   *  own item, not the shorter /business-builder/tools ("Send") that it
-   *  happens to sit under. */
+   *  deeper route lights up its own item, not a shorter parent href it
+   *  happens to sit under (e.g. /business-builder/pipeline/[id] marks
+   *  Prospects, not some shorter prefix). */
   const activeHref = useMemo(() => {
     let best: string | null = null;
     for (const item of Array.from(ALL_ITEMS_BY_HREF.values())) {

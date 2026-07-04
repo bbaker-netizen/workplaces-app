@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Upload } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listMarketingContacts } from "@/lib/db/queries/marketing-contacts";
 import { MarketingListClient } from "@/components/marketing/MarketingListClient";
@@ -26,25 +25,17 @@ export default async function MarketingListPage({
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
-      <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
-            Business Builder
-          </p>
-          <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
-            Marketing list
-          </h1>
-          <p className="font-sans text-sm text-muted-foreground">
-            {total} contact{total === 1 ? "" : "s"} for marketing — separate
-            from your sales pipeline, so they never affect your Reports.
-          </p>
-        </div>
-        <Link
-          href="/business-builder/tools/import-marketing"
-          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
-        >
-          <Upload className="w-3.5 h-3.5" aria-hidden /> Import list
-        </Link>
+      <header className="space-y-2">
+        <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
+          Business Builder
+        </p>
+        <h1 className="font-display font-bold text-foreground text-4xl tracking-tight leading-none">
+          Marketing list
+        </h1>
+        <p className="font-sans text-sm text-muted-foreground">
+          {total} contact{total === 1 ? "" : "s"} for marketing — separate
+          from your sales pipeline, so they never affect your Reports.
+        </p>
       </header>
 
       <form method="get" className="flex items-center gap-2">
