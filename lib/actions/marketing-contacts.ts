@@ -13,12 +13,13 @@
  * Business Builders only. Everything runs in the master org.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { marketingContacts, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { formatPhone } from "@/lib/format";
 import {
   isImportableEmail,
   parseMarketingCsv,
@@ -306,4 +307,106 @@ export async function deleteMarketingContact(
   );
   revalidatePath("/business-builder/marketing");
   return { ok: true, data: undefined };
+}
+
+const promoteSchema = z.object({ id: z.string().uuid() });
+
+/**
+ * Promote a marketing contact into the sales pipeline as a real prospect.
+ * If a prospect with the same email already exists we link to it instead of
+ * creating a duplicate. The marketing contact stays on the list, flagged
+ * "in pipeline," so nothing is lost.
+ */
+export async function promoteMarketingContact(
+  input: z.input<typeof promoteSchema>,
+): Promise<ActionResult<{ prospectId: string; alreadyExisted: boolean }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+  const p = promoteSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "Invalid id." };
+
+  try {
+    const result = await withSystemContext(async (tx) => {
+      const [master] = await tx
+        .select({ id: orgs.id })
+        .from(orgs)
+        .where(eq(orgs.type, "master"))
+        .limit(1);
+      if (!master) throw new Error("Master org not configured.");
+
+      const [c] = await tx
+        .select()
+        .from(marketingContacts)
+        .where(
+          and(
+            eq(marketingContacts.id, p.data.id),
+            eq(marketingContacts.orgId, master.id),
+          ),
+        )
+        .limit(1);
+      if (!c) throw new Error("Contact not found.");
+
+      const email = c.email.trim().toLowerCase();
+
+      // Don't create a duplicate — reuse an existing prospect with this email.
+      const [existing] = await tx
+        .select({ id: prospects.id })
+        .from(prospects)
+        .where(
+          and(
+            eq(prospects.orgId, master.id),
+            eq(prospects.contactEmail, email),
+          ),
+        )
+        .limit(1);
+
+      let prospectId: string;
+      let alreadyExisted: boolean;
+      if (existing) {
+        prospectId = existing.id;
+        alreadyExisted = true;
+      } else {
+        // companyName is required; fall back to the person's name, then the
+        // email's local part, so the prospect always has a readable label.
+        const companyName =
+          c.company?.trim() ||
+          c.name?.trim() ||
+          email.split("@")[0] ||
+          "New lead";
+        const [row] = await tx
+          .insert(prospects)
+          .values({
+            orgId: master.id,
+            companyName,
+            contactName: c.name?.trim() || null,
+            contactEmail: email,
+            phone: c.phone ? formatPhone(c.phone) : null,
+            leadSource: c.source || "WordPress",
+            notes: c.notes ?? null,
+            ownerUserProfileId: profile.userProfileId,
+            status: "new_lead",
+          })
+          .returning({ id: prospects.id });
+        prospectId = row.id;
+        alreadyExisted = false;
+      }
+
+      // Flag the marketing contact so the list shows it's in the pipeline.
+      await tx
+        .update(marketingContacts)
+        .set({ matchedProspectId: prospectId })
+        .where(eq(marketingContacts.id, c.id));
+
+      return { prospectId, alreadyExisted };
+    });
+
+    revalidatePath("/business-builder/marketing");
+    revalidatePath("/business-builder/pipeline");
+    return { ok: true, data: result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
