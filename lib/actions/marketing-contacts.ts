@@ -24,6 +24,48 @@ import {
   parseMarketingCsv,
   type ParsedRow,
 } from "@/lib/marketing/csv";
+import {
+  looksLikeFormidableXml,
+  parseFormidableXml,
+} from "@/lib/marketing/formidable";
+
+type NormalizedParse = {
+  format: "csv" | "formidable-xml";
+  rows: ParsedRow[];
+  headers: string[];
+  mapping: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    company: string | null;
+  };
+};
+
+/** Parse either a Formidable XML export or a CSV into the same row shape. */
+function parseImport(text: string): NormalizedParse {
+  if (looksLikeFormidableXml(text)) {
+    const rows = parseFormidableXml(text);
+    return {
+      format: "formidable-xml",
+      rows,
+      headers: [],
+      mapping: {
+        name: "Formidable name",
+        // We only surface a mapping label; XML detection is by value.
+        email: rows.some((r) => r.email) ? "auto-detected" : null,
+        phone: rows.some((r) => r.phone) ? "auto-detected" : null,
+        company: null,
+      },
+    };
+  }
+  const csv = parseMarketingCsv(text);
+  return {
+    format: "csv",
+    rows: csv.rows,
+    headers: csv.headers,
+    mapping: csv.mapping,
+  };
+}
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -54,7 +96,7 @@ const csvSchema = z.object({
 });
 
 async function classify(csv: string) {
-  const parsed = parseMarketingCsv(csv);
+  const parsed = parseImport(csv);
 
   const master = await withSystemContext(async (tx) => {
     const [m] = await tx
@@ -139,7 +181,10 @@ export async function previewMarketingImport(
     if (!parsed.mapping.email) {
       return {
         ok: false,
-        error: `Couldn't find an email column. Columns found: ${parsed.headers.join(", ") || "(none)"}. Make sure the export has an Email column.`,
+        error:
+          parsed.format === "formidable-xml"
+            ? "No email addresses found in that Formidable XML export. Make sure the form has an email field."
+            : `Couldn't find an email column. Columns found: ${parsed.headers.join(", ") || "(none)"}. Make sure the export has an Email column.`,
       };
     }
     return {
@@ -185,7 +230,10 @@ export async function importMarketingContacts(
     if (!parsed.mapping.email) {
       return {
         ok: false,
-        error: `Couldn't find an email column. Columns found: ${parsed.headers.join(", ") || "(none)"}.`,
+        error:
+          parsed.format === "formidable-xml"
+            ? "No email addresses found in that Formidable XML export."
+            : `Couldn't find an email column. Columns found: ${parsed.headers.join(", ") || "(none)"}.`,
       };
     }
 

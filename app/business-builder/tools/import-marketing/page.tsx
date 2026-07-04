@@ -49,19 +49,18 @@ export default async function ImportMarketingPage() {
             contact / lead form.
           </li>
           <li>
-            Go to <b>Entries</b>, then <b>Import/Export</b> (or the{" "}
-            <b>Export</b> tab) and choose <b>CSV</b>.
+            Go to <b>Import/Export → Export</b> and choose either{" "}
+            <b>XML</b> (Formidable&apos;s default) or <b>CSV</b> — both work
+            here.
           </li>
-          <li>
-            Pick the fields (Name, Email, Phone are enough) and download the
-            CSV.
-          </li>
+          <li>Download the file (all fields is fine).</li>
           <li>Upload it below and hit Preview.</li>
         </ol>
         <p className="text-[11px] text-tbb-ink-3">
-          The importer auto-detects the Name, Email, and Phone columns, skips
-          rows without a valid email, and de-dupes by email — so re-importing
-          the same file won&apos;t create duplicates.
+          The importer reads Formidable XML <em>or</em> CSV, auto-detects the
+          Name, Email, and Phone from your form, skips rows without a valid
+          email, and de-dupes by email — so re-importing the same file
+          won&apos;t create duplicates.
         </p>
       </section>
 

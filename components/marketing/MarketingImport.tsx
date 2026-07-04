@@ -66,7 +66,7 @@ export function MarketingImport() {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className={labelCls}>Upload the CSV export</span>
+          <span className={labelCls}>Upload the export (CSV or XML)</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -81,7 +81,7 @@ export function MarketingImport() {
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,text/csv,.xml,text/xml,application/xml"
               onChange={onFile}
               className="hidden"
             />
