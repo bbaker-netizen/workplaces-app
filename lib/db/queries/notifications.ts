@@ -81,7 +81,11 @@ export async function listBusinessBuilderNotifications(): Promise<
   const prospectIds = Array.from(
     new Set(
       rows
-        .filter((r) => r.parentEntityType === "prospect_comment")
+        .filter(
+          (r) =>
+            r.parentEntityType === "prospect_comment" ||
+            r.parentEntityType === "prospect_stale",
+        )
         .map((r) => r.parentEntityId),
     ),
   );
@@ -102,6 +106,14 @@ export async function listBusinessBuilderNotifications(): Promise<
       return {
         ...n,
         contextLabel: `New comment on ${name}`,
+        href: `/business-builder/pipeline/${n.parentEntityId}`,
+      };
+    }
+    if (n.parentEntityType === "prospect_stale") {
+      const name = nameById.get(n.parentEntityId) ?? "a lead";
+      return {
+        ...n,
+        contextLabel: `${name} has gone quiet — follow up or move it to Lost`,
         href: `/business-builder/pipeline/${n.parentEntityId}`,
       };
     }

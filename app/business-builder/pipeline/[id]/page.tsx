@@ -19,11 +19,16 @@ import {
   Globe,
   Link2,
   Search,
+  Clock,
 } from "lucide-react";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
 import { listProspectComments } from "@/lib/db/queries/prospect-comments";
+import {
+  daysSinceContact,
+  isProspectStale,
+} from "@/lib/pipeline/staleness";
 import {
   getProspect,
   listProspectActivities,
@@ -217,6 +222,29 @@ export default async function ProspectDetailPage({
           })}
         </p>
       </header>
+
+      {isProspectStale({
+        status: prospect.status,
+        lastContactAt: prospect.lastContactAt,
+        createdAt: prospect.createdAt,
+        archivedAt: prospect.archivedAt,
+      }) && (
+        <div className="flex items-start gap-3 rounded-lg border border-tbb-orange/40 bg-tbb-orange/10 px-4 py-3">
+          <Clock className="w-4 h-4 text-tbb-orange flex-none mt-0.5" aria-hidden />
+          <div className="text-sm">
+            <p className="font-bold text-tbb-navy">
+              This lead has gone quiet —{" "}
+              {daysSinceContact(prospect.lastContactAt, prospect.createdAt)}{" "}
+              days since last contact.
+            </p>
+            <p className="text-tbb-ink-2 mt-0.5">
+              Follow up, or set the stage to <strong>Lost</strong> so it stops
+              sitting in the pipeline. Business Builders get a reminder about
+              stale leads automatically.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column — contact + deal + notes + signing */}
