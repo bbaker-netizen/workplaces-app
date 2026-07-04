@@ -10,8 +10,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Loader2, Trash2, Upload } from "lucide-react";
-import { deleteMarketingContact } from "@/lib/actions/marketing-contacts";
+import { ArrowRight, Download, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  deleteMarketingContact,
+  promoteMarketingContact,
+} from "@/lib/actions/marketing-contacts";
 import type { MarketingContact } from "@/lib/db/schema";
 
 export function MarketingListClient({
@@ -78,6 +81,7 @@ export function MarketingListClient({
               <th>Phone</th>
               <th>Company</th>
               <th>Source</th>
+              <th>Pipeline</th>
               <th className="w-8" aria-label="Actions" />
             </tr>
           </thead>
@@ -95,23 +99,54 @@ export function MarketingListClient({
 function Row({ contact }: { contact: MarketingContact }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isPromoting, startPromote] = useTransition();
   const [gone, setGone] = useState(false);
+  const [prospectId, setProspectId] = useState<string | null>(
+    contact.matchedProspectId,
+  );
   if (gone) return null;
 
   return (
     <tr className="[&_td]:px-3 [&_td]:py-2 text-tbb-ink-2 group">
       <td className="font-medium text-tbb-navy">{contact.name ?? "—"}</td>
-      <td className="break-all">
-        {contact.email}
-        {contact.matchedProspectId && (
-          <span className="ml-2 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
-            in pipeline
-          </span>
-        )}
-      </td>
+      <td className="break-all">{contact.email}</td>
       <td>{contact.phone ?? "—"}</td>
       <td>{contact.company ?? "—"}</td>
       <td>{contact.source}</td>
+      <td>
+        {prospectId ? (
+          <Link
+            href={`/business-builder/pipeline/${prospectId}`}
+            className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+          >
+            In pipeline <ArrowRight className="w-3 h-3" aria-hidden />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              startPromote(async () => {
+                const r = await promoteMarketingContact({ id: contact.id });
+                if (r.ok) {
+                  setProspectId(r.data.prospectId);
+                  router.refresh();
+                } else {
+                  window.alert(r.error);
+                }
+              });
+            }}
+            disabled={isPromoting}
+            className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill border border-tbb-blue text-tbb-blue hover:bg-tbb-blue-100 disabled:opacity-50"
+          >
+            {isPromoting ? (
+              <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+            ) : (
+              <ArrowRight className="w-3 h-3" aria-hidden />
+            )}
+            Move to pipeline
+          </button>
+        )}
+      </td>
       <td>
         <button
           type="button"
