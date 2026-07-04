@@ -184,6 +184,7 @@ const updateSchema = z.object({
     .nullable()
     .optional(),
   nextActionNote: optionalString,
+  nextActionLocation: optionalString,
   ownerUserProfileId: z.string().uuid().nullable().optional(),
   status: statusEnum.optional(),
   notes: z.string().max(40000).nullable().optional(),
@@ -296,6 +297,8 @@ export async function updateProspect(
           : null;
       if (data.nextActionNote !== undefined)
         updates.nextActionNote = data.nextActionNote;
+      if (data.nextActionLocation !== undefined)
+        updates.nextActionLocation = data.nextActionLocation;
       if (data.ownerUserProfileId !== undefined)
         updates.ownerUserProfileId = data.ownerUserProfileId;
       if (data.status !== undefined) {

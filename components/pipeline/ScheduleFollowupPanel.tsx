@@ -2,26 +2,35 @@
 
 /**
  * Schedule-a-follow-up panel on the prospect detail page. Sets the
- * Next-action date + note and logs it to the activity timeline.
+ * Next-action date + time + location + note and logs it to the activity
+ * timeline. Location is a plain field here; Google Places autocomplete
+ * enhances it separately.
  */
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, Check } from "lucide-react";
+import { CalendarPlus, Check, MapPin } from "lucide-react";
 import { scheduleProspectFollowup } from "@/lib/actions/prospect-followup";
 
 export function ScheduleFollowupPanel({
   prospectId,
   currentDate,
+  currentTime,
+  currentLocation,
   currentNote,
 }: {
   prospectId: string;
   /** Existing next-action date as YYYY-MM-DD, if any. */
   currentDate: string | null;
+  /** Existing next-action time as HH:MM (24h), if any. */
+  currentTime: string | null;
+  currentLocation: string | null;
   currentNote: string | null;
 }) {
   const router = useRouter();
   const [date, setDate] = useState(currentDate ?? "");
+  const [time, setTime] = useState(currentTime ?? "");
+  const [location, setLocation] = useState(currentLocation ?? "");
   const [note, setNote] = useState(currentNote ?? "");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +43,8 @@ export function ScheduleFollowupPanel({
       const r = await scheduleProspectFollowup({
         prospectId,
         date,
+        time: time || null,
+        location: location.trim() || null,
         note: note.trim() || null,
       });
       if (!r.ok) {
@@ -52,8 +63,8 @@ export function ScheduleFollowupPanel({
         <h2 className="font-bold text-tbb-navy">Schedule a follow-up</h2>
       </div>
       <p className="text-xs text-tbb-ink-3">
-        Sets the next-action date and logs it on the timeline below. It also
-        surfaces on your console home when it comes due.
+        Sets the next-action date, time, and place, and logs it on the timeline
+        below. It also surfaces on your console home when it comes due.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
@@ -65,10 +76,34 @@ export function ScheduleFollowupPanel({
             value={date}
             onChange={(e) => setDate(e.target.value)}
             disabled={pending}
-            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+            className={inputCls}
           />
         </label>
         <label className="block space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            Time (optional)
+          </span>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            disabled={pending}
+            className={inputCls}
+          />
+        </label>
+        <label className="block space-y-1 sm:col-span-2">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            <MapPin className="w-3 h-3" aria-hidden /> Location (optional)
+          </span>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Their office, a coffee shop, or a video link"
+            disabled={pending}
+            className={inputCls}
+          />
+        </label>
+        <label className="block space-y-1 sm:col-span-2">
           <span className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
             Note (optional)
           </span>
@@ -77,7 +112,7 @@ export function ScheduleFollowupPanel({
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. Call re: proposal"
             disabled={pending}
-            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+            className={inputCls}
           />
         </label>
       </div>
@@ -101,3 +136,6 @@ export function ScheduleFollowupPanel({
     </section>
   );
 }
+
+const inputCls =
+  "w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue";

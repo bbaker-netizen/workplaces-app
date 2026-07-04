@@ -39,6 +39,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect";
+import { ProspectLeadEssentials } from "@/components/pipeline/ProspectLeadEssentials";
 import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
@@ -56,6 +57,7 @@ import { DeleteProspectButton } from "@/components/pipeline/DeleteProspectButton
 import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
   canSendDiagnostic,
+  prospectPhase,
   STAGE_STYLES,
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
@@ -151,6 +153,22 @@ export default async function ProspectDetailPage({
     activities.find((a) => a.type === "diagnostic_sent")?.occurredAt ?? null;
   const showDiagnostic = canSendDiagnostic(prospect.status as ProspectStatus);
 
+  // Stage-aware sections: leads stay lean; deal/QBO/convert/signing only
+  // surface once the prospect is far enough along to need them.
+  const phase = prospectPhase(prospect.status as ProspectStatus);
+  const isConverted = Boolean(prospect.convertedEngagementId);
+  const showDeal = phase === "qualifying" || phase === "closing" || phase === "won";
+  const showSoulPreview = showDeal;
+  const showSigning = showDeal;
+  const showQbo = phase === "closing" || phase === "won" || isConverted;
+  const showConvert = phase === "closing";
+
+  // Next-action time (HH:MM) and location for the follow-up panel. A stored
+  // time of exactly noon is our "no specific time" sentinel, shown as blank.
+  const nextActionTime = prospect.nextActionDate
+    ? new Date(prospect.nextActionDate).toISOString().slice(11, 16)
+    : null;
+
   return (
     <main className="max-w-6xl mx-auto px-6 py-12 space-y-6">
       <header className="space-y-2">
@@ -188,6 +206,17 @@ export default async function ProspectDetailPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column — contact + deal + notes + signing */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Lead essentials — Owner / Program / Source, settable from the
+              very first lead (always visible, every stage). */}
+          <ProspectLeadEssentials
+            prospectId={prospect.id}
+            ownerUserProfileId={prospect.ownerUserProfileId}
+            programType={prospect.programType}
+            leadSource={prospect.leadSource}
+            referrerName={prospect.referrerName}
+            businessBuilders={businessBuilders}
+          />
+
           {/* Contact card */}
           <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
             <div className="flex items-baseline justify-between gap-3">
@@ -266,6 +295,8 @@ export default async function ProspectDetailPage({
                 ? new Date(prospect.nextActionDate).toISOString().slice(0, 10)
                 : null
             }
+            currentTime={nextActionTime === "12:00" ? null : nextActionTime}
+            currentLocation={prospect.nextActionLocation}
             currentNote={prospect.nextActionNote}
           />
 
@@ -302,23 +333,23 @@ export default async function ProspectDetailPage({
                 )}
               </div>
             )}
-            <div className="border-t border-tbb-line-soft pt-4 space-y-2">
-              <p className="text-xs text-tbb-ink-3">
-                If we&apos;ve already had Fireflies-recorded sessions with
-                this prospect, draft the Business Builder insights on them
-                — no engagement created, no portal invite sent. Pure
-                preview so you can see what we know before deciding to
-                formalize them.
-              </p>
-              <SoulFilePreviewButton prospectId={prospect.id} />
-            </div>
+            {showSoulPreview && (
+              <div className="border-t border-tbb-line-soft pt-4 space-y-2">
+                <p className="text-xs text-tbb-ink-3">
+                  If we&apos;ve already had Fireflies-recorded sessions with
+                  this prospect, draft the Business Builder insights on them
+                  — no engagement created, no portal invite sent. Pure
+                  preview so you can see what we know before deciding to
+                  formalize them.
+                </p>
+                <SoulFilePreviewButton prospectId={prospect.id} />
+              </div>
+            )}
             {/* Convert prospect → engagement. Appears once the contract
                 is signed (or whenever Bruce wants to formalize). Carries
                 program type, pricing tier, monthly fee, and start date
                 across so the engagement form is pre-filled. */}
-            {!prospect.convertedEngagementId &&
-              prospect.status !== "onboarded" &&
-              prospect.status !== "lost" && (
+            {showConvert && !prospect.convertedEngagementId && (
               <div className="border-t border-tbb-line-soft pt-4 space-y-2">
                 <p className="text-xs text-tbb-ink-3">
                   Ready to formalize this prospect into a paying
@@ -349,31 +380,37 @@ export default async function ProspectDetailPage({
             )}
           </section>
 
-          {/* Deal card */}
-          <ProspectDealCard
-            prospectId={prospect.id}
-            totalClientValueCents={prospect.qboLifetimePaymentsCents}
-            leadSource={prospect.leadSource}
-            referrerName={prospect.referrerName}
-            ownerUserProfileId={prospect.ownerUserProfileId}
-            ownerName={prospect.ownerName}
-            nextActionDate={prospect.nextActionDate}
-            nextActionNote={prospect.nextActionNote}
-            lastContactAt={prospect.lastContactAt}
-            programType={prospect.programType}
-            monthlyFeeCents={prospect.monthlyFeeCents}
-            businessBuilders={businessBuilders}
-          />
+          {/* Deal card — value / fee / next-action detail. Surfaces once
+              the prospect is being qualified; leads use Lead essentials. */}
+          {showDeal && (
+            <ProspectDealCard
+              prospectId={prospect.id}
+              totalClientValueCents={prospect.qboLifetimePaymentsCents}
+              leadSource={prospect.leadSource}
+              referrerName={prospect.referrerName}
+              ownerUserProfileId={prospect.ownerUserProfileId}
+              ownerName={prospect.ownerName}
+              nextActionDate={prospect.nextActionDate}
+              nextActionNote={prospect.nextActionNote}
+              lastContactAt={prospect.lastContactAt}
+              programType={prospect.programType}
+              monthlyFeeCents={prospect.monthlyFeeCents}
+              businessBuilders={businessBuilders}
+            />
+          )}
 
-          {/* QuickBooks customer link — drives the pipeline Value */}
-          <ProspectQboCustomerPicker
-            prospectId={prospect.id}
-            customerId={prospect.qboCustomerId}
-            customerName={prospect.qboCustomerName}
-            lifetimePaymentsCents={prospect.qboLifetimePaymentsCents}
-            syncedAt={prospect.qboValueSyncedAt?.toISOString() ?? null}
-            linkedAt={prospect.qboLinkedAt?.toISOString() ?? null}
-          />
+          {/* QuickBooks customer link — drives the pipeline Value. Only
+              relevant near/after signing, so hidden for early leads. */}
+          {showQbo && (
+            <ProspectQboCustomerPicker
+              prospectId={prospect.id}
+              customerId={prospect.qboCustomerId}
+              customerName={prospect.qboCustomerName}
+              lifetimePaymentsCents={prospect.qboLifetimePaymentsCents}
+              syncedAt={prospect.qboValueSyncedAt?.toISOString() ?? null}
+              linkedAt={prospect.qboLinkedAt?.toISOString() ?? null}
+            />
+          )}
 
           {/* Notes */}
           <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
@@ -394,7 +431,8 @@ export default async function ProspectDetailPage({
             )}
           </section>
 
-          {/* Signing */}
+          {/* Signing — proposals/contracts. Hidden for early leads. */}
+          {showSigning && (
           <ProspectEnvelopeSection
             prospectId={prospect.id}
             defaultSignerName={prospect.contactName ?? ""}
@@ -442,6 +480,7 @@ export default async function ProspectDetailPage({
               },
             }}
           />
+          )}
         </div>
 
         {/* Right column — activity timeline */}
