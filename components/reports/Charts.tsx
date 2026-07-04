@@ -44,53 +44,6 @@ export function HBarList({
   );
 }
 
-/* ------------------------- funnel ------------------------- */
-
-export function FunnelChart({
-  rows,
-}: {
-  rows: { label: string; count: number; won?: boolean }[];
-}) {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  if (rows.every((r) => r.count === 0)) return <EmptyChart />;
-  return (
-    <ol className="space-y-1.5">
-      {rows.map((r, i) => {
-        const pct = Math.round((r.count / max) * 100);
-        return (
-          <li key={r.label} className="flex items-center gap-3">
-            <span className="w-28 flex-none text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 truncate">
-              {r.label}
-            </span>
-            <div className="flex-1 h-6 rounded-md bg-tbb-cream-50 overflow-hidden">
-              <div
-                className={
-                  "h-full rounded-md flex items-center justify-end px-2 " +
-                  (r.won ? "bg-tbb-orange" : "bg-tbb-blue")
-                }
-                style={{ width: `${Math.max(pct, r.count > 0 ? 8 : 0)}%` }}
-              >
-                {r.count > 0 && (
-                  <span className="text-[11px] font-bold text-white tabular-nums">
-                    {r.count}
-                  </span>
-                )}
-              </div>
-            </div>
-            {r.count === 0 && (
-              <span className="text-[11px] text-tbb-ink-4 tabular-nums w-4">
-                0
-              </span>
-            )}
-            {/* keep index for stable keys / ordering */}
-            <span className="sr-only">step {i + 1}</span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
 /* --------------------- column chart (SVG) --------------------- */
 
 export function ColumnChart({
