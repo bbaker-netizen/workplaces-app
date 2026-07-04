@@ -19,10 +19,16 @@ import {
   Globe,
   Link2,
   Search,
+  Clock,
 } from "lucide-react";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
+import { listProspectComments } from "@/lib/db/queries/prospect-comments";
+import {
+  daysSinceContact,
+  isProspectStale,
+} from "@/lib/pipeline/staleness";
 import {
   getProspect,
   listProspectActivities,
@@ -42,6 +48,7 @@ import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect
 import { ProspectLeadEssentials } from "@/components/pipeline/ProspectLeadEssentials";
 import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
+import { ProspectComments } from "@/components/pipeline/ProspectComments";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
@@ -95,6 +102,7 @@ export default async function ProspectDetailPage({
     me,
     org,
     businessBuilders,
+    comments,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -152,6 +160,7 @@ export default async function ProspectDetailPage({
       return o ?? null;
     }),
     listBusinessBuilders(),
+    listProspectComments(prospect.id),
   ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
@@ -213,6 +222,29 @@ export default async function ProspectDetailPage({
           })}
         </p>
       </header>
+
+      {isProspectStale({
+        status: prospect.status,
+        lastContactAt: prospect.lastContactAt,
+        createdAt: prospect.createdAt,
+        archivedAt: prospect.archivedAt,
+      }) && (
+        <div className="flex items-start gap-3 rounded-lg border border-tbb-orange/40 bg-tbb-orange/10 px-4 py-3">
+          <Clock className="w-4 h-4 text-tbb-orange flex-none mt-0.5" aria-hidden />
+          <div className="text-sm">
+            <p className="font-bold text-tbb-navy">
+              This lead has gone quiet —{" "}
+              {daysSinceContact(prospect.lastContactAt, prospect.createdAt)}{" "}
+              days since last contact.
+            </p>
+            <p className="text-tbb-ink-2 mt-0.5">
+              Follow up, or set the stage to <strong>Lost</strong> so it stops
+              sitting in the pipeline. Business Builders get a reminder about
+              stale leads automatically.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column — contact + deal + notes + signing */}
@@ -497,8 +529,17 @@ export default async function ProspectDetailPage({
           )}
         </div>
 
-        {/* Right column — activity timeline */}
-        <aside className="lg:col-span-1">
+        {/* Right column — internal team discussion + activity timeline */}
+        <aside className="lg:col-span-1 space-y-6">
+          <ProspectComments
+            prospectId={prospect.id}
+            comments={comments}
+            teammates={businessBuilders.filter(
+              (b) => b.id !== profile.userProfileId,
+            )}
+            currentUserId={profile.userProfileId}
+            isMasterAdmin={profile.role === "master_admin"}
+          />
           <ProspectActivityTimeline
             prospectId={prospect.id}
             activities={activities}

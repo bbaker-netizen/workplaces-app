@@ -2082,6 +2082,45 @@ export const prospectActivities = pgTable(
 );
 
 /**
+ * `prospect_comments` — internal Business Builder discussion on a
+ * prospect / client. Private to the practice (master_admin + coach);
+ * never surfaced in the client portal. Distinct from
+ * `prospect_activities` (a factual touchpoint log) — this is a
+ * conversation thread so Bruce, Jen, and future Business Builders can
+ * talk about a lead. Authors can @notify teammates, who receive an
+ * in-app notification + an email.
+ */
+export const prospectComments = pgTable(
+  "prospect_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references((): AnyPgColumn => prospects.id, { onDelete: "cascade" }),
+    authorUserProfileId: uuid("author_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    body: text("body").notNull(),
+    notifiedUserProfileIds: jsonb("notified_user_profile_ids")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    prospectIdx: index("prospect_comments_prospect_idx").on(
+      t.prospectId,
+      t.createdAt,
+    ),
+    orgIdx: index("prospect_comments_org_idx").on(t.orgId),
+  }),
+);
+
+/**
  * `person_profiles` — TTI TriMetrix HD assessment per individual.
  * Per CLAUDE.md domain model, this is a first-class entity. Each row
  * captures the gap report PDF + extracted summary + raw scores
@@ -2476,6 +2515,8 @@ export type DocumentTag = typeof documentTags.$inferSelect;
 export type NewDocumentTag = typeof documentTags.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type ProspectComment = typeof prospectComments.$inferSelect;
+export type NewProspectComment = typeof prospectComments.$inferInsert;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type NewMessageReaction = typeof messageReactions.$inferInsert;
 export type MessageAttachment = typeof messageAttachments.$inferSelect;
