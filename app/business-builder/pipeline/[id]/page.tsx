@@ -50,6 +50,7 @@ import { ResetEngagementButton } from "@/components/pipeline/ResetEngagementButt
 import { ClientCommunicationsPanel } from "@/components/communications/ClientCommunicationsPanel";
 import { SendDiagnosticButton } from "@/components/pipeline/SendDiagnosticButton";
 import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButton";
+import { StartRecordedSessionButton } from "@/components/pipeline/StartRecordedSessionButton";
 import { ProspectNextStep } from "@/components/pipeline/ProspectNextStep";
 import { ScheduleFollowupPanel } from "@/components/pipeline/ScheduleFollowupPanel";
 import { SoulFilePreviewButton } from "@/components/pipeline/SoulFilePreviewButton";
@@ -310,6 +311,9 @@ export default async function ProspectDetailPage({
               companyName={prospect.companyName}
               recipientName={prospect.contactName}
             />
+            <div className="border-t border-tbb-line-soft pt-4">
+              <StartRecordedSessionButton prospectId={prospect.id} />
+            </div>
             {showDiagnostic && (
               <div className="border-t border-tbb-line-soft pt-4 space-y-2">
                 <p className="text-xs text-tbb-ink-3">
