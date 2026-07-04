@@ -139,17 +139,26 @@ function ContactEdit({
       );
       return;
     }
+    // Only send fields the user actually changed. Sending every field lets
+    // a stale/empty form value (e.g. a phone that hadn't loaded) overwrite
+    // good data on save — that's how Jen's phone number got wiped. A field
+    // left untouched is never sent, so it can't be clobbered.
+    const patch: Parameters<typeof updateProspect>[0] = { id: prospectId };
+    if (company.trim() !== companyName) patch.companyName = company.trim();
+    if (contactName.trim() !== (initial.contactName ?? ""))
+      patch.contactName = contactName.trim();
+    if (contactEmail.trim() !== initial.contactEmail)
+      patch.contactEmail = contactEmail.trim();
+    if ((phone.trim() || null) !== (initial.phone ?? null))
+      patch.phone = phone.trim() || null;
+    if ((companyWebsite.trim() || null) !== (initial.companyWebsite ?? null))
+      patch.companyWebsite = companyWebsite.trim() || null;
+    if ((linkedinUrl.trim() || null) !== (initial.linkedinUrl ?? null))
+      patch.linkedinUrl = linkedinUrl.trim() || null;
+
     showPendingFeedback("Saving…");
     startTransition(async () => {
-      const r = await updateProspect({
-        id: prospectId,
-        companyName: company.trim(),
-        contactName: contactName.trim(),
-        contactEmail: contactEmail.trim(),
-        phone: phone.trim() || null,
-        companyWebsite: companyWebsite.trim() || null,
-        linkedinUrl: linkedinUrl.trim() || null,
-      });
+      const r = await updateProspect(patch);
       hidePendingFeedback();
       if (!r.ok) setError(r.error);
       else {

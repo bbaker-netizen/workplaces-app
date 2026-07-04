@@ -179,9 +179,12 @@ export function prospectPhase(status: ProspectStatus): ProspectPhase {
     case "first_contact":
     case "diagnostic_pending":
     case "diagnostic_complete":
-      return "lead";
+    // "Appt booked" and "Appt complete" are still nurturing / following-up,
+    // so they stay in the lean view — the Deal card + Signing don't show
+    // until a proposal is out.
     case "meeting_scheduled":
     case "appt_completed_followup":
+      return "lead";
     case "proposal_sent":
     case "negotiation":
       return "qualifying";
