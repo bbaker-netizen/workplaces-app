@@ -19,10 +19,17 @@ export type UserUIPrefs = {
   homeDashboardLayout: HomeDashboardLayout | null;
 };
 
-/** Pipeline table column preferences — what's visible, in what order, how wide. */
+/** Pipeline table column preferences — what's visible, in what order, how
+ *  wide, plus the per-user filter/sort selection so each Business Builder's
+ *  pipeline stays how THEY left it without changing anyone else's. */
 export type PipelineColumnPrefs = {
   visible: string[]; // ordered column keys, e.g. ["company","contact","email","stage"]
   widths: Record<string, number>; // px widths keyed by column key
+  filters?: {
+    stage?: string; // stage / segment filter value
+    source?: string; // lead-source filter value
+    sort?: string; // sort key
+  };
 };
 
 /** Home-dashboard layout — array of card placements. */

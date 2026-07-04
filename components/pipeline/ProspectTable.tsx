@@ -119,19 +119,38 @@ export function ProspectTable({
   prospects: PipelineProspect[];
   initialPrefs: PipelineColumnPrefs | null;
 }) {
+  const savedFilters = initialPrefs?.filters;
   const [query, setQuery] = useState("");
   // Default to the prospect funnel — new leads + everyone being worked
-  // toward becoming a client — hiding onboarded clients and lost.
+  // toward becoming a client — hiding onboarded clients and lost. Restored
+  // from the caller's saved per-user prefs when present.
   const [stageFilter, setStageFilter] = useState<
     ProspectStatus | "all" | "prospects" | "clients" | "archived"
-  >("prospects");
+  >(
+    (savedFilters?.stage as
+      | ProspectStatus
+      | "all"
+      | "prospects"
+      | "clients"
+      | "archived"
+      | undefined) ?? "prospects",
+  );
   // Lead-source filter — "all" shows every source. Sits alongside the
   // stage filter so the board can be sliced by channel (Facebook Ads,
   // Website Form, Referral, …).
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>(
+    savedFilters?.source ?? "all",
+  );
   const [sortBy, setSortBy] = useState<
     "company" | "updated" | "owner" | "signed"
-  >("updated");
+  >(
+    (savedFilters?.sort as
+      | "company"
+      | "updated"
+      | "owner"
+      | "signed"
+      | undefined) ?? "updated",
+  );
   const [visible, setVisible] = useState<ColumnKey[]>(() => {
     const fromPrefs = (initialPrefs?.visible ?? []) as ColumnKey[];
     // Make sure non-optional columns are always present + only known keys.
@@ -320,8 +339,13 @@ export function ProspectTable({
   }
 
   /* Persist preferences with a small debounce so dragging doesn't hit
-     the server on every pixel. */
+     the server on every pixel. Filters are read from live refs so every
+     save carries the current filter/sort selection alongside columns. */
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filterRef = useRef({ stage: stageFilter, source: sourceFilter, sort: sortBy });
+  filterRef.current = { stage: stageFilter, source: sourceFilter, sort: sortBy };
+  const viewStateRef = useRef({ visible, widths });
+  viewStateRef.current = { visible, widths };
   const persist = useCallback(
     (nextVisible: ColumnKey[], nextWidths: Record<ColumnKey, number>) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -329,6 +353,11 @@ export function ProspectTable({
         setPipelineColumnPrefs({
           visible: nextVisible,
           widths: nextWidths,
+          filters: {
+            stage: filterRef.current.stage,
+            source: filterRef.current.source,
+            sort: filterRef.current.sort,
+          },
         });
       }, 400);
     },
@@ -339,6 +368,17 @@ export function ProspectTable({
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, []);
+
+  // Save when a filter / sort changes, per user — skips the first render so
+  // simply loading the page never overwrites saved prefs with defaults.
+  const filtersHydrated = useRef(false);
+  useEffect(() => {
+    if (!filtersHydrated.current) {
+      filtersHydrated.current = true;
+      return;
+    }
+    persist(viewStateRef.current.visible, viewStateRef.current.widths);
+  }, [stageFilter, sourceFilter, sortBy, persist]);
 
   function toggleColumn(key: ColumnKey) {
     setVisible((prev) => {
