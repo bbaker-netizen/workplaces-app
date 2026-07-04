@@ -758,8 +758,8 @@ export default async function CoachWelcomePage() {
             icon={<Sparkles className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
-            href="/business-builder/tools/import-leads"
-            label="Import / update leads — bulk-fill from a spreadsheet"
+            href="/business-builder/tools/fix-facebook-leads"
+            label="Fix Facebook lead phone numbers"
             icon={<Filter className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
         </ul>
