@@ -10,21 +10,33 @@
  */
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
+  Check,
   Link2,
   Loader2,
   Mail,
   MessageSquare,
+  Pencil,
   Phone,
   PenLine,
   Plus,
   Sparkles,
   StickyNote,
   Users,
+  X,
 } from "lucide-react";
-import { logProspectActivity } from "@/lib/actions/prospect-activities";
+import {
+  logProspectActivity,
+  updateProspectActivity,
+} from "@/lib/actions/prospect-activities";
 import { ACTIVITY_TYPES, activityTypeLabel } from "@/lib/pipeline/stages";
 import type { ProspectActivityWithAuthor } from "@/lib/db/queries/prospects";
+
+// Entry types a Business Builder wrote by hand and can edit. System-
+// generated entries (stage changes, web leads, signature/diagnostic/QBO
+// events) are a factual record and stay read-only.
+const EDITABLE_TYPES = new Set(["call", "meeting", "note", "email"]);
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   call: Phone,
@@ -45,12 +57,49 @@ export function ProspectActivityTimeline({
   prospectId: string;
   activities: ProspectActivityWithAuthor[];
 }) {
+  const router = useRouter();
   const [type, setType] =
     useState<(typeof ACTIVITY_TYPES)[number]["value"]>("note");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Inline edit of an existing entry.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSubject, setEditSubject] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isEditPending, startEditTransition] = useTransition();
+
+  function beginEdit(a: ProspectActivityWithAuthor) {
+    setEditingId(a.id);
+    setEditSubject(a.subject ?? "");
+    setEditBody(a.body ?? "");
+    setEditError(null);
+  }
+  function saveEdit() {
+    if (!editSubject.trim() && !editBody.trim()) {
+      setEditError("Add a subject or body.");
+      return;
+    }
+    setEditError(null);
+    const id = editingId;
+    if (!id) return;
+    startEditTransition(async () => {
+      const r = await updateProspectActivity({
+        id,
+        subject: editSubject.trim() || null,
+        body: editBody.trim() || null,
+      });
+      if (!r.ok) {
+        setEditError(r.error);
+        return;
+      }
+      setEditingId(null);
+      router.refresh();
+    });
+  }
 
   function submit() {
     if (!subject.trim() && !body.trim()) {
@@ -131,6 +180,7 @@ export function ProspectActivityTimeline({
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           disabled={isPending}
+          spellCheck
           placeholder="Subject (e.g., Intro call — 30 min)"
           className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         />
@@ -139,9 +189,14 @@ export function ProspectActivityTimeline({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           disabled={isPending}
+          spellCheck
           placeholder="What was said, decided, or learned…"
           className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
+        <p className="text-[11px] text-tbb-ink-3">
+          Tip: give it a quick spelling &amp; grammar check — teammates read
+          these notes, so clear beats fast.
+        </p>
         {error && (
           <p className="text-sm text-tbb-danger">{error}</p>
         )}
@@ -176,7 +231,7 @@ export function ProspectActivityTimeline({
                   </span>
                   <span className="w-px flex-1 bg-tbb-line-soft mt-1" aria-hidden />
                 </div>
-                <div className="flex-1 min-w-0 pb-4">
+                <div className="flex-1 min-w-0 pb-4 group">
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
                       {activityTypeLabel(a.type)}
@@ -194,16 +249,76 @@ export function ProspectActivityTimeline({
                         by {a.authorName}
                       </span>
                     )}
+                    {EDITABLE_TYPES.has(a.type) && editingId !== a.id && (
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(a)}
+                        className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue opacity-0 group-hover:opacity-100 focus:opacity-100 hover:underline"
+                      >
+                        <Pencil className="w-3 h-3" aria-hidden /> Edit
+                      </button>
+                    )}
                   </div>
-                  {a.subject && (
-                    <p className="font-bold text-tbb-navy mt-0.5">
-                      {a.subject}
-                    </p>
-                  )}
-                  {a.body && (
-                    <p className="text-sm text-tbb-ink-2 mt-0.5 whitespace-pre-wrap">
-                      {a.body}
-                    </p>
+
+                  {editingId === a.id ? (
+                    <div className="mt-1.5 space-y-2">
+                      <input
+                        value={editSubject}
+                        onChange={(e) => setEditSubject(e.target.value)}
+                        disabled={isEditPending}
+                        spellCheck
+                        placeholder="Subject"
+                        className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                      />
+                      <textarea
+                        rows={3}
+                        value={editBody}
+                        onChange={(e) => setEditBody(e.target.value)}
+                        disabled={isEditPending}
+                        spellCheck
+                        placeholder="What was said, decided, or learned…"
+                        className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
+                      />
+                      {editError && (
+                        <p className="text-sm text-tbb-danger">{editError}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={saveEdit}
+                          disabled={isEditPending}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
+                        >
+                          {isEditPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+                          ) : (
+                            <Check className="w-3 h-3" aria-hidden />
+                          )}
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(null)}
+                          disabled={isEditPending}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy"
+                        >
+                          <X className="w-3 h-3" aria-hidden /> Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {a.subject && (
+                        <p className="font-bold text-tbb-navy mt-0.5">
+                          {a.subject}
+                        </p>
+                      )}
+                      {a.body && (
+                        <p className="text-sm text-tbb-ink-2 mt-0.5 whitespace-pre-wrap">
+                          {a.body}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </li>
