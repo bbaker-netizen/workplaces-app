@@ -161,7 +161,12 @@ export function ProspectBoard({
   }
 
   return (
-    <div className="overflow-x-auto pb-3">
+    // Scroll box owns BOTH axes so the column headers can stick: a plain
+    // overflow-x container coerces overflow-y to auto with no height, which
+    // gives `position: sticky` nothing to pin against. A capped height makes
+    // the vertical scroll real, so each stage header stays visible while you
+    // scroll a long column and drag a card into it.
+    <div className="overflow-auto max-h-[78vh] pb-3">
       <div className="flex gap-3 items-start">
         {columns.map(({ status, items }) => {
           const style = STAGE_STYLES[status];
@@ -232,39 +237,43 @@ export function ProspectBoard({
                   : "border-tbb-line bg-tbb-cream/40")
               }
             >
-              {/* Header — collapse toggle, dot, label, count + value. */}
-              <button
-                type="button"
-                onClick={() => toggleCollapse(status)}
-                title="Click to collapse this stage"
-                className="w-full flex items-center gap-1.5 px-1 py-1.5 rounded hover:bg-white/60 transition-colors text-left"
-              >
-                <ChevronDown
-                  className="w-3.5 h-3.5 text-tbb-ink-3 shrink-0"
-                  aria-hidden
-                />
-                <span
-                  aria-hidden
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: style.dotHex }}
-                />
-                <span
-                  className={
-                    "flex-1 min-w-0 truncate text-[11px] font-bold uppercase tracking-tbb-caps " +
-                    style.textClass
-                  }
+              {/* Header — collapse toggle, dot, label, count + value.
+                  Sticks to the top of the board scroll box so the stage
+                  stays labelled while you scroll a long column and drag. */}
+              <div className="sticky top-0 z-10 -mx-2 -mt-2 px-2 pt-2 pb-1 bg-tbb-cream/95 backdrop-blur-sm rounded-t">
+                <button
+                  type="button"
+                  onClick={() => toggleCollapse(status)}
+                  title="Click to collapse this stage"
+                  className="w-full flex items-center gap-1.5 px-1 py-1.5 rounded hover:bg-white/60 transition-colors text-left"
                 >
-                  {style.label}
-                </span>
-                <span className="text-[11px] font-mono text-tbb-ink-3 shrink-0">
-                  {items.length}
-                </span>
-              </button>
-              {value && (
-                <p className="px-1 pb-1.5 text-[11px] font-bold text-tbb-navy">
-                  {value}
-                </p>
-              )}
+                  <ChevronDown
+                    className="w-3.5 h-3.5 text-tbb-ink-3 shrink-0"
+                    aria-hidden
+                  />
+                  <span
+                    aria-hidden
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: style.dotHex }}
+                  />
+                  <span
+                    className={
+                      "flex-1 min-w-0 truncate text-[11px] font-bold uppercase tracking-tbb-caps " +
+                      style.textClass
+                    }
+                  >
+                    {style.label}
+                  </span>
+                  <span className="text-[11px] font-mono text-tbb-ink-3 shrink-0">
+                    {items.length}
+                  </span>
+                </button>
+                {value && (
+                  <p className="px-1 text-[11px] font-bold text-tbb-navy">
+                    {value}
+                  </p>
+                )}
+              </div>
 
               <div className="space-y-2 min-h-[3rem]">
                 {items.map((p) => {
