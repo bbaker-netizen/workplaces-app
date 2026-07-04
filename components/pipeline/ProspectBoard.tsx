@@ -1,19 +1,23 @@
 "use client";
 
 /**
- * Pipeline board — a stacked-lane layout. Each stage is a full-width
- * horizontal lane (label on the left, cards flowing to the right), so
- * all eleven stages fit any screen with no horizontal scroll and stage
- * headers never truncate. Prospect cards drag between lanes; dropping a
- * card changes its stage (via updateProspect). Native HTML5
- * drag-and-drop — no extra dependency. Optimistic move with revert on
- * failure. Dropping into "Won" offers one-click onboarding.
+ * Pipeline board — the industry-standard horizontal Kanban (Pipedrive /
+ * HubSpot style). Stages run left-to-right as fixed-width columns with
+ * drag-and-drop; the row scrolls horizontally when many stages are open.
+ *
+ * To tame eleven stages, every column is COLLAPSIBLE: click a stage
+ * header to fold it to a thin strip (its cards tuck away, the strip
+ * still accepts drops), so you narrow the board to just the stages
+ * you're working. Collapsed state is remembered per browser.
+ *
+ * Native HTML5 drag-and-drop — no extra dependency. Optimistic move with
+ * revert on failure. Dropping into "Won" offers one-click onboarding.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GripVertical } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical } from "lucide-react";
 import { updateProspect } from "@/lib/actions/prospects";
 import { activateProspectAsEngagement } from "@/lib/actions/activate-engagement";
 import {
@@ -23,8 +27,10 @@ import {
 } from "@/lib/pipeline/stages";
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
 
+const COLLAPSE_KEY = "tbb_pipeline_collapsed";
+
 // Retired / off-board statuses map onto the nearest working column so every
-// prospect lands somewhere. Dropping a card sets the lane's real status.
+// prospect lands somewhere. Dropping a card sets the column's real status.
 const STATUS_TO_COLUMN: Record<string, ProspectStatus> = {
   diagnostic_pending: "contact_attempted",
   diagnostic_complete: "first_contact",
@@ -41,6 +47,15 @@ function money(cents: number | null | undefined): string | null {
   return `$${Math.round(cents / 100).toLocaleString()}`;
 }
 
+/** A column's headline value — sum of monthly fees if any, else expected
+ *  one-time value. Keeps the two from being added together misleadingly. */
+function columnValue(items: PipelineProspect[]): string | null {
+  const monthly = items.reduce((s, p) => s + (p.monthlyFeeCents ?? 0), 0);
+  if (monthly > 0) return `${money(monthly)}/mo`;
+  const oneTime = items.reduce((s, p) => s + (p.expectedValueCents ?? 0), 0);
+  return money(oneTime);
+}
+
 export function ProspectBoard({
   prospects,
 }: {
@@ -54,11 +69,36 @@ export function ProspectBoard({
   );
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ProspectStatus | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Restore collapsed columns from the last visit.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      if (raw) setCollapsed(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function toggleCollapse(status: ProspectStatus) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   const statusOf = (p: PipelineProspect): ProspectStatus =>
     overrides[p.id] ?? (p.status as ProspectStatus);
 
-  const lanes = useMemo(() => {
+  const columns = useMemo(() => {
     const byCol = new Map<ProspectStatus, PipelineProspect[]>();
     for (const s of STAGE_ORDER) byCol.set(s, []);
     for (const p of prospects) {
@@ -121,33 +161,88 @@ export function ProspectBoard({
   }
 
   return (
-    <div className="space-y-2">
-      {lanes.map(({ status, items }) => {
-        const style = STAGE_STYLES[status];
-        const active = dragOverCol === status;
-        return (
-          <div
-            key={status}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOverCol(status);
-            }}
-            onDragLeave={() =>
-              setDragOverCol((c) => (c === status ? null : c))
-            }
-            onDrop={() => drop(status)}
-            style={{ borderLeftColor: style.dotHex }}
-            className={
-              "flex flex-col sm:flex-row gap-2 rounded-lg border border-l-4 p-2 transition-colors " +
-              (active
-                ? "border-tbb-blue bg-tbb-blue-50"
-                : "border-tbb-line bg-tbb-cream/40")
-            }
-          >
-            {/* Stage label — a fixed column on desktop, full-width header on
-                mobile. Gets the whole width it needs, so it never truncates. */}
-            <div className="sm:w-44 sm:shrink-0 flex sm:flex-col items-center sm:items-start gap-2 sm:gap-0.5 px-1 sm:py-1">
-              <div className="flex items-center gap-1.5 min-w-0">
+    <div className="overflow-x-auto pb-3">
+      <div className="flex gap-3 items-start">
+        {columns.map(({ status, items }) => {
+          const style = STAGE_STYLES[status];
+          const active = dragOverCol === status;
+          const isCollapsed = collapsed.has(status);
+          const value = columnValue(items);
+
+          // Collapsed → a thin, drop-friendly strip with vertical label.
+          if (isCollapsed) {
+            return (
+              <button
+                type="button"
+                key={status}
+                onClick={() => toggleCollapse(status)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverCol(status);
+                }}
+                onDragLeave={() =>
+                  setDragOverCol((c) => (c === status ? null : c))
+                }
+                onDrop={() => drop(status)}
+                title={`${style.label} — click to expand`}
+                style={{ borderTopColor: style.dotHex }}
+                className={
+                  "shrink-0 w-11 self-stretch min-h-[8rem] rounded-lg border border-t-4 flex flex-col items-center gap-2 py-2 transition-colors " +
+                  (active
+                    ? "border-tbb-blue bg-tbb-blue-50"
+                    : "border-tbb-line bg-tbb-cream/60 hover:bg-tbb-cream")
+                }
+              >
+                <ChevronRight
+                  className="w-3.5 h-3.5 text-tbb-ink-3 shrink-0"
+                  aria-hidden
+                />
+                <span className="text-[11px] font-mono text-tbb-ink-2">
+                  {items.length}
+                </span>
+                <span
+                  className={
+                    "text-[10.5px] font-bold uppercase tracking-tbb-caps whitespace-nowrap " +
+                    style.textClass
+                  }
+                  style={{ writingMode: "vertical-rl" }}
+                >
+                  {style.label}
+                </span>
+              </button>
+            );
+          }
+
+          return (
+            <div
+              key={status}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverCol(status);
+              }}
+              onDragLeave={() =>
+                setDragOverCol((c) => (c === status ? null : c))
+              }
+              onDrop={() => drop(status)}
+              style={{ borderTopColor: style.dotHex }}
+              className={
+                "shrink-0 w-[270px] rounded-lg border border-t-4 p-2 transition-colors " +
+                (active
+                  ? "border-tbb-blue bg-tbb-blue-50"
+                  : "border-tbb-line bg-tbb-cream/40")
+              }
+            >
+              {/* Header — collapse toggle, dot, label, count + value. */}
+              <button
+                type="button"
+                onClick={() => toggleCollapse(status)}
+                title="Click to collapse this stage"
+                className="w-full flex items-center gap-1.5 px-1 py-1.5 rounded hover:bg-white/60 transition-colors text-left"
+              >
+                <ChevronDown
+                  className="w-3.5 h-3.5 text-tbb-ink-3 shrink-0"
+                  aria-hidden
+                />
                 <span
                   aria-hidden
                   className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -155,87 +250,87 @@ export function ProspectBoard({
                 />
                 <span
                   className={
-                    "text-[11px] font-bold uppercase tracking-tbb-caps " +
+                    "flex-1 min-w-0 truncate text-[11px] font-bold uppercase tracking-tbb-caps " +
                     style.textClass
                   }
                 >
                   {style.label}
                 </span>
-              </div>
-              <span className="text-[11px] font-mono text-tbb-ink-3">
-                {items.length}{" "}
-                <span className="hidden sm:inline">
-                  {items.length === 1 ? "prospect" : "prospects"}
+                <span className="text-[11px] font-mono text-tbb-ink-3 shrink-0">
+                  {items.length}
                 </span>
-              </span>
-            </div>
-
-            {/* Cards flow left-to-right and wrap onto new rows — no sideways
-                scroll. Each card keeps a comfortable fixed width. */}
-            <div className="flex-1 flex flex-wrap gap-2 min-h-[2.75rem] content-start">
-              {items.map((p) => {
-                const value = money(p.monthlyFeeCents)
-                  ? `${money(p.monthlyFeeCents)}/mo`
-                  : money(p.expectedValueCents);
-                return (
-                  <div
-                    key={p.id}
-                    draggable
-                    onDragStart={() => setDragId(p.id)}
-                    onDragEnd={() => setDragId(null)}
-                    className={
-                      "group relative w-full sm:w-56 rounded-md border border-tbb-line bg-white p-2.5 shadow-tbb-sm cursor-grab active:cursor-grabbing " +
-                      (dragId === p.id
-                        ? "opacity-50"
-                        : "hover:border-tbb-blue")
-                    }
-                  >
-                    <GripVertical
-                      className="absolute right-1 top-2 w-3 h-3 text-tbb-line group-hover:text-tbb-ink-3"
-                      aria-hidden
-                    />
-                    <Link
-                      href={`/business-builder/pipeline/${p.id}`}
-                      className="block pr-3"
-                    >
-                      <p className="font-bold text-tbb-navy text-sm leading-tight truncate">
-                        {p.companyName}
-                      </p>
-                      {p.contactName && (
-                        <p className="text-xs text-tbb-ink-3 truncate mt-0.5">
-                          {p.contactName}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 flex-wrap mt-2">
-                        {value && (
-                          <span className="text-[11px] font-bold text-tbb-navy">
-                            {value}
-                          </span>
-                        )}
-                        {p.leadSource && (
-                          <span className="text-[10px] font-mono text-tbb-ink-3 truncate">
-                            {p.leadSource}
-                          </span>
-                        )}
-                      </div>
-                      {p.ownerName && (
-                        <p className="text-[10px] uppercase tracking-tbb-caps text-tbb-ink-3 mt-1.5">
-                          {p.ownerName}
-                        </p>
-                      )}
-                    </Link>
-                  </div>
-                );
-              })}
-              {items.length === 0 && (
-                <p className="text-[11px] text-tbb-ink-3 italic px-2 self-center">
-                  Drop here
+              </button>
+              {value && (
+                <p className="px-1 pb-1.5 text-[11px] font-bold text-tbb-navy">
+                  {value}
                 </p>
               )}
+
+              <div className="space-y-2 min-h-[3rem]">
+                {items.map((p) => {
+                  const cardValue = money(p.monthlyFeeCents)
+                    ? `${money(p.monthlyFeeCents)}/mo`
+                    : money(p.expectedValueCents);
+                  return (
+                    <div
+                      key={p.id}
+                      draggable
+                      onDragStart={() => setDragId(p.id)}
+                      onDragEnd={() => setDragId(null)}
+                      className={
+                        "group relative rounded-md border border-tbb-line bg-white p-2.5 shadow-tbb-sm cursor-grab active:cursor-grabbing " +
+                        (dragId === p.id
+                          ? "opacity-50"
+                          : "hover:border-tbb-blue")
+                      }
+                    >
+                      <GripVertical
+                        className="absolute right-1 top-2 w-3 h-3 text-tbb-line group-hover:text-tbb-ink-3"
+                        aria-hidden
+                      />
+                      <Link
+                        href={`/business-builder/pipeline/${p.id}`}
+                        className="block pr-3"
+                      >
+                        <p className="font-bold text-tbb-navy text-sm leading-tight truncate">
+                          {p.companyName}
+                        </p>
+                        {p.contactName && (
+                          <p className="text-xs text-tbb-ink-3 truncate mt-0.5">
+                            {p.contactName}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 flex-wrap mt-2">
+                          {cardValue && (
+                            <span className="text-[11px] font-bold text-tbb-navy">
+                              {cardValue}
+                            </span>
+                          )}
+                          {p.leadSource && (
+                            <span className="text-[10px] font-mono text-tbb-ink-3 truncate">
+                              {p.leadSource}
+                            </span>
+                          )}
+                        </div>
+                        {p.ownerName && (
+                          <p className="text-[10px] uppercase tracking-tbb-caps text-tbb-ink-3 mt-1.5">
+                            {p.ownerName}
+                          </p>
+                        )}
+                      </Link>
+                    </div>
+                  );
+                })}
+                {items.length === 0 && (
+                  <p className="text-[11px] text-tbb-ink-3 italic px-1.5 py-3 text-center">
+                    Drop here
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

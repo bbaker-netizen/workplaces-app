@@ -12,7 +12,7 @@
  * never creates new records — unmatched emails are only reported.
  */
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -57,12 +57,32 @@ export type LeadFixRow = {
   name: string;
   newPhone: string;
   found: boolean;
+  /** How the app record was located: by email, by unique name, or not at all. */
+  matchedBy: "email" | "name" | "none";
   company: string | null;
   currentPhone: string | null;
   currentSource: string | null;
   phoneChanges: boolean;
   sourceChanges: boolean;
 };
+
+/** Normalise a name for matching: trim, lowercase, collapse whitespace. */
+function normName(s: string | null): string {
+  return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** A phone value we're safe to overwrite on a name match: empty, or the
+ *  date/time junk the earlier bad import wrote. Never clobbers a value that
+ *  already looks like a real phone number. */
+function isEmptyOrJunkPhone(phone: string | null): boolean {
+  const t = (phone ?? "").trim();
+  if (!t) return true;
+  if (/\d{4}-\d{1,2}-\d{1,2}/.test(t)) return true; // ISO date
+  if (/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(t)) return true; // slash date
+  if (/\d{1,2}:\d{2}/.test(t)) return true; // time
+  if (/[A-Za-z]{2,}/.test(t)) return true; // words (e.g. "9:09am")
+  return false;
+}
 
 export type LeadFixResult =
   | {
@@ -91,24 +111,53 @@ async function run(apply: boolean): Promise<LeadFixResult> {
         .limit(1);
       if (!master) return { ok: false, error: "Master org isn't configured." };
 
+      // Pull every prospect in the master org once, then match in memory —
+      // by email first, then by a UNIQUE name as a fallback (some leads have
+      // no email on their record, so email-only matching missed them).
+      const all = await tx
+        .select({
+          id: prospects.id,
+          company: prospects.companyName,
+          contactName: prospects.contactName,
+          email: prospects.contactEmail,
+          phone: prospects.phone,
+          leadSource: prospects.leadSource,
+        })
+        .from(prospects)
+        .where(eq(prospects.orgId, master.id));
+
+      type Row = (typeof all)[number];
+      const byEmail = new Map<string, Row>();
+      const byName = new Map<string, Row[]>();
+      for (const p of all) {
+        const e = (p.email ?? "").trim().toLowerCase();
+        if (e && !byEmail.has(e)) byEmail.set(e, p);
+        for (const nm of [p.contactName, p.company]) {
+          const n = normName(nm);
+          if (!n) continue;
+          const list = byName.get(n) ?? [];
+          if (!list.includes(p)) list.push(p);
+          byName.set(n, list);
+        }
+      }
+
       const rows: LeadFixRow[] = [];
       let phonesFixed = 0;
       let sourcesFixed = 0;
       let matched = 0;
 
       for (const lead of FACEBOOK_LEADS) {
-        const [existing] = await tx
-          .select({
-            id: prospects.id,
-            company: prospects.companyName,
-            phone: prospects.phone,
-            leadSource: prospects.leadSource,
-          })
-          .from(prospects)
-          .where(
-            sql`${prospects.orgId} = ${master.id} and lower(${prospects.contactEmail}) = ${lead.email}`,
-          )
-          .limit(1);
+        let existing: Row | undefined = byEmail.get(lead.email);
+        let matchedBy: LeadFixRow["matchedBy"] = existing ? "email" : "none";
+        if (!existing) {
+          // Fall back to name — only if EXACTLY one prospect carries it, so
+          // we never guess between two people with the same name.
+          const candidates = byName.get(normName(lead.name)) ?? [];
+          if (candidates.length === 1) {
+            existing = candidates[0];
+            matchedBy = "name";
+          }
+        }
 
         if (!existing) {
           rows.push({
@@ -116,6 +165,7 @@ async function run(apply: boolean): Promise<LeadFixResult> {
             name: lead.name,
             newPhone: lead.phone,
             found: false,
+            matchedBy: "none",
             company: null,
             currentPhone: null,
             currentSource: null,
@@ -126,7 +176,12 @@ async function run(apply: boolean): Promise<LeadFixResult> {
         }
 
         matched++;
-        const phoneChanges = (existing.phone ?? "") !== lead.phone;
+        // Email match: trust it, overwrite the phone. Name match: only fill
+        // when the current phone is empty or junk, never over a real number.
+        const canSetPhone =
+          matchedBy === "email" || isEmptyOrJunkPhone(existing.phone);
+        const phoneChanges =
+          canSetPhone && (existing.phone ?? "") !== lead.phone;
         const sourceChanges = (existing.leadSource ?? "") !== LEAD_SOURCE;
         if (phoneChanges) phonesFixed++;
         if (sourceChanges) sourcesFixed++;
@@ -136,6 +191,7 @@ async function run(apply: boolean): Promise<LeadFixResult> {
           name: lead.name,
           newPhone: lead.phone,
           found: true,
+          matchedBy,
           company: existing.company,
           currentPhone: existing.phone,
           currentSource: existing.leadSource,
@@ -143,13 +199,12 @@ async function run(apply: boolean): Promise<LeadFixResult> {
           sourceChanges,
         });
 
-        // Only write the two fields, and only when something actually
-        // changes. Notes / name / email / stage are never in this .set().
+        // Only ever writes phone and/or lead source — nothing else.
         if (apply && (phoneChanges || sourceChanges)) {
-          await tx
-            .update(prospects)
-            .set({ phone: lead.phone, leadSource: LEAD_SOURCE })
-            .where(eq(prospects.id, existing.id));
+          const patch: { phone?: string; leadSource?: string } = {};
+          if (phoneChanges) patch.phone = lead.phone;
+          if (sourceChanges) patch.leadSource = LEAD_SOURCE;
+          await tx.update(prospects).set(patch).where(eq(prospects.id, existing.id));
         }
       }
 
