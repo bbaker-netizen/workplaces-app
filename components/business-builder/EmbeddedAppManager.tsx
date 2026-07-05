@@ -8,11 +8,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Puzzle, Trash2 } from "lucide-react";
+import { Loader2, Plus, Puzzle, RefreshCw, Trash2 } from "lucide-react";
 import {
   createEmbeddedApp,
   deleteEmbeddedApp,
 } from "@/lib/actions/embedded-apps";
+import { syncNetlifyTools } from "@/lib/actions/resources";
 
 export type EngagementApp = {
   id: string;
@@ -44,6 +45,24 @@ export function EmbeddedAppManager({
   const [instructions, setInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [isSyncing, startSync] = useTransition();
+
+  function syncNow() {
+    setError(null);
+    setSyncMsg(null);
+    startSync(async () => {
+      const r = await syncNetlifyTools();
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      setSyncMsg(
+        `Synced ${r.data.total} project${r.data.total === 1 ? "" : "s"} from Netlify.`,
+      );
+      router.refresh();
+    });
+  }
 
   const available = netlifyProjects;
   const q = query.trim().toLowerCase();
@@ -139,19 +158,57 @@ export function EmbeddedAppManager({
       {adding ? (
         <div className="space-y-2 border border-tbb-line rounded-md p-3 bg-tbb-cream-50">
           {available.length === 0 ? (
-            <p className="text-xs text-tbb-ink-3">
-              No Netlify projects synced yet. Sync them first under{" "}
-              <span className="font-bold">Tools &amp; tutorials</span>.
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-tbb-ink-3">
+                No Netlify projects synced yet. Pull them in from your Netlify
+                account:
+              </p>
+              <button
+                type="button"
+                onClick={syncNow}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
+              >
+                {isSyncing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <RefreshCw className="w-3.5 h-3.5" aria-hidden />
+                )}
+                Sync now from Netlify
+              </button>
+              {syncMsg && (
+                <p className="text-xs text-tbb-success">{syncMsg}</p>
+              )}
+              {error && <p className="text-xs text-tbb-danger">{error}</p>}
+            </div>
           ) : (
             <>
               <div className="space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-                  Netlify project{" "}
-                  <span className="text-tbb-ink-4 font-normal normal-case tracking-normal">
-                    ({available.length} synced)
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                    Netlify project{" "}
+                    <span className="text-tbb-ink-4 font-normal normal-case tracking-normal">
+                      ({available.length} synced)
+                    </span>
                   </span>
+                  <button
+                    type="button"
+                    onClick={syncNow}
+                    disabled={isSyncing}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline disabled:opacity-50"
+                    title="Pull the latest projects from your Netlify account"
+                  >
+                    {isSyncing ? (
+                      <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" aria-hidden />
+                    )}
+                    Sync
+                  </button>
                 </span>
+                {syncMsg && (
+                  <p className="text-[11px] text-tbb-success">{syncMsg}</p>
+                )}
                 <input
                   type="search"
                   value={query}
