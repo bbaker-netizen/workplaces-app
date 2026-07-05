@@ -177,7 +177,13 @@ export function ProspectBoard({
           setOverrides((o) => ({ ...o, [id]: prev }));
           window.alert(`Couldn't start onboarding: ${r.error}`);
         } else {
-          router.refresh();
+          // Land the coach on the new client's workspace with a next-steps
+          // banner, so onboarding never ends in silence.
+          router.push(
+            `/business-builder/engagements/${r.data.engagementId}?onboarded=1&drive=${
+              r.data.driveCreated ? "created" : "skipped"
+            }`,
+          );
         }
       });
       return;

@@ -234,8 +234,10 @@ export default async function CoachWelcomePage() {
           <p className="mt-2 text-sm text-tbb-ink-3">
             <strong>Won starts onboarding automatically.</strong> The
             moment you move a prospect to <strong>Won</strong>, the app
-            asks if you want to start onboarding — one click spins up
-            their engagement workspace. More on that in Phase 03.
+            asks if you want to start onboarding — one click spins up their
+            engagement workspace, creates their Google Drive folder, and
+            lands you on their workspace with a next-steps checklist. More
+            on that in Phase 03.
           </p>
         </Step>
 
@@ -379,17 +381,28 @@ export default async function CoachWelcomePage() {
             by clicking the stage chip or dragging their card into the Won
             column — the app asks{" "}
             <em>&quot;Mark this client as Won and start onboarding
-            now?&quot;</em>. Say yes and it spins up the client&apos;s
-            engagement workspace immediately, so you can start setting up
-            their portal.
+            now?&quot;</em>. Say yes and it does three things for you:
+            spins up the client&apos;s engagement workspace,{" "}
+            <strong>automatically creates their Google Drive folder</strong>{" "}
+            (if your Google account is connected), and{" "}
+            <strong>drops you straight onto their workspace page with a
+            checklist of what&apos;s left</strong> — so onboarding never
+            leaves you guessing what to do next.
+          </p>
+          <p className="mt-2">
+            That checklist walks you through the rest: upload their signed
+            contract, confirm the Drive folder, pick their portal modules,
+            and — when you&apos;re ready — <strong>Invite client</strong>.
           </p>
           <p className="mt-2 text-sm text-tbb-ink-3">
             The confirm is there so a stray drag never provisions a
             workspace by accident. Starting onboarding creates the
-            workspace only — it does <strong>not</strong> email or invite
-            the client. That stays a deliberate step you take when
-            you&apos;re ready (the <strong>Invite client</strong> button,
-            below).
+            workspace (and Drive folder) only — it does <strong>not</strong>{" "}
+            email or invite the client. That stays a deliberate step you
+            take when you&apos;re ready (the <strong>Invite client</strong>{" "}
+            button, below). If your Google account isn&apos;t connected yet,
+            the Drive folder is skipped and the checklist prompts you to
+            connect it (Practice → Google Workspace) and create it.
           </p>
         </Step>
 

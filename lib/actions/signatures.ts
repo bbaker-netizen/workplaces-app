@@ -23,6 +23,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
+  coaches,
   documents,
   engagements,
   prospectActivities,
@@ -31,6 +32,7 @@ import {
   signatureSigners,
   userProfiles,
 } from "@/lib/db/schema";
+import { uploadFileToDrive } from "@/lib/integrations/google-drive";
 import {
   resolveEngagementIdFromRecord,
   withSystemContext,
@@ -1022,6 +1024,53 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
     }
     return doc.id;
   });
+
+  // Mirror the signed contract into the client's managed Google Drive
+  // folder, if they have one. Best effort — a Drive hiccup (or no folder /
+  // no Google connection) never blocks completion or the emails. Only for
+  // engagement-linked signings; a prospect with no engagement has no
+  // folder to file it under.
+  const signedEngagementId = ctx.env.engagementId ?? ctx.doc.engagementId;
+  if (signedEngagementId) {
+    try {
+      const drive = await withSystemContext(async (tx) => {
+        const [row] = await tx
+          .select({
+            managed: engagements.googleDriveManaged,
+            folderId: engagements.googleDriveFolderId,
+            coachUpid: coaches.userProfileId,
+          })
+          .from(engagements)
+          .leftJoin(coaches, eq(coaches.id, engagements.coachId))
+          .where(eq(engagements.id, signedEngagementId))
+          .limit(1);
+        return row ?? null;
+      });
+      if (drive?.managed && drive.folderId && drive.coachUpid) {
+        const driveFile = await uploadFileToDrive(
+          drive.coachUpid,
+          drive.folderId,
+          signedFilename,
+          "application/pdf",
+          signedBytes,
+        );
+        await withSystemContext(async (tx) => {
+          await tx
+            .update(documents)
+            .set({
+              googleDriveFileId: driveFile.id,
+              googleDriveWebLink: driveFile.webViewLink,
+            })
+            .where(eq(documents.id, signedDocId));
+        });
+      }
+    } catch (e) {
+      console.error(
+        "[signing] Drive mirror of signed contract failed:",
+        e,
+      );
+    }
+  }
 
   // Email the signed copy to every signer + the sender.
   const recipientList: string[] = [];

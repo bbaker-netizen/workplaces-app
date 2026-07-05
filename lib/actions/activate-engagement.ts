@@ -28,6 +28,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
+import { createManagedDriveFolder } from "@/lib/actions/engagement-drive";
 import { referralRewardEmail } from "@/lib/email/templates";
 
 /** A queued "thank the referrer" reward to email after the DB commit. */
@@ -158,7 +159,7 @@ function buildRows(
 export async function activateProspectAsEngagement(
   prospectId: string,
   program?: "accelerator" | "implementer",
-): Promise<Result> {
+): Promise<Result<{ engagementId: string; driveCreated: boolean }>> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
   if (profile.role !== "master_admin" && profile.role !== "coach") {
@@ -174,7 +175,11 @@ export async function activateProspectAsEngagement(
         .limit(1);
       if (!p) throw new Error("Prospect not found.");
       if (p.convertedEngagementId) {
-        return { engagementId: p.convertedEngagementId, reward: null };
+        return {
+          engagementId: p.convertedEngagementId,
+          reward: null,
+          isNew: false,
+        };
       }
       const rows = buildRows(p, coachId, program);
       await tx.insert(orgs).values(rows.org);
@@ -196,7 +201,7 @@ export async function activateProspectAsEngagement(
         engagementOrgId: rows.org.id,
         coachUserProfileId: profile.userProfileId,
       });
-      return { engagementId: rows.newEngagementId, reward };
+      return { engagementId: rows.newEngagementId, reward, isNew: true };
     });
     // Email the coach about the gift cert after the commit, so a mail
     // hiccup can never roll back the conversion.
@@ -213,10 +218,26 @@ export async function activateProspectAsEngagement(
         );
       }
     }
+    // Auto-create the client's managed Google Drive folder as part of
+    // onboarding — best effort, so a missing Google connection (or any
+    // Drive hiccup) never blocks the conversion. Only on a brand-new
+    // engagement. The onboarding banner reflects whether it was created.
+    let driveCreated = false;
+    if (result.isNew) {
+      try {
+        const dr = await createManagedDriveFolder(result.engagementId);
+        driveCreated = dr.ok;
+      } catch {
+        // Swallow — the coach can create it manually from Documents & Drive.
+      }
+    }
     revalidatePath("/business-builder/pipeline");
     revalidatePath(`/business-builder/pipeline/${prospectId}`);
     revalidatePath("/business-builder/engagements");
-    return { ok: true, data: { engagementId: result.engagementId } };
+    return {
+      ok: true,
+      data: { engagementId: result.engagementId, driveCreated },
+    };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
