@@ -6,11 +6,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, inArray } from "drizzle-orm";
-import { ArrowRight, Briefcase, Eye, FolderSymlink } from "lucide-react";
+import { Briefcase, FolderSymlink } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
+import { EngagementSearchList } from "@/components/business-builder/EngagementSearchList";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { CollapsibleSection } from "@/components/business-builder/CollapsibleSection";
 import { SeedDemoButton } from "@/components/business-builder/SeedDemoButton";
@@ -119,55 +120,19 @@ export default async function EngagementsListPage() {
           </p>
         </div>
       ) : (
-        <ul className="border border-tbb-line rounded-lg bg-white divide-y divide-tbb-line-soft overflow-hidden shadow-tbb-sm">
-          {active.map((e) => (
-            <li key={e.id} className="flex items-center gap-2 px-5 py-4 hover:bg-tbb-cream-50 transition-colors">
-              <Link
-                href={`/business-builder/engagements/${e.id}`}
-                className="flex items-center gap-3 flex-1 min-w-0"
-              >
-                <span className="flex-1 min-w-0">
-                  <span className="block font-bold text-tbb-navy">
-                    {e.name ?? e.orgName ?? "Untitled engagement"}
-                  </span>
-                  <span className="block text-xs text-tbb-ink-3 mt-0.5">
-                    {e.prospect?.contactName || "—"}
-                    {e.status !== "active" && (
-                      <> · <span className="capitalize">{e.status}</span></>
-                    )}
-                  </span>
-                </span>
-                <ArrowRight className="w-4 h-4 text-tbb-ink-3 shrink-0" aria-hidden />
-              </Link>
-              {/* Program is set at conversion and lives on the prospect —
-                  shown here read-only (no selector) since the two are now
-                  connected end to end. */}
-              <span
-                className="shrink-0 inline-flex items-center text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill bg-tbb-cream-100 text-tbb-ink-2 capitalize"
-                title="The program this client is signed up for (set at conversion)"
-              >
-                {(e.prospect?.programType ?? e.type) === "implementer"
-                  ? "Implementer"
-                  : "Accelerator"}
-              </span>
-              {/* Plain <a> (full-document nav) — this target is a Route
-                  Handler that sets a cookie + redirects; Next's <Link>
-                  client-side navigation can't follow it. */}
-              <a
-                href={`/portal/e/${e.id}`}
-                title="See this client's portal exactly as they see it"
-                className="shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tbb-caps px-2.5 py-1.5 rounded-pill border border-tbb-line text-tbb-blue hover:border-tbb-blue hover:bg-white transition-colors"
-              >
-                <Eye className="w-3 h-3" aria-hidden /> View portal
-              </a>
-              <EngagementArchiveButton
-                engagementId={e.id}
-                engagementName={e.name ?? e.orgName ?? "this client"}
-                archived={false}
-              />
-            </li>
-          ))}
-        </ul>
+        <EngagementSearchList
+          rows={active.map((e) => ({
+            id: e.id,
+            name: e.name ?? "",
+            orgName: e.orgName,
+            contactName: e.prospect?.contactName ?? null,
+            status: e.status,
+            program:
+              (e.prospect?.programType ?? e.type) === "implementer"
+                ? "Implementer"
+                : "Accelerator",
+          }))}
+        />
       )}
 
       {archived.length > 0 && (
