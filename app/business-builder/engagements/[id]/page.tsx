@@ -71,10 +71,14 @@ import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
 
 export default async function EngagementDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ onboarded?: string }>;
 }) {
   const { id } = await params;
+  const { onboarded } = await searchParams;
+  const justOnboarded = onboarded === "1";
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
@@ -250,6 +254,36 @@ export default async function EngagementDetailPage({
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
+      {justOnboarded && (
+        <section className="rounded-lg border border-tbb-blue/40 bg-tbb-blue-50 p-5 space-y-3">
+          <p className="flex items-center gap-2 font-bold text-tbb-navy text-lg">
+            <CheckCircle2 className="w-5 h-5 text-tbb-success" aria-hidden />
+            {data.eng.name ?? "Your client"} is onboarded — this is their
+            workspace.
+          </p>
+          <p className="text-sm text-tbb-ink-2">
+            Nothing has been sent to the client yet. Here&apos;s what to do
+            next:
+          </p>
+          <ol className="list-decimal list-inside text-sm text-tbb-ink-2 space-y-1">
+            <li>Choose which portal modules they see (further down this page).</li>
+            <li>
+              <Link
+                href={`/business-builder/documents/${id}`}
+                className="text-tbb-blue font-bold hover:underline"
+              >
+                Upload their signed contract &amp; create their Google Drive
+                folder
+              </Link>{" "}
+              (Documents &amp; Drive).
+            </li>
+            <li>
+              When you&apos;re ready, use <strong>Invite client</strong> below
+              to send their portal welcome email.
+            </li>
+          </ol>
+        </section>
+      )}
       <header className="space-y-2">
         <Link
           href="/business-builder/engagements"

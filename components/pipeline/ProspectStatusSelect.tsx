@@ -71,8 +71,12 @@ export function ProspectStatusSelect({
           return;
         }
         setConverted(true);
-        setShowConfetti(true);
-        router.refresh();
+        // Take the coach straight to the new client's workspace (with a
+        // next-steps banner) instead of leaving them on the pipeline
+        // wondering what happened.
+        router.push(
+          `/business-builder/engagements/${r.data.engagementId}?onboarded=1`,
+        );
       });
       return;
     }
