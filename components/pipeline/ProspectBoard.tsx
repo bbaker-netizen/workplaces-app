@@ -180,7 +180,9 @@ export function ProspectBoard({
           // Land the coach on the new client's workspace with a next-steps
           // banner, so onboarding never ends in silence.
           router.push(
-            `/business-builder/engagements/${r.data.engagementId}?onboarded=1`,
+            `/business-builder/engagements/${r.data.engagementId}?onboarded=1&drive=${
+              r.data.driveCreated ? "created" : "skipped"
+            }`,
           );
         }
       });

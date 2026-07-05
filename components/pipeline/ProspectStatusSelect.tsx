@@ -75,7 +75,9 @@ export function ProspectStatusSelect({
         // next-steps banner) instead of leaving them on the pipeline
         // wondering what happened.
         router.push(
-          `/business-builder/engagements/${r.data.engagementId}?onboarded=1`,
+          `/business-builder/engagements/${r.data.engagementId}?onboarded=1&drive=${
+            r.data.driveCreated ? "created" : "skipped"
+          }`,
         );
       });
       return;

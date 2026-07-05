@@ -74,11 +74,12 @@ export default async function EngagementDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ onboarded?: string }>;
+  searchParams: Promise<{ onboarded?: string; drive?: string }>;
 }) {
   const { id } = await params;
-  const { onboarded } = await searchParams;
+  const { onboarded, drive } = await searchParams;
   const justOnboarded = onboarded === "1";
+  const driveAutoCreated = drive === "created";
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
@@ -265,23 +266,65 @@ export default async function EngagementDetailPage({
             Nothing has been sent to the client yet. Here&apos;s what to do
             next:
           </p>
-          <ol className="list-decimal list-inside text-sm text-tbb-ink-2 space-y-1">
-            <li>Choose which portal modules they see (further down this page).</li>
-            <li>
-              <Link
-                href={`/business-builder/documents/${id}`}
-                className="text-tbb-blue font-bold hover:underline"
-              >
-                Upload their signed contract &amp; create their Google Drive
-                folder
-              </Link>{" "}
-              (Documents &amp; Drive).
+          <ul className="text-sm text-tbb-ink-2 space-y-1.5">
+            <li className="flex items-start gap-2">
+              <CheckCircle2
+                className={
+                  "w-4 h-4 mt-0.5 flex-none " +
+                  (driveAutoCreated ? "text-tbb-success" : "text-tbb-ink-4")
+                }
+                aria-hidden
+              />
+              {driveAutoCreated ? (
+                <span>
+                  <strong>Google Drive folder created automatically.</strong>{" "}
+                  Find it on{" "}
+                  <Link
+                    href={`/business-builder/documents/${id}`}
+                    className="text-tbb-blue font-bold hover:underline"
+                  >
+                    Documents &amp; Drive
+                  </Link>
+                  .
+                </span>
+              ) : (
+                <span>
+                  <strong>Create their Google Drive folder</strong> on{" "}
+                  <Link
+                    href={`/business-builder/documents/${id}`}
+                    className="text-tbb-blue font-bold hover:underline"
+                  >
+                    Documents &amp; Drive
+                  </Link>{" "}
+                  (connect Google first under Practice → Google Workspace if
+                  prompted).
+                </span>
+              )}
             </li>
-            <li>
-              When you&apos;re ready, use <strong>Invite client</strong> below
-              to send their portal welcome email.
+            <li className="flex items-start gap-2">
+              <Circle className="w-4 h-4 mt-0.5 flex-none text-tbb-ink-4" aria-hidden />
+              <span>
+                <Link
+                  href={`/business-builder/documents/${id}`}
+                  className="text-tbb-blue font-bold hover:underline"
+                >
+                  Upload their signed contract
+                </Link>{" "}
+                so it&apos;s stored on their file.
+              </span>
             </li>
-          </ol>
+            <li className="flex items-start gap-2">
+              <Circle className="w-4 h-4 mt-0.5 flex-none text-tbb-ink-4" aria-hidden />
+              <span>Choose which portal modules they see (further down this page).</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Circle className="w-4 h-4 mt-0.5 flex-none text-tbb-ink-4" aria-hidden />
+              <span>
+                When you&apos;re ready, use <strong>Invite client</strong> below
+                to send their portal welcome email.
+              </span>
+            </li>
+          </ul>
         </section>
       )}
       <header className="space-y-2">
