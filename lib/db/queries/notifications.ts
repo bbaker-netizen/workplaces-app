@@ -11,7 +11,12 @@
  */
 
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { notifications, prospects, type Notification } from "../schema";
+import {
+  engagements,
+  notifications,
+  prospects,
+  type Notification,
+} from "../schema";
 import { withSystemContext, withTenantContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
@@ -100,6 +105,25 @@ export async function listBusinessBuilderNotifications(): Promise<
     for (const p of pRows) nameById.set(p.id, p.companyName);
   }
 
+  // Resolve engagement names for client-acceptance notifications.
+  const engagementIds = Array.from(
+    new Set(
+      rows
+        .filter((r) => r.parentEntityType === "client_accepted")
+        .map((r) => r.parentEntityId),
+    ),
+  );
+  const engNameById = new Map<string, string>();
+  if (engagementIds.length > 0) {
+    const eRows = await withSystemContext((tx) =>
+      tx
+        .select({ id: engagements.id, name: engagements.name })
+        .from(engagements)
+        .where(inArray(engagements.id, engagementIds)),
+    );
+    for (const e of eRows) engNameById.set(e.id, e.name ?? "your client");
+  }
+
   return rows.map((n) => {
     if (n.parentEntityType === "prospect_comment") {
       const name = nameById.get(n.parentEntityId) ?? "a lead";
@@ -115,6 +139,14 @@ export async function listBusinessBuilderNotifications(): Promise<
         ...n,
         contextLabel: `${name} has gone quiet — follow up or move it to Lost`,
         href: `/business-builder/pipeline/${n.parentEntityId}`,
+      };
+    }
+    if (n.parentEntityType === "client_accepted") {
+      const name = engNameById.get(n.parentEntityId) ?? "Your client";
+      return {
+        ...n,
+        contextLabel: `${name} accepted their invitation — open their workspace`,
+        href: `/business-builder/engagements/${n.parentEntityId}`,
       };
     }
     if (n.parentEntityType === "action_item") {

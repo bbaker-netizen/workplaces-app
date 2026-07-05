@@ -168,11 +168,14 @@ export async function inviteClientToPortal(
     /* coach can clean up via Clerk dashboard */
   }
 
-  // 5. Branded welcome email (best-effort).
+  // 5. Branded welcome email to the client + a copy to the Business
+  //    Builder who sent it (best-effort).
   if (invitationUrl && ctx.sender) {
     try {
       const { sendEmailQuietly } = await import("@/lib/email/send");
-      const { engagementWelcomeEmail } = await import("@/lib/email/templates");
+      const { engagementWelcomeEmail, clientInviteCopyEmail } = await import(
+        "@/lib/email/templates"
+      );
       await sendEmailQuietly({
         ...engagementWelcomeEmail({
           to: clientEmail,
@@ -189,8 +192,22 @@ export async function inviteClientToPortal(
         }),
         bypassWorkingHours: true,
       });
+      // Copy the Business Builder so they have a record it went out.
+      if (ctx.sender.email) {
+        await sendEmailQuietly({
+          ...clientInviteCopyEmail({
+            to: ctx.sender.email,
+            coachName: ctx.sender.fullName ?? "there",
+            clientName,
+            clientEmail,
+            engagementName: orgName,
+            engagementUrl: `/business-builder/engagements/${engagementId}`,
+          }),
+          bypassWorkingHours: true,
+        });
+      }
     } catch {
-      /* welcome email is best-effort */
+      /* welcome + copy emails are best-effort */
     }
   }
 
