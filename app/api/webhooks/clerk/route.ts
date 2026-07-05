@@ -33,10 +33,15 @@ import { NextResponse } from "next/server";
 import { and, eq, ne } from "drizzle-orm";
 import {
   actionItems,
+  coaches,
+  engagements,
+  notifications,
   orgs,
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { sendEmailQuietly } from "@/lib/email/send";
+import { clientAcceptedEmail } from "@/lib/email/templates";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -216,7 +221,7 @@ async function handleMembershipUpserted(
     ? data.public_metadata!.app_role!
     : "client_employee";
 
-  await withSystemContext(async (tx) => {
+  const isNewClient = await withSystemContext(async (tx) => {
     const [org] = await tx
       .select({ id: orgs.id })
       .from(orgs)
@@ -226,7 +231,7 @@ async function handleMembershipUpserted(
       console.warn(
         `[clerk-webhook] no orgs row for clerk_org_id=${clerkOrgId}; skipping membership upsert.`,
       );
-      return;
+      return false;
     }
     const [existing] = await tx
       .select({ id: userProfiles.id, orgId: userProfiles.orgId })
@@ -244,7 +249,7 @@ async function handleMembershipUpserted(
           role: role as AppRole,
         })
         .where(eq(userProfiles.id, existing.id));
-      return;
+      return false;
     }
     await tx.insert(userProfiles).values({
       clerkUserId,
@@ -253,7 +258,74 @@ async function handleMembershipUpserted(
       fullName,
       role: role as AppRole,
     });
+    // A brand-new CLIENT-side member just accepted their invite. (Coach /
+    // master-admin memberships aren't client acceptances — don't notify.)
+    return role === "client_lead" || role === "client_manager" || role === "client_employee";
   });
+
+  if (isNewClient) {
+    await notifyCoachOfClientAcceptance(clerkOrgId, fullName);
+  }
+}
+
+/**
+ * When a client accepts their invite and joins the portal, confirm it to
+ * the engagement's Business Builder — an in-app notification plus an email
+ * with the next steps. Best effort: never throw out of the webhook.
+ */
+async function notifyCoachOfClientAcceptance(
+  clerkOrgId: string,
+  clientName: string,
+): Promise<void> {
+  try {
+    const info = await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          engagementId: engagements.id,
+          engagementName: engagements.name,
+          coachEmail: userProfiles.email,
+          coachName: userProfiles.fullName,
+          coachUserProfileId: userProfiles.id,
+          coachOrgId: userProfiles.orgId,
+        })
+        .from(orgs)
+        .innerJoin(engagements, eq(engagements.orgId, orgs.id))
+        .innerJoin(coaches, eq(coaches.id, engagements.coachId))
+        .innerJoin(userProfiles, eq(userProfiles.id, coaches.userProfileId))
+        .where(eq(orgs.clerkOrgId, clerkOrgId))
+        .limit(1);
+      return row ?? null;
+    });
+    if (!info) return;
+
+    // In-app notification in the coach's feed.
+    await withSystemContext(async (tx) => {
+      await tx.insert(notifications).values({
+        orgId: info.coachOrgId,
+        userProfileId: info.coachUserProfileId,
+        type: "message",
+        parentEntityType: "client_accepted",
+        parentEntityId: info.engagementId,
+        sentVia: "both",
+      });
+    });
+
+    // Confirmation email with next steps.
+    if (info.coachEmail) {
+      await sendEmailQuietly({
+        ...clientAcceptedEmail({
+          to: info.coachEmail,
+          coachName: info.coachName ?? "there",
+          clientName,
+          engagementName: info.engagementName ?? "your client",
+          engagementUrl: `/business-builder/engagements/${info.engagementId}`,
+        }),
+        bypassWorkingHours: true,
+      });
+    }
+  } catch (e) {
+    console.error("[clerk-webhook] client-acceptance notify failed:", e);
+  }
 }
 
 async function handleMembershipDeleted(

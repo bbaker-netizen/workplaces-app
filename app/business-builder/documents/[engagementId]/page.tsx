@@ -135,12 +135,18 @@ export default async function CoachDocumentsPage({
         <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           {engagement.name ?? "Engagement"} · Documents
         </h1>
-        <nav className="flex gap-3 text-xs font-mono uppercase tracking-tbb-caps">
+        <nav className="flex gap-3 text-xs font-mono uppercase tracking-tbb-caps items-center">
+          <Link
+            href={`/business-builder/engagements/${engagement.id}`}
+            className="inline-flex items-center gap-1 text-tbb-blue font-bold hover:underline"
+          >
+            ← {engagement.name ?? "Client"} workspace
+          </Link>
           <Link
             href="/business-builder"
             className="text-muted-foreground hover:text-foreground"
           >
-            ← Coach
+            Coach home
           </Link>
           {engagements.length > 1 && (
             <details className="relative">

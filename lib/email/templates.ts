@@ -787,3 +787,94 @@ export function engagementWelcomeEmail(
 
   return { to: input.to, subject, html, text };
 }
+
+/* ------------- client invite: copy to the Business Builder ------------- */
+
+export type ClientInviteCopyEmailInput = {
+  to: string; // the Business Builder who sent the invite
+  coachName: string;
+  clientName: string;
+  clientEmail: string;
+  engagementName: string;
+  engagementUrl: string;
+};
+
+/** Sent to the Business Builder as their copy when they invite a client —
+ *  so they have a record the invitation went out and a link back to the
+ *  workspace. */
+export function clientInviteCopyEmail(
+  input: ClientInviteCopyEmailInput,
+): EmailEnvelope {
+  const url = input.engagementUrl.startsWith("http")
+    ? input.engagementUrl
+    : appUrl() + input.engagementUrl;
+  const subject = `Invitation sent to ${input.clientName} (${input.engagementName})`;
+  const html = shell({
+    preheader: `You invited ${input.clientName} to their portal.`,
+    heading: `Invitation sent to ${input.clientName}`,
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.coachName.split(" ")[0] ?? input.coachName)},</p>
+      <p style="margin:0 0 12px 0;">This is your copy — a portal invitation just went out to <strong>${escapeHtml(input.clientName)}</strong> (${escapeHtml(input.clientEmail)}) for <strong>${escapeHtml(input.engagementName)}</strong>.</p>
+      <p style="margin:0 0 12px 0;">You'll get another email the moment they accept, with what to do next.</p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Open the workspace",
+  });
+  const text = [
+    `Your copy: a portal invitation was sent to ${input.clientName} (${input.clientEmail}) for ${input.engagementName}.`,
+    "",
+    `You'll be notified when they accept.`,
+    "",
+    `Workspace: ${url}`,
+  ].join("\n");
+  return { to: input.to, subject, html, text };
+}
+
+/* ---------- client accepted their invite: notify the Builder ---------- */
+
+export type ClientAcceptedEmailInput = {
+  to: string; // the Business Builder
+  coachName: string;
+  clientName: string;
+  engagementName: string;
+  engagementUrl: string;
+};
+
+/** Sent to the Business Builder when a client accepts their invitation and
+ *  lands in the portal — confirmation + the next steps. */
+export function clientAcceptedEmail(
+  input: ClientAcceptedEmailInput,
+): EmailEnvelope {
+  const url = input.engagementUrl.startsWith("http")
+    ? input.engagementUrl
+    : appUrl() + input.engagementUrl;
+  const subject = `${input.clientName} accepted — ${input.engagementName} is live`;
+  const html = shell({
+    preheader: `${input.clientName} joined their portal.`,
+    heading: `${input.clientName} is in!`,
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.coachName.split(" ")[0] ?? input.coachName)},</p>
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.clientName)}</strong> accepted their invitation and now has access to the <strong>${escapeHtml(input.engagementName)}</strong> portal.</p>
+      <p style="margin:0 0 8px 0;"><strong>What to do next:</strong></p>
+      <ol style="margin:0 0 12px 18px;padding:0;">
+        <li style="margin-bottom:4px;">Schedule their first Business Building Session.</li>
+        <li style="margin-bottom:4px;">Post a welcome message in their Communication thread.</li>
+        <li style="margin-bottom:4px;">Confirm the portal modules they can see.</li>
+      </ol>
+    `,
+    buttonHref: url,
+    buttonLabel: "Open the workspace",
+    accent: "#E87722",
+  });
+  const text = [
+    `${input.clientName} accepted their invitation and joined the ${input.engagementName} portal.`,
+    "",
+    "What to do next:",
+    "  1. Schedule their first Business Building Session.",
+    "  2. Post a welcome message in their Communication thread.",
+    "  3. Confirm the portal modules they can see.",
+    "",
+    `Workspace: ${url}`,
+  ].join("\n");
+  return { to: input.to, subject, html, text };
+}

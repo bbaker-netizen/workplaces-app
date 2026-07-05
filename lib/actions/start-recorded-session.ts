@@ -96,7 +96,10 @@ export async function startRecordedSession(
   let htmlLink: string | null = null;
   try {
     const r = await createMeetingWithInvite(profile.userProfileId, {
-      summary: `Recorded session — ${prospect.companyName}`,
+      // Title format matches the Fireflies channel convention
+      // ("{Client} - Business Building Session") so the coach's Fireflies
+      // assistant routes the recording to the right channel.
+      summary: `${prospect.companyName} - Business Building Session`,
       description:
         "Recorded via Fireflies. The Fireflies notetaker will join and " +
         "capture the transcript; action items are drafted afterward.",

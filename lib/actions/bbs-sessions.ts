@@ -152,7 +152,7 @@ export async function scheduleSession(
       orgId: created.orgId,
       userProfileId: profile.userProfileId,
       bbsSessionId: created.row.id,
-      summary: `BBS · ${created.engagementName}`,
+      summary: `${created.engagementName} - Business Building Session`,
       description: sessionDescription({
         engagementName: created.engagementName,
         type: data.type,
@@ -294,7 +294,7 @@ export async function updateSession(
         orgId: result.orgId,
         userProfileId: profile.userProfileId,
         bbsSessionId: id,
-        summary: `BBS · ${"engagementName" in result ? result.engagementName : "Engagement"}`,
+        summary: `${"engagementName" in result ? result.engagementName : "Engagement"} - Business Building Session`,
         description: sessionDescription({
           engagementName:
             "engagementName" in result ? (result.engagementName ?? "Engagement") : "Engagement",

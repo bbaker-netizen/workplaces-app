@@ -39,12 +39,21 @@ export function EmbeddedAppManager({
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [projectId, setProjectId] = useState("");
+  const [query, setQuery] = useState("");
   const [authMode, setAuthMode] = useState("public");
   const [instructions, setInstructions] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const available = netlifyProjects;
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? available.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) || p.url.toLowerCase().includes(q),
+      )
+    : available;
+  const selectedProject = available.find((p) => p.id === projectId) ?? null;
 
   function add() {
     setError(null);
@@ -69,6 +78,7 @@ export function EmbeddedAppManager({
       }
       setAdding(false);
       setProjectId("");
+      setQuery("");
       setAuthMode("public");
       setInstructions("");
       router.refresh();
@@ -135,24 +145,67 @@ export function EmbeddedAppManager({
             </p>
           ) : (
             <>
-              <label className="block space-y-1">
+              <div className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-                  Netlify project
+                  Netlify project{" "}
+                  <span className="text-tbb-ink-4 font-normal normal-case tracking-normal">
+                    ({available.length} synced)
+                  </span>
                 </span>
-                <select
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
                   disabled={isPending}
+                  placeholder="Type to search your Netlify projects…"
                   className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-                >
-                  <option value="">Pick a project…</option>
-                  {available.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                />
+                <div className="max-h-52 overflow-y-auto rounded-md border border-tbb-line divide-y divide-tbb-line-soft bg-white">
+                  {filtered.length === 0 ? (
+                    <p className="px-3 py-3 text-xs text-tbb-ink-3">
+                      No projects match &ldquo;{query}&rdquo;.
+                    </p>
+                  ) : (
+                    filtered.map((p) => {
+                      const on = p.id === projectId;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setProjectId(p.id)}
+                          disabled={isPending}
+                          className={
+                            "w-full text-left px-3 py-2 flex items-center gap-2 transition-colors " +
+                            (on
+                              ? "bg-tbb-blue-50 ring-1 ring-inset ring-tbb-blue"
+                              : "hover:bg-tbb-cream-50")
+                          }
+                        >
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-bold text-tbb-navy truncate">
+                              {p.name}
+                            </span>
+                            <span className="block text-[11px] text-tbb-ink-3 truncate">
+                              {p.url}
+                            </span>
+                          </span>
+                          {on && (
+                            <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue shrink-0">
+                              Selected
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                {selectedProject && (
+                  <p className="text-[11px] text-tbb-ink-3">
+                    Adding <strong>{selectedProject.name}</strong> to this
+                    client&apos;s portal.
+                  </p>
+                )}
+              </div>
               <label className="block space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
                   Access
