@@ -12,6 +12,7 @@
  */
 
 import { getDocument } from "@/lib/db/queries/documents";
+import { getProspectDocumentForDownload } from "@/lib/db/queries/prospect-documents";
 import { downloadDocumentBlob } from "@/lib/storage/blobs";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +22,22 @@ export async function GET(
   _req: Request,
   { params }: { params: { id: string } },
 ): Promise<Response> {
-  const doc = await getDocument(params.id);
-  if (!doc) {
+  // Engagement documents go through the RLS-scoped getDocument. Prospect
+  // (lead) documents have no engagement, so fall back to the Business-
+  // Builder-only prospect-document lookup.
+  const engagementDoc = await getDocument(params.id);
+  const meta = engagementDoc
+    ? {
+        blobKey: engagementDoc.blobKey,
+        filename: engagementDoc.originalFilename,
+        fileType: engagementDoc.fileType,
+      }
+    : await getProspectDocumentForDownload(params.id);
+  if (!meta) {
     return new Response("Not found", { status: 404 });
   }
 
-  const blob = await downloadDocumentBlob(doc.blobKey);
+  const blob = await downloadDocumentBlob(meta.blobKey);
   if (!blob) {
     return new Response("File missing on storage.", { status: 410 });
   }
@@ -34,11 +45,10 @@ export async function GET(
   // Use `attachment` disposition by default — the browser downloads
   // rather than tries to render unfamiliar mime types. Quote-escape
   // the filename per RFC 6266.
-  const safeName = doc.originalFilename.replace(/"/g, '\\"');
+  const safeName = meta.filename.replace(/"/g, '\\"');
   return new Response(blob.body, {
     headers: {
-      "Content-Type": doc.fileType || "application/octet-stream",
-      "Content-Length": String(doc.sizeBytes),
+      "Content-Type": meta.fileType || "application/octet-stream",
       "Content-Disposition": `attachment; filename="${safeName}"`,
       "Cache-Control": "private, max-age=0, no-store",
     },
