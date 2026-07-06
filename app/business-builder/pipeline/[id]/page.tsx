@@ -183,10 +183,20 @@ export default async function ProspectDetailPage({
   const showQbo = phase === "closing" || phase === "won" || isConverted;
   const showConvert = phase === "closing";
 
-  // Next-action time (HH:MM) and location for the follow-up panel. A stored
-  // time of exactly noon is our "no specific time" sentinel, shown as blank.
-  const nextActionTime = prospect.nextActionDate
-    ? new Date(prospect.nextActionDate).toISOString().slice(11, 16)
+  // Next-action date/time for the follow-up panel. Guard the date parsing:
+  // an unparseable stored value would otherwise make `.toISOString()` throw
+  // a RangeError and crash the whole page render. A stored time of exactly
+  // noon is our "no specific time" sentinel, shown as blank.
+  const nextActionAt = prospect.nextActionDate
+    ? new Date(prospect.nextActionDate)
+    : null;
+  const nextActionValid =
+    nextActionAt !== null && !Number.isNaN(nextActionAt.getTime());
+  const nextActionDateYmd = nextActionValid
+    ? nextActionAt!.toISOString().slice(0, 10)
+    : null;
+  const nextActionTime = nextActionValid
+    ? nextActionAt!.toISOString().slice(11, 16)
     : null;
 
   return (
@@ -333,11 +343,7 @@ export default async function ProspectDetailPage({
           {/* Schedule a follow-up — sets the next-action date + logs it. */}
           <ScheduleFollowupPanel
             prospectId={prospect.id}
-            currentDate={
-              prospect.nextActionDate
-                ? new Date(prospect.nextActionDate).toISOString().slice(0, 10)
-                : null
-            }
+            currentDate={nextActionDateYmd}
             currentTime={nextActionTime === "12:00" ? null : nextActionTime}
             currentLocation={prospect.nextActionLocation}
             currentNote={prospect.nextActionNote}
