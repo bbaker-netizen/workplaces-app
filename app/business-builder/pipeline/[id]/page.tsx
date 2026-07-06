@@ -419,6 +419,17 @@ export default async function ProspectDetailPage({
                   preview so you can see what we know before deciding to
                   formalize them.
                 </p>
+                <p className="text-xs text-tbb-ink-3">
+                  <strong>How it finds the recording:</strong> virtual calls
+                  match automatically on{" "}
+                  {prospect.contactName ?? "the contact"}&apos;s email. For{" "}
+                  <strong>in-person</strong> meetings Fireflies usually only
+                  logs the coach, so title the recording{" "}
+                  <span className="font-mono text-tbb-navy">
+                    Prospect — {prospect.companyName}
+                  </span>{" "}
+                  and it&apos;ll be picked up.
+                </p>
                 <SoulFilePreviewButton prospectId={prospect.id} />
               </div>
             )}

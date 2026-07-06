@@ -22,9 +22,11 @@ import { getProspect } from "@/lib/db/queries/prospects";
 import { complete } from "@/lib/ai/anthropic";
 import {
   fetchTranscript,
+  listRecentTranscripts,
   searchTranscriptsByAttendee,
   transcriptToPlainText,
 } from "@/lib/integrations/fireflies";
+import { normalizeName } from "@/lib/sync/match-emails";
 
 const TRANSCRIPT_CHAR_CAP = 60_000;
 
@@ -123,19 +125,47 @@ export async function previewSoulFileDraft(input: {
   if (!prospect) {
     return { ok: false, error: "Prospect not found." };
   }
-  if (!prospect.contactEmail) {
+
+  // 1. Fireflies search — match recordings to this prospect two ways, then
+  //    merge:
+  //      a) The prospect's email as a meeting attendee. Works for VIRTUAL
+  //         calls, where Fireflies captures every participant's address.
+  //      b) A title starting "Prospect — <Company>". The IN-PERSON fallback:
+  //         face-to-face recordings usually capture only the coach as an
+  //         attendee, so the title is the only reliable signal (same reason
+  //         the engagement-meetings sync matches BBS recordings by title).
+  const companyNorm = normalizeName(prospect.companyName ?? "");
+  const titlePrefix = companyNorm ? `prospect ${companyNorm}` : null;
+
+  if (!prospect.contactEmail && !titlePrefix) {
     return {
       ok: false,
-      error: "This prospect has no email — Fireflies needs an attendee email to search.",
+      error:
+        "This prospect has no email and no company name — Fireflies needs one of them to find recordings.",
     };
   }
 
-  // 1. Fireflies search.
-  let summaries;
+  type Summary = Awaited<
+    ReturnType<typeof searchTranscriptsByAttendee>
+  >[number];
+  const byId = new Map<string, Summary>();
   try {
-    summaries = await searchTranscriptsByAttendee(prospect.contactEmail, {
-      limit: 3,
-    });
+    const [byAttendee, recent] = await Promise.all([
+      prospect.contactEmail
+        ? searchTranscriptsByAttendee(prospect.contactEmail, { limit: 5 })
+        : Promise.resolve([]),
+      titlePrefix
+        ? listRecentTranscripts({ maxTotal: 400 })
+        : Promise.resolve([]),
+    ]);
+    for (const t of byAttendee) byId.set(t.id, t);
+    if (titlePrefix) {
+      for (const t of recent) {
+        if (normalizeName(t.title ?? "").startsWith(titlePrefix)) {
+          byId.set(t.id, t);
+        }
+      }
+    }
   } catch (e) {
     return {
       ok: false,
@@ -143,10 +173,19 @@ export async function previewSoulFileDraft(input: {
       kind: "api_error",
     };
   }
+
+  // Newest first, cap at 3 for the draft.
+  const summaries = Array.from(byId.values())
+    .sort((a, b) => (b.date ?? 0) - (a.date ?? 0))
+    .slice(0, 3);
+
   if (summaries.length === 0) {
+    const emailPart = prospect.contactEmail
+      ? `${prospect.contactEmail} wasn't a captured attendee on any call`
+      : "this prospect has no email on file";
     return {
       ok: false,
-      error: `No Fireflies transcripts found where ${prospect.contactEmail} is an attendee. Make sure the email matches what they use on calls.`,
+      error: `No Fireflies recordings found for ${prospect.companyName}. Either ${emailPart}, or no recording is titled "Prospect — ${prospect.companyName}". For in-person meetings, title the Fireflies recording "Prospect — ${prospect.companyName}" so it gets picked up.`,
       kind: "no_transcripts",
     };
   }

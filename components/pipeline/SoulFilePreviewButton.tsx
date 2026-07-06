@@ -6,8 +6,10 @@
  * formalising them into an engagement.
  *
  * Flow:
- *   - Click button → server action pulls last 3 Fireflies transcripts
- *     for the prospect's email + Claude drafts a 6-section Soul File.
+ *   - Click button → server action pulls up to 3 Fireflies transcripts
+ *     matched to the prospect (by their email as an attendee, or by a
+ *     "Prospect — <Company>" recording title) + Claude drafts a 6-section
+ *     Soul File.
  *   - Result lands in a modal with markdown rendering + copy-to-
  *     clipboard so Bruce can paste it elsewhere or just read it.
  *   - Same draft prompt as the engagement-create-time seeder, so what
