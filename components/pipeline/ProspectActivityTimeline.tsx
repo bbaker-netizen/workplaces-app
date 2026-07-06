@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   Check,
+  FileText,
   Link2,
   Loader2,
   Mail,
@@ -50,6 +51,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   diagnostic_sent: Mail,
   qbo_linked: Link2,
   follow_up: CalendarClock,
+  document: FileText,
 };
 
 export function ProspectActivityTimeline({

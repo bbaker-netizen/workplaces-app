@@ -1122,6 +1122,12 @@ export const documents = pgTable(
     engagementId: uuid("engagement_id").references(() => engagements.id, {
       onDelete: "cascade",
     }),
+    // A document can instead (or also) belong to a prospect/lead — e.g. the
+    // PDF The Climb generates — so it stays on file whether or not they
+    // convert. Nullable; engagement documents leave it null.
+    prospectId: uuid("prospect_id").references((): AnyPgColumn => prospects.id, {
+      onDelete: "cascade",
+    }),
     blobKey: text("blob_key").notNull().unique(),
     originalFilename: text("original_filename").notNull(),
     fileType: text("file_type").notNull(),

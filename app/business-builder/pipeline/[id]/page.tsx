@@ -26,6 +26,7 @@ import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
 import { listProspectComments } from "@/lib/db/queries/prospect-comments";
+import { listProspectDocuments } from "@/lib/db/queries/prospect-documents";
 import {
   daysSinceContact,
   isProspectStale,
@@ -50,6 +51,7 @@ import { ProspectLeadEssentials } from "@/components/pipeline/ProspectLeadEssent
 import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
 import { ProspectComments } from "@/components/pipeline/ProspectComments";
+import { ProspectDocuments } from "@/components/pipeline/ProspectDocuments";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
@@ -104,6 +106,7 @@ export default async function ProspectDetailPage({
     org,
     businessBuilders,
     comments,
+    prospectDocs,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -162,6 +165,7 @@ export default async function ProspectDetailPage({
     }),
     listBusinessBuilders(),
     listProspectComments(prospect.id),
+    listProspectDocuments(prospect.id),
   ]);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
@@ -556,8 +560,12 @@ export default async function ProspectDetailPage({
           )}
         </div>
 
-        {/* Right column — internal team discussion + activity timeline */}
+        {/* Right column — documents on file + team discussion + activity */}
         <aside className="lg:col-span-1 space-y-6">
+          <ProspectDocuments
+            prospectId={prospect.id}
+            documents={prospectDocs}
+          />
           <ProspectComments
             prospectId={prospect.id}
             comments={comments}

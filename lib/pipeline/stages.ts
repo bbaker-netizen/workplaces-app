@@ -260,6 +260,7 @@ const SYSTEM_ACTIVITY_LABELS: Record<string, string> = {
   diagnostic_sent: "Diagnostic sent",
   qbo_linked: "QuickBooks linked",
   follow_up: "Follow-up",
+  document: "Document",
 };
 
 export function activityTypeLabel(type: string): string {
