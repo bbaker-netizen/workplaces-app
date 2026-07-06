@@ -25,9 +25,13 @@ function prettySize(bytes: number): string {
 export function ProspectDocuments({
   prospectId,
   documents,
+  embedded = false,
 }: {
   prospectId: string;
   documents: ProspectDocument[];
+  /** When rendered inside a CollapsibleSection, drop the card chrome +
+   *  title (the drawer supplies them) and float the Upload button. */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -49,33 +53,44 @@ export function ProspectDocuments({
     });
   }
 
+  const uploadButton = (
+    <button
+      type="button"
+      onClick={() => fileRef.current?.click()}
+      disabled={isUploading}
+      className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill border border-tbb-line bg-white hover:border-tbb-blue disabled:opacity-50"
+    >
+      {isUploading ? (
+        <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+      ) : (
+        <Upload className="w-3 h-3" aria-hidden />
+      )}
+      Upload
+    </button>
+  );
+
+  const Wrapper = embedded ? "div" : "section";
+
   return (
-    <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
-      <header className="px-5 py-3 border-b border-tbb-line-soft flex items-center justify-between gap-2">
-        <h2 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-          <FileText className="w-3.5 h-3.5" aria-hidden />
-          Documents on file
-        </h2>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={isUploading}
-          className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps px-2.5 py-1 rounded-pill border border-tbb-line bg-white hover:border-tbb-blue disabled:opacity-50"
-        >
-          {isUploading ? (
-            <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
-          ) : (
-            <Upload className="w-3 h-3" aria-hidden />
-          )}
-          Upload
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          onChange={onFile}
-          className="hidden"
-        />
-      </header>
+    <Wrapper
+      className={
+        embedded
+          ? ""
+          : "border border-tbb-line rounded-lg bg-white shadow-tbb-sm"
+      }
+    >
+      {embedded ? (
+        <div className="px-5 pt-4 flex justify-end">{uploadButton}</div>
+      ) : (
+        <header className="px-5 py-3 border-b border-tbb-line-soft flex items-center justify-between gap-2">
+          <h2 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            <FileText className="w-3.5 h-3.5" aria-hidden />
+            Documents on file
+          </h2>
+          {uploadButton}
+        </header>
+      )}
+      <input ref={fileRef} type="file" onChange={onFile} className="hidden" />
 
       <p className="px-5 pt-3 text-[11px] text-tbb-ink-3">
         The PDF from The Climb auto-saves here; you can also upload anything
@@ -125,7 +140,7 @@ export function ProspectDocuments({
           ))
         )}
       </ul>
-    </section>
+    </Wrapper>
   );
 }
 

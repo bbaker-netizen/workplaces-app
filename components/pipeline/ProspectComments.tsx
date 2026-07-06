@@ -27,6 +27,7 @@ export function ProspectComments({
   teammates,
   currentUserId,
   isMasterAdmin,
+  embedded = false,
 }: {
   prospectId: string;
   comments: ProspectCommentWithAuthor[];
@@ -34,6 +35,9 @@ export function ProspectComments({
   teammates: Teammate[];
   currentUserId: string;
   isMasterAdmin: boolean;
+  /** When rendered inside a CollapsibleSection, drop the card chrome +
+   *  title (the drawer supplies them). */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
@@ -72,17 +76,27 @@ export function ProspectComments({
     });
   }
 
+  const Wrapper = embedded ? "div" : "section";
+
   return (
-    <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
-      <header className="px-5 py-3 border-b border-tbb-line-soft flex items-center justify-between gap-2">
-        <h2 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-          <MessageCircle className="w-3.5 h-3.5" aria-hidden />
-          Team discussion
-        </h2>
-        <span className="text-[11px] text-tbb-ink-3 tabular-nums">
-          {comments.length} {comments.length === 1 ? "comment" : "comments"}
-        </span>
-      </header>
+    <Wrapper
+      className={
+        embedded
+          ? ""
+          : "border border-tbb-line rounded-lg bg-white shadow-tbb-sm"
+      }
+    >
+      {!embedded && (
+        <header className="px-5 py-3 border-b border-tbb-line-soft flex items-center justify-between gap-2">
+          <h2 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            <MessageCircle className="w-3.5 h-3.5" aria-hidden />
+            Team discussion
+          </h2>
+          <span className="text-[11px] text-tbb-ink-3 tabular-nums">
+            {comments.length} {comments.length === 1 ? "comment" : "comments"}
+          </span>
+        </header>
+      )}
 
       <p className="px-5 pt-3 text-[11px] text-tbb-ink-3">
         Private to Business Builders — the client never sees this. Use it to
@@ -193,7 +207,7 @@ export function ProspectComments({
           Post comment
         </button>
       </div>
-    </section>
+    </Wrapper>
   );
 }
 

@@ -21,7 +21,13 @@ import {
   Search,
   Clock,
   Mountain,
+  Zap,
+  StickyNote,
+  FileText,
+  MessageCircle,
+  Archive,
 } from "lucide-react";
+import { CollapsibleSection } from "@/components/pipeline/CollapsibleSection";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
@@ -374,11 +380,15 @@ export default async function ProspectDetailPage({
             currentNote={prospect.nextActionNote}
           />
 
-          {/* Quick actions — Schedule a meeting + send the diagnostic. */}
-          <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-4 shadow-tbb-sm">
-            <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-              Quick actions
-            </h2>
+          {/* Quick actions — collapsible. Auto-opens for fresh leads (when
+              you're actively working them), collapses once qualifying. */}
+          <CollapsibleSection
+            title="Quick actions"
+            storageKey="quick-actions"
+            defaultOpen={phase === "lead"}
+            icon={<Zap className="w-3.5 h-3.5" aria-hidden />}
+          >
+            <div className="p-5 space-y-4">
             <ScheduleMeetingButton
               prospectId={prospect.id}
               companyName={prospect.companyName}
@@ -466,7 +476,8 @@ export default async function ProspectDetailPage({
                 <ResetEngagementButton prospectId={prospect.id} />
               </div>
             )}
-          </section>
+            </div>
+          </CollapsibleSection>
 
           {/* Deal card — value / fee / next-action detail. Surfaces once
               the prospect is being qualified; leads use Lead essentials. */}
@@ -500,24 +511,28 @@ export default async function ProspectDetailPage({
             />
           )}
 
-          {/* Notes */}
-          <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-                Notes
-              </h2>
-              <ProspectInlineEdit
-                prospectId={prospect.id}
-                field="notes"
-                initial={{ notes: prospect.notes }}
-              />
+          {/* Notes — collapsible. */}
+          <CollapsibleSection
+            title="Notes"
+            storageKey="notes"
+            icon={<StickyNote className="w-3.5 h-3.5" aria-hidden />}
+            badge={prospect.notes ? undefined : "empty"}
+          >
+            <div className="p-5 space-y-3">
+              <div className="flex justify-end">
+                <ProspectInlineEdit
+                  prospectId={prospect.id}
+                  field="notes"
+                  initial={{ notes: prospect.notes }}
+                />
+              </div>
+              {prospect.notes ? (
+                <MarkdownBody body={prospect.notes} />
+              ) : (
+                <p className="text-sm text-tbb-ink-4 italic">No notes yet.</p>
+              )}
             </div>
-            {prospect.notes ? (
-              <MarkdownBody body={prospect.notes} />
-            ) : (
-              <p className="text-sm text-tbb-ink-4 italic">No notes yet.</p>
-            )}
-          </section>
+          </CollapsibleSection>
 
           {/* Signing — proposals/contracts. Hidden for early leads. */}
           {showSigning && (
@@ -571,21 +586,39 @@ export default async function ProspectDetailPage({
           )}
         </div>
 
-        {/* Right column — documents on file + team discussion + activity */}
+        {/* Right column — documents on file + team discussion + activity.
+            Documents + discussion collapse (opened on demand); the activity
+            timeline stays open so there's always a live sense of history. */}
         <aside className="lg:col-span-1 space-y-6">
-          <ProspectDocuments
-            prospectId={prospect.id}
-            documents={prospectDocs}
-          />
-          <ProspectComments
-            prospectId={prospect.id}
-            comments={comments}
-            teammates={businessBuilders.filter(
-              (b) => b.id !== profile.userProfileId,
-            )}
-            currentUserId={profile.userProfileId}
-            isMasterAdmin={profile.role === "master_admin"}
-          />
+          <CollapsibleSection
+            title="Documents on file"
+            storageKey="documents"
+            icon={<FileText className="w-3.5 h-3.5" aria-hidden />}
+            badge={prospectDocs.length || undefined}
+          >
+            <ProspectDocuments
+              prospectId={prospect.id}
+              documents={prospectDocs}
+              embedded
+            />
+          </CollapsibleSection>
+          <CollapsibleSection
+            title="Team discussion"
+            storageKey="team-discussion"
+            icon={<MessageCircle className="w-3.5 h-3.5" aria-hidden />}
+            badge={comments.length || undefined}
+          >
+            <ProspectComments
+              prospectId={prospect.id}
+              comments={comments}
+              teammates={businessBuilders.filter(
+                (b) => b.id !== profile.userProfileId,
+              )}
+              currentUserId={profile.userProfileId}
+              isMasterAdmin={profile.role === "master_admin"}
+              embedded
+            />
+          </CollapsibleSection>
           <ProspectActivityTimeline
             prospectId={prospect.id}
             activities={activities}
@@ -605,26 +638,28 @@ export default async function ProspectDetailPage({
         emailTemplates={templates}
       />
 
-      {/* Archive this prospect (soft-delete). Recoverable from the
-          Archived view; activity log + comms are preserved. */}
-      <section className="border border-tbb-danger/30 bg-tbb-cream-50 rounded-lg p-5 space-y-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-danger">
-            {prospect.archivedAt ? "Archived" : "Archive"}
-          </p>
-          <p className="text-sm text-tbb-ink-2 mt-1">
+      {/* Archive this prospect (soft-delete) — collapsed by default; it's
+          rarely used and destructive, so it stays out of the way until
+          asked for. Recoverable from the Archived view. */}
+      <CollapsibleSection
+        title={prospect.archivedAt ? "Archived" : "Archive"}
+        storageKey="archive"
+        icon={<Archive className="w-3.5 h-3.5" aria-hidden />}
+      >
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-tbb-ink-2">
             {prospect.archivedAt
               ? "This prospect is archived and hidden from the pipeline. Restore it to bring it back, or — for a lead you\u2019re sure about — delete it permanently. Converted clients are archive-only."
               : "Archive removes this prospect from the pipeline but keeps the record, activity log, and communications — restore it anytime. For deals that didn't close, set Stage = Lost instead so they stay in the funnel history."}
           </p>
+          <DeleteProspectButton
+            prospectId={prospect.id}
+            prospectLabel={prospect.companyName}
+            archived={Boolean(prospect.archivedAt)}
+            isClient={Boolean(prospect.convertedEngagementId)}
+          />
         </div>
-        <DeleteProspectButton
-          prospectId={prospect.id}
-          prospectLabel={prospect.companyName}
-          archived={Boolean(prospect.archivedAt)}
-          isClient={Boolean(prospect.convertedEngagementId)}
-        />
-      </section>
+      </CollapsibleSection>
     </main>
   );
 }
