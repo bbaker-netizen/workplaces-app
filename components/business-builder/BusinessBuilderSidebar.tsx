@@ -29,7 +29,6 @@ import {
   ChevronRight,
   BarChart3,
   Bell,
-  Mountain,
   CheckSquare,
   Eye,
   FileText,
@@ -94,7 +93,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     icon: Filter,
     items: [
       { href: "/business-builder/pipeline", label: "Prospects & Clients", icon: Filter, tourId: "Coach-pipeline" },
-      { href: "/business-builder/the-climb", label: "The Climb (meeting prep)", icon: Mountain },
       { href: "/business-builder/reports", label: "Reports", icon: BarChart3 },
     ],
   },

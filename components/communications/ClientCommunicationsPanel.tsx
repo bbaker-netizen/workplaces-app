@@ -49,6 +49,7 @@ export function ClientCommunicationsPanel({
   smsEnabled,
   readOnly = false,
   emailTemplates = [],
+  embedded = false,
 }: {
   prospectId?: string;
   engagementId?: string;
@@ -66,6 +67,10 @@ export function ClientCommunicationsPanel({
    *  Only meaningful for prospect context — engagement-level template
    *  resolution lands in a later phase. */
   emailTemplates?: EmailTemplateOption[];
+  /** When inside a CollapsibleSection, drop the outer card chrome + the
+   *  "Communications" title (the drawer supplies them). The channel tabs
+   *  and compose actions stay. */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Channel>("all");
@@ -242,8 +247,13 @@ export function ClientCommunicationsPanel({
     });
   }
 
+  const Wrapper = embedded ? "div" : "section";
   return (
-    <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
+    <Wrapper
+      className={
+        embedded ? "" : "border border-tbb-line rounded-lg bg-white shadow-tbb-sm"
+      }
+    >
       {sentNotice && (
         <div
           role="status"
@@ -261,9 +271,11 @@ export function ClientCommunicationsPanel({
         </div>
       )}
       <header className="border-b border-tbb-line-soft px-5 py-3 flex items-center gap-3 flex-wrap">
-        <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-          Communications
-        </h2>
+        {!embedded && (
+          <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            Communications
+          </h2>
+        )}
         <span className="text-xs text-tbb-ink-3 tabular-nums">
           {filtered.length} of {rows.length}
         </span>
@@ -557,7 +569,7 @@ export function ClientCommunicationsPanel({
           ))}
         </ul>
       )}
-    </section>
+    </Wrapper>
   );
 }
 

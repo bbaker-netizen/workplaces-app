@@ -22,6 +22,7 @@ export function ScheduleFollowupPanel({
   currentTime,
   currentLocation,
   currentNote,
+  embedded = false,
 }: {
   prospectId: string;
   /** Existing next-action date as YYYY-MM-DD, if any. */
@@ -30,6 +31,8 @@ export function ScheduleFollowupPanel({
   currentTime: string | null;
   currentLocation: string | null;
   currentNote: string | null;
+  /** When inside a CollapsibleSection, drop the card chrome + title. */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [date, setDate] = useState(currentDate ?? "");
@@ -85,14 +88,23 @@ export function ScheduleFollowupPanel({
     });
   }
 
+  const Wrapper = embedded ? "div" : "section";
   return (
-    <section className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm">
-      <div className="flex items-center gap-2">
-        <CalendarPlus className="w-4 h-4 text-tbb-blue" aria-hidden />
-        <h2 className="font-bold text-tbb-navy">
-          {editing ? "Follow-up" : "Schedule a follow-up"}
-        </h2>
-      </div>
+    <Wrapper
+      className={
+        embedded
+          ? "p-5 space-y-3"
+          : "border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm"
+      }
+    >
+      {!embedded && (
+        <div className="flex items-center gap-2">
+          <CalendarPlus className="w-4 h-4 text-tbb-blue" aria-hidden />
+          <h2 className="font-bold text-tbb-navy">
+            {editing ? "Follow-up" : "Schedule a follow-up"}
+          </h2>
+        </div>
+      )}
       <p className="text-xs text-tbb-ink-3">
         Sets the next-action date, time, and place, and logs it on the timeline
         below. It also surfaces on your console home when it comes due.
@@ -181,7 +193,7 @@ export function ScheduleFollowupPanel({
         )}
         {error && <span className="text-sm text-tbb-danger">{error}</span>}
       </div>
-    </section>
+    </Wrapper>
   );
 }
 
