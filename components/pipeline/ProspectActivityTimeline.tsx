@@ -12,6 +12,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarClock,
   Check,
   Link2,
   Loader2,
@@ -48,6 +49,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   signature_request: PenLine,
   diagnostic_sent: Mail,
   qbo_linked: Link2,
+  follow_up: CalendarClock,
 };
 
 export function ProspectActivityTimeline({

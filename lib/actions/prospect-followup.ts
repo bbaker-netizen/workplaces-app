@@ -7,7 +7,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { prospectActivities, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -85,13 +85,35 @@ export async function scheduleProspectFollowup(
         `Follow-up scheduled for ${prettyDate(date)}` +
         (time ? ` at ${prettyTime(time)}` : "") +
         (loc ? ` · ${loc}` : "");
-      await tx.insert(prospectActivities).values({
-        prospectId,
-        orgId: p.orgId,
-        type: "follow_up",
-        subject,
-        body: note ?? null,
-      });
+
+      // Keep a single follow-up entry on the timeline that reflects the
+      // CURRENT plan: update the existing one in place (bumping it to now)
+      // instead of stacking a new row every time the coach edits it.
+      const [existing] = await tx
+        .select({ id: prospectActivities.id })
+        .from(prospectActivities)
+        .where(
+          and(
+            eq(prospectActivities.prospectId, prospectId),
+            eq(prospectActivities.type, "follow_up"),
+          ),
+        )
+        .orderBy(desc(prospectActivities.occurredAt))
+        .limit(1);
+      if (existing) {
+        await tx
+          .update(prospectActivities)
+          .set({ subject, body: note ?? null, occurredAt: new Date() })
+          .where(eq(prospectActivities.id, existing.id));
+      } else {
+        await tx.insert(prospectActivities).values({
+          prospectId,
+          orgId: p.orgId,
+          type: "follow_up",
+          subject,
+          body: note ?? null,
+        });
+      }
     });
     revalidatePath(`/business-builder/pipeline/${prospectId}`);
     return { ok: true };
@@ -99,6 +121,51 @@ export async function scheduleProspectFollowup(
     return {
       ok: false,
       error: (e instanceof Error ? e.message : "Couldn't schedule.").slice(0, 200),
+    };
+  }
+}
+
+/**
+ * Remove a prospect's scheduled follow-up: clears the next-action fields
+ * and deletes the follow-up entry from the timeline so the log reflects
+ * that there's no longer a follow-up on the books.
+ */
+export async function clearProspectFollowup(
+  prospectId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  if (!z.string().uuid().safeParse(prospectId).success) {
+    return { ok: false, error: "Invalid id." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(prospects)
+        .set({
+          nextActionDate: null,
+          nextActionNote: null,
+          nextActionLocation: null,
+        })
+        .where(eq(prospects.id, prospectId));
+      await tx
+        .delete(prospectActivities)
+        .where(
+          and(
+            eq(prospectActivities.prospectId, prospectId),
+            eq(prospectActivities.type, "follow_up"),
+          ),
+        );
+    });
+    revalidatePath(`/business-builder/pipeline/${prospectId}`);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: (e instanceof Error ? e.message : "Couldn't remove.").slice(0, 200),
     };
   }
 }
