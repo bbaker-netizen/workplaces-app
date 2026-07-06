@@ -26,7 +26,11 @@ export type PipelineColumnPrefs = {
   visible: string[]; // ordered column keys, e.g. ["company","contact","email","stage"]
   widths: Record<string, number>; // px widths keyed by column key
   filters?: {
-    stage?: string; // stage / segment filter value
+    // Stage / segment filter. Historically a single string ("prospects",
+    // "all", a stage key, …); now an array of selected stage keys for
+    // multi-select. Old single-string values are still read and migrated
+    // on load. The sentinel ["__archived__"] means the Archived view.
+    stage?: string | string[];
     source?: string; // lead-source filter value
     sort?: string; // sort key
   };

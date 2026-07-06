@@ -22,9 +22,11 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  ChevronDown,
   Columns3,
   Loader2,
   Search,
+  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -110,6 +112,66 @@ const DEFAULT_WIDTHS = Object.fromEntries(
 const MIN_WIDTH = 60;
 const MAX_WIDTH = 600;
 
+/* -------------------------- Stage filter groups ------------------------- */
+
+// Active engagements = won clients.
+const CLIENT_STAGES: ProspectStatus[] = ["onboarded"];
+// The prospect funnel = everyone still being worked toward becoming a
+// client. Mirrors the old single-select "prospects" segment: every stage
+// except signed deals, active engagements, and lost.
+const FUNNEL_STAGES: ProspectStatus[] = STAGE_ORDER.filter(
+  (s) => s !== "contract_signed" && s !== "onboarded" && s !== "lost",
+);
+// Stored in the stage-pref array to mean "the Archived view".
+const ARCHIVED_SENTINEL = "__archived__";
+
+function sameStages(
+  a: Set<ProspectStatus>,
+  b: readonly ProspectStatus[],
+): boolean {
+  if (a.size !== b.length) return false;
+  for (const s of b) if (!a.has(s)) return false;
+  return true;
+}
+
+/**
+ * Read a persisted stage pref — the new array of stage keys OR a legacy
+ * single string ("prospects" / "clients" / "all" / "archived" / a stage) —
+ * into the multi-select model. Keeps every saved pipeline working across
+ * the single→multi upgrade.
+ */
+function parseStagePref(raw: string | string[] | undefined): {
+  stages: Set<ProspectStatus>;
+  archived: boolean;
+} {
+  const valid = new Set<string>(STAGE_ORDER as readonly string[]);
+  if (Array.isArray(raw)) {
+    if (raw.includes(ARCHIVED_SENTINEL)) {
+      return { stages: new Set(FUNNEL_STAGES), archived: true };
+    }
+    const picked = raw.filter((s): s is ProspectStatus => valid.has(s));
+    return {
+      stages: new Set(picked.length ? picked : FUNNEL_STAGES),
+      archived: false,
+    };
+  }
+  switch (raw) {
+    case "archived":
+      return { stages: new Set(FUNNEL_STAGES), archived: true };
+    case "clients":
+      return { stages: new Set(CLIENT_STAGES), archived: false };
+    case "all":
+      return { stages: new Set(STAGE_ORDER), archived: false };
+    case "prospects":
+    case undefined:
+      return { stages: new Set(FUNNEL_STAGES), archived: false };
+    default:
+      return valid.has(raw)
+        ? { stages: new Set([raw as ProspectStatus]), archived: false }
+        : { stages: new Set(FUNNEL_STAGES), archived: false };
+  }
+}
+
 /* ------------------------------ Component ------------------------------ */
 
 export function ProspectTable({
@@ -121,20 +183,25 @@ export function ProspectTable({
 }) {
   const savedFilters = initialPrefs?.filters;
   const [query, setQuery] = useState("");
-  // Default to the prospect funnel — new leads + everyone being worked
-  // toward becoming a client — hiding onboarded clients and lost. Restored
-  // from the caller's saved per-user prefs when present.
-  const [stageFilter, setStageFilter] = useState<
-    ProspectStatus | "all" | "prospects" | "clients" | "archived"
-  >(
-    (savedFilters?.stage as
-      | ProspectStatus
-      | "all"
-      | "prospects"
-      | "clients"
-      | "archived"
-      | undefined) ?? "prospects",
+  // Stage filter — now multi-select. `stages` is the set of stage keys to
+  // show; `archived` is the orthogonal Archived view. Default to the
+  // prospect funnel (new leads + everyone being worked toward a client),
+  // restored from the caller's saved per-user prefs when present.
+  const initialStage = parseStagePref(savedFilters?.stage);
+  const [stages, setStages] = useState<Set<ProspectStatus>>(
+    initialStage.stages,
   );
+  const [archived, setArchived] = useState<boolean>(initialStage.archived);
+  const [stageMenuOpen, setStageMenuOpen] = useState(false);
+
+  function toggleStage(k: ProspectStatus) {
+    setStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }
   // Lead-source filter — "all" shows every source. Sits alongside the
   // stage filter so the board can be sliced by channel (Facebook Ads,
   // Website Form, Referral, …).
@@ -188,26 +255,14 @@ export function ProspectTable({
     const q = query.trim().toLowerCase();
     const rows = prospects.filter((p) => {
       // Archived rows are hidden everywhere except the explicit
-      // "Archived" view, which shows only them.
+      // "Archived" view, which shows only them. Otherwise a row shows if
+      // its stage is one of the (multi-)selected stages.
       const isArchived = Boolean(p.archivedAt);
-      if (stageFilter === "archived") {
+      if (archived) {
         if (!isArchived) return false;
-      } else if (isArchived) {
-        return false;
-      } else if (stageFilter === "prospects") {
-        // The active funnel you're still working to win — hide signed
-        // deals, active engagements (onboarded), and lost.
-        if (
-          p.status === "contract_signed" ||
-          p.status === "onboarded" ||
-          p.status === "lost"
-        ) {
-          return false;
-        }
-      } else if (stageFilter === "clients") {
-        if (p.status !== "onboarded") return false;
-      } else if (stageFilter !== "all" && p.status !== stageFilter) {
-        return false;
+      } else {
+        if (isArchived) return false;
+        if (!stages.has(p.status as ProspectStatus)) return false;
       }
       if (sourceFilter !== "all" && (p.leadSource ?? "") !== sourceFilter) {
         return false;
@@ -252,7 +307,31 @@ export function ProspectTable({
       }
       return a.companyName.localeCompare(b.companyName);
     });
-  }, [prospects, query, stageFilter, sourceFilter, sortBy]);
+  }, [prospects, query, stages, archived, sourceFilter, sortBy]);
+
+  // Per-stage counts (active rows only) shown next to each checkbox.
+  const stageCounts = useMemo(() => {
+    const m = new Map<ProspectStatus, number>();
+    for (const p of prospects) {
+      if (p.archivedAt) continue;
+      const s = p.status as ProspectStatus;
+      m.set(s, (m.get(s) ?? 0) + 1);
+    }
+    return m;
+  }, [prospects]);
+
+  // Summary label on the stage-filter button.
+  const stageSummary = archived
+    ? "Archived"
+    : sameStages(stages, FUNNEL_STAGES)
+      ? "Prospects"
+      : sameStages(stages, CLIENT_STAGES)
+        ? "Active engagements"
+        : sameStages(stages, STAGE_ORDER)
+          ? "All stages"
+          : stages.size === 0
+            ? "No stages"
+            : `${stages.size} stages`;
 
   // Total monthly program fee across the rows currently shown — i.e. the
   // monthly revenue this view represents (respects the stage filter).
@@ -265,7 +344,7 @@ export function ProspectTable({
     () => prospects.filter((p) => p.archivedAt).length,
     [prospects],
   );
-  const viewingArchived = stageFilter === "archived";
+  const viewingArchived = archived;
 
   // Source dropdown options: the canonical list plus any legacy values
   // actually present on rows (so an old source isn't silently un-filterable).
@@ -286,13 +365,26 @@ export function ProspectTable({
       const raw = localStorage.getItem(VIEW_KEY);
       if (raw) {
         const v = JSON.parse(raw) as {
-          stageFilter?: string;
+          stages?: string[];
+          archived?: boolean;
+          stageFilter?: string; // legacy single-select value
           sourceFilter?: string;
           query?: string;
           sortBy?: string;
         };
-        if (typeof v.stageFilter === "string")
-          setStageFilter(v.stageFilter as typeof stageFilter);
+        if (
+          Array.isArray(v.stages) ||
+          typeof v.archived === "boolean" ||
+          typeof v.stageFilter === "string"
+        ) {
+          const parsed = parseStagePref(
+            Array.isArray(v.stages) ? v.stages : v.stageFilter,
+          );
+          setStages(parsed.stages);
+          setArchived(
+            typeof v.archived === "boolean" ? v.archived : parsed.archived,
+          );
+        }
         if (typeof v.sourceFilter === "string")
           setSourceFilter(v.sourceFilter);
         if (typeof v.query === "string") setQuery(v.query);
@@ -314,20 +406,28 @@ export function ProspectTable({
     try {
       localStorage.setItem(
         VIEW_KEY,
-        JSON.stringify({ stageFilter, sourceFilter, query, sortBy }),
+        JSON.stringify({
+          stages: Array.from(stages),
+          archived,
+          sourceFilter,
+          query,
+          sortBy,
+        }),
       );
     } catch {
       /* ignore */
     }
-  }, [stageFilter, sourceFilter, query, sortBy]);
+  }, [stages, archived, sourceFilter, query, sortBy]);
 
   const viewIsDefault =
-    stageFilter === "prospects" &&
+    !archived &&
+    sameStages(stages, FUNNEL_STAGES) &&
     sourceFilter === "all" &&
     query === "" &&
     sortBy === "updated";
   function resetView() {
-    setStageFilter("prospects");
+    setStages(new Set(FUNNEL_STAGES));
+    setArchived(false);
     setSourceFilter("all");
     setQuery("");
     setSortBy("updated");
@@ -342,8 +442,15 @@ export function ProspectTable({
      the server on every pixel. Filters are read from live refs so every
      save carries the current filter/sort selection alongside columns. */
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterRef = useRef({ stage: stageFilter, source: sourceFilter, sort: sortBy });
-  filterRef.current = { stage: stageFilter, source: sourceFilter, sort: sortBy };
+  const stagePref: string[] = archived
+    ? [ARCHIVED_SENTINEL]
+    : Array.from(stages);
+  const filterRef = useRef<{ stage: string[]; source: string; sort: string }>({
+    stage: stagePref,
+    source: sourceFilter,
+    sort: sortBy,
+  });
+  filterRef.current = { stage: stagePref, source: sourceFilter, sort: sortBy };
   const viewStateRef = useRef({ visible, widths });
   viewStateRef.current = { visible, widths };
   const persist = useCallback(
@@ -378,7 +485,7 @@ export function ProspectTable({
       return;
     }
     persist(viewStateRef.current.visible, viewStateRef.current.widths);
-  }, [stageFilter, sourceFilter, sortBy, persist]);
+  }, [stages, archived, sourceFilter, sortBy, persist]);
 
   function toggleColumn(key: ColumnKey) {
     setVisible((prev) => {
@@ -562,25 +669,94 @@ export function ProspectTable({
             className="w-full bg-white border border-tbb-line rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
         </label>
-        <select
-          value={stageFilter}
-          onChange={(e) =>
-            setStageFilter(e.target.value as ProspectStatus | "all")
-          }
-          className="bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-        >
-          <option value="prospects">Prospects (default)</option>
-          <option value="clients">Active engagements</option>
-          <option value="all">All stages</option>
-          {STAGE_ORDER.map((k) => (
-            <option key={k} value={k}>
-              {STAGE_STYLES[k].label}
-            </option>
-          ))}
-          {archivedCount > 0 && (
-            <option value="archived">Archived ({archivedCount})</option>
+        {/* Stage filter — multi-select. Pick any combination of stages, or
+            a preset (Prospects / Active engagements / All). Disabled while
+            viewing Archived, which is an orthogonal mode. */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setStageMenuOpen((v) => !v)}
+            disabled={archived}
+            aria-haspopup="true"
+            aria-expanded={stageMenuOpen}
+            className="inline-flex items-center gap-1.5 bg-white border border-tbb-line rounded-md px-3 py-2 text-sm text-tbb-navy hover:bg-tbb-cream-50 focus:outline-none focus:ring-2 focus:ring-tbb-blue disabled:opacity-50"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-tbb-ink-3" aria-hidden />
+            <span className="font-bold">{stageSummary}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-tbb-ink-3" aria-hidden />
+          </button>
+          {stageMenuOpen && !archived && (
+            <>
+              <div
+                role="presentation"
+                onClick={() => setStageMenuOpen(false)}
+                className="fixed inset-0 z-30"
+              />
+              <div className="absolute left-0 mt-1 z-40 w-72 bg-white border border-tbb-line rounded-md shadow-tbb-md p-2 space-y-1">
+                <div className="flex flex-wrap gap-1">
+                  <StagePreset
+                    label="Prospects"
+                    active={sameStages(stages, FUNNEL_STAGES)}
+                    onClick={() => setStages(new Set(FUNNEL_STAGES))}
+                  />
+                  <StagePreset
+                    label="Active engagements"
+                    active={sameStages(stages, CLIENT_STAGES)}
+                    onClick={() => setStages(new Set(CLIENT_STAGES))}
+                  />
+                  <StagePreset
+                    label="All"
+                    active={sameStages(stages, STAGE_ORDER)}
+                    onClick={() => setStages(new Set(STAGE_ORDER))}
+                  />
+                </div>
+                <div className="border-t border-tbb-line-soft my-1" />
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                    Stages
+                  </p>
+                  {stages.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setStages(new Set())}
+                      className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-64 overflow-y-auto space-y-0.5">
+                  {STAGE_ORDER.map((k) => {
+                    const on = stages.has(k);
+                    const st = STAGE_STYLES[k];
+                    return (
+                      <label
+                        key={k}
+                        className="flex items-center gap-2 px-1 py-1.5 rounded text-sm cursor-pointer hover:bg-tbb-cream-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => toggleStage(k)}
+                          className="rounded"
+                        />
+                        <span
+                          aria-hidden
+                          className="inline-block w-2.5 h-2.5 rounded-full ring-1 ring-tbb-line shrink-0"
+                          style={{ backgroundColor: st.dotHex }}
+                        />
+                        <span className="flex-1 text-tbb-navy">{st.label}</span>
+                        <span className="text-[10px] text-tbb-ink-3 tabular-nums">
+                          {stageCounts.get(k) ?? 0}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
           )}
-        </select>
+        </div>
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
@@ -615,9 +791,7 @@ export function ProspectTable({
         {(archivedCount > 0 || viewingArchived) && (
           <button
             type="button"
-            onClick={() =>
-              setStageFilter(viewingArchived ? "prospects" : "archived")
-            }
+            onClick={() => setArchived((v) => !v)}
             aria-pressed={viewingArchived}
             className={
               "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-tbb-blue border " +
@@ -749,7 +923,7 @@ export function ProspectTable({
           </span>
           <button
             type="button"
-            onClick={() => setStageFilter("prospects")}
+            onClick={() => setArchived(false)}
             className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-white border border-tbb-blue text-tbb-blue hover:bg-tbb-blue hover:text-white transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
@@ -941,6 +1115,34 @@ export function ProspectTable({
         </div>
       </div>
     </div>
+  );
+}
+
+/** A preset chip inside the stage multi-select that sets the whole
+ *  selection at once (Prospects / Active engagements / All). */
+function StagePreset({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        "px-2.5 py-1 rounded-pill text-[11px] font-bold transition-colors duration-tbb-base " +
+        (active
+          ? "bg-tbb-blue text-white"
+          : "bg-white border border-tbb-line text-tbb-ink-2 hover:border-tbb-blue")
+      }
+    >
+      {label}
+    </button>
   );
 }
 
