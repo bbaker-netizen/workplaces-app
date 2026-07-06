@@ -25,6 +25,9 @@ import {
   StickyNote,
   FileText,
   MessageCircle,
+  MessageSquare,
+  CalendarClock,
+  Activity,
   Archive,
 } from "lucide-react";
 import { CollapsibleSection } from "@/components/pipeline/CollapsibleSection";
@@ -351,41 +354,48 @@ export default async function ProspectDetailPage({
               current stage so Bruce always sees a clear suggested action. */}
           <ProspectNextStep status={prospect.status as ProspectStatus} />
 
-          {/* Meeting prep — one tap to The Climb kit (app + companion docs),
-              carrying this lead's context so Climb output can tie back here. */}
-          <Link
-            href={`/business-builder/the-climb?prospectId=${prospect.id}&company=${encodeURIComponent(prospect.companyName)}`}
-            className="flex items-center gap-3 rounded-lg border border-tbb-line bg-white p-4 hover:border-tbb-blue hover:shadow-tbb-sm transition-all shadow-tbb-sm"
+          {/* Meeting prep — collapsible. Carries this lead's context into
+              The Climb so its output can tie back here. */}
+          <CollapsibleSection
+            title="Prep with The Climb"
+            storageKey="climb-prep"
+            icon={<Mountain className="w-3.5 h-3.5" aria-hidden />}
           >
-            <span className="flex-none w-10 h-10 rounded-md bg-tbb-blue-100 text-tbb-blue grid place-items-center">
-              <Mountain className="w-5 h-5" aria-hidden />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block font-bold text-tbb-navy">
-                Prep with The Climb
-              </span>
-              <span className="block text-sm text-tbb-ink-2">
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-tbb-ink-2">
                 Open the meeting-prep kit — the Map of the Mountain, the four
                 Building Blocks, and the companion tools.
-              </span>
-            </span>
-          </Link>
+              </p>
+              <Link
+                href={`/business-builder/the-climb?prospectId=${prospect.id}&company=${encodeURIComponent(prospect.companyName)}`}
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
+              >
+                <Mountain className="w-3.5 h-3.5" aria-hidden />
+                Open the prep kit
+              </Link>
+            </div>
+          </CollapsibleSection>
 
-          {/* Schedule a follow-up — sets the next-action date + logs it. */}
-          <ScheduleFollowupPanel
-            prospectId={prospect.id}
-            currentDate={nextActionDateYmd}
-            currentTime={nextActionTime === "12:00" ? null : nextActionTime}
-            currentLocation={prospect.nextActionLocation}
-            currentNote={prospect.nextActionNote}
-          />
+          {/* Schedule a follow-up — collapsible. Sets the next-action date. */}
+          <CollapsibleSection
+            title={nextActionDateYmd ? "Follow-up" : "Schedule a follow-up"}
+            storageKey="followup"
+            icon={<CalendarClock className="w-3.5 h-3.5" aria-hidden />}
+          >
+            <ScheduleFollowupPanel
+              prospectId={prospect.id}
+              currentDate={nextActionDateYmd}
+              currentTime={nextActionTime === "12:00" ? null : nextActionTime}
+              currentLocation={prospect.nextActionLocation}
+              currentNote={prospect.nextActionNote}
+              embedded
+            />
+          </CollapsibleSection>
 
-          {/* Quick actions — collapsible. Auto-opens for fresh leads (when
-              you're actively working them), collapses once qualifying. */}
+          {/* Quick actions — collapsible, closed by default. */}
           <CollapsibleSection
             title="Quick actions"
             storageKey="quick-actions"
-            defaultOpen={phase === "lead"}
             icon={<Zap className="w-3.5 h-3.5" aria-hidden />}
           >
             <div className="p-5 space-y-4">
@@ -586,9 +596,8 @@ export default async function ProspectDetailPage({
           )}
         </div>
 
-        {/* Right column — documents on file + team discussion + activity.
-            Documents + discussion collapse (opened on demand); the activity
-            timeline stays open so there's always a live sense of history. */}
+        {/* Right column — documents on file + team discussion + activity,
+            all collapsible and closed by default. */}
         <aside className="lg:col-span-1 space-y-6">
           <CollapsibleSection
             title="Documents on file"
@@ -619,24 +628,40 @@ export default async function ProspectDetailPage({
               embedded
             />
           </CollapsibleSection>
-          <ProspectActivityTimeline
-            prospectId={prospect.id}
-            activities={activities}
-          />
+          <CollapsibleSection
+            title="Activity"
+            storageKey="activity"
+            icon={<Activity className="w-3.5 h-3.5" aria-hidden />}
+            badge={activities.length || undefined}
+          >
+            <ProspectActivityTimeline
+              prospectId={prospect.id}
+              activities={activities}
+              embedded
+            />
+          </CollapsibleSection>
         </aside>
       </div>
 
       {/* Full-width communications timeline — every email / SMS / WhatsApp /
-          call note attached to this prospect. */}
-      <ClientCommunicationsPanel
-        prospectId={prospect.id}
-        contactName={prospect.contactName}
-        contactEmail={prospect.contactEmail}
-        contactPhone={prospect.phone}
-        rows={communications}
-        smsEnabled={isSmsConfigured()}
-        emailTemplates={templates}
-      />
+          call note attached to this prospect. Collapsible, closed by default. */}
+      <CollapsibleSection
+        title="Communications"
+        storageKey="communications"
+        icon={<MessageSquare className="w-3.5 h-3.5" aria-hidden />}
+        badge={communications.length || undefined}
+      >
+        <ClientCommunicationsPanel
+          prospectId={prospect.id}
+          contactName={prospect.contactName}
+          contactEmail={prospect.contactEmail}
+          contactPhone={prospect.phone}
+          rows={communications}
+          smsEnabled={isSmsConfigured()}
+          emailTemplates={templates}
+          embedded
+        />
+      </CollapsibleSection>
 
       {/* Archive this prospect (soft-delete) — collapsed by default; it's
           rarely used and destructive, so it stays out of the way until

@@ -57,9 +57,12 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 export function ProspectActivityTimeline({
   prospectId,
   activities,
+  embedded = false,
 }: {
   prospectId: string;
   activities: ProspectActivityWithAuthor[];
+  /** When inside a CollapsibleSection, drop the card chrome + title. */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [type, setType] =
@@ -126,16 +129,23 @@ export function ProspectActivityTimeline({
     });
   }
 
+  const Wrapper = embedded ? "div" : "section";
   return (
-    <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
-      <header className="px-5 py-3 border-b border-tbb-line-soft flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-          Activity
-        </h2>
-        <span className="text-[11px] text-tbb-ink-3 tabular-nums">
-          {activities.length} {activities.length === 1 ? "entry" : "entries"}
-        </span>
-      </header>
+    <Wrapper
+      className={
+        embedded ? "" : "border border-tbb-line rounded-lg bg-white shadow-tbb-sm"
+      }
+    >
+      {!embedded && (
+        <header className="px-5 py-3 border-b border-tbb-line-soft flex items-center justify-between gap-2">
+          <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            Activity
+          </h2>
+          <span className="text-[11px] text-tbb-ink-3 tabular-nums">
+            {activities.length} {activities.length === 1 ? "entry" : "entries"}
+          </span>
+        </header>
+      )}
 
       {/* Quick log form */}
       <form
@@ -330,6 +340,6 @@ export function ProspectActivityTimeline({
           })
         )}
       </ul>
-    </section>
+    </Wrapper>
   );
 }
