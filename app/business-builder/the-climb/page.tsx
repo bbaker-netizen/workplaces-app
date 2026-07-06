@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, FileText, Mountain } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, FileText, Mountain } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { THE_CLIMB_URL, CLIMB_COMPANION_TOOLS } from "@/lib/prep-kit";
 
@@ -29,6 +30,26 @@ export default async function TheClimbPage({
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-12 space-y-8">
+      {/* Back to the lead this prep is for — so the Business Builder is never
+          stranded on the kit page with no way home to the prospect record. */}
+      {prospectId ? (
+        <Link
+          href={`/business-builder/pipeline/${prospectId}`}
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-blue"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
+          Back to {company ? `${company}'s` : "the"} profile
+        </Link>
+      ) : (
+        <Link
+          href="/business-builder/pipeline"
+          className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-blue"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
+          Back to the pipeline
+        </Link>
+      )}
+
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           Business Builder · Meeting prep
