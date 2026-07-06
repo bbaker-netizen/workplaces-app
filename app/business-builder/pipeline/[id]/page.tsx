@@ -20,6 +20,7 @@ import {
   Link2,
   Search,
   Clock,
+  Mountain,
 } from "lucide-react";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -339,6 +340,26 @@ export default async function ProspectDetailPage({
           {/* What's next — surfaces the obvious next move based on the
               current stage so Bruce always sees a clear suggested action. */}
           <ProspectNextStep status={prospect.status as ProspectStatus} />
+
+          {/* Meeting prep — one tap to The Climb kit (app + companion docs),
+              carrying this lead's context so Climb output can tie back here. */}
+          <Link
+            href={`/business-builder/the-climb?prospectId=${prospect.id}&company=${encodeURIComponent(prospect.companyName)}`}
+            className="flex items-center gap-3 rounded-lg border border-tbb-line bg-white p-4 hover:border-tbb-blue hover:shadow-tbb-sm transition-all shadow-tbb-sm"
+          >
+            <span className="flex-none w-10 h-10 rounded-md bg-tbb-blue-100 text-tbb-blue grid place-items-center">
+              <Mountain className="w-5 h-5" aria-hidden />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block font-bold text-tbb-navy">
+                Prep with The Climb
+              </span>
+              <span className="block text-sm text-tbb-ink-2">
+                Open the meeting-prep kit — the Map of the Mountain, the four
+                Building Blocks, and the companion tools.
+              </span>
+            </span>
+          </Link>
 
           {/* Schedule a follow-up — sets the next-action date + logs it. */}
           <ScheduleFollowupPanel
