@@ -103,7 +103,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     icon: Rocket,
     items: [
       { href: "/business-builder", label: "My work", icon: CheckSquare, tourId: "Coach-home" },
-      { href: "/business-builder/notifications", label: "Notifications", icon: Bell },
       { href: "/business-builder/engagements", label: "Client Portal", icon: Briefcase },
       { href: "/business-builder/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/business-builder/action-items", label: "Action items", icon: CheckSquare },
@@ -763,7 +762,7 @@ function TodayPulse({ pulse }: { pulse: BusinessBuilderPulse }) {
       {open && (
         <div className="mt-1.5 space-y-1.5">
           <Link
-            href="/business-builder/notifications"
+            href="/business-builder/settings/notifications"
             className={
               "block px-2.5 py-2 rounded-md transition-colors group " +
               (unread > 0

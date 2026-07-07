@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  Bell,
   Building2,
   CreditCard,
   FileText,
@@ -74,6 +75,14 @@ const CARDS: SettingsCard[] = [
     description:
       "Your name, email, password, two-factor authentication, email signature, e-signature image. Most fields live in Clerk.",
     icon: User,
+    status: "ready",
+  },
+  {
+    href: "/business-builder/settings/notifications",
+    title: "Notifications",
+    description:
+      "Turn on desktop alerts, check for due follow-ups, and see everything routed to you — teammate comments, new leads, and reminders.",
+    icon: Bell,
     status: "ready",
   },
 ];

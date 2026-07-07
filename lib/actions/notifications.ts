@@ -31,7 +31,7 @@ export async function checkFollowupsNow(): Promise<
   }
   try {
     const { created } = await scanFollowupsDue();
-    revalidatePath("/business-builder/notifications");
+    revalidatePath("/business-builder/settings/notifications");
     revalidatePath("/business-builder", "layout");
     return { ok: true, created };
   } catch (e) {
