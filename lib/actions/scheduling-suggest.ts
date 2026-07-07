@@ -13,9 +13,14 @@
 
 import { and, gte, lte } from "drizzle-orm";
 import { z } from "zod";
+import { DateTime } from "luxon";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { bbsSessions } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+
+// Suggestions are anchored to the coach's working day in Mountain Time,
+// never the server clock (UTC on Netlify).
+const SUGGEST_TIMEZONE = "America/Edmonton";
 
 const inputSchema = z.object({
   durationMinutes: z.number().int().min(15).max(240),
@@ -96,35 +101,26 @@ export async function suggestOpenSlots(
   const slots: SuggestedSlot[] = [];
   // Walk every day in the horizon. For each day that matches an
   // accepted weekday, generate candidate slots in step-minute
-  // increments inside the start/end hour window.
-  const dayMs = 24 * 60 * 60 * 1000;
+  // increments inside the start/end hour window — all anchored to
+  // Mountain Time, not the server clock.
+  const nowMt = DateTime.fromJSDate(now).setZone(SUGGEST_TIMEZONE);
   for (let dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
-    const day = new Date(now.getTime() + dayOffset * dayMs);
-    if (!weekdaySet.has(day.getDay())) continue;
-    // Start of the day at startHour local time.
-    const dayStart = new Date(
-      day.getFullYear(),
-      day.getMonth(),
-      day.getDate(),
-      startHour,
-      0,
-      0,
-      0,
-    );
-    const dayEnd = new Date(
-      day.getFullYear(),
-      day.getMonth(),
-      day.getDate(),
-      endHour,
-      0,
-      0,
-      0,
-    );
+    const dayMt = nowMt.plus({ days: dayOffset });
+    // luxon weekday is 1=Mon..7=Sun; JS getDay() is 0=Sun..6=Sat.
+    if (!weekdaySet.has(dayMt.weekday % 7)) continue;
+    // Start/end of the working window at startHour/endHour Mountain Time
+    // (luxon resolves the correct UTC instant, including DST).
+    const dayStartMs = dayMt
+      .set({ hour: startHour, minute: 0, second: 0, millisecond: 0 })
+      .toMillis();
+    const dayEndMs = dayMt
+      .set({ hour: endHour, minute: 0, second: 0, millisecond: 0 })
+      .toMillis();
     // Walk the day in STEP_MINUTES increments. Skip slots that already
     // started, that would extend past dayEnd, or that overlap a busy.
     for (
-      let t = dayStart.getTime();
-      t + durationMinutes * 60 * 1000 <= dayEnd.getTime();
+      let t = dayStartMs;
+      t + durationMinutes * 60 * 1000 <= dayEndMs;
       t += STEP_MINUTES * 60 * 1000
     ) {
       if (t < now.getTime() + 60 * 60 * 1000) continue; // skip past + the next hour

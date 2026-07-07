@@ -16,6 +16,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { clientWriteBlocked, READ_ONLY_ERROR } from "@/lib/server/engagement-guard";
 import { goals, type UserProfile } from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
@@ -91,6 +92,9 @@ export async function createGoal(
     };
   }
   const data = parsed.data;
+  if (await clientWriteBlocked(profile.role, data.engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
+  }
   if (!data.revenueImpact && !data.marginImpact) {
     return {
       ok: false,
@@ -161,6 +165,9 @@ export async function updateGoal(
     if (!lookupEngId) {
       return { ok: false, error: "Goal not found." };
     }
+    if (await clientWriteBlocked(profile.role, lookupEngId)) {
+      return { ok: false, error: READ_ONLY_ERROR };
+    }
     await withEngagementContext(
       profile.orgId,
       profile.role,
@@ -229,6 +236,9 @@ export async function deleteGoal(id: string): Promise<ActionResult> {
     const lookupEngId = await resolveEngagementIdFromRecord("goals", id);
     if (!lookupEngId) {
       return { ok: false, error: "Goal not found." };
+    }
+    if (await clientWriteBlocked(profile.role, lookupEngId)) {
+      return { ok: false, error: READ_ONLY_ERROR };
     }
     await withEngagementContext(
       profile.orgId,

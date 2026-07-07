@@ -12,6 +12,7 @@ import { eq, max } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { clientWriteBlocked, READ_ONLY_ERROR } from "@/lib/server/engagement-guard";
 import {
   projects,
   tasks,
@@ -127,6 +128,9 @@ export async function createProjectsBulk(
   if (names.length === 0) {
     return { ok: false, error: "Add at least one project name." };
   }
+  if (await clientWriteBlocked(profile.role, data.engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
+  }
   try {
     const count = await withEngagementContext(
       profile.orgId,
@@ -177,6 +181,9 @@ export async function createProject(
       error:
         "Projects must move top-line revenue, protect margin, or both.",
     };
+  }
+  if (await clientWriteBlocked(profile.role, data.engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
   try {
     const created = await withEngagementContext(
@@ -239,6 +246,9 @@ export async function updateProject(
   const engagementId = await resolveEngagementIdFromRecord("projects", id);
   if (!engagementId) {
     return { ok: false, error: "Project not found." };
+  }
+  if (await clientWriteBlocked(profile.role, engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
   try {
     await withEngagementContext(
@@ -304,6 +314,9 @@ export async function deleteProject(id: string): Promise<ActionResult> {
   const engagementId = await resolveEngagementIdFromRecord("projects", id);
   if (!engagementId) {
     return { ok: false, error: "Project not found." };
+  }
+  if (await clientWriteBlocked(profile.role, engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
   try {
     await withEngagementContext(
@@ -374,6 +387,9 @@ export async function createTask(
   if (!engagementId) {
     return { ok: false, error: "Project not found." };
   }
+  if (await clientWriteBlocked(profile.role, engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
+  }
   try {
     const created = await withEngagementContext(
       profile.orgId,
@@ -435,6 +451,9 @@ export async function updateTask(
   const engagementId = await resolveEngagementIdFromRecord("tasks", id);
   if (!engagementId) {
     return { ok: false, error: "Task not found." };
+  }
+  if (await clientWriteBlocked(profile.role, engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
   try {
     const projectId = await withEngagementContext(
@@ -508,6 +527,9 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   const engagementId = await resolveEngagementIdFromRecord("tasks", id);
   if (!engagementId) {
     return { ok: false, error: "Task not found." };
+  }
+  if (await clientWriteBlocked(profile.role, engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
   try {
     const projectId = await withEngagementContext(

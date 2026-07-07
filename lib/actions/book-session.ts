@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { clientWriteBlocked, READ_ONLY_ERROR } from "@/lib/server/engagement-guard";
 import {
   bbsSessions,
   engagements,
@@ -50,6 +51,10 @@ export async function bookAdHocSession(
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request." };
   const { engagementId, startIso, builderUserProfileId } = parsed.data;
+  // Read-only when the engagement is paused (coaches pass through).
+  if (await clientWriteBlocked(profile.role, engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
+  }
 
   const start = new Date(startIso);
   if (Number.isNaN(start.getTime()))

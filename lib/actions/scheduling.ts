@@ -255,6 +255,12 @@ export async function createBooking(
 
       // Idempotency: if someone else booked this exact slot, fail.
       const startsAt = new Date(data.startsAtUtc);
+      if (Number.isNaN(startsAt.getTime())) {
+        throw new Error("That time isn't valid.");
+      }
+      if (startsAt.getTime() < Date.now()) {
+        throw new Error("That time has already passed. Pick another slot.");
+      }
       const [existing] = await tx
         .select({ id: bookings.id })
         .from(bookings)

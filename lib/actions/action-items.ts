@@ -289,6 +289,7 @@ export async function updateActionItem(
             "dueDate",
             "revenueImpact",
             "marginImpact",
+            "projectId",
           ] as const;
           for (const key of restrictedKeys) {
             if (data[key] !== undefined) {
