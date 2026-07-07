@@ -7,6 +7,7 @@ import { listBusinessBuilderNotifications } from "@/lib/db/queries/notifications
 import { MarkAllReadOnMount } from "@/components/portal/MarkAllReadOnMount";
 import { PushToggle } from "@/components/notifications/PushToggle";
 import { CheckFollowupsButton } from "@/components/notifications/CheckFollowupsButton";
+import { FollowupNotificationLink } from "@/components/notifications/FollowupNotificationLink";
 
 /**
  * Business Builder notifications feed — team-discussion @mentions,
@@ -84,9 +85,21 @@ export default async function BusinessBuilderNotificationsPage() {
                 )}
               </div>
             );
+            const isUnactedFollowup =
+              n.parentEntityType === "prospect_followup_due" && !n.readAt;
             return (
               <li key={n.id}>
-                {n.href ? <Link href={n.href}>{inner}</Link> : inner}
+                {n.href ? (
+                  isUnactedFollowup ? (
+                    <FollowupNotificationLink notificationId={n.id} href={n.href}>
+                      {inner}
+                    </FollowupNotificationLink>
+                  ) : (
+                    <Link href={n.href}>{inner}</Link>
+                  )
+                ) : (
+                  inner
+                )}
               </li>
             );
           })}

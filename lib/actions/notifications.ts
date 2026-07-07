@@ -8,7 +8,7 @@
  * mount via a tiny client effect.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { notifications } from "@/lib/db/schema";
@@ -94,12 +94,50 @@ export async function markAllNotificationsRead(): Promise<ActionResult> {
           and(
             eq(notifications.userProfileId, profile.userProfileId),
             isNull(notifications.readAt),
+            // Follow-up reminders stay bold until the user actually acts on
+            // them (clicks through to the lead), rather than greying out
+            // just from opening the feed. markNotificationRead clears them.
+            ne(notifications.parentEntityType, "prospect_followup_due"),
           ),
         );
     });
     revalidatePath("/portal");
     revalidatePath("/portal/notifications");
     // Business Builder side — refresh the sidebar unread badge + feed.
+    revalidatePath("/business-builder", "layout");
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/**
+ * Mark a single notification read — used when the user clicks a follow-up
+ * reminder to act on it, so it clears only once acted upon. Scoped to the
+ * caller's own rows.
+ */
+export async function markNotificationRead(
+  notificationId: string,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") {
+    return { ok: false, error: "Not authenticated." };
+  }
+  try {
+    await withTenantContext(profile.orgId, async (tx) => {
+      await tx
+        .update(notifications)
+        .set({ readAt: sql`now()` })
+        .where(
+          and(
+            eq(notifications.id, notificationId),
+            eq(notifications.userProfileId, profile.userProfileId),
+          ),
+        );
+    });
     revalidatePath("/business-builder", "layout");
     return { ok: true };
   } catch (e) {
