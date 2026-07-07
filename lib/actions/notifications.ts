@@ -14,6 +14,30 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { notifications } from "@/lib/db/schema";
 import { withTenantContext } from "@/lib/db/tenant";
 import { listBusinessBuilderNotifications } from "@/lib/db/queries/notifications";
+import { scanFollowupsDue } from "@/lib/notifications/followups";
+
+/**
+ * Run the follow-up-due scan on demand (the "Check now" button). Same scan
+ * the daily cron runs, but session-authed so a coach can pull due follow-ups
+ * without waiting for the morning job. Returns how many reminders it created.
+ */
+export async function checkFollowupsNow(): Promise<
+  { ok: true; created: number } | { ok: false; error: string }
+> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  try {
+    const { created } = await scanFollowupsDue();
+    revalidatePath("/business-builder/notifications");
+    revalidatePath("/business-builder", "layout");
+    return { ok: true, created };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Server error." };
+  }
+}
 
 /** Slim notification shape the in-app toaster polls for. */
 export type ToastNotification = {
