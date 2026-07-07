@@ -6,6 +6,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listBusinessBuilderNotifications } from "@/lib/db/queries/notifications";
 import { MarkAllReadOnMount } from "@/components/portal/MarkAllReadOnMount";
 import { PushToggle } from "@/components/notifications/PushToggle";
+import { CheckFollowupsButton } from "@/components/notifications/CheckFollowupsButton";
 
 /**
  * Business Builder notifications feed — team-discussion @mentions,
@@ -36,8 +37,9 @@ export default async function BusinessBuilderNotificationsPage() {
         </p>
       </header>
 
-      <div className="mb-8">
+      <div className="mb-8 space-y-3">
         <PushToggle />
+        <CheckFollowupsButton />
       </div>
 
       {notifs.length === 0 ? (
