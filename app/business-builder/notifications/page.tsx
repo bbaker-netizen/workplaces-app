@@ -5,6 +5,7 @@ import { Bell, MessageCircle } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listBusinessBuilderNotifications } from "@/lib/db/queries/notifications";
 import { MarkAllReadOnMount } from "@/components/portal/MarkAllReadOnMount";
+import { PushToggle } from "@/components/notifications/PushToggle";
 
 /**
  * Business Builder notifications feed — team-discussion @mentions,
@@ -34,6 +35,10 @@ export default async function BusinessBuilderNotificationsPage() {
           Team comments on leads and clients, plus updates routed to you.
         </p>
       </header>
+
+      <div className="mb-8">
+        <PushToggle />
+      </div>
 
       {notifs.length === 0 ? (
         <div className="rounded-md border border-dashed border-tbb-line bg-white px-6 py-12 text-center">

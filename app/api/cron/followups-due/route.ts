@@ -1,28 +1,28 @@
 /**
- * Stale-lead nudge endpoint.
+ * Follow-up-due reminder endpoint.
  *
- * Finds OPEN prospects (not won / lost / not_qualified, not archived)
- * that haven't been contacted in STALE_DAYS and drops an in-app
- * notification so a Business Builder acts on them — follow up, or move
- * the lead to Lost so it doesn't rot in the pipeline.
+ * Finds OPEN prospects (not won / lost / not_qualified, not archived) whose
+ * scheduled follow-up date has arrived (due today in Mountain Time, or
+ * overdue) and drops an in-app notification so the owner actually gets
+ * reminded — which then also surfaces as an in-app toast and, when enabled,
+ * a desktop push. Fills the gap where scheduling a follow-up set a date but
+ * never pinged anyone.
  *
- * Recipient: the prospect's owner if one is set, otherwise every
- * Business Builder (so an unowned stale lead doesn't fall through).
+ * Recipient: the prospect's owner if set, otherwise every Business Builder.
  *
  * Auth: Bearer `CRON_SECRET`. Callers:
- *   - the Netlify Scheduled Function (`netlify/functions/stale-leads.mts`)
+ *   - the Netlify Scheduled Function (`netlify/functions/followups-due.mts`)
  *   - manual `curl -H "Authorization: Bearer …"` for verification.
  *
  * Cross-tenant SYSTEM scan. Idempotency: we don't re-notify the same
- * (prospect, user) pair within STALE_RENOTIFY_DAYS, so a lingering stale
- * lead nudges roughly every ~10 days rather than daily.
+ * (prospect, user) pair within ~20h, so a still-open follow-up nudges once
+ * a day rather than on every run.
  */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { notifications, orgs, prospects, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
-import { STALE_DAYS, STALE_RENOTIFY_DAYS } from "@/lib/pipeline/staleness";
 import { sendPushToUser } from "@/lib/push/web-push";
 
 export const dynamic = "force-dynamic";
@@ -47,9 +47,8 @@ export async function GET(req: Request) {
       .from(orgs)
       .where(eq(orgs.type, "master"))
       .limit(1);
-    if (!master) return { scanned: 0, created: 0 };
+    if (!master) return { scanned: 0, created: 0, pushTargets: [] };
 
-    // Every internal user — the fallback recipients for unowned leads.
     const bbs = await tx
       .select({ id: userProfiles.id })
       .from(userProfiles)
@@ -60,10 +59,11 @@ export async function GET(req: Request) {
         ),
       );
     const bbIds = bbs.map((b) => b.id);
-    if (bbIds.length === 0) return { scanned: 0, created: 0 };
+    if (bbIds.length === 0) return { scanned: 0, created: 0, pushTargets: [] };
 
-    // Candidate stale prospects.
-    const staleCutoff = sql`now() - ${`${STALE_DAYS} days`}::interval`;
+    // "Due" = the follow-up moment is before the start of TOMORROW in
+    // Mountain Time — i.e. due today or overdue.
+    const dueCutoff = sql`(date_trunc('day', (now() AT TIME ZONE 'America/Edmonton')) + interval '1 day') AT TIME ZONE 'America/Edmonton'`;
     const candidates = await tx
       .select({
         id: prospects.id,
@@ -75,15 +75,18 @@ export async function GET(req: Request) {
       .where(
         and(
           eq(prospects.orgId, master.id),
+          isNotNull(prospects.nextActionDate),
           sql`${prospects.archivedAt} IS NULL`,
           sql`${prospects.status} NOT IN ('onboarded','lost','not_qualified')`,
-          sql`COALESCE(${prospects.lastContactAt}, ${prospects.createdAt}) < ${staleCutoff}`,
+          sql`${prospects.nextActionDate} < ${dueCutoff}`,
         ),
       );
 
-    if (candidates.length === 0) return { scanned: 0, created: 0 };
+    if (candidates.length === 0) {
+      return { scanned: 0, created: 0, pushTargets: [] };
+    }
 
-    // Existing recent stale notifications, so we don't re-nudge too soon.
+    // Don't re-nudge the same (prospect, user) within ~20h.
     const recent = await tx
       .select({
         prospectId: notifications.parentEntityId,
@@ -92,8 +95,8 @@ export async function GET(req: Request) {
       .from(notifications)
       .where(
         and(
-          eq(notifications.parentEntityType, "prospect_stale"),
-          sql`${notifications.createdAt} > now() - ${`${STALE_RENOTIFY_DAYS} days`}::interval`,
+          eq(notifications.parentEntityType, "prospect_followup_due"),
+          sql`${notifications.createdAt} > now() - interval '20 hours'`,
         ),
       );
     const alreadyNotified = new Set(
@@ -103,18 +106,16 @@ export async function GET(req: Request) {
     const toInsert: (typeof notifications.$inferInsert)[] = [];
     const pushTargets: { uid: string; prospectId: string; name: string }[] = [];
     for (const c of candidates) {
-      const recipients = c.ownerUserProfileId
-        ? [c.ownerUserProfileId]
-        : bbIds;
+      const recipients = c.ownerUserProfileId ? [c.ownerUserProfileId] : bbIds;
       for (const uid of recipients) {
         if (alreadyNotified.has(`${c.id}:${uid}`)) continue;
         toInsert.push({
           orgId: c.orgId,
           userProfileId: uid,
           type: "message",
-          parentEntityType: "prospect_stale",
+          parentEntityType: "prospect_followup_due",
           parentEntityId: c.id,
-          sentVia: "in_app",
+          sentVia: "both",
         });
         pushTargets.push({ uid, prospectId: c.id, name: c.companyName });
       }
@@ -123,17 +124,21 @@ export async function GET(req: Request) {
     if (toInsert.length > 0) {
       await tx.insert(notifications).values(toInsert);
     }
-    return { scanned: candidates.length, created: toInsert.length, pushTargets };
+    return {
+      scanned: candidates.length,
+      created: toInsert.length,
+      pushTargets,
+    };
   });
 
   // Desktop push (best-effort), outside the DB transaction.
   await Promise.all(
     (result.pushTargets ?? []).map((t) =>
       sendPushToUser(t.uid, {
-        title: "Lead has gone quiet",
-        body: `${t.name} hasn't been contacted in a while — follow up or move it to Lost.`,
+        title: "Follow-up due",
+        body: `Time to follow up with ${t.name}.`,
         url: `/business-builder/pipeline/${t.prospectId}`,
-        tag: `prospect-stale-${t.prospectId}`,
+        tag: `followup-due-${t.prospectId}`,
       }),
     ),
   );
