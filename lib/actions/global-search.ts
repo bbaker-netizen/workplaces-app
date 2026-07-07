@@ -28,6 +28,7 @@ import {
   projects,
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
+import { canViewThread } from "@/lib/communication/audience";
 
 export type GlobalSearchHit = {
   type:
@@ -250,6 +251,11 @@ export async function globalSearch(
       });
     }
     for (const r of msgHits) {
+      // Audience wall: don't surface leadership-thread messages to roles
+      // that can't see that thread (e.g. a client_employee). Mirrors the
+      // filter listEngagementRecentActivity applies; RLS only scopes by
+      // org, not by within-engagement thread audience.
+      if (!canViewThread(r.parentEntityType, profile.role)) continue;
       hits.push({
         type: "message",
         id: r.id,
