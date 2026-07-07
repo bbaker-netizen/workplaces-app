@@ -162,7 +162,7 @@ export function ModuleReference() {
         what="Your Business Builder feed — teammate comments that tagged you, stale-lead nudges, and other updates routed to you. The sidebar Today panel shows an unread count; opening the feed clears it. Stale-lead nudges fire automatically when an open lead has had no contact in 14 days, prompting you to follow up or move it to Lost."
         when="Check it whenever the Today panel shows unread items. It's how the team keeps each other in the loop without email."
         replaces={`Chasing Monday notifications and email threads to find what needs your attention.`}
-        link="/business-builder/notifications"
+        link="/business-builder/settings/notifications"
         linkLabel="Open notifications"
       />
       <ModuleCard

@@ -85,7 +85,6 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 
 **02 Engage — run the rhythm**
 - My work (/business-builder) — the home dashboard. Customizable cards.
-- Notifications (/business-builder/notifications) — the Business Builder feed: teammate comments on leads/clients that tagged you, stale-lead nudges, and other updates routed to you. The sidebar "Today" panel shows an unread count; opening the feed marks everything read.
 - Action items (/business-builder/action-items) — small commitments measured in hours/days. AI-drafted from Fireflies transcripts of BBS sessions OR created manually. Edit, assign, set due date, hit Publish.
 - Inbox (/business-builder/inbox) — every external email/SMS/call note across every client. Synced from Gmail.
 - Communication (/business-builder/communication) — in-app threads with the client (Leadership-private and Team-public).
@@ -107,6 +106,7 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 - Business Builders / team (/business-builder/settings/team, MASTER ADMIN ONLY) — invite teammates (like Jen) as a "Standard Business Builder" (full coaching console, no system settings) or a "Master admin" (everything). For each standard Business Builder you can ALSO limit their reach: expand the "Access" control on their row to restrict which CLIENTS they see (all, or only selected ones) and which CONSOLE MODULES they can use (all, or only selected ones). Default for everyone is full access; you only see the controls once a standard Business Builder is on the team (master admins always have full access, so their row shows no controls). Standard Business Builders can't reach this page or any other system settings.
 - Send: diagnostic & review (/business-builder/tools) — fire the diagnostic form OR a Google review request to anyone by email or text, without leaving the page.
 - Fix Facebook lead phones (/business-builder/tools/fix-facebook-leads) — a one-off repair tool that sets the correct phone number + "Facebook Ads" source on the Facebook leads, matched by email (or unique name). Preview then apply; it only touches phone + source, never notes or names.
+- Notifications (/business-builder/settings/notifications) — under Settings. The Business Builder feed: teammate comments on leads/clients that tagged you, stale-lead nudges, new-lead alerts, and follow-up reminders routed to you. Also where you turn on desktop alerts and check for due follow-ups. The sidebar "Today" panel + bell badge show an unread count; opening the feed marks everything read.
 - Business Builder guide (/business-builder/welcome) — workflow walkthrough.
 - Module reference (/business-builder/welcome/modules) — full module cheat sheet.
 
