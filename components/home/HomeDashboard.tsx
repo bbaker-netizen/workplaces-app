@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GripVertical, Maximize2, Minus, MoreHorizontal, Plus, X } from "lucide-react";
+import { ChevronDown, GripVertical, Maximize2, Minus, MoreHorizontal, Plus, X } from "lucide-react";
 import { setHomeDashboardLayout } from "@/lib/actions/user-prefs";
 import type { HomeDashboardLayout } from "@/lib/db/queries/user-prefs";
 
@@ -44,6 +44,8 @@ type LayoutCard = {
   id: string; // matches card.type (each type used at most once for now)
   type: string;
   size: CardSize;
+  /** Collapsed = show only the title handle, hide the card body. */
+  collapsed?: boolean;
 };
 
 function defaultLayoutFor(available: DashboardCard[]): LayoutCard[] {
@@ -51,6 +53,7 @@ function defaultLayoutFor(available: DashboardCard[]): LayoutCard[] {
     id: c.type,
     type: c.type,
     size: c.defaultSize,
+    collapsed: false,
   }));
 }
 
@@ -67,14 +70,18 @@ function reconcileLayout(
         type?: string;
         w?: number;
         size?: CardSize;
+        config?: { size?: CardSize; collapsed?: boolean };
       };
       const size: CardSize =
-        raw.size ?? (raw.w && raw.w >= 3 ? "large" : raw.w === 2 ? "medium" : "small");
+        raw.config?.size ??
+        raw.size ??
+        (raw.w && raw.w >= 3 ? "large" : raw.w === 2 ? "medium" : "small");
       const type = raw.type ?? "";
       return {
         id: raw.id ?? type,
         type,
         size,
+        collapsed: raw.config?.collapsed ?? false,
       };
     });
   if (savedCards.length === 0) return defaultLayoutFor(available);
@@ -119,7 +126,7 @@ export function HomeDashboard({
           y: i,
           w: c.size === "large" ? 3 : c.size === "medium" ? 2 : 1,
           h: 1,
-          config: { size: c.size },
+          config: { size: c.size, collapsed: c.collapsed ?? false },
         })),
       });
     }, 400);
@@ -135,6 +142,12 @@ export function HomeDashboard({
 
   function setSize(id: string, size: CardSize) {
     update(layout.map((c) => (c.id === id ? { ...c, size } : c)));
+  }
+
+  function toggleCollapsed(id: string) {
+    update(
+      layout.map((c) => (c.id === id ? { ...c, collapsed: !c.collapsed } : c)),
+    );
   }
 
   function removeCard(id: string) {
@@ -297,7 +310,38 @@ export function HomeDashboard({
                   <GripVertical className="w-4 h-4" aria-hidden />
                 </div>
               )}
-              <div className={editing ? "pt-10" : ""}>{def.node}</div>
+              {/* Collapse handle — hidden while editing (the layout controls
+                  take over there). Collapsed cards show just this bar. */}
+              {!editing && (
+                <button
+                  type="button"
+                  onClick={() => toggleCollapsed(slot.id)}
+                  aria-expanded={!slot.collapsed}
+                  aria-label={
+                    slot.collapsed ? `Expand ${def.label}` : `Collapse ${def.label}`
+                  }
+                  className={
+                    "w-full flex items-center gap-2 px-4 py-2 text-tbb-ink-3 hover:bg-tbb-cream-50 " +
+                    (slot.collapsed ? "" : "border-b border-tbb-line-soft")
+                  }
+                >
+                  <ChevronDown
+                    className={
+                      "w-4 h-4 flex-none transition-transform duration-tbb-base " +
+                      (slot.collapsed ? "-rotate-90" : "")
+                    }
+                    aria-hidden
+                  />
+                  {slot.collapsed && (
+                    <span className="text-[11px] font-bold uppercase tracking-tbb-caps">
+                      {def.label}
+                    </span>
+                  )}
+                </button>
+              )}
+              {(!slot.collapsed || editing) && (
+                <div className={editing ? "pt-10" : ""}>{def.node}</div>
+              )}
             </div>
           );
         })}
