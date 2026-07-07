@@ -18,11 +18,8 @@ import {
   Calendar,
   CheckSquare,
   FileText,
-  Filter,
   Plus,
-  Target,
   TrendingUp,
-  UserCheck,
   Users,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -32,7 +29,6 @@ import { listCoachActionItems } from "@/lib/db/queries/action-items";
 import {
   listCoachDeliverables,
   listCoachGoals,
-  listCoachHires,
   listCoachProjects,
   listCoachUpcomingSessions,
 } from "@/lib/db/queries/business-builder-cross-engagement";
@@ -57,7 +53,6 @@ export default async function CoachConsole() {
     actionItems,
     upcomingSessions,
     projects,
-    hires,
     deliverables,
     goals,
     prospects,
@@ -67,7 +62,6 @@ export default async function CoachConsole() {
     listCoachActionItems(),
     listCoachUpcomingSessions(),
     listCoachProjects(),
-    listCoachHires(),
     listCoachDeliverables(),
     listCoachGoals(),
     listProspects(),
@@ -139,21 +133,11 @@ export default async function CoachConsole() {
   const activeProjects = projects.filter(
     (p) => p.status === "active" || p.status === "planning",
   );
-  const activeHires = hires.filter(
-    (h) => h.status !== "hired" && h.status !== "declined",
-  );
   const inflightDeliverables = deliverables.filter(
     (d) =>
       d.status === "in_progress" ||
       d.status === "review" ||
       d.status === "not_started",
-  );
-  const overdueGoals = goals.filter(
-    (g) =>
-      g.targetDate &&
-      g.targetDate < now &&
-      g.status !== "achieved" &&
-      g.status !== "abandoned",
   );
   /**
    * Unified Commitments stream — action items, deliverables, and goals
@@ -367,6 +351,7 @@ export default async function CoachConsole() {
       type: "new_leads",
       label: "New leads (last 7 days)",
       defaultSize: "small",
+      defaultOpen: true,
       node: (
         <CardShell
           icon={<TrendingUp className="w-4 h-4" aria-hidden />}
@@ -455,43 +440,6 @@ export default async function CoachConsole() {
       ),
     },
     {
-      type: "negotiation",
-      label: "Prospects in negotiation",
-      defaultSize: "small",
-      node: (
-        <CardShell
-          icon={<Filter className="w-4 h-4" aria-hidden />}
-          title={`In negotiation · ${negotiationProspects.length}`}
-          href="/business-builder/pipeline"
-          cta="Open"
-        >
-          {negotiationProspects.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No active negotiations.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {negotiationProspects.slice(0, 5).map((p) => (
-                <li key={p.id} className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                  <Link
-                    href={`/business-builder/pipeline/${p.id}`}
-                    className="text-sm font-bold text-foreground hover:underline underline-offset-4"
-                  >
-                    {p.companyName}
-                  </Link>
-                  {p.expectedValueCents && (
-                    <span className="ml-auto text-xs text-tbb-navy font-bold tabular-nums">
-                      ${(p.expectedValueCents / 100).toLocaleString("en-CA")}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardShell>
-      ),
-    },
-    {
       type: "pipeline_value",
       label: "Pipeline value",
       defaultSize: "small",
@@ -517,6 +465,7 @@ export default async function CoachConsole() {
       type: "upcoming_sessions",
       label: "Upcoming sessions",
       defaultSize: "medium",
+      defaultOpen: true,
       node: (
         <CardShell
           icon={<Calendar className="w-4 h-4" aria-hidden />}
@@ -588,44 +537,6 @@ export default async function CoachConsole() {
       ),
     },
     {
-      type: "hiring",
-      label: "Hiring pipeline",
-      defaultSize: "small",
-      node: (
-        <CardShell
-          icon={<UserCheck className="w-4 h-4" aria-hidden />}
-          title={`Hiring · ${activeHires.length}`}
-          href="/business-builder/hiring"
-          cta="Open"
-        >
-          {activeHires.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No candidates in flight.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {activeHires.slice(0, 5).map((h) => (
-                <li
-                  key={h.id}
-                  className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap"
-                >
-                  <span className="text-sm font-bold text-foreground">
-                    {h.candidateName}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                    {h.engagementName}
-                  </span>
-                  <span className="ml-auto text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                    {h.status.replace("_", " ")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardShell>
-      ),
-    },
-    {
       type: "deliverables",
       label: "Deliverables in flight",
       defaultSize: "small",
@@ -650,39 +561,6 @@ export default async function CoachConsole() {
                   <span className="text-sm font-bold text-foreground">{d.title}</span>
                   <span className="ml-auto text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
                     {d.status.replace("_", " ")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardShell>
-      ),
-    },
-    {
-      type: "goals_overdue",
-      label: "Goals past target",
-      defaultSize: "small",
-      node: (
-        <CardShell
-          icon={<Target className="w-4 h-4" aria-hidden />}
-          title={`Goals · ${overdueGoals.length} past target`}
-          href="/business-builder/goals"
-          cta="Open"
-        >
-          {overdueGoals.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              Goals on track.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {overdueGoals.slice(0, 5).map((g) => (
-                <li
-                  key={g.id}
-                  className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap"
-                >
-                  <span className="text-sm font-bold text-foreground">{g.title}</span>
-                  <span className="text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                    {g.engagementName}
                   </span>
                 </li>
               ))}
