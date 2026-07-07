@@ -8,7 +8,8 @@ import {
   PORTAL_PREVIEW_COOKIE,
 } from "@/lib/db/queries/engagements";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
-import { ALL_MODULES, getEnabledModules } from "@/lib/modules";
+import { ALL_MODULES } from "@/lib/modules";
+import { getEnabledModules } from "@/lib/modules-server";
 import {
   isEngagementReadOnly,
   readOnlyReason,
