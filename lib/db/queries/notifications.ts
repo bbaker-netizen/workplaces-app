@@ -89,7 +89,9 @@ export async function listBusinessBuilderNotifications(): Promise<
         .filter(
           (r) =>
             r.parentEntityType === "prospect_comment" ||
-            r.parentEntityType === "prospect_stale",
+            r.parentEntityType === "prospect_stale" ||
+            r.parentEntityType === "prospect_new_lead" ||
+            r.parentEntityType === "prospect_followup_due",
         )
         .map((r) => r.parentEntityId),
     ),
@@ -138,6 +140,22 @@ export async function listBusinessBuilderNotifications(): Promise<
       return {
         ...n,
         contextLabel: `${name} has gone quiet — follow up or move it to Lost`,
+        href: `/business-builder/pipeline/${n.parentEntityId}`,
+      };
+    }
+    if (n.parentEntityType === "prospect_new_lead") {
+      const name = nameById.get(n.parentEntityId) ?? "A new lead";
+      return {
+        ...n,
+        contextLabel: `New lead: ${name} — strike while warm`,
+        href: `/business-builder/pipeline/${n.parentEntityId}`,
+      };
+    }
+    if (n.parentEntityType === "prospect_followup_due") {
+      const name = nameById.get(n.parentEntityId) ?? "a lead";
+      return {
+        ...n,
+        contextLabel: `Follow-up due: ${name}`,
         href: `/business-builder/pipeline/${n.parentEntityId}`,
       };
     }

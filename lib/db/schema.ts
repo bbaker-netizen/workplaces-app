@@ -1266,6 +1266,43 @@ export const notifications = pgTable(
   })
 );
 
+/**
+ * Web Push subscriptions — one row per browser/device a Business Builder
+ * has enabled desktop notifications on. The server sends a push to every
+ * subscription for a user when a notification fires, so a pop-up reaches
+ * them with the tab closed.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    endpointUniq: uniqueIndex("push_subscriptions_endpoint_uniq").on(
+      t.endpoint,
+    ),
+    userIdx: index("push_subscriptions_user_idx").on(t.userProfileId),
+  }),
+);
+
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+
 // ---------- Phase 1.16: Forms ----------
 
 /**

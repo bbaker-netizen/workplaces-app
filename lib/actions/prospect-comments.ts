@@ -27,6 +27,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { mentionEmail } from "@/lib/email/templates";
+import { sendPushToUser } from "@/lib/push/web-push";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -150,6 +151,18 @@ export async function createProspectComment(
               }),
             ),
           ),
+      );
+      // Desktop push (best-effort) to every notified teammate — reaches
+      // them with the tab closed.
+      await Promise.all(
+        result.recipients.map((r) =>
+          sendPushToUser(r.id, {
+            title: "New comment",
+            body: `${authorName} commented on ${label}`,
+            url,
+            tag: `prospect-comment-${data.prospectId}`,
+          }),
+        ),
       );
     }
 

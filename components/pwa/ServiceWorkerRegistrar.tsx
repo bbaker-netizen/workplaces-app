@@ -9,8 +9,12 @@ import { useEffect } from "react";
  * of the app — hiding fresh deploys from returning browsers (it bit the
  * owner twice). Offline viewing wasn't worth that, so we no longer
  * register a caching SW at all. Instead, on every load we unregister any
- * existing service worker, wipe its caches, and reload once so the page
- * serves directly from the network from then on.
+ * existing caching service worker, wipe its caches, and reload once so the
+ * page serves directly from the network from then on.
+ *
+ * Exception: the push-only worker (/push-sw.js) is left alone. It has no
+ * fetch handler and no cache, so it can't serve a stale build — it only
+ * exists to receive Web Push notifications while the tab is closed.
  */
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
@@ -20,8 +24,18 @@ export function ServiceWorkerRegistrar() {
     (async () => {
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
-        if (regs.length === 0) return; // already clean — nothing to do
-        await Promise.all(regs.map((r) => r.unregister()));
+        // Only tear down NON-push workers (the old caching SW). The push
+        // worker must survive so desktop notifications keep working.
+        const stale = regs.filter((r) => {
+          const url =
+            r.active?.scriptURL ||
+            r.waiting?.scriptURL ||
+            r.installing?.scriptURL ||
+            "";
+          return !url.endsWith("/push-sw.js");
+        });
+        if (stale.length === 0) return; // nothing but the push worker — done
+        await Promise.all(stale.map((r) => r.unregister()));
         if (typeof caches !== "undefined") {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));

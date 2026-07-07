@@ -33,6 +33,7 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
+  notifications,
   orgs,
   prospectActivities,
   prospects,
@@ -41,6 +42,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { newLeadEmail } from "@/lib/email/templates";
+import { sendPushToUser } from "@/lib/push/web-push";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -137,6 +139,7 @@ export async function POST(req: Request): Promise<Response> {
   // Insert + activity + collect recipients.
   let prospectId: string;
   let recipientEmails: string[] = [];
+  let recipientIds: string[] = [];
   try {
     const result = await withSystemContext(async (tx) => {
       const [master] = await tx
@@ -204,7 +207,7 @@ export async function POST(req: Request): Promise<Response> {
       // Notify every master_admin + Coach in the master org so the
       // first one to see it can claim and follow up.
       const recipients = await tx
-        .select({ email: userProfiles.email })
+        .select({ id: userProfiles.id, email: userProfiles.email })
         .from(userProfiles)
         .where(
           or(
@@ -212,10 +215,26 @@ export async function POST(req: Request): Promise<Response> {
             eq(userProfiles.role, "coach"),
           ),
         );
+
+      // In-app notification per Business Builder so the new lead surfaces in
+      // the bell + toast (and, below, desktop push) — not just email.
+      if (recipients.length > 0) {
+        await tx.insert(notifications).values(
+          recipients.map((r) => ({
+            orgId: master.id,
+            userProfileId: r.id,
+            type: "message" as const,
+            parentEntityType: "prospect_new_lead",
+            parentEntityId: created.id,
+            sentVia: "both" as const,
+          })),
+        );
+      }
       return { id: created.id, recipients, deduped: false };
     });
     prospectId = result.id;
     recipientEmails = result.recipients.map((r) => r.email);
+    recipientIds = result.recipients.map((r) => r.id);
   } catch (e) {
     console.error("[/api/leads] insert failed:", e);
     return NextResponse.json(
@@ -244,6 +263,21 @@ export async function POST(req: Request): Promise<Response> {
       bypassWorkingHours: true,
     });
   }
+
+  // Desktop push (best-effort) — a new lead should reach every Business
+  // Builder even with the tab closed.
+  await Promise.all(
+    recipientIds.map((uid) =>
+      sendPushToUser(uid, {
+        title: "New lead",
+        body: `${data.companyName}${
+          data.contactName ? ` · ${data.contactName}` : ""
+        } — ${leadSource}. Strike while warm.`,
+        url: `/business-builder/pipeline/${prospectId}`,
+        tag: `new-lead-${prospectId}`,
+      }),
+    ),
+  );
 
   return NextResponse.json(
     { ok: true, prospectId },
