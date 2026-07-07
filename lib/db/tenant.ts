@@ -179,6 +179,19 @@ export async function withEngagementContext<T>(
     if (!resolved) {
       throw new Error("Engagement not found.");
     }
+    // Enforce per-Business-Builder client grants at the foundation. A
+    // master_admin and an all-clients coach always pass; a coach who has
+    // been restricted to specific clients may only reach engagements they
+    // were granted. Without this check, binding RLS to the engagement's
+    // own org below would hand a restricted coach full read/write access
+    // to ANY client by id. (Dynamic import breaks the static cycle with
+    // the bb-access query module, which imports withSystemContext here.)
+    const { canCurrentBbAccessEngagement } = await import(
+      "./queries/bb-access"
+    );
+    if (!(await canCurrentBbAccessEngagement(engagementId))) {
+      throw new Error("You don't have access to this client.");
+    }
     targetOrgId = resolved;
   }
 

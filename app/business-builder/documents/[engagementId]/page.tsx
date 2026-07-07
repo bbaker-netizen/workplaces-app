@@ -12,6 +12,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import {
   getEngagementByIdOrSlug,
   listCoachEngagements,
@@ -52,6 +53,10 @@ export default async function CoachDocumentsPage({
   // which 404'd the Documents & Drive button for wrapped-up clients.
   const engagement = await getEngagementByIdOrSlug(params.engagementId);
   if (!engagement) notFound();
+  // A coach restricted to specific clients may only open granted clients.
+  if (!(await canCurrentBbAccessEngagement(engagement.id))) {
+    redirect("/business-builder/engagements");
+  }
   // The "Switch engagement" dropdown still lists the active ones.
   const engagements = await listCoachEngagements();
 

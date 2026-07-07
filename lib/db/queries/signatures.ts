@@ -18,6 +18,7 @@ import {
 } from "../schema";
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
+import { canCurrentBbAccessEngagement } from "./bb-access";
 
 export type EnvelopeWithSigners = SignatureEnvelope & {
   signers: SignatureSigner[];
@@ -144,6 +145,19 @@ export async function getEnvelopeForCoach(
   if (profile.role !== "master_admin" && profile.role !== "coach")
     return null;
 
+  // A coach restricted to specific clients may only read envelopes for
+  // engagements they were granted (master_admin / all-clients pass).
+  const envEngagementId = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({ engagementId: signatureEnvelopes.engagementId })
+      .from(signatureEnvelopes)
+      .where(eq(signatureEnvelopes.id, envelopeId))
+      .limit(1);
+    return row?.engagementId ?? null;
+  });
+  if (!envEngagementId) return null;
+  if (!(await canCurrentBbAccessEngagement(envEngagementId))) return null;
+
   return withSystemContext(async (tx) => {
     const [env] = await tx
       .select()
@@ -214,6 +228,8 @@ export async function listEnvelopesForEngagement(
 ): Promise<SignatureEnvelope[]> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
+  // Restricted coaches only see envelopes for granted engagements.
+  if (!(await canCurrentBbAccessEngagement(engagementId))) return [];
   return withSystemContext(async (tx) =>
     tx
       .select()

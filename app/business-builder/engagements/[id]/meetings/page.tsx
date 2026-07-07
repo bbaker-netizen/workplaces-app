@@ -24,6 +24,7 @@ import {
   Video,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import {
   engagementMeetings,
   engagements,
@@ -43,6 +44,9 @@ export default async function EngagementMeetingsPage({
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     redirect("/portal");
+  }
+  if (!(await canCurrentBbAccessEngagement(id))) {
+    redirect("/business-builder/engagements");
   }
 
   const data = await withSystemContext(async (tx) => {

@@ -249,6 +249,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     { sessionId: z.string().uuid() },
     async ({ sessionId }) => {
       const result = await withSystemContext(async (tx) => {
+        const [Coach] = await tx
+          .select({ id: coaches.id })
+          .from(coaches)
+          .where(eq(coaches.userProfileId, auth.coachUserProfileId))
+          .limit(1);
+        if (!Coach) return null;
         const [session] = await tx
           .select()
           .from(bbsSessions)
@@ -260,6 +266,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .from(engagements)
           .where(eq(engagements.id, session.engagementId))
           .limit(1);
+        // Ownership: only expose sessions on engagements this coach owns.
+        if (!engagement || engagement.coachId !== Coach.id) return null;
 
         const [priorSession] = await tx
           .select()
@@ -336,10 +344,21 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       marginImpact,
     }) => {
       const result = await withSystemContext(async (tx) => {
+        const [Coach] = await tx
+          .select({ id: coaches.id })
+          .from(coaches)
+          .where(eq(coaches.userProfileId, auth.coachUserProfileId))
+          .limit(1);
+        if (!Coach) throw new Error("Engagement not found.");
         const [eng] = await tx
           .select({ id: engagements.id, orgId: engagements.orgId })
           .from(engagements)
-          .where(eq(engagements.id, engagementId))
+          .where(
+            and(
+              eq(engagements.id, engagementId),
+              eq(engagements.coachId, Coach.id),
+            ),
+          )
           .limit(1);
         if (!eng) throw new Error("Engagement not found.");
         const [row] = await tx
@@ -382,10 +401,21 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     },
     async ({ engagementId, scheduledAt, type, notes }) => {
       const result = await withSystemContext(async (tx) => {
+        const [Coach] = await tx
+          .select({ id: coaches.id })
+          .from(coaches)
+          .where(eq(coaches.userProfileId, auth.coachUserProfileId))
+          .limit(1);
+        if (!Coach) throw new Error("Engagement not found.");
         const [eng] = await tx
           .select({ id: engagements.id, orgId: engagements.orgId })
           .from(engagements)
-          .where(eq(engagements.id, engagementId))
+          .where(
+            and(
+              eq(engagements.id, engagementId),
+              eq(engagements.coachId, Coach.id),
+            ),
+          )
           .limit(1);
         if (!eng) throw new Error("Engagement not found.");
         const [row] = await tx
@@ -430,10 +460,21 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     },
     async ({ engagementId, threadType, parentEntityId, body }) => {
       const result = await withSystemContext(async (tx) => {
+        const [Coach] = await tx
+          .select({ id: coaches.id })
+          .from(coaches)
+          .where(eq(coaches.userProfileId, auth.coachUserProfileId))
+          .limit(1);
+        if (!Coach) throw new Error("Engagement not found.");
         const [eng] = await tx
           .select({ id: engagements.id, orgId: engagements.orgId })
           .from(engagements)
-          .where(eq(engagements.id, engagementId))
+          .where(
+            and(
+              eq(engagements.id, engagementId),
+              eq(engagements.coachId, Coach.id),
+            ),
+          )
           .limit(1);
         if (!eng) throw new Error("Engagement not found.");
         const [row] = await tx
@@ -463,6 +504,25 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     { actionItemId: z.string().uuid() },
     async ({ actionItemId }) => {
       await withSystemContext(async (tx) => {
+        const [Coach] = await tx
+          .select({ id: coaches.id })
+          .from(coaches)
+          .where(eq(coaches.userProfileId, auth.coachUserProfileId))
+          .limit(1);
+        if (!Coach) throw new Error("Action item not found.");
+        // Ownership: only complete items on engagements this coach owns.
+        const [item] = await tx
+          .select({ id: actionItems.id })
+          .from(actionItems)
+          .innerJoin(engagements, eq(engagements.id, actionItems.engagementId))
+          .where(
+            and(
+              eq(actionItems.id, actionItemId),
+              eq(engagements.coachId, Coach.id),
+            ),
+          )
+          .limit(1);
+        if (!item) throw new Error("Action item not found.");
         await tx
           .update(actionItems)
           .set({ status: "done" })

@@ -36,6 +36,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import { listProspectActivities } from "@/lib/db/queries/prospects";
 import { activityTypeLabel } from "@/lib/pipeline/stages";
 import {
@@ -84,6 +85,11 @@ export default async function EngagementDetailPage({
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     redirect("/portal");
+  }
+  // A coach restricted to specific clients may only open granted
+  // engagements (master_admin / all-clients coaches pass through).
+  if (!(await canCurrentBbAccessEngagement(id))) {
+    redirect("/business-builder/engagements");
   }
 
   // Load everything in one server hop.

@@ -24,6 +24,7 @@ import {
 } from "../schema";
 import { withEngagementContext, withSystemContext, withTenantContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
+import { canCurrentBbAccessEngagement } from "./bb-access";
 
 export type ListedActionItem = ActionItem & {
   assigneeName: string | null;
@@ -78,7 +79,7 @@ export async function getActionItem(
 
   // For Coach roles, items can live in any client org — use system context.
   if (profile.role === "master_admin" || profile.role === "coach") {
-    return withSystemContext(async (tx) => {
+    const found = await withSystemContext(async (tx) => {
       const rows = await tx
         .select({
           item: actionItems,
@@ -94,6 +95,16 @@ export async function getActionItem(
       if (!rows[0]) return null;
       return { ...rows[0].item, assigneeName: rows[0].assigneeName };
     });
+    if (!found) return null;
+    // A coach restricted to specific clients may only read items for
+    // engagements they were granted (master_admin / all-clients pass).
+    if (
+      found.engagementId &&
+      !(await canCurrentBbAccessEngagement(found.engagementId))
+    ) {
+      return null;
+    }
+    return found;
   }
 
   // Client roles: tenant-scoped lookup via RLS.
