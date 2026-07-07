@@ -28,6 +28,10 @@ export type DashboardCard = {
   label: string;
   /** Default size when first added. */
   defaultSize: CardSize;
+  /** Whether the card starts expanded. Default false (starts collapsed) —
+   *  only the timely cards (new leads, upcoming sessions) open by default so
+   *  the dashboard opens lean. Users pin open whatever they want; it sticks. */
+  defaultOpen?: boolean;
   /** Pre-rendered card body (server-rendered). */
   node: React.ReactNode;
 };
@@ -53,7 +57,7 @@ function defaultLayoutFor(available: DashboardCard[]): LayoutCard[] {
     id: c.type,
     type: c.type,
     size: c.defaultSize,
-    collapsed: false,
+    collapsed: !c.defaultOpen,
   }));
 }
 
@@ -62,6 +66,12 @@ function reconcileLayout(
   saved: HomeDashboardLayout | null,
 ): LayoutCard[] {
   const knownTypes = new Set(available.map((c) => c.type));
+  // A card the user hasn't explicitly collapsed/expanded falls back to its
+  // default (most start collapsed) — so existing saved layouts pick up the
+  // lean default without a migration.
+  const defaultOpenByType = new Map(
+    available.map((c) => [c.type, c.defaultOpen ?? false] as const),
+  );
   const savedCards = (saved?.cards ?? [])
     .filter((c) => knownTypes.has((c as unknown as { type?: string }).type ?? ""))
     .map((c) => {
@@ -81,7 +91,8 @@ function reconcileLayout(
         id: raw.id ?? type,
         type,
         size,
-        collapsed: raw.config?.collapsed ?? false,
+        collapsed:
+          raw.config?.collapsed ?? !(defaultOpenByType.get(type) ?? false),
       };
     });
   if (savedCards.length === 0) return defaultLayoutFor(available);
