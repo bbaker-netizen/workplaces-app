@@ -537,6 +537,10 @@ export async function bulkDeleteProspects(
  * stays current without manual edits.
  */
 export async function touchLastContact(prospectId: string): Promise<void> {
+  // "use server" export — must guard: Business Builders only.
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return;
+  if (profile.role !== "master_admin" && profile.role !== "coach") return;
   await withSystemContext(async (tx) => {
     await tx
       .update(prospects)

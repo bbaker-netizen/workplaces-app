@@ -56,18 +56,24 @@ async function authenticate(req: Request): Promise<
   if (!clerkUserId) {
     return { ok: false, status: 401, error: "Missing user id in token." };
   }
-  const profileId = await withSystemContext(async (tx) => {
+  const profile = await withSystemContext(async (tx) => {
     const [row] = await tx
-      .select({ id: userProfiles.id })
+      .select({ id: userProfiles.id, role: userProfiles.role })
       .from(userProfiles)
       .where(eq(userProfiles.clerkUserId, clerkUserId))
       .limit(1);
-    return row?.id ?? null;
+    return row ?? null;
   });
-  if (!profileId) {
+  if (!profile) {
     return { ok: false, status: 403, error: "Unknown user." };
   }
-  return { ok: true, coachUserProfileId: profileId };
+  // Only Business Builders may use the MCP endpoint. Without this, any
+  // user (e.g. a client-portal account) holding the shared bearer token
+  // could reach the coach tools.
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, status: 403, error: "Not a Business Builder." };
+  }
+  return { ok: true, coachUserProfileId: profile.id };
 }
 
 export async function POST(req: Request): Promise<Response> {

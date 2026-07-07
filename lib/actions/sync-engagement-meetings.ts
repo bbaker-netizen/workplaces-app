@@ -307,6 +307,15 @@ export async function syncAllEngagementMeetings(): Promise<{
   inserted: number;
   updated: number;
 }> {
+  // "use server" export — must guard: Business Builders only. Without this,
+  // an unauthenticated caller could trigger a full (costly) Fireflies re-sync.
+  const profile = await ensureUserProfile();
+  if (
+    profile.status !== "ok" ||
+    (profile.role !== "master_admin" && profile.role !== "coach")
+  ) {
+    return { engagements: 0, inserted: 0, updated: 0 };
+  }
   const ids = await withSystemContext(async (tx) =>
     tx
       .select({ id: engagements.id })

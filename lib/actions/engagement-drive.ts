@@ -75,6 +75,12 @@ export async function setDriveArchiveFolder(
 export async function moveEngagementFolderToArchive(
   engagementId: string,
 ): Promise<void> {
+  // "use server" export — must guard: Business Builders only. Called
+  // internally by archiveEngagement (already authed) but also directly
+  // reachable, so it verifies the caller itself.
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return;
+  if (profile.role !== "master_admin" && profile.role !== "coach") return;
   try {
     const info = await withSystemContext(async (tx) => {
       const [row] = await tx
@@ -418,6 +424,10 @@ export async function unlinkEngagementDriveFolder(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  // Business Builders only — mirror the sibling Drive actions' role gate.
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Not allowed." };
+  }
   if (!z.string().uuid().safeParse(engagementId).success) {
     return { ok: false, error: "Invalid id." };
   }
