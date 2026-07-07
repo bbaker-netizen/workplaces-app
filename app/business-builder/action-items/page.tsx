@@ -51,6 +51,8 @@ export default async function CoachActionItemsPage() {
         newItemHref="/business-builder/action-items/new"
         emptyHeadline="Clear plate across every client."
         emptyDescription="Either you just shipped a lot, or you have a Fireflies recording sitting on a BBS session waiting for Claude to extract action items from it. Either way: well done. Or get to work."
+        groupByDueDate
+        nowMs={Date.now()}
       />
     </main>
   );
