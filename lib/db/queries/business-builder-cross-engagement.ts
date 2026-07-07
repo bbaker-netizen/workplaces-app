@@ -10,7 +10,7 @@
  * caller isn't a Coach, returns empty.
  */
 
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import {
   bbsSessions,
   coaches,
@@ -178,6 +178,11 @@ export async function listCoachUpcomingSessions(): Promise<
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
   const cid = await coachId(profile.userProfileId);
   if (!cid) return [];
+  // Only sessions from now onward count as "upcoming". Without this,
+  // past sessions that were never marked completed (still status
+  // "scheduled") sort to the top and masquerade as upcoming. Matches the
+  // sidebar pulse's next-session filter.
+  const now = new Date();
   return withSystemContext(async (tx) =>
     tx
       .select({
@@ -194,6 +199,7 @@ export async function listCoachUpcomingSessions(): Promise<
           eq(engagements.coachId, cid),
           eq(bbsSessions.status, "scheduled"),
           isNotNull(bbsSessions.scheduledAt),
+          gte(bbsSessions.scheduledAt, now),
         ),
       )
       .orderBy(bbsSessions.scheduledAt),
