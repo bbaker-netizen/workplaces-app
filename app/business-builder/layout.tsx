@@ -9,6 +9,7 @@ import { BusinessBuilderOnboarding } from "@/components/business-builder/Busines
 import { PortalFooter } from "@/components/portal/PortalFooter";
 import { BusinessBuilderTour } from "@/components/business-builder/BusinessBuilderTour";
 import { BuilderBuddy } from "@/components/mascot/BuilderBuddy";
+import { NotificationToaster } from "@/components/notifications/NotificationToaster";
 
 /**
  * Business Builder Console layout — role gate + lifecycle sidebar.
@@ -58,6 +59,9 @@ export default async function BusinessBuilderLayout({
           surfaces page-specific tips when clicked. Dismissible per
           page or globally. */}
       <BuilderBuddy />
+      {/* In-app pop-up notifications — polls the notification feed and
+          slides a toast in for anything new while you're in the console. */}
+      <NotificationToaster />
     </div>
   );
 }
