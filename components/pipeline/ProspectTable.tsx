@@ -653,8 +653,10 @@ export function ProspectTable({
   return (
     <div className="space-y-3">
       {/* Sticky toolbar — search, filter, columns, and the bulk-action
-          bar stay pinned at the top of the page while the list scrolls. */}
-      <div className="sticky top-0 z-20 bg-background pt-2 pb-2 space-y-3">
+          bar stay pinned at the top of the page while the list scrolls.
+          z-30 (above the sticky table header's z-20) so the filter
+          popovers open in front of the header rather than behind it. */}
+      <div className="sticky top-0 z-30 bg-background pt-2 pb-2 space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
         <label className="relative flex-1 min-w-[240px] max-w-md">
           <Search
@@ -725,6 +727,26 @@ export function ProspectTable({
                     </button>
                   )}
                 </div>
+                <label className="flex items-center gap-2 px-1 py-1.5 rounded text-sm cursor-pointer hover:bg-tbb-cream-50 font-bold text-tbb-navy">
+                  <input
+                    type="checkbox"
+                    checked={stages.size === STAGE_ORDER.length}
+                    ref={(el) => {
+                      if (el)
+                        el.indeterminate =
+                          stages.size > 0 && stages.size < STAGE_ORDER.length;
+                    }}
+                    onChange={() =>
+                      setStages(
+                        stages.size === STAGE_ORDER.length
+                          ? new Set()
+                          : new Set(STAGE_ORDER),
+                      )
+                    }
+                    className="rounded"
+                  />
+                  <span className="flex-1">Select all</span>
+                </label>
                 <div className="max-h-64 overflow-y-auto space-y-0.5">
                   {STAGE_ORDER.map((k) => {
                     const on = stages.has(k);
