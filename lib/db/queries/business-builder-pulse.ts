@@ -17,7 +17,18 @@
  * layout's render fast.
  */
 
-import { and, asc, count, eq, gte, lt, ne, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gte,
+  inArray,
+  lt,
+  ne,
+  isNotNull,
+  isNull,
+} from "drizzle-orm";
 import {
   actionItems,
   bbsSessions,
@@ -27,6 +38,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getCurrentBbAccess } from "@/lib/db/queries/bb-access";
 
 export type BusinessBuilderPulse = {
   nextSession: {
@@ -45,6 +57,16 @@ export async function getBusinessBuilderPulse(): Promise<BusinessBuilderPulse> {
   const profile = await ensureUserProfile();
   const userProfileId =
     profile.status === "ok" ? profile.userProfileId : null;
+  // A coach restricted to specific clients should only see THEIR clients'
+  // counts. master_admin and all-clients coaches see everything (null =
+  // no restriction). Empty grant list → an empty inArray, i.e. zeros.
+  const access = await getCurrentBbAccess();
+  const restrictIds =
+    access.isBusinessBuilder &&
+    !access.isMasterAdmin &&
+    !access.allClientsAccess
+      ? access.grantedEngagementIds
+      : null;
   try {
     const [next, overdue, awaiting, unread] = await withSystemContext(async (tx) => {
       const [nextRows, overdueRows, awaitingRows, unreadRows] = await Promise.all([
@@ -63,6 +85,9 @@ export async function getBusinessBuilderPulse(): Promise<BusinessBuilderPulse> {
             and(
               gte(bbsSessions.scheduledAt, now),
               eq(bbsSessions.status, "scheduled"),
+              restrictIds
+                ? inArray(bbsSessions.engagementId, restrictIds)
+                : undefined,
             ),
           )
           .orderBy(asc(bbsSessions.scheduledAt))
@@ -76,12 +101,22 @@ export async function getBusinessBuilderPulse(): Promise<BusinessBuilderPulse> {
               lt(actionItems.dueDate, now),
               ne(actionItems.status, "done"),
               ne(actionItems.status, "draft"),
+              restrictIds
+                ? inArray(actionItems.engagementId, restrictIds)
+                : undefined,
             ),
           ),
         tx
           .select({ n: count() })
           .from(signatureEnvelopes)
-          .where(eq(signatureEnvelopes.status, "in_progress")),
+          .where(
+            and(
+              eq(signatureEnvelopes.status, "in_progress"),
+              restrictIds
+                ? inArray(signatureEnvelopes.engagementId, restrictIds)
+                : undefined,
+            ),
+          ),
         userProfileId
           ? tx
               .select({ n: count() })

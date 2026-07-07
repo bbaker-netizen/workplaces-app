@@ -14,7 +14,7 @@
  * itself, so a notification links straight to the prospect page.
  */
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -100,7 +100,16 @@ export async function createProspectComment(
             fullName: userProfiles.fullName,
           })
           .from(userProfiles)
-          .where(inArray(userProfiles.id, notifyIds));
+          .where(
+            and(
+              inArray(userProfiles.id, notifyIds),
+              // Internal Business Builders in the master org only — an
+              // internal lead comment must never notify (email/push) a
+              // client or a user in another org, even if their id is passed.
+              eq(userProfiles.orgId, p.orgId),
+              inArray(userProfiles.role, ["master_admin", "coach"]),
+            ),
+          );
 
         if (recipients.length > 0) {
           await tx.insert(notifications).values(

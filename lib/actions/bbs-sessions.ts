@@ -22,6 +22,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { clientWriteBlocked, READ_ONLY_ERROR } from "@/lib/server/engagement-guard";
 import {
   bbsSessions,
   engagements,
@@ -117,6 +118,9 @@ export async function scheduleSession(
   const scheduled = new Date(data.scheduledAt);
   if (Number.isNaN(scheduled.getTime())) {
     return { ok: false, error: "Date and time isn't valid." };
+  }
+  if (await clientWriteBlocked(profile.role, data.engagementId)) {
+    return { ok: false, error: READ_ONLY_ERROR };
   }
 
   try {
@@ -214,6 +218,9 @@ export async function updateSession(
     );
     if (!lookupEngId) {
       return { ok: false, error: "Session not found." };
+    }
+    if (await clientWriteBlocked(profile.role, lookupEngId)) {
+      return { ok: false, error: READ_ONLY_ERROR };
     }
     const result = await withEngagementContext(
       profile.orgId,
@@ -352,6 +359,9 @@ async function setStatus(
     if (!lookupEngId) {
       return { ok: false, error: "Session not found." };
     }
+    if (await clientWriteBlocked(profile.role, lookupEngId)) {
+      return { ok: false, error: READ_ONLY_ERROR };
+    }
     const result = await withEngagementContext(
       profile.orgId,
       profile.role,
@@ -412,6 +422,9 @@ export async function deleteSession(id: string): Promise<ActionResult> {
     );
     if (!lookupEngId) {
       return { ok: false, error: "Session not found." };
+    }
+    if (await clientWriteBlocked(profile.role, lookupEngId)) {
+      return { ok: false, error: READ_ONLY_ERROR };
     }
     const result = await withEngagementContext(
       profile.orgId,
