@@ -13,6 +13,43 @@ import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { notifications } from "@/lib/db/schema";
 import { withTenantContext } from "@/lib/db/tenant";
+import { listBusinessBuilderNotifications } from "@/lib/db/queries/notifications";
+
+/** Slim notification shape the in-app toaster polls for. */
+export type ToastNotification = {
+  id: string;
+  createdAtMs: number;
+  label: string;
+  href: string | null;
+  read: boolean;
+};
+
+/**
+ * Recent notifications for the in-app toaster (Business Builder side).
+ * Only rows we can describe (have a context label) are returned; the client
+ * pops a toast for any that are unread and newer than what it's already
+ * seen. Reuses the same enriched feed as the sidebar bell, so toasts and
+ * the bell stay in sync.
+ */
+export async function getToastNotifications(): Promise<ToastNotification[]> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return [];
+  if (profile.role !== "master_admin" && profile.role !== "coach") return [];
+  const rows = await listBusinessBuilderNotifications();
+  return rows
+    .filter((n) => n.contextLabel)
+    .slice(0, 15)
+    .map((n) => ({
+      id: n.id,
+      createdAtMs:
+        n.createdAt instanceof Date
+          ? n.createdAt.getTime()
+          : new Date(n.createdAt as unknown as string).getTime(),
+      label: n.contextLabel as string,
+      href: n.href,
+      read: n.readAt != null,
+    }));
+}
 
 export type ActionResult =
   | { ok: true }
