@@ -246,14 +246,48 @@ export async function sendGmailMessage(
 
   const rawEncoded = encodeBase64Url(Buffer.from(raw, "utf8"));
 
-  const result = await gmail<{ id: string; threadId: string }>(
-    token.token,
-    `/users/me/messages/send`,
-    {
-      method: "POST",
-      body: JSON.stringify({ raw: rawEncoded }),
-    },
-  );
+  const RECONNECT_MSG =
+    "Your Google connection needs to be reconnected before you can send email. " +
+    "Open Settings → Integrations (or /business-builder/profile/google-calendar), " +
+    "disconnect Google, then connect again.";
+
+  const doSend = (accessToken: string) =>
+    gmail<{ id: string; threadId: string }>(
+      accessToken,
+      `/users/me/messages/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({ raw: rawEncoded }),
+      },
+    );
+
+  let result: { id: string; threadId: string };
+  try {
+    result = await doSend(token.token);
+  } catch (e) {
+    // A Gmail 401 means Google rejected the token we held — it was revoked
+    // or superseded server-side even though it hadn't clock-expired, so the
+    // cached token check didn't catch it. Force-mint a fresh token and retry
+    // once. If the refresh token is itself dead, tell the user to reconnect
+    // rather than leaking a raw Gmail error.
+    if (!(e instanceof Error) || !e.message.includes("Gmail API 401")) {
+      throw e;
+    }
+    const fresh = await getValidAccessToken(userProfileId, {
+      forceRefresh: true,
+    }).catch(() => null);
+    if (!fresh) {
+      throw new Error(RECONNECT_MSG);
+    }
+    try {
+      result = await doSend(fresh.token);
+    } catch (e2) {
+      if (e2 instanceof Error && e2.message.includes("Gmail API 401")) {
+        throw new Error(RECONNECT_MSG);
+      }
+      throw e2;
+    }
+  }
   return { messageId: result.id, threadId: result.threadId };
 }
 
