@@ -65,7 +65,10 @@ export function ProspectActivityTimeline({
   embedded?: boolean;
 }) {
   const router = useRouter();
-  const [type, setType] =
+  // A single, general log entry — no type picker. Meetings get logged when
+  // you schedule them and calls/anything else are just a note, so every
+  // manual entry is stored as a plain "note".
+  const [type] =
     useState<(typeof ACTIVITY_TYPES)[number]["value"]>("note");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -155,47 +158,12 @@ export function ProspectActivityTimeline({
         }}
         className="px-5 py-4 border-b border-tbb-line-soft space-y-2"
       >
-        <div className="flex items-center gap-2 flex-wrap">
-          {ACTIVITY_TYPES.filter(
-            (t) =>
-              t.value !== "stage_change" &&
-              t.value !== "web_lead" &&
-              t.value !== "signature_request" &&
-              // Email is now logged automatically when sent through the
-              // Communications panel and when Gmail auto-syncs inbound
-              // mail. Manual "log an email" is redundant — removed from
-              // the picker so the only entries here are CALL / MEETING /
-              // NOTE. The email activity TYPE itself stays in
-              // ACTIVITY_TYPES so historical / system-logged emails
-              // still render with the right label.
-              t.value !== "email",
-          ).map((t) => {
-            const active = type === t.value;
-            const Icon = ICONS[t.value] ?? MessageSquare;
-            return (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => setType(t.value)}
-                className={
-                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-pill text-[11px] font-bold uppercase tracking-tbb-caps transition-colors duration-tbb-base " +
-                  (active
-                    ? "bg-tbb-blue text-white"
-                    : "bg-white border border-tbb-line text-tbb-ink-2 hover:border-tbb-blue")
-                }
-              >
-                <Icon className="w-3 h-3" aria-hidden />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
         <input
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           disabled={isPending}
           spellCheck
-          placeholder="Subject (e.g., Intro call — 30 min)"
+          placeholder="Subject (e.g., call, site visit, quick note)"
           className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
         />
         <textarea
