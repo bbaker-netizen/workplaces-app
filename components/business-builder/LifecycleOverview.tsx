@@ -36,7 +36,7 @@ const PHASES: Phase[] = [
   {
     number: "01",
     label: "Prospect",
-    blurb: "Lead lands. First contact. Diagnostic. Discovery call.",
+    blurb: "Lead lands. First contact. Discovery call.",
     href: "/business-builder/pipeline",
     icon: <Filter className="w-5 h-5" aria-hidden />,
     accent: "text-tbb-blue",

@@ -47,7 +47,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Phase 01 — Pipeline.",
     content:
-      "Every prospect starts here — your CRM, grouped by stage. Add them by scanning a business card on your phone, manually, or let them land automatically when someone fills out your public diagnostic. Click the stage chip to move a prospect; open them to email, schedule, send the diagnostic, or send a contract for signature.",
+      "Every prospect starts here — your CRM, grouped by stage. Add them by scanning a business card on your phone, manually, or let them land automatically from your public forms. Click the stage chip to move a prospect; open them to email, schedule, or send a contract for signature.",
   },
   {
     target: "body",

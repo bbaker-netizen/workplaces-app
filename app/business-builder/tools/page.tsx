@@ -20,11 +20,11 @@ export default async function QuickSendPage() {
           Tools
         </p>
         <h1 className="font-bold text-foreground text-4xl tracking-tight leading-none">
-          Send — diagnostic &amp; Google review
+          Send a Google review request
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
-          Fire off a diagnostic or a Google-review request to anyone — by email
-          or text — without leaving this page.
+          Ask anyone for a Google review — by email or text — without leaving
+          this page.
         </p>
       </header>
 
