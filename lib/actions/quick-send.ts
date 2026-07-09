@@ -18,12 +18,6 @@ const REVIEW_URL =
   process.env.NEXT_PUBLIC_GOOGLE_REVIEW_URL ??
   "https://g.page/r/CepaVNuDzHD_EBE/review";
 
-function appBase(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://builder.4workplaces.com"
-  ).replace(/\/+$/, "");
-}
-
 const schema = z.object({
   name: z.string().max(120).nullable().optional(),
   email: z
@@ -62,10 +56,7 @@ function emailShell(heading: string, body: string, buttonLabel: string, url: str
   </div>`;
 }
 
-async function run(
-  input: Input,
-  kind: "diagnostic" | "review",
-): Promise<Result> {
+async function run(input: Input): Promise<Result> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
   if (profile.role !== "master_admin" && profile.role !== "coach") {
@@ -91,36 +82,21 @@ async function run(
     return { ok: false, error: "Texting isn't set up on your account yet." };
   }
 
-  const url = kind === "diagnostic" ? `${appBase()}/diagnostic` : REVIEW_URL;
+  const url = REVIEW_URL;
   const extra = message && message.trim() ? `<p>${message.trim()}</p>` : "";
 
-  const email_ =
-    kind === "diagnostic"
-      ? {
-          subject: "A quick business diagnostic from Workplaces",
-          html: emailShell(
-            `Hi ${first},`,
-            `<p>Here's a short business diagnostic — it takes about 5 minutes and gives us a clear picture to work from.</p>${extra}`,
-            "Start the diagnostic",
-            url,
-          ),
-          text: `Hi ${first}, here's a quick business diagnostic from Workplaces: ${url}`,
-        }
-      : {
-          subject: "Would you leave us a quick Google review?",
-          html: emailShell(
-            `Hi ${first},`,
-            `<p>Thanks for working with us! If you have a moment, a quick Google review would mean a lot and helps other business owners find us.</p>${extra}`,
-            "Leave a Google review",
-            url,
-          ),
-          text: `Hi ${first}, thanks for working with us! Would you mind leaving a quick Google review? ${url}`,
-        };
+  const email_ = {
+    subject: "Would you leave us a quick Google review?",
+    html: emailShell(
+      `Hi ${first},`,
+      `<p>Thanks for working with us! If you have a moment, a quick Google review would mean a lot and helps other business owners find us.</p>${extra}`,
+      "Leave a Google review",
+      url,
+    ),
+    text: `Hi ${first}, thanks for working with us! Would you mind leaving a quick Google review? ${url}`,
+  };
 
-  const smsBody =
-    kind === "diagnostic"
-      ? `Hi ${first}, here's a quick business diagnostic from Workplaces: ${url}`
-      : `Hi ${first}, thanks for working with us! Would you mind leaving a quick Google review? ${url}`;
+  const smsBody = `Hi ${first}, thanks for working with us! Would you mind leaving a quick Google review? ${url}`;
 
   let sentEmail = false;
   let sentSms = false;
@@ -152,10 +128,6 @@ async function run(
   return { ok: true, sentEmail, sentSms };
 }
 
-export async function sendDiagnosticInvite(input: Input): Promise<Result> {
-  return run(input, "diagnostic");
-}
-
 export async function sendReviewRequest(input: Input): Promise<Result> {
-  return run(input, "review");
+  return run(input);
 }

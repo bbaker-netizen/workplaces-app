@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Loader2, Send, Star, ClipboardList } from "lucide-react";
-import {
-  sendDiagnosticInvite,
-  sendReviewRequest,
-} from "@/lib/actions/quick-send";
+import { Check, Loader2, Send, Star } from "lucide-react";
+import { sendReviewRequest } from "@/lib/actions/quick-send";
 
 type Channel = "email" | "sms" | "both";
 type Result =
@@ -22,14 +19,6 @@ type Action = (input: {
 export function QuickSendTools() {
   return (
     <div className="space-y-6">
-      <SendTool
-        icon={<ClipboardList className="w-4 h-4 text-tbb-blue" aria-hidden />}
-        title="Send the diagnostic"
-        blurb="Email or text someone a link to your business diagnostic — no need to add them as a prospect first (a completed one lands in your Pipeline automatically)."
-        cta="Send diagnostic"
-        action={sendDiagnosticInvite}
-        placeholderMsg="Optional note, e.g. 'Great chatting today — here's that quick assessment.'"
-      />
       <SendTool
         icon={<Star className="w-4 h-4 text-tbb-warning" aria-hidden />}
         title="Request a Google review"

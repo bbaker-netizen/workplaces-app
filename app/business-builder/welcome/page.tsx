@@ -17,7 +17,6 @@ import {
   Briefcase,
   CalendarClock,
   CheckSquare,
-  Compass,
   CreditCard,
   FileSignature,
   FileText,
@@ -53,7 +52,7 @@ export default async function CoachWelcomePage() {
         <p className="text-tbb-lead text-tbb-ink-2 max-w-prose">
           This is the full playbook for running a client engagement
           through the Business Builder Portal — from the first time a
-          prospect hits your diagnostic, to the day you renew them for
+          prospect lands in your pipeline, to the day you renew them for
           another year. Read top to bottom once; come back to specific
           sections when you need a refresher.
         </p>
@@ -228,7 +227,7 @@ export default async function CoachWelcomePage() {
             Move a prospect by clicking the stage chip on any row (or
             dragging its card on the board). Click the company name to
             open the full prospect page where you can email, schedule
-            meetings, send the diagnostic, and send for signature — all
+            meetings, and send for signature — all
             from one place.
           </p>
           <p className="mt-2 text-sm text-tbb-ink-3">
@@ -280,26 +279,6 @@ export default async function CoachWelcomePage() {
           </p>
         </Step>
 
-        <Step
-          icon={<Compass className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Share the public diagnostic"
-          href="/diagnostic"
-          hrefLabel="See the diagnostic"
-        >
-          <p>
-            <code className="font-mono text-sm bg-tbb-bg-soft px-1.5 py-0.5 rounded-sm">
-              workplaces-the-builder.netlify.app/diagnostic
-            </code>{" "}
-            is your public intake form. Share it on social, in cold
-            email signatures, or after a sales call. Submissions
-            auto-create a prospect record in your Pipeline at{" "}
-            <strong>First contact</strong>.
-          </p>
-          <p className="mt-2 text-sm text-tbb-ink-3">
-            You&apos;ll see the company, contact, and the prospect&apos;s
-            answers to the diagnostic questions on their detail page.
-          </p>
-        </Step>
 
         <Step
           icon={<Sparkles className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
@@ -817,7 +796,7 @@ export default async function CoachWelcomePage() {
           />
           <CheatSheetItem
             href="/business-builder/tools"
-            label="Send — diagnostic & Google review by email or text"
+            label="Send — Google review by email or text"
             icon={<Sparkles className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem

@@ -50,15 +50,13 @@ const STEPS_BY_STATUS: Partial<Record<ProspectStatus, NextStep>> = {
     body: "Email tag is where deals go to die. Twenty minutes on the calendar moves the ball further than a week of follow-ups.",
     prompts: [
       { icon: <Calendar className="w-3.5 h-3.5" aria-hidden />, label: "Schedule a meeting — Google sends the invite" },
-      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Send the diagnostic so they show up loaded with answers" },
     ],
   },
   meeting_scheduled: {
     emoji: "🗓️",
     heading: "It's on the books",
-    body: "Send the diagnostic now so they show up already half-coached. After the call, dump your notes here — future-you will thank you.",
+    body: "After the call, dump your notes here — future-you will thank you.",
     prompts: [
-      { icon: <Sparkles className="w-3.5 h-3.5" aria-hidden />, label: "Send the diagnostic if they haven't filled it out yet" },
       { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "After the call → log a Note in the activity panel" },
     ],
   },
@@ -83,7 +81,7 @@ const STEPS_BY_STATUS: Partial<Record<ProspectStatus, NextStep>> = {
   appt_completed_followup: {
     emoji: "🤝",
     heading: "Great meeting — now follow up before it fades",
-    body: "The energy of a good call has a short shelf life. Get the next thing out the door today: the proposal, the diagnostic, or a recap with a clear next step. Momentum closes deals.",
+    body: "The energy of a good call has a short shelf life. Get the next thing out the door today: the proposal or a recap with a clear next step. Momentum closes deals.",
     prompts: [
       { icon: <FileText className="w-3.5 h-3.5" aria-hidden />, label: "Send the proposal while the conversation is fresh" },
       { icon: <PenSquare className="w-3.5 h-3.5" aria-hidden />, label: "Log a Note so nothing from the call gets lost" },
