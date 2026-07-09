@@ -27,6 +27,7 @@ import {
   MessageCircle,
   MessageSquare,
   CalendarClock,
+  Video,
   Activity,
   Archive,
 } from "lucide-react";
@@ -392,6 +393,26 @@ export default async function ProspectDetailPage({
             />
           </CollapsibleSection>
 
+          {/* Schedule a meeting — its own drawer, right next to the
+              follow-up, so booking a real session (with a Google Meet link
+              + calendar invite) is as easy to find as setting a reminder.
+              Open by default because it was previously buried in Quick
+              actions and easy to miss. */}
+          <CollapsibleSection
+            title="Schedule a meeting"
+            storageKey="schedule-meeting"
+            defaultOpen
+            icon={<Video className="w-3.5 h-3.5" aria-hidden />}
+          >
+            <div className="p-5">
+              <ScheduleMeetingButton
+                prospectId={prospect.id}
+                companyName={prospect.companyName}
+                recipientName={prospect.contactName}
+              />
+            </div>
+          </CollapsibleSection>
+
           {/* Quick actions — collapsible, closed by default. */}
           <CollapsibleSection
             title="Quick actions"
@@ -399,12 +420,7 @@ export default async function ProspectDetailPage({
             icon={<Zap className="w-3.5 h-3.5" aria-hidden />}
           >
             <div className="p-5 space-y-4">
-            <ScheduleMeetingButton
-              prospectId={prospect.id}
-              companyName={prospect.companyName}
-              recipientName={prospect.contactName}
-            />
-            <div className="border-t border-tbb-line-soft pt-4">
+            <div>
               <StartRecordedSessionButton prospectId={prospect.id} />
             </div>
             {showDiagnostic && (
