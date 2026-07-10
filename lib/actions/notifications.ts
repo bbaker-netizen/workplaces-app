@@ -12,7 +12,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { notifications } from "@/lib/db/schema";
-import { withTenantContext } from "@/lib/db/tenant";
+import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 import { listBusinessBuilderNotifications } from "@/lib/db/queries/notifications";
 import { scanFollowupsDue } from "@/lib/notifications/followups";
 
@@ -145,5 +145,56 @@ export async function markNotificationRead(
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     };
+  }
+}
+
+/**
+ * Dismiss (delete) a single notification. Scoped to the caller's own rows
+ * via an explicit userProfileId filter under system context, so a caller
+ * can only ever remove their own notifications.
+ */
+export async function deleteNotification(
+  notificationId: string,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") {
+    return { ok: false, error: "Not authenticated." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .delete(notifications)
+        .where(
+          and(
+            eq(notifications.id, notificationId),
+            eq(notifications.userProfileId, profile.userProfileId),
+          ),
+        );
+    });
+    revalidatePath("/business-builder/settings/notifications");
+    revalidatePath("/business-builder", "layout");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Clear (delete) every one of the caller's own notifications. */
+export async function clearAllNotifications(): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") {
+    return { ok: false, error: "Not authenticated." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .delete(notifications)
+        .where(eq(notifications.userProfileId, profile.userProfileId));
+    });
+    revalidatePath("/business-builder/settings/notifications");
+    revalidatePath("/business-builder", "layout");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
