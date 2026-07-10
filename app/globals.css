@@ -409,6 +409,39 @@
 .ProseMirror li > p {
   margin: 0;
 }
+/* The rest of the composer editor formatting — the simple editor carries no
+ * `.tbb-rich-editor` class, so links/blockquotes/emphasis were unstyled by
+ * Tailwind's preflight (e.g. a link looked like plain text, so "add link"
+ * seemed broken). Mirror the rich-editor styling onto `.ProseMirror`. */
+.ProseMirror a {
+  color: #2E4057;
+  text-decoration: underline;
+}
+.ProseMirror strong {
+  font-weight: 700;
+}
+.ProseMirror em {
+  font-style: italic;
+}
+.ProseMirror s,
+.ProseMirror del {
+  text-decoration: line-through;
+}
+.ProseMirror blockquote {
+  margin: 0.6rem 0;
+  padding: 0.4rem 0.9rem;
+  border-left: 3px solid #2E4057;
+  background: #F5F1E8;
+  font-style: italic;
+  color: #1A1A1A;
+}
+.ProseMirror code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: #F5F1E8;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
 .tbb-rich-editor blockquote {
   margin: 0.6rem 0;
   padding: 0.4rem 0.9rem;
