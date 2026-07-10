@@ -135,9 +135,17 @@ export async function previewSoulFileDraft(input: {
   //         attendee, so the title is the only reliable signal (same reason
   //         the engagement-meetings sync matches BBS recordings by title).
   const companyNorm = normalizeName(prospect.companyName ?? "");
+  const contactNorm = normalizeName(prospect.contactName ?? "");
   const titlePrefix = companyNorm ? `prospect ${companyNorm}` : null;
+  // Also catch booking-default titles like "… (Jordon Deagle)" by looking
+  // for the prospect's contact or company name anywhere in the title. Length
+  // guard so a short/common name can't over-match a stranger's call.
+  const nameNeedles = Array.from(
+    new Set([companyNorm, contactNorm].filter((n) => n.length >= 5)),
+  );
+  const wantTitleScan = Boolean(titlePrefix) || nameNeedles.length > 0;
 
-  if (!prospect.contactEmail && !titlePrefix) {
+  if (!prospect.contactEmail && !wantTitleScan) {
     return {
       ok: false,
       error:
@@ -154,16 +162,18 @@ export async function previewSoulFileDraft(input: {
       prospect.contactEmail
         ? searchTranscriptsByAttendee(prospect.contactEmail, { limit: 5 })
         : Promise.resolve([]),
-      titlePrefix
+      wantTitleScan
         ? listRecentTranscripts({ maxTotal: 400 })
         : Promise.resolve([]),
     ]);
     for (const t of byAttendee) byId.set(t.id, t);
-    if (titlePrefix) {
+    if (wantTitleScan) {
       for (const t of recent) {
-        if (normalizeName(t.title ?? "").startsWith(titlePrefix)) {
-          byId.set(t.id, t);
-        }
+        const tn = normalizeName(t.title ?? "");
+        const hit =
+          (titlePrefix !== null && tn.startsWith(titlePrefix)) ||
+          nameNeedles.some((n) => tn.includes(n));
+        if (hit) byId.set(t.id, t);
       }
     }
   } catch (e) {
