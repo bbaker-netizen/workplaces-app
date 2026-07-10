@@ -90,6 +90,8 @@ function InboxComposerModal({
     return /^re:/i.test(s) ? s : `Re: ${s}`;
   })();
   const [to, setTo] = useState(initialTo);
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +142,8 @@ function InboxComposerModal({
         engagementId: row.engagementId,
         channel: "email",
         to: [to.trim()],
+        cc: cc.split(/[,;]/).map((s) => s.trim()).filter(Boolean),
+        bcc: bcc.split(/[,;]/).map((s) => s.trim()).filter(Boolean),
         subject: subject.trim(),
         body: md.trim(),
         inReplyTo: row.externalId ?? undefined,
@@ -208,6 +212,34 @@ function InboxComposerModal({
               className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Cc
+              </span>
+              <input
+                type="text"
+                value={cc}
+                onChange={(e) => setCc(e.target.value)}
+                placeholder="name@company.com"
+                disabled={isPending}
+                className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Bcc
+              </span>
+              <input
+                type="text"
+                value={bcc}
+                onChange={(e) => setBcc(e.target.value)}
+                placeholder="hidden@company.com"
+                disabled={isPending}
+                className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+              />
+            </label>
+          </div>
           <label className="block">
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Subject

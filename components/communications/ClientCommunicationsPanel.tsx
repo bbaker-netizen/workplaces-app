@@ -83,6 +83,8 @@ export function ClientCommunicationsPanel({
   const [composing, setComposing] = useState<null | {
     channel: "email" | "sms";
     to: string;
+    cc?: string;
+    bcc?: string;
     subject: string;
     body: string;
     replyTo?: CommunicationRow;
@@ -154,6 +156,8 @@ export function ClientCommunicationsPanel({
     setComposing({
       channel: "email",
       to: replyTo?.fromAddress ?? contactEmail ?? "",
+      cc: "",
+      bcc: "",
       subject: replyTo?.subject
         ? replyTo.subject.startsWith("Re: ")
           ? replyTo.subject
@@ -209,6 +213,20 @@ export function ClientCommunicationsPanel({
         engagementId: engagementId ?? null,
         channel: composing.channel,
         to: [composing.to],
+        cc:
+          composing.channel === "email"
+            ? (composing.cc ?? "")
+                .split(/[,;]/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : undefined,
+        bcc:
+          composing.channel === "email"
+            ? (composing.bcc ?? "")
+                .split(/[,;]/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : undefined,
         subject: composing.channel === "email" ? composing.subject : null,
         body: composing.body,
         inReplyTo:
@@ -381,6 +399,40 @@ export function ClientCommunicationsPanel({
               disabled={isPending}
             />
           </label>
+          {composing.channel === "email" && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Cc
+                </span>
+                <input
+                  type="text"
+                  value={composing.cc ?? ""}
+                  onChange={(e) =>
+                    setComposing({ ...composing, cc: e.target.value })
+                  }
+                  placeholder="name@company.com"
+                  className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                  disabled={isPending}
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Bcc
+                </span>
+                <input
+                  type="text"
+                  value={composing.bcc ?? ""}
+                  onChange={(e) =>
+                    setComposing({ ...composing, bcc: e.target.value })
+                  }
+                  placeholder="hidden@company.com"
+                  className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                  disabled={isPending}
+                />
+              </label>
+            </div>
+          )}
           {composing.channel === "email" && (
             <>
               {emailTemplates.length > 0 && prospectId && (
