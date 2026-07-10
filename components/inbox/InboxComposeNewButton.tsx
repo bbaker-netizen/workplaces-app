@@ -69,6 +69,8 @@ function ComposeModal({
   const [pickerOpen, setPickerOpen] = useState(true);
   const [pickerSearch, setPickerSearch] = useState("");
   const [toOverride, setToOverride] = useState<string | null>(null);
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +136,8 @@ function ComposeModal({
         engagementId: picked.engagementId,
         channel: "email",
         to: [toAddress],
+        cc: cc.split(/[,;]/).map((s) => s.trim()).filter(Boolean),
+        bcc: bcc.split(/[,;]/).map((s) => s.trim()).filter(Boolean),
         subject: subject.trim() || null,
         body: finalBody,
       });
@@ -262,6 +266,36 @@ function ComposeModal({
                 )}
               </>
             )}
+          </div>
+
+          {/* Cc / Bcc */}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Cc
+              </span>
+              <input
+                type="text"
+                value={cc}
+                onChange={(e) => setCc(e.target.value)}
+                placeholder="name@company.com"
+                className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                disabled={isPending}
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Bcc
+              </span>
+              <input
+                type="text"
+                value={bcc}
+                onChange={(e) => setBcc(e.target.value)}
+                placeholder="hidden@company.com"
+                className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                disabled={isPending}
+              />
+            </label>
           </div>
 
           {/* Subject */}

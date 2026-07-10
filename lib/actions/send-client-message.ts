@@ -43,6 +43,8 @@ const sendSchema = z
     engagementId: z.string().uuid().nullable().optional(),
     channel: z.enum(["email", "sms"]),
     to: z.array(z.string().min(1)).min(1).max(10),
+    cc: z.array(z.string().min(1)).max(20).optional(),
+    bcc: z.array(z.string().min(1)).max(20).optional(),
     subject: z.string().max(500).nullable().optional(),
     body: z.string().min(1).max(50_000),
     inReplyTo: z.string().max(500).nullable().optional(),
@@ -136,6 +138,8 @@ export async function sendClientMessage(
       void markdownToEmailHtml;
       const r = await sendGmailMessage(profile.userProfileId, senderEmail, {
         to: data.to,
+        cc: data.cc,
+        bcc: data.bcc,
         subject: data.subject ?? "(no subject)",
         body: bodyWithSignature,
         bodyHtml,
