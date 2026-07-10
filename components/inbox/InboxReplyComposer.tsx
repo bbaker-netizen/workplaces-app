@@ -92,6 +92,7 @@ function InboxComposerModal({
   const [to, setTo] = useState(initialTo);
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +213,16 @@ function InboxComposerModal({
               className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
           </label>
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowCcBcc((v) => !v)}
+              className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              {showCcBcc ? "Hide Cc/Bcc" : "Add Cc / Bcc"}
+            </button>
+          </div>
+          {showCcBcc && (
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
@@ -240,6 +251,7 @@ function InboxComposerModal({
               />
             </label>
           </div>
+          )}
           <label className="block">
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Subject

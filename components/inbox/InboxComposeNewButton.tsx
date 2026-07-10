@@ -71,6 +71,7 @@ function ComposeModal({
   const [toOverride, setToOverride] = useState<string | null>(null);
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -268,7 +269,17 @@ function ComposeModal({
             )}
           </div>
 
-          {/* Cc / Bcc */}
+          {/* Cc / Bcc — collapsed by default */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowCcBcc((v) => !v)}
+              className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              {showCcBcc ? "Hide Cc/Bcc" : "Add Cc / Bcc"}
+            </button>
+          </div>
+          {showCcBcc && (
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
@@ -297,6 +308,7 @@ function ComposeModal({
               />
             </label>
           </div>
+          )}
 
           {/* Subject */}
           <label className="block">
