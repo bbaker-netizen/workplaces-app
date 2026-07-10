@@ -249,7 +249,8 @@ export function buildHtmlBodyWithSignature(
   // Render the body as a full email doc, then splice the styled sig
   // in just before the closing </body>.
   const bodyDoc = markdownToEmailHtml(bodyMarkdown);
-  const SIG_SEPARATOR = `<div style="margin:18px 0 0 0;padding-top:14px;border-top:1px solid #E5E5E5;"></div>`;
+  // Spacer only — no divider line above the signature (per request).
+  const SIG_SEPARATOR = `<div style="margin:22px 0 0 0;"></div>`;
   return bodyDoc.replace(
     /<\/body>\s*<\/html>$/,
     `${SIG_SEPARATOR}${sigHtml}</body></html>`,
