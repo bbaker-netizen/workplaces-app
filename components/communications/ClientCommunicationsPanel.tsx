@@ -85,6 +85,7 @@ export function ClientCommunicationsPanel({
     sizeBytes: number;
   };
   const editorRef = useRef<RichTextEditorHandle | null>(null);
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [composing, setComposing] = useState<null | {
     channel: "email" | "sms";
     to: string;
@@ -398,8 +399,20 @@ export function ClientCommunicationsPanel({
             </button>
           </div>
           <label className="block">
-            <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-              To {contactName ? `(${contactName})` : ""}
+            <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              <span>To {contactName ? `(${contactName})` : ""}</span>
+              {composing.channel === "email" && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowCcBcc((v) => !v);
+                  }}
+                  className="text-tbb-blue hover:underline"
+                >
+                  {showCcBcc ? "Hide Cc/Bcc" : "Cc / Bcc"}
+                </button>
+              )}
             </span>
             <input
               type="text"
@@ -414,7 +427,7 @@ export function ClientCommunicationsPanel({
               disabled={isPending}
             />
           </label>
-          {composing.channel === "email" && (
+          {composing.channel === "email" && showCcBcc && (
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
                 <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
@@ -595,7 +608,9 @@ export function ClientCommunicationsPanel({
               disabled={
                 isPending ||
                 !composing.to.trim() ||
-                !composing.body.trim() ||
+                // Email body lives in the rich-text editor (validated on
+                // click), so only gate on `body` for SMS.
+                (composing.channel === "sms" && !composing.body.trim()) ||
                 (composing.channel === "email" && !composing.subject.trim())
               }
               className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 shadow-tbb-cta"
