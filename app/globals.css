@@ -387,6 +387,28 @@
 .tbb-rich-editor li {
   margin: 0 0 0.15rem 0;
 }
+
+/* List markers inside ANY rich-text editor surface. Tiptap tags the
+ * editable element `.ProseMirror`; the simple message/email composer
+ * doesn't carry `.tbb-rich-editor`, so without this Tailwind's preflight
+ * (list-style: none) hides the bullets/numbers and the list buttons look
+ * broken even though the list is really there. */
+.ProseMirror ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0 0 0.5rem 0;
+}
+.ProseMirror ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+  margin: 0 0 0.5rem 0;
+}
+.ProseMirror li {
+  margin: 0 0 0.15rem 0;
+}
+.ProseMirror li > p {
+  margin: 0;
+}
 .tbb-rich-editor blockquote {
   margin: 0.6rem 0;
   padding: 0.4rem 0.9rem;
