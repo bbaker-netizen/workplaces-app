@@ -199,9 +199,12 @@ export async function searchTranscriptsByAttendee(
   opts: { limit?: number } = {},
 ): Promise<FirefliesTranscriptSummary[]> {
   const limit = opts.limit ?? 3;
+  // Use the `participants` filter, NOT `participant_email`: the latter does
+  // not reliably match GUEST attendee emails (only the Fireflies user's),
+  // so a prospect's own email on a booking call wouldn't find the recording.
   const query = /* GraphQL */ `
-    query FindForAttendee($email: String!, $limit: Int!) {
-      transcripts(participant_email: $email, limit: $limit) {
+    query FindForAttendee($emails: [String!], $limit: Int!) {
+      transcripts(participants: $emails, limit: $limit) {
         id
         title
         date
@@ -218,7 +221,7 @@ export async function searchTranscriptsByAttendee(
     },
     body: JSON.stringify({
       query,
-      variables: { email: participantEmail.toLowerCase(), limit },
+      variables: { emails: [participantEmail.toLowerCase()], limit },
     }),
     cache: "no-store",
   });
