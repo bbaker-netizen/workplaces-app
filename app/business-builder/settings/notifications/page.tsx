@@ -8,6 +8,8 @@ import { MarkAllReadOnMount } from "@/components/portal/MarkAllReadOnMount";
 import { PushToggle } from "@/components/notifications/PushToggle";
 import { CheckFollowupsButton } from "@/components/notifications/CheckFollowupsButton";
 import { FollowupNotificationLink } from "@/components/notifications/FollowupNotificationLink";
+import { DismissNotificationButton } from "@/components/notifications/DismissNotificationButton";
+import { ClearAllNotificationsButton } from "@/components/notifications/ClearAllNotificationsButton";
 
 /**
  * Business Builder notifications feed — team-discussion @mentions,
@@ -56,7 +58,11 @@ export default async function BusinessBuilderNotificationsPage() {
           </p>
         </div>
       ) : (
-        <ul className="space-y-2">
+        <>
+          <div className="mb-3 flex items-center justify-end">
+            <ClearAllNotificationsButton />
+          </div>
+          <ul className="space-y-2">
           {notifs.map((n) => {
             const inner = (
               <div
@@ -88,22 +94,26 @@ export default async function BusinessBuilderNotificationsPage() {
             const isUnactedFollowup =
               n.parentEntityType === "prospect_followup_due" && !n.readAt;
             return (
-              <li key={n.id}>
-                {n.href ? (
-                  isUnactedFollowup ? (
-                    <FollowupNotificationLink notificationId={n.id} href={n.href}>
-                      {inner}
-                    </FollowupNotificationLink>
+              <li key={n.id} className="flex items-stretch gap-1">
+                <div className="flex-1 min-w-0">
+                  {n.href ? (
+                    isUnactedFollowup ? (
+                      <FollowupNotificationLink notificationId={n.id} href={n.href}>
+                        {inner}
+                      </FollowupNotificationLink>
+                    ) : (
+                      <Link href={n.href}>{inner}</Link>
+                    )
                   ) : (
-                    <Link href={n.href}>{inner}</Link>
-                  )
-                ) : (
-                  inner
-                )}
+                    inner
+                  )}
+                </div>
+                <DismissNotificationButton notificationId={n.id} />
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </>
       )}
     </main>
   );
