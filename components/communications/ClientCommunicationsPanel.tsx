@@ -27,6 +27,10 @@ import {
   X,
 } from "lucide-react";
 import { sendClientMessage } from "@/lib/actions/send-client-message";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "@/components/communication/RichTextEditor";
 import { resolveTemplateForProspect } from "@/lib/actions/email-templates";
 import { syncContactEmails } from "@/lib/actions/gmail-backfill";
 import type { CommunicationRow } from "@/lib/db/queries/client-communications";
@@ -80,6 +84,7 @@ export function ClientCommunicationsPanel({
     base64: string;
     sizeBytes: number;
   };
+  const editorRef = useRef<RichTextEditorHandle | null>(null);
   const [composing, setComposing] = useState<null | {
     channel: "email" | "sms";
     to: string;
@@ -206,6 +211,16 @@ export function ClientCommunicationsPanel({
 
   function submitCompose() {
     if (!composing) return;
+    // Email body comes from the rich-text editor (markdown); SMS stays a
+    // plain textarea.
+    const composedBody =
+      composing.channel === "email"
+        ? (editorRef.current?.getMarkdown() ?? "")
+        : composing.body;
+    if (!composedBody.trim()) {
+      setError("Write a message before sending.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const r = await sendClientMessage({
@@ -228,7 +243,7 @@ export function ClientCommunicationsPanel({
                 .filter(Boolean)
             : undefined,
         subject: composing.channel === "email" ? composing.subject : null,
-        body: composing.body,
+        body: composedBody,
         inReplyTo:
           composing.replyTo?.externalId && composing.channel === "email"
             ? composing.replyTo.externalId
@@ -458,6 +473,8 @@ export function ClientCommunicationsPanel({
                           subject: r.subject,
                           body: r.body,
                         });
+                        // Load the template into the rich-text editor.
+                        editorRef.current?.setMarkdown(r.body);
                       } else {
                         setError(r.error);
                       }
@@ -494,22 +511,34 @@ export function ClientCommunicationsPanel({
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Message
             </span>
-            <textarea
-              rows={composing.channel === "email" ? 6 : 3}
-              value={composing.body}
-              onChange={(e) =>
-                setComposing({ ...composing, body: e.target.value })
-              }
-              className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
-              disabled={isPending}
-              placeholder={
-                composing.channel === "email"
-                  ? "Write your message here. Sent from your connected Gmail account."
-                  : composing.channel === "sms"
+            {composing.channel === "email" ? (
+              <div className="mt-1">
+                <RichTextEditor
+                  key={`${composing.channel}:${composing.replyTo?.id ?? "new"}`}
+                  editorRef={editorRef}
+                  initialMarkdown={composing.body}
+                  placeholder="Write your message here. Sent from your connected Gmail account."
+                  disabled={isPending}
+                  onSubmit={submitCompose}
+                  ariaLabel="Email body"
+                />
+              </div>
+            ) : (
+              <textarea
+                rows={3}
+                value={composing.body}
+                onChange={(e) =>
+                  setComposing({ ...composing, body: e.target.value })
+                }
+                className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
+                disabled={isPending}
+                placeholder={
+                  composing.channel === "sms"
                     ? "Keep it short — SMS messages over 160 characters get split into multiple sends."
                     : "WhatsApp message text."
-              }
-            />
+                }
+              />
+            )}
           </label>
           {composing.channel === "email" && (
             <div className="space-y-2">
