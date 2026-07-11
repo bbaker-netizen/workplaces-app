@@ -9,7 +9,12 @@ import {
   hidePendingFeedback,
   showPendingFeedback,
 } from "@/components/layout/NavLoaderOverlay";
-import { LEAD_SOURCES, STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
+import { STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
+import {
+  LEAD_SOURCE_CHANNELS,
+  LEAD_SOURCE_LABELS,
+  type LeadSourceChannel,
+} from "@/lib/pipeline/lead-source";
 import {
   validateProspect,
   type ValidationIssue,
@@ -44,8 +49,12 @@ export function NewProspectForm({
   const [phone, setPhone] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
-  const [leadSource, setLeadSource] = useState("");
+  const [source, setSource] = useState<LeadSourceChannel | "">("");
+  const [sourceDetail, setSourceDetail] = useState("");
   const [referrerName, setReferrerName] = useState("");
+  // The human label that mirrors the chosen channel — drives the shared
+  // referral rule in validateProspect (keyed on "Referral").
+  const leadSourceLabel = source ? LEAD_SOURCE_LABELS[source] : null;
   const [nextActionDate, setNextActionDate] = useState("");
   const [nextActionNote, setNextActionNote] = useState("");
   const [status, setStatus] = useState<string>("new_lead");
@@ -104,7 +113,7 @@ export function NewProspectForm({
         contactEmail: contactEmail.trim(),
         phone: phone.trim() || null,
         legalNameConfirmed,
-        leadSource: leadSource || null,
+        leadSource: leadSourceLabel,
         referrerName: referrerName.trim() || null,
       }),
     [
@@ -113,7 +122,7 @@ export function NewProspectForm({
       contactEmail,
       phone,
       legalNameConfirmed,
-      leadSource,
+      leadSourceLabel,
       referrerName,
     ],
   );
@@ -127,7 +136,8 @@ export function NewProspectForm({
     phone !== "" ||
     companyWebsite !== "" ||
     linkedinUrl !== "" ||
-    leadSource !== "" ||
+    source !== "" ||
+    sourceDetail !== "" ||
     referrerName !== "" ||
     nextActionNote !== "" ||
     notes !== "";
@@ -169,6 +179,10 @@ export function NewProspectForm({
       );
       return;
     }
+    if (!source) {
+      setError("Pick a lead source — every prospect needs a channel on file.");
+      return;
+    }
     showPendingFeedback("Saving prospect…");
     startTransition(async () => {
       // Parse the monthly-fee input (dollars) into cents.
@@ -184,8 +198,9 @@ export function NewProspectForm({
         phone: phone.trim() || null,
         companyWebsite: companyWebsite.trim() || null,
         linkedinUrl: linkedinUrl.trim() || null,
-        leadSource: leadSource || null,
-        referrerName: leadSource === "Referral" ? referrerName.trim() : null,
+        source,
+        sourceDetail: sourceDetail.trim() || null,
+        referrerName: source === "referral" ? referrerName.trim() : null,
         nextActionDate: nextActionDate || null,
         nextActionNote: nextActionNote.trim() || null,
         // @ts-expect-error status is a narrow string enum at runtime
@@ -312,22 +327,22 @@ export function NewProspectForm({
             Find on LinkedIn ↗
           </a>
         </Field>
-        <Field label="Lead source">
+        <Field label="Lead source" required>
           <select
-            value={leadSource}
-            onChange={(e) => setLeadSource(e.target.value)}
+            value={source}
+            onChange={(e) => setSource(e.target.value as LeadSourceChannel | "")}
             disabled={isPending}
             className={inputCls}
           >
             <option value="">Pick one</option>
-            {LEAD_SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {LEAD_SOURCE_CHANNELS.map((c) => (
+              <option key={c} value={c}>
+                {LEAD_SOURCE_LABELS[c]}
               </option>
             ))}
           </select>
         </Field>
-        {leadSource === "Referral" && (
+        {source === "referral" && (
           <Field
             label="Referred by"
             required
@@ -339,6 +354,23 @@ export function NewProspectForm({
               onBlur={() => setTouched((t) => ({ ...t, referrerName: true }))}
               disabled={isPending}
               placeholder="Who referred them?"
+              className={inputCls}
+            />
+          </Field>
+        )}
+        {source !== "" && source !== "referral" && (
+          <Field label="Source detail (optional)">
+            <input
+              value={sourceDetail}
+              onChange={(e) => setSourceDetail(e.target.value)}
+              disabled={isPending}
+              placeholder={
+                source === "podcast"
+                  ? "Which podcast?"
+                  : source === "google_ads" || source === "meta"
+                    ? "Campaign name"
+                    : "Anything to remember about where they came from"
+              }
               className={inputCls}
             />
           </Field>

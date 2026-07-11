@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { orgs, prospectActivities, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { channelFromWebhookPayload } from "@/lib/pipeline/lead-source";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,6 +95,25 @@ export async function POST(
   const source =
     pick(body, ["source", "lead_source", "channel", "utm_source", "platform"]) ??
     "Webhook";
+  // UTM / click-id capture — how we know the real acquisition channel for
+  // website-form leads (the form posts these from a first-party cookie).
+  const utmSource = pick(body, ["utm_source", "utmsource"]);
+  const utmMedium = pick(body, ["utm_medium", "utmmedium"]);
+  const utmCampaign = pick(body, ["utm_campaign", "utmcampaign", "campaign"]);
+  const gclid = pick(body, ["gclid"]);
+  const fbclid = pick(body, ["fbclid"]);
+  const channel = channelFromWebhookPayload({
+    source,
+    utmSource,
+    utmMedium,
+    gclid,
+    fbclid,
+  });
+  // Granular provenance for the detail column: campaign name, else the raw
+  // source string when it adds anything beyond the channel itself.
+  const sourceDetail =
+    utmCampaign ??
+    (source && source.toLowerCase() !== "webhook" ? source : null);
   const website = pick(body, ["website", "company_website", "url"]);
   const linkedin = pick(body, ["linkedin", "linkedin_url"]);
   const facebook = pick(body, ["facebook", "facebook_url"]);
@@ -142,6 +162,9 @@ export async function POST(
             facebookUrl: facebook ?? undefined,
             instagramUrl: instagram ?? undefined,
             leadSource: source,
+            source: channel,
+            sourceDetail: sourceDetail ?? undefined,
+            firstSeenAt: new Date(),
             status: "new_lead",
             notes: message ?? undefined,
             lastContactAt: new Date(),

@@ -12,13 +12,17 @@
  *     "last contact" column stays accurate without manual updates)
  */
 
-import { and, eq, inArray, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
+import {
+  LEAD_SOURCE_CHANNELS,
+  LEAD_SOURCE_LABELS,
+} from "@/lib/pipeline/lead-source";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
 
 export type ActionResult<T = void> =
@@ -68,7 +72,11 @@ const createSchema = z.object({
   phone: optionalString,
   companyWebsite: optionalString,
   linkedinUrl: optionalString,
-  leadSource: optionalString,
+  // Canonical acquisition channel — REQUIRED. The DB enforces NOT NULL;
+  // requiring it here means the form can't save without a real choice.
+  source: z.enum(LEAD_SOURCE_CHANNELS),
+  // Granular provenance (which podcast, campaign, referrer context).
+  sourceDetail: optionalString,
   referrerName: optionalString,
   expectedValueCents: z.number().int().nonnegative().nullable().optional(),
   nextActionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -113,6 +121,10 @@ export async function createProspect(
     };
   const data = parsed.data;
 
+  // `source` is the canonical channel. Keep the human-facing `leadSource`
+  // label in sync (drives the referral rule + the older Reports view).
+  const leadSourceLabel = LEAD_SOURCE_LABELS[data.source];
+
   // Apply the shared data-quality rules. Server enforces hard
   // errors even if the client somehow bypassed them.
   const quality = validateProspect({
@@ -121,7 +133,7 @@ export async function createProspect(
     contactEmail: data.contactEmail,
     phone: data.phone ?? null,
     legalNameConfirmed: data.legalNameConfirmed ?? false,
-    leadSource: data.leadSource ?? null,
+    leadSource: leadSourceLabel,
     referrerName: data.referrerName ?? null,
   });
   if (!quality.ok) {
@@ -148,7 +160,10 @@ export async function createProspect(
         phone: data.phone ? formatPhone(data.phone) : null,
         companyWebsite: normalizeWebsite(data.companyWebsite),
         linkedinUrl: normalizeWebsite(data.linkedinUrl),
-        leadSource: data.leadSource ?? null,
+        source: data.source,
+        sourceDetail: data.sourceDetail ?? null,
+        firstSeenAt: new Date(),
+        leadSource: leadSourceLabel,
         referrerName: data.referrerName ?? null,
         expectedValueCents: data.expectedValueCents ?? null,
         nextActionDate: data.nextActionDate
@@ -291,6 +306,13 @@ export async function updateProspect(
         // Stamp the signed date when they reach contract_signed.
         if (data.status === "contract_signed") {
           updates.contractSignedAt = new Date();
+        }
+        // Attribution stamps — set once (COALESCE keeps first-touch).
+        if (data.status === "meeting_scheduled") {
+          updates.bookedSessionAt = sql`coalesce(${prospects.bookedSessionAt}, now())` as unknown as Date;
+        }
+        if (data.status === "onboarded") {
+          updates.becameClientAt = sql`coalesce(${prospects.becameClientAt}, now())` as unknown as Date;
         }
       }
       if (data.notes !== undefined) updates.notes = data.notes;

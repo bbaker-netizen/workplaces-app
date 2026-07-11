@@ -146,6 +146,10 @@ export async function submitPublicForm(
           contactEmail: data.respondentEmail,
           status: "first_contact",
           leadSource: "Diagnostic",
+          // A diagnostic fill doesn't reveal the acquisition channel — the
+          // Coach sets it later from the pipeline. Untagged for now.
+          source: "other",
+          firstSeenAt: new Date(),
           diagnosticSubmissionId: row.id,
         });
       }
