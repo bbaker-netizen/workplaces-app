@@ -9,6 +9,7 @@ import {
   Bell,
   Building2,
   CreditCard,
+  DollarSign,
   FileText,
   Plug,
   User,
@@ -84,6 +85,15 @@ const CARDS: SettingsCard[] = [
       "Turn on desktop alerts, check for due follow-ups, and see everything routed to you — teammate comments, new leads, and reminders.",
     icon: Bell,
     status: "ready",
+  },
+  {
+    href: "/business-builder/settings/channel-spend",
+    title: "Channel spend",
+    description:
+      "Enter what you spent per marketing channel each month. Powers the cost-per-booked-session and cost-per-client columns in Reports.",
+    icon: DollarSign,
+    status: "ready",
+    masterAdminOnly: true,
   },
 ];
 

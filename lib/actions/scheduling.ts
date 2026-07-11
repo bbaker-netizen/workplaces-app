@@ -28,6 +28,7 @@ import {
   type UserProfile,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { LEAD_SOURCE_CHANNELS } from "@/lib/pipeline/lead-source";
 import { DateTime } from "luxon";
 
 const TIMEZONE = "America/Edmonton";
@@ -232,6 +233,10 @@ const bookSchema = z.object({
   bookerEmail: z.string().email(),
   bookerCompany: z.string().max(200).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  // "How did you hear about me?" — required on the public booking form so
+  // every booked session carries its acquisition channel. Only consumed
+  // when the booking creates a prospect (discovery links).
+  source: z.enum(LEAD_SOURCE_CHANNELS),
 });
 
 export async function createBooking(
@@ -294,6 +299,10 @@ export async function createBooking(
             contactEmail: data.bookerEmail,
             status: "meeting_scheduled",
             leadSource: "Discovery booking",
+            source: data.source,
+            firstSeenAt: new Date(),
+            // They just booked — stamp the booked-session attribution date.
+            bookedSessionAt: new Date(),
             notes: data.notes ?? null,
           })
           .returning({ id: prospects.id });

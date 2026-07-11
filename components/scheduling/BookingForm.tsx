@@ -3,6 +3,11 @@
 import { useState, useTransition } from "react";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBooking } from "@/lib/actions/scheduling";
+import {
+  LEAD_SOURCE_CHANNELS,
+  LEAD_SOURCE_LABELS,
+  type LeadSourceChannel,
+} from "@/lib/pipeline/lead-source";
 
 type Slot = { startsAt: string; startsAtLocal: string };
 
@@ -18,6 +23,7 @@ export function BookingForm({
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
   const [notes, setNotes] = useState("");
+  const [source, setSource] = useState<LeadSourceChannel | "">("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -62,6 +68,10 @@ export function BookingForm({
       setError("Name and email are required.");
       return;
     }
+    if (!source) {
+      setError("Let us know how you heard about us.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const result = await createBooking({
@@ -71,6 +81,7 @@ export function BookingForm({
         bookerEmail: email.trim(),
         bookerCompany: company.trim() || null,
         notes: notes.trim() || null,
+        source,
       });
       if (!result.ok) setError(result.error);
       else {
@@ -170,6 +181,24 @@ export function BookingForm({
             disabled={isPending}
             className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
           />
+        </label>
+        <label className="block space-y-1 sm:col-span-2">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+            How did you hear about me?
+          </span>
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value as LeadSourceChannel | "")}
+            disabled={isPending}
+            className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+          >
+            <option value="">Pick one…</option>
+            {LEAD_SOURCE_CHANNELS.map((c) => (
+              <option key={c} value={c}>
+                {LEAD_SOURCE_LABELS[c]}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="block space-y-1 sm:col-span-2">
           <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">

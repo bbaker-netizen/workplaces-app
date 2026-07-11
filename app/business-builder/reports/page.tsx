@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getPipelineReport } from "@/lib/db/queries/reports";
+import { getAttributionReport } from "@/lib/db/queries/attribution";
 import { formatCad } from "@/lib/format";
 import {
   ColumnChart,
@@ -8,6 +9,16 @@ import {
   StatCard,
 } from "@/components/reports/Charts";
 import { SalesFunnel } from "@/components/reports/SalesFunnel";
+import { AttributionReport } from "@/components/reports/AttributionReport";
+
+/** Parse a YYYY-MM-DD search param into a UTC Date, or null if malformed. */
+function parseDateParam(v: string | undefined): Date | null {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
  * Business Builder reports dashboard — the pipeline at a glance.
@@ -16,7 +27,11 @@ import { SalesFunnel } from "@/components/reports/SalesFunnel";
  * new leads over time. Read-only, server-rendered, Business Builder side
  * only. Numbers come from getPipelineReport (master org prospects).
  */
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams?: { from?: string; to?: string };
+}) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
@@ -24,6 +39,19 @@ export default async function ReportsPage() {
   }
 
   const r = await getPipelineReport();
+
+  // Attribution window: default to the trailing 12 months ending today.
+  const todayUtc = new Date(`${isoDay(new Date())}T23:59:59.999Z`);
+  const defaultFrom = new Date(
+    Date.UTC(todayUtc.getUTCFullYear() - 1, todayUtc.getUTCMonth(), 1),
+  );
+  const from = parseDateParam(searchParams?.from) ?? defaultFrom;
+  // Include the whole "to" day.
+  const toParsed = parseDateParam(searchParams?.to);
+  const to = toParsed
+    ? new Date(`${isoDay(toParsed)}T23:59:59.999Z`)
+    : todayUtc;
+  const attribution = await getAttributionReport(from, to);
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-12 space-y-8">
@@ -68,6 +96,13 @@ export default async function ReportsPage() {
           }
         />
       </section>
+
+      {/* Lead source attribution — spend vs. booked sessions vs. clients */}
+      <AttributionReport
+        report={attribution}
+        fromDate={isoDay(from)}
+        toDate={isoDay(to)}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Lead source */}

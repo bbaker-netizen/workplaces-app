@@ -40,6 +40,7 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { channelFromWebhookPayload } from "@/lib/pipeline/lead-source";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { newLeadEmail } from "@/lib/email/templates";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -63,6 +64,13 @@ const intakeSchema = z.object({
   leadSource: z.string().max(200).optional().nullable(),
   message: z.string().max(8000).optional().nullable(),
   industry: z.string().max(200).optional().nullable(),
+  // UTM / click-id capture for real channel attribution (first-party
+  // cookie → hidden form fields). All optional.
+  utmSource: z.string().max(200).optional().nullable(),
+  utmMedium: z.string().max(200).optional().nullable(),
+  utmCampaign: z.string().max(200).optional().nullable(),
+  gclid: z.string().max(300).optional().nullable(),
+  fbclid: z.string().max(300).optional().nullable(),
   // Honeypot: a hidden field bots fill and humans never see. If it arrives
   // non-empty, we silently drop the submission. Add a hidden <input
   // name="honeypot"> to your form to activate it.
@@ -136,6 +144,20 @@ export async function POST(req: Request): Promise<Response> {
       ? data.leadSource.trim()
       : "Web form";
 
+  // Canonical channel from the UTM/click-id signals (falls back to `other`
+  // when the form gives us nothing to attribute on).
+  const channel = channelFromWebhookPayload({
+    source: data.leadSource ?? null,
+    utmSource: data.utmSource ?? null,
+    utmMedium: data.utmMedium ?? null,
+    gclid: data.gclid ?? null,
+    fbclid: data.fbclid ?? null,
+  });
+  const sourceDetail =
+    (data.utmCampaign && data.utmCampaign.trim()) ||
+    (data.utmSource && data.utmSource.trim()) ||
+    null;
+
   // Insert + activity + collect recipients.
   let prospectId: string;
   let recipientEmails: string[] = [];
@@ -190,6 +212,9 @@ export async function POST(req: Request): Promise<Response> {
           companyWebsite: data.companyWebsite ?? null,
           industry: data.industry ?? null,
           leadSource,
+          source: channel,
+          sourceDetail,
+          firstSeenAt: new Date(),
           status: "new_lead",
           notes: data.message ?? null,
           lastContactAt: new Date(),

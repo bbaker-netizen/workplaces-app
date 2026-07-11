@@ -19,6 +19,7 @@ import {
   type AnyPgColumn,
   bigint,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -161,6 +162,22 @@ export const prospectStatusEnum = pgEnum("prospect_status", [
   "onboarded",           // "Won"
   "lost",
   "not_qualified",       // Disqualified
+]);
+
+/** Canonical acquisition channel for a prospect — the attribution key
+ *  the lead-source spend report is built on. See lib/pipeline/lead-source.ts
+ *  for labels + the legacy/webhook mapping helpers. Stored NOT NULL on
+ *  every prospect (enforced in migration 0079). */
+export const leadSourceChannelEnum = pgEnum("lead_source_channel", [
+  "google_ads",
+  "meta",
+  "organic_search",
+  "direct",
+  "referral",
+  "podcast",
+  "linkedin",
+  "cold_inbound",
+  "other",
 ]);
 
 export const personProfileSourceEnum = pgEnum("person_profile_source", [
@@ -2012,7 +2029,26 @@ export const prospects = pgTable(
     facebookUrl: text("facebook_url"),
     instagramUrl: text("instagram_url"),
     industry: text("industry"),
+    /** Free-text, human-facing source label (LEAD_SOURCES). Retained for
+     *  display + the referral gift-cert rule. NOT the attribution key —
+     *  see `source` below. */
     leadSource: text("lead_source"),
+    /** Canonical acquisition channel — first-touch, never overwritten,
+     *  NOT NULL and no DB default, so every insert path MUST set it
+     *  (compile-time via $inferInsert, runtime via the NOT NULL constraint). */
+    source: leadSourceChannelEnum("source").notNull(),
+    /** Granular provenance the channel can't hold: utm_campaign, which
+     *  podcast, the referrer's context. Nullable. */
+    sourceDetail: text("source_detail"),
+    /** First time this prospect reached us (first-touch). Backfilled from
+     *  created_at; set once, never moved. */
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    /** When they first booked a session. Drives the report's "Booked
+     *  sessions" column. Set once. */
+    bookedSessionAt: timestamp("booked_session_at", { withTimezone: true }),
+    /** When they became a paying client (onboarded). Drives the "Clients"
+     *  column. Set once. */
+    becameClientAt: timestamp("became_client_at", { withTimezone: true }),
     /** Who referred this prospect — required when leadSource = "Referral".
      *  On conversion to an active engagement, drives the $50 gift-cert /
      *  thank-you-card reminder. */
@@ -2284,6 +2320,38 @@ export const bookings = pgTable(
     bookedAtIdx: index("bookings_booked_at_idx").on(t.bookedAt),
   }),
 );
+
+/**
+ * `channel_spend` — hand-entered marketing spend, one row per channel per
+ * month. No ad-platform API: Bruce types in what he spent. Powers the
+ * cost-per-booked-session and cost-per-client columns of the lead-source
+ * attribution report. Channels with no row show a dash for cost columns.
+ * Master-org only (accessed via withSystemContext), RLS on org_id.
+ */
+export const channelSpend = pgTable(
+  "channel_spend",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    channel: leadSourceChannelEnum("channel").notNull(),
+    /** First day of the month the spend applies to (always day 01). */
+    month: date("month").notNull(),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgChannelMonthUniq: uniqueIndex("channel_spend_org_channel_month_uniq").on(
+      t.orgId,
+      t.channel,
+      t.month,
+    ),
+  }),
+);
+export type ChannelSpend = typeof channelSpend.$inferSelect;
+export type NewChannelSpend = typeof channelSpend.$inferInsert;
 
 /**
  * `signature_envelopes` — Phase 4.5 native e-signing.

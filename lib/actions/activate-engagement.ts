@@ -14,7 +14,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
@@ -189,6 +189,8 @@ export async function activateProspectAsEngagement(
         .set({
           convertedEngagementId: rows.newEngagementId,
           status: "onboarded",
+          // Attribution: date they became a client (set once).
+          becameClientAt: sql`coalesce(${prospects.becameClientAt}, now())` as unknown as Date,
           // Persist the program chosen at conversion so the prospect (the
           // single source the Engagements + Portal lists read) matches the
           // engagement. Falls through to whatever was already set otherwise.
@@ -282,6 +284,7 @@ export async function activateAllSignedProspects(): Promise<
           .set({
             convertedEngagementId: rows.newEngagementId,
             status: "onboarded",
+            becameClientAt: sql`coalesce(${prospects.becameClientAt}, now())` as unknown as Date,
           })
           .where(eq(prospects.id, p.id));
         const reward = await insertReferralReward(tx, {
@@ -347,7 +350,12 @@ export async function resetProspectEngagement(
       if (!p) throw new Error("Prospect not found.");
       await tx
         .update(prospects)
-        .set({ convertedEngagementId: null, status: "contract_signed" })
+        .set({
+          convertedEngagementId: null,
+          status: "contract_signed",
+          // Undo the conversion → they're no longer a client for the report.
+          becameClientAt: null,
+        })
         .where(eq(prospects.id, prospectId));
       const engId = p.convertedEngagementId;
       if (!engId) return;
