@@ -76,13 +76,13 @@ FROM "orgs" o
 CROSS JOIN (VALUES
   (
     'booking_follow_through_1',
-    'Booking Follow-Through 1 — paperwork first',
+    'Booking Follow-Through 1, paperwork first',
     'Your ninety minutes, and the paperwork first',
     $bft1$Hello {{first_name}},
 
 Thanks for booking. You're set for {{session_day}}, {{session_date}} at {{session_time}}.
 
-Before we meet, one bit of housekeeping: attached is a mutual NDA so we can both speak freely about your business. Give it a read and sign at your convenience — it protects you as much as me.
+I've attached a mutual NDA, already signed on my end, so you can speak freely about your business when we meet. There's nothing for you to do with it right now.
 
 Looking forward to it.
 
@@ -90,27 +90,23 @@ Bruce$bft1$
   ),
   (
     'booking_follow_through_2',
-    'Booking Follow-Through 2 — gentle nudge',
-    'Before we meet — the quick paperwork',
+    'Booking Follow-Through 2, gentle nudge',
+    'Before we meet, the quick paperwork',
     $bft2$Hello {{first_name}},
 
 We're on for {{session_day}}, {{session_date}} at {{session_time}}. I'm looking forward to it.
 
-I don't yet have the signed NDA back. It only takes a minute, and having it in place before we talk means we can get straight into the real conversation. Reply if you'd like me to resend it.
+If it's helpful to have the NDA countersigned before we talk, send it back whenever you get a minute. No rush, and no problem if you'd rather sort it on the call.
 
 Bruce$bft2$
   ),
   (
     'booking_follow_through_3',
-    'Booking Follow-Through 3 — morning of',
-    'Today is the day — one last thing',
+    'Booking Follow-Through 3, morning of',
+    'Today is the day, one last thing',
     $bft3$Hello {{first_name}},
 
-Today's the day — I'll see you at {{session_time}}.
-
-If you haven't had a chance to sign the NDA yet, no problem: we can sort it at the start of our call. Either way, come ready to talk about what's actually going on in the business.
-
-See you soon.
+Today's the day. I'll see you at {{session_time}}. If you'd like the NDA squared away, we can do it at the start of the call. Either way, come ready to talk about what's really going on in the business.
 
 Bruce$bft3$
   )
