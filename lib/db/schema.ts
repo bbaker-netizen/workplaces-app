@@ -1634,6 +1634,10 @@ export const emailTemplates = pgTable(
     category: text("category").notNull().default("other"),
     subject: text("subject").notNull(),
     body: text("body").notNull(),
+    /** Stable lookup key for automation-driven templates (e.g. the booking
+     *  follow-through emails), so a human rename never breaks the cron.
+     *  Null for ordinary user-created templates. */
+    templateKey: text("template_key"),
     createdByUserProfileId: uuid("created_by_user_profile_id").references(
       () => userProfiles.id,
       { onDelete: "set null" },
@@ -2352,6 +2356,58 @@ export const channelSpend = pgTable(
 );
 export type ChannelSpend = typeof channelSpend.$inferSelect;
 export type NewChannelSpend = typeof channelSpend.$inferInsert;
+
+/**
+ * `booking_follow_through` — one row per booked session, created when the
+ * "Booking → Builder Pipeline" Make scenario POSTs a new calendar event to
+ * /api/leads/{token}. Drives the three-email NDA/paperwork sequence, which
+ * is sent through the Make "Booking Follow-Through - Send" webhook.
+ *
+ * `calendarEventId` is UNIQUE — the whole idempotency mechanism. A re-seen
+ * event conflicts on insert and creates nothing, so no email fires twice.
+ * Each `*SentAt` is stamped only on a 2xx from Make; a failed POST retries
+ * next tick, capped at 3 attempts before a next-action is raised for Bruce.
+ */
+export const bookingFollowThrough = pgTable(
+  "booking_follow_through",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references(() => prospects.id, { onDelete: "cascade" }),
+    calendarEventId: text("calendar_event_id").notNull(),
+    sessionAt: timestamp("session_at", { withTimezone: true }).notNull(),
+    email1SentAt: timestamp("email1_sent_at", { withTimezone: true }),
+    email2SentAt: timestamp("email2_sent_at", { withTimezone: true }),
+    email3SentAt: timestamp("email3_sent_at", { withTimezone: true }),
+    /** Set by hand in the UI — the one toggle Bruce touches. Suppresses
+     *  emails 2 and 3. */
+    documentsReceivedAt: timestamp("documents_received_at", {
+      withTimezone: true,
+    }),
+    rescheduledAt: timestamp("rescheduled_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    email1Attempts: integer("email1_attempts").notNull().default(0),
+    email2Attempts: integer("email2_attempts").notNull().default(0),
+    email3Attempts: integer("email3_attempts").notNull().default(0),
+    lastError: text("last_error"),
+    failureFlaggedAt: timestamp("failure_flagged_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    calendarEventUniq: uniqueIndex(
+      "booking_follow_through_calendar_event_uniq",
+    ).on(t.calendarEventId),
+    prospectIdx: index("booking_follow_through_prospect_idx").on(t.prospectId),
+    sessionIdx: index("booking_follow_through_session_idx").on(t.sessionAt),
+  }),
+);
+export type BookingFollowThrough = typeof bookingFollowThrough.$inferSelect;
+export type NewBookingFollowThrough = typeof bookingFollowThrough.$inferInsert;
 
 /**
  * `signature_envelopes` — Phase 4.5 native e-signing.
