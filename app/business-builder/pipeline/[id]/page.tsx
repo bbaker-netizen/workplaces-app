@@ -72,6 +72,8 @@ import { ScheduleMeetingButton } from "@/components/pipeline/ScheduleMeetingButt
 import { StartRecordedSessionButton } from "@/components/pipeline/StartRecordedSessionButton";
 import { ProspectNextStep } from "@/components/pipeline/ProspectNextStep";
 import { ScheduleFollowupPanel } from "@/components/pipeline/ScheduleFollowupPanel";
+import { BookingFollowThroughPanel } from "@/components/pipeline/BookingFollowThroughPanel";
+import { getBookingFollowThroughForProspect } from "@/lib/db/queries/booking-follow-through";
 import { SoulFilePreviewButton } from "@/components/pipeline/SoulFilePreviewButton";
 import { DeleteProspectButton } from "@/components/pipeline/DeleteProspectButton";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
@@ -175,6 +177,10 @@ export default async function ProspectDetailPage({
     listProspectComments(prospect.id),
     listProspectDocuments(prospect.id),
   ]);
+
+  // Booking follow-through row, if this prospect came in via a booked
+  // session. Drives the three-email NDA/paperwork panel.
+  const bookingFt = await getBookingFollowThroughForProspect(prospect.id);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
 
@@ -346,6 +352,22 @@ export default async function ProspectDetailPage({
           {/* What's next — surfaces the obvious next move based on the
               current stage so Bruce always sees a clear suggested action. */}
           <ProspectNextStep status={prospect.status as ProspectStatus} />
+
+          {/* Booking follow-through — only when this prospect came in via a
+              booked session. The three-email NDA/paperwork sequence with the
+              one toggle Bruce touches. */}
+          {bookingFt && (
+            <BookingFollowThroughPanel
+              id={bookingFt.id}
+              prospectId={prospect.id}
+              sessionAtISO={bookingFt.sessionAt.toISOString()}
+              email1SentAtISO={bookingFt.email1SentAt?.toISOString() ?? null}
+              email2SentAtISO={bookingFt.email2SentAt?.toISOString() ?? null}
+              email3SentAtISO={bookingFt.email3SentAt?.toISOString() ?? null}
+              documentsReceived={Boolean(bookingFt.documentsReceivedAt)}
+              cancelled={Boolean(bookingFt.cancelledAt)}
+            />
+          )}
 
           {/* Meeting prep — collapsible. Carries this lead's context into
               The Climb so its output can tie back here. */}

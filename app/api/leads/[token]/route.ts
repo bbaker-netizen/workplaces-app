@@ -15,7 +15,12 @@
 
 import { NextResponse } from "next/server";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { orgs, prospectActivities, prospects } from "@/lib/db/schema";
+import {
+  bookingFollowThrough,
+  orgs,
+  prospectActivities,
+  prospects,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { channelFromWebhookPayload } from "@/lib/pipeline/lead-source";
 
@@ -119,6 +124,21 @@ export async function POST(
   const facebook = pick(body, ["facebook", "facebook_url"]);
   const instagram = pick(body, ["instagram", "instagram_url"]);
 
+  // Booking payload (from the "Booking → Builder Pipeline" Make scenario):
+  // a calendar event became a booked session. Recognized by an explicit
+  // calendar_event_id + a parseable booked_session_at. calendar_event_id is
+  // the idempotency key — a re-seen event creates nothing.
+  const calendarEventId = pick(body, ["calendar_event_id", "event_id"]);
+  const eventSummary = pick(body, ["event_summary", "summary"]);
+  const bookedSessionAtRaw = pick(body, [
+    "booked_session_at",
+    "session_at",
+    "start",
+  ]);
+  const sessionAt = bookedSessionAtRaw ? new Date(bookedSessionAtRaw) : null;
+  const isBooking =
+    !!calendarEventId && !!sessionAt && !Number.isNaN(sessionAt.getTime());
+
   try {
     const result = await withSystemContext(async (tx) => {
       const [org] = await tx
@@ -127,6 +147,110 @@ export async function POST(
         .where(eq(orgs.leadWebhookToken, token))
         .limit(1);
       if (!org) return { status: 401 as const };
+
+      // ---- Booking branch --------------------------------------------
+      // A calendar event became a booked session. calendar_event_id is the
+      // idempotency key: if we've seen it, do nothing (no double emails).
+      if (isBooking && calendarEventId && sessionAt) {
+        const [seen] = await tx
+          .select({ id: bookingFollowThrough.id })
+          .from(bookingFollowThrough)
+          .where(eq(bookingFollowThrough.calendarEventId, calendarEventId))
+          .limit(1);
+        if (seen) {
+          return {
+            status: 200 as const,
+            prospectId: null,
+            deduped: true,
+            booking: true,
+            noop: true,
+          };
+        }
+
+        // Find or create the prospect (dedupe by email).
+        const [existingP] = await tx
+          .select({ id: prospects.id })
+          .from(prospects)
+          .where(
+            and(
+              eq(prospects.orgId, org.id),
+              isNull(prospects.archivedAt),
+              sql`lower(${prospects.contactEmail}) = lower(${email})`,
+            ),
+          )
+          .limit(1);
+
+        let bProspectId: string;
+        if (existingP) {
+          bProspectId = existingP.id;
+          await tx
+            .update(prospects)
+            .set({
+              status: "meeting_scheduled",
+              // First-touch: keep the earliest booked date if one exists.
+              bookedSessionAt:
+                sql`coalesce(${prospects.bookedSessionAt}, ${sessionAt.toISOString()})` as unknown as Date,
+              nextActionNote: "Send follow-through email 1",
+              nextActionDate: new Date(),
+              lastContactAt: new Date(),
+            })
+            .where(eq(prospects.id, existingP.id));
+        } else {
+          const [row] = await tx
+            .insert(prospects)
+            .values({
+              orgId: org.id,
+              companyName: (company ?? name ?? email).slice(0, 200),
+              contactName: name,
+              contactEmail: email,
+              phone: phone ?? undefined,
+              companyWebsite: website ?? undefined,
+              // "Booking" is the descriptive label; the acquisition channel
+              // (`source`) stays whatever the payload implies — a bare
+              // calendar booking carries none, so it derives to `other`.
+              leadSource: "Booking",
+              source: channel,
+              firstSeenAt: new Date(),
+              bookedSessionAt: sessionAt,
+              status: "meeting_scheduled",
+              nextActionNote: "Send follow-through email 1",
+              nextActionDate: new Date(),
+              notes: message ?? undefined,
+              lastContactAt: new Date(),
+            })
+            .returning({ id: prospects.id });
+          bProspectId = row.id;
+        }
+
+        // The follow-through row. onConflictDoNothing on the unique
+        // calendar_event_id is belt-and-suspenders against a racing poller.
+        await tx
+          .insert(bookingFollowThrough)
+          .values({
+            orgId: org.id,
+            prospectId: bProspectId,
+            calendarEventId,
+            sessionAt,
+          })
+          .onConflictDoNothing({
+            target: bookingFollowThrough.calendarEventId,
+          });
+
+        await tx.insert(prospectActivities).values({
+          orgId: org.id,
+          prospectId: bProspectId,
+          type: "booking",
+          subject: "Session booked",
+          body: eventSummary ?? null,
+        });
+
+        return {
+          status: 200 as const,
+          prospectId: bProspectId,
+          deduped: !!existingP,
+          booking: true,
+        };
+      }
 
       // De-dupe by email within the org (ignore archived).
       const [existing] = await tx
