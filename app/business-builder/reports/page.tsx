@@ -188,12 +188,12 @@ function ReportCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
+    <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm flex flex-col">
       <header className="px-5 py-3 border-b border-tbb-line-soft">
         <h2 className="font-bold text-tbb-navy">{title}</h2>
         <p className="text-[11px] text-tbb-ink-3 mt-0.5">{subtitle}</p>
       </header>
-      <div className="px-5 py-4">{children}</div>
+      <div className="px-5 py-4 flex-1">{children}</div>
     </section>
   );
 }

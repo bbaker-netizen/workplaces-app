@@ -28,8 +28,8 @@ export function SalesFunnel({ tiers }: { tiers: FunnelTierInput[] }) {
     n <= 1 ? MAX_W : MAX_W - (MAX_W - MIN_W) * (i / (n - 1));
 
   return (
-    <div className="w-full">
-      <div className="mx-auto max-w-md">
+    <div className="w-full h-full flex flex-col">
+      <div className="mx-auto max-w-md w-full flex-1 flex flex-col">
         {tiers.map((t, i) => {
           const isWon = i === n - 1;
           const topW = widthAt(i);
@@ -44,7 +44,7 @@ export function SalesFunnel({ tiers }: { tiers: FunnelTierInput[] }) {
           return (
             <div
               key={t.label}
-              className="relative h-[66px] flex items-center justify-center text-white"
+              className="relative flex-1 min-h-[66px] flex items-center justify-center text-white"
               style={{
                 clipPath: `polygon(${tl}% 0, ${tr}% 0, ${br}% 100%, ${bl}% 100%)`,
                 backgroundColor: isWon
