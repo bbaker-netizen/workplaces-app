@@ -30,6 +30,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   proposal: "Proposal",
   follow_up: "Follow-up",
   intro: "Intro",
+  booking_follow_through: "Booking follow-through",
   other: "Other",
 };
 

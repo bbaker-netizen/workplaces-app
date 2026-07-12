@@ -46,15 +46,15 @@ export type BookingEmailNum = 1 | 2 | 3;
 const DEFAULTS: Record<BookingEmailNum, { subject: string; body: string }> = {
   1: {
     subject: "Your ninety minutes, and the paperwork first",
-    body: "Hello {{first_name}},\n\nThanks for booking — you're set for {{session_day}}, {{session_date}} at {{session_time}}. Attached is a mutual NDA so we can both speak freely; sign at your convenience.\n\nBruce",
+    body: "Hello {{first_name}},\n\nThanks for booking. You're set for {{session_day}}, {{session_date}} at {{session_time}}.\n\nI've attached a mutual NDA, already signed on my end, so you can speak freely about your business when we meet. There's nothing for you to do with it right now.\n\nLooking forward to it.\n\nBruce",
   },
   2: {
-    subject: "Before we meet — the quick paperwork",
-    body: "Hello {{first_name}},\n\nWe're on for {{session_day}}, {{session_date}} at {{session_time}}. I don't yet have the signed NDA back — it only takes a minute. Reply if you'd like me to resend it.\n\nBruce",
+    subject: "Before we meet, the quick paperwork",
+    body: "Hello {{first_name}},\n\nWe're on for {{session_day}}, {{session_date}} at {{session_time}}. I'm looking forward to it.\n\nIf it's helpful to have the NDA countersigned before we talk, send it back whenever you get a minute. No rush, and no problem if you'd rather sort it on the call.\n\nBruce",
   },
   3: {
-    subject: "Today is the day — one last thing",
-    body: "Hello {{first_name}},\n\nToday's the day — I'll see you at {{session_time}}. If you haven't signed the NDA yet, we can sort it at the start of the call.\n\nBruce",
+    subject: "Today is the day, one last thing",
+    body: "Hello {{first_name}},\n\nToday's the day. I'll see you at {{session_time}}. If you'd like the NDA squared away, we can do it at the start of the call.\n\nBruce",
   },
 };
 

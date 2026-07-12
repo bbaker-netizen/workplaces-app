@@ -21,6 +21,10 @@ export const TEMPLATE_CATEGORIES = [
   "proposal",
   "follow_up",
   "intro",
+  // Automation-driven: the booking follow-through sequence seeds three
+  // templates under this category. Must be a valid enum value so those
+  // rows save through the Templates editor like any other.
+  "booking_follow_through",
   "other",
 ] as const;
 
