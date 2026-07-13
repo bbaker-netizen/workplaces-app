@@ -92,9 +92,12 @@ function emptyResult(): ConversionSyncSummary["booked"] {
   return { eligible: 0, uploaded: 0, failed: 0, skipped: 0 };
 }
 
-/** Google wants "yyyy-MM-dd HH:mm:ss+HH:mm" in a real time zone. */
+/** Data Manager wants an RFC 3339 timestamp, e.g. "2026-07-13T15:45:47-06:00". */
 function conversionDateTime(at: Date): string {
-  return DateTime.fromJSDate(at).setZone(TZ).toFormat("yyyy-MM-dd HH:mm:ssZZ");
+  return (
+    DateTime.fromJSDate(at).setZone(TZ).toISO({ suppressMilliseconds: true }) ??
+    at.toISOString()
+  );
 }
 
 async function stampUploaded(

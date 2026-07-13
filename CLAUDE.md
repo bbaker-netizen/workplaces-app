@@ -920,6 +920,41 @@ Per the "ERP build spec 2026-07-13". Migration `0082_click_ids_and_conversions.s
    two "import / offline" conversion actions (Booked session, Client signed) in
    Google Ads; until then the feature is dormant.
 
+## Correction — Google Ads offline conversions moved to the Data Manager API (2026-07-13)
+
+Wiring the feature up surfaced two blockers that changed how item 6 above actually
+works. The sweep, watermarks, and idempotency logic are unchanged; only the
+transport and account routing changed.
+
+1. **`UploadClickConversions` is dead for new integrations.** As of 2026-06-15
+   Google blocks `ConversionUploadService.UploadClickConversions` for developer
+   tokens that hadn't already used it (`CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE`).
+   Our token is new, so it's blocked with no allowlist path. `lib/google-ads/client.ts`
+   was rewritten to upload via the **Data Manager API**
+   (`POST https://datamanager.googleapis.com/v1/events:ingest`) instead:
+   - New OAuth scope `https://www.googleapis.com/auth/datamanager` (token re-minted
+     with both it and `adwords`); the "Data Manager API" must be enabled in the
+     Cloud project. **No developer token needed** for uploads (still needed once to
+     create the conversion actions).
+   - Destination = `{operatingAccount:{accountType:GOOGLE_ADS, accountId:<cid>},
+     productDestinationId:<conversionActionId>}`; event carries `eventSource:"WEB"`,
+     `adIdentifiers.gclid`, RFC-3339 `eventTimestamp`, `conversionValue`/`currency`.
+   - Async, no partial-failure: HTTP 200 = accepted. API version pinning is gone.
+2. **The ad account is NOT under the manager.** `824-301-5435` is accessed
+   *directly* by bbaker@4workplaces.com — it is not a client of manager
+   `168-696-7494`. Routing through the manager returns `USER_PERMISSION_DENIED`.
+   So `GOOGLE_ADS_LOGIN_CUSTOMER_ID` is left **blank** and calls go direct;
+   `config.ts` no longer requires it, and `client.ts` only sends the header when a
+   real managing id is set. The dev token can still live on the manager — token
+   ownership is independent of account routing.
+
+Setup scripts added: `scripts/google-ads-mint-refresh-token.mjs` (loopback OAuth,
+writes the refresh token into `.env.local`), `google-ads-create-conversion-actions.mjs`
+(idempotent create/find of the two actions), `google-ads-test-upload.mjs`
+(validate-only or `--live` proof). The two actions exist:
+Booked `…/conversionActions/7683937191`, Signed `…/conversionActions/7683959902`.
+Both validated (HTTP 200, validate-only) on 2026-07-13.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.

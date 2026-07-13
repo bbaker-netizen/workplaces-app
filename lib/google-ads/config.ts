@@ -14,8 +14,11 @@ export interface GoogleAdsConfig {
   refreshToken: string;
   /** Digits only (dashes stripped). The Workplaces ad account, 824-301-5435. */
   customerId: string;
-  /** Digits only. The manager (MCC) account, 168-696-7494 — sent as the
-   *  `login-customer-id` header. */
+  /** Digits only, or "" when the ad account is accessed directly (not through a
+   *  manager). Sent as the `login-customer-id` header only when it's a real
+   *  manager of the operating account. Our ad account 824-301-5435 is NOT a
+   *  client under manager 168-696-7494, so this is left blank and calls go
+   *  direct. Set it only if you later link the account under an MCC. */
   loginCustomerId: string;
   /** Conversion-action resource names (or bare numeric ids) for the two
    *  "import / offline" actions. A kind whose action is unset is skipped. */
@@ -47,13 +50,14 @@ export function googleAdsConfig(): GoogleAdsConfig | null {
   const customerId = digitsOnly(process.env.GOOGLE_ADS_CUSTOMER_ID);
   const loginCustomerId = digitsOnly(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID);
 
+  // loginCustomerId is intentionally NOT required — direct access to the ad
+  // account needs no manager. It's only used when set (see client.ts).
   if (
     !developerToken ||
     !clientId ||
     !clientSecret ||
     !refreshToken ||
-    !customerId ||
-    !loginCustomerId
+    !customerId
   ) {
     return null;
   }
