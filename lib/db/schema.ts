@@ -2113,6 +2113,33 @@ export const prospects = pgTable(
     /** When the contract was signed — set when status moves to
      *  contract_signed. Drives the "Date signed" sort on the pipeline. */
     contractSignedAt: timestamp("contract_signed_at", { withTimezone: true }),
+    /** Paid-click attribution captured by the website snippet (WPCode) into
+     *  90-day cookies on landing and posted with the lead. First-touch: the
+     *  first non-empty click id wins and is never overwritten (a later dedupe
+     *  submission with an empty gclid must not blank it). A click id is harder
+     *  evidence of the acquisition channel than the "How did you hear?" answer,
+     *  and it is what the Google Ads offline-conversion upload keys off. */
+    gclid: text("gclid"),
+    gbraid: text("gbraid"),
+    wbraid: text("wbraid"),
+    fbclid: text("fbclid"),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    /** Anything else the snippet sent in its click_ids object (future-proofing
+     *  — new params land here without a migration). */
+    clickIds: jsonb("click_ids"),
+    /** Google Ads offline-conversion upload watermarks — one per conversion
+     *  action. Idempotency: a non-null timestamp means that (gclid, action)
+     *  pair was already uploaded and must never be uploaded again. */
+    googleBookedConversionUploadedAt: timestamp(
+      "google_booked_conversion_uploaded_at",
+      { withTimezone: true },
+    ),
+    googleSignedConversionUploadedAt: timestamp(
+      "google_signed_conversion_uploaded_at",
+      { withTimezone: true },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -2122,6 +2149,7 @@ export const prospects = pgTable(
     emailIdx: index("prospects_email_idx").on(t.contactEmail),
     ownerIdx: index("prospects_owner_idx").on(t.ownerUserProfileId),
     nextActionIdx: index("prospects_next_action_idx").on(t.nextActionDate),
+    gclidIdx: index("prospects_gclid_idx").on(t.gclid),
   }),
 );
 

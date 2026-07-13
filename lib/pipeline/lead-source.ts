@@ -97,13 +97,22 @@ export function channelFromWebhookPayload(fields: {
   utmSource?: string | null;
   utmMedium?: string | null;
   gclid?: string | null;
+  gbraid?: string | null;
+  wbraid?: string | null;
   fbclid?: string | null;
 }): LeadSourceChannel {
   const src = (fields.source ?? fields.utmSource ?? "").trim().toLowerCase();
   const medium = (fields.utmMedium ?? "").trim().toLowerCase();
 
-  // Click-ids are unambiguous paid-click markers.
-  if (fields.gclid && fields.gclid.trim()) return "google_ads";
+  // Click-ids are unambiguous paid-click markers (harder evidence than the
+  // free-text source). gclid/gbraid/wbraid are all Google paid clicks.
+  if (
+    (fields.gclid && fields.gclid.trim()) ||
+    (fields.gbraid && fields.gbraid.trim()) ||
+    (fields.wbraid && fields.wbraid.trim())
+  ) {
+    return "google_ads";
+  }
   if (fields.fbclid && fields.fbclid.trim()) return "meta";
 
   if (/facebook|instagram|meta|\bfb\b|\big\b/.test(src)) return "meta";
@@ -122,4 +131,61 @@ export function channelFromWebhookPayload(fields: {
   // A known legacy label may still arrive verbatim from an old scenario.
   const legacy = channelFromLegacyLeadSource(src);
   return legacy;
+}
+
+/**
+ * Map the free-text answer to the booking form's "How did you hear about me?"
+ * question onto a channel. This MUST mirror the mapping the website snippet uses
+ * so a calendar booking and a website form for the same answer attribute the
+ * same way (ERP build spec 2026-07-13, item 3):
+ *   referral                     → referral
+ *   Google ad                    → google_ads
+ *   Google search / Google Maps  → organic_search
+ *   Facebook / Instagram         → meta
+ *   LinkedIn                     → linkedin
+ *   anything else                → other  (never a guess)
+ * Order matters: "Google ad" is checked before the generic Google → organic.
+ */
+export function channelFromHearAboutAnswer(
+  answer: string | null | undefined,
+): LeadSourceChannel {
+  const a = (answer ?? "").trim().toLowerCase();
+  if (!a) return "other";
+  if (/referr|word[\s-]*of[\s-]*mouth|friend|colleague|existing client/.test(a)) {
+    return "referral";
+  }
+  if (/google\s*ads?\b|adwords|\bppc\b|\bsem\b|paid search/.test(a)) return "google_ads";
+  if (/google|\bsearch\b|\bmaps\b|\bbing\b|search engine/.test(a)) return "organic_search";
+  if (/facebook|instagram|\bfb\b|\big\b|\bmeta\b/.test(a)) return "meta";
+  if (/linkedin/.test(a)) return "linkedin";
+  return "other";
+}
+
+/**
+ * Extract the "How did you hear about me?" answer out of a calendar booking's
+ * pipe-delimited notes/description (the poller passes the event description
+ * through as `message`). Returns the raw answer, or null when it can't be found
+ * — the caller must NOT silently swallow a null; it falls back to `other` and
+ * leaves a note.
+ */
+export function parseHearAboutAnswer(
+  message: string | null | undefined,
+): string | null {
+  if (!message) return null;
+  // Split on pipes AND newlines — booking tools use either as a field separator.
+  const segments = message
+    .split(/[|\n\r]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  // Primary: an explicit "How did you hear about ..." label.
+  for (const seg of segments) {
+    const m = seg.match(/how\s+did\s+you\s+hear[^:]*:\s*(.+)$/i);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  // Secondary: a "Source:" / "Lead source:" / "Referral source:" label.
+  for (const seg of segments) {
+    const m = seg.match(/^(?:lead\s+|referral\s+)?source[^:]*:\s*(.+)$/i);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  return null;
 }

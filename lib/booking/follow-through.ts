@@ -30,6 +30,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { applyTemplate } from "@/lib/templates/variables";
 import { markdownToEmailHtml } from "@/lib/templates/markdown-to-html";
+import { isValidEmail } from "@/lib/pipeline/email";
 
 const TZ = "America/Edmonton";
 const WEBHOOK_URL =
@@ -170,6 +171,35 @@ export async function sendBookingFollowThroughEmail(
 
   if (!loaded) return { ok: false, error: "Booking row not found." };
   const { row, tpl } = loaded;
+
+  // GUARD: never POST the Make sender an empty/invalid recipient. On 2026-07-13
+  // a blank `to` made Gmail return 400 and Make deactivated the whole scenario,
+  // killing every follow-through email. So: don't send, don't stamp *_sent_at,
+  // and raise a next action for Bruce (once — guarded by failure_flagged_at so
+  // the 15-minute sweep doesn't re-raise it every tick). Applies to the manual
+  // "Send now" too — the UI disables the button, this is the server backstop.
+  if (!isValidEmail(row.email)) {
+    await withSystemContext(async (tx) => {
+      if (!row.ft.failureFlaggedAt) {
+        await tx
+          .update(prospects)
+          .set({
+            nextActionNote: "Follow-through blocked, no email address.",
+            nextActionDate: now,
+          })
+          .where(eq(prospects.id, row.ft.prospectId));
+        await tx
+          .update(bookingFollowThrough)
+          .set({
+            failureFlaggedAt: now,
+            lastError: "No valid email address on the prospect — send skipped.",
+          })
+          .where(eq(bookingFollowThrough.id, row.ft.id));
+      }
+    });
+    return { ok: false, error: "No email address on this prospect." };
+  }
+
   if (!opts.manual && attemptsFor(row.ft, n) >= MAX_ATTEMPTS) {
     return { ok: false, error: "Retry cap reached." };
   }

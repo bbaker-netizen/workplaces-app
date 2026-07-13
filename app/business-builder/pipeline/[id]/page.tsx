@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { CollapsibleSection } from "@/components/pipeline/CollapsibleSection";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
+import { isValidEmail } from "@/lib/pipeline/email";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
 import { listProspectComments } from "@/lib/db/queries/prospect-comments";
@@ -349,6 +350,49 @@ export default async function ProspectDetailPage({
             </div>
           </section>
 
+          {/* Paid-click evidence — when the lead arrived with a Google/Meta
+              click id, show it so Bruce knows this came from a paid click (and
+              it's what the Google Ads offline-conversion upload keys off). */}
+          {(() => {
+            const googleClickId =
+              prospect.gclid || prospect.gbraid || prospect.wbraid;
+            const clickId = googleClickId || prospect.fbclid;
+            if (!clickId) return null;
+            const label = googleClickId ? "Google Ads" : "Meta";
+            const key = prospect.gclid
+              ? "gclid"
+              : prospect.gbraid
+                ? "gbraid"
+                : prospect.wbraid
+                  ? "wbraid"
+                  : "fbclid";
+            const shown =
+              clickId.length > 20 ? `${clickId.slice(0, 20)}…` : clickId;
+            return (
+              <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm px-5 py-3">
+                <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Paid click
+                </h2>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-pill bg-tbb-blue text-white text-[11px] font-bold uppercase tracking-tbb-caps px-2.5 py-1">
+                    {label}
+                  </span>
+                  <code
+                    className="text-[11px] text-tbb-ink-3 break-all"
+                    title={`${key}: ${clickId} — used for Google Ads offline conversions`}
+                  >
+                    {key}: {shown}
+                  </code>
+                </div>
+                {prospect.utmCampaign && (
+                  <p className="mt-1 text-[11px] text-tbb-ink-3">
+                    Campaign: {prospect.utmCampaign}
+                  </p>
+                )}
+              </section>
+            );
+          })()}
+
           {/* What's next — surfaces the obvious next move based on the
               current stage so Bruce always sees a clear suggested action. */}
           <ProspectNextStep status={prospect.status as ProspectStatus} />
@@ -366,6 +410,7 @@ export default async function ProspectDetailPage({
               email3SentAtISO={bookingFt.email3SentAt?.toISOString() ?? null}
               documentsReceived={Boolean(bookingFt.documentsReceivedAt)}
               cancelled={Boolean(bookingFt.cancelledAt)}
+              hasEmail={isValidEmail(prospect.contactEmail)}
             />
           )}
 

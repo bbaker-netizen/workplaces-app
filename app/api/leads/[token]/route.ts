@@ -22,7 +22,11 @@ import {
   prospects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
-import { channelFromWebhookPayload } from "@/lib/pipeline/lead-source";
+import {
+  channelFromHearAboutAnswer,
+  channelFromWebhookPayload,
+  parseHearAboutAnswer,
+} from "@/lib/pipeline/lead-source";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,17 +105,35 @@ export async function POST(
     pick(body, ["source", "lead_source", "channel", "utm_source", "platform"]) ??
     "Webhook";
   // UTM / click-id capture — how we know the real acquisition channel for
-  // website-form leads (the form posts these from a first-party cookie).
-  const utmSource = pick(body, ["utm_source", "utmsource"]);
-  const utmMedium = pick(body, ["utm_medium", "utmmedium"]);
-  const utmCampaign = pick(body, ["utm_campaign", "utmcampaign", "campaign"]);
-  const gclid = pick(body, ["gclid"]);
-  const fbclid = pick(body, ["fbclid"]);
+  // website-form leads. The WPCode snippet stores gclid/gbraid/wbraid/fbclid +
+  // utm params in 90-day first-party cookies on landing and posts them here,
+  // both at the top level (gclid) and inside a `click_ids` object. A click id
+  // is harder evidence than any free-text source, so it drives the channel.
+  const clickIdsObj: Record<string, unknown> =
+    body.click_ids && typeof body.click_ids === "object" && !Array.isArray(body.click_ids)
+      ? (body.click_ids as Record<string, unknown>)
+      : {};
+  // Prefer a top-level value, then the click_ids object.
+  const ci = (keys: string[]): string | null =>
+    pick(body, keys) ?? pick(clickIdsObj, keys);
+  const utmSource = ci(["utm_source", "utmsource"]);
+  const utmMedium = ci(["utm_medium", "utmmedium"]);
+  const utmCampaign = ci(["utm_campaign", "utmcampaign", "campaign"]);
+  const gclid = ci(["gclid"]);
+  const gbraid = ci(["gbraid"]);
+  const wbraid = ci(["wbraid"]);
+  const fbclid = ci(["fbclid"]);
+  // Persist the whole click_ids object verbatim (only the keys the snippet sent)
+  // so nothing is lost even if we don't have a dedicated column for it.
+  const clickIdsJson: Record<string, unknown> | null =
+    Object.keys(clickIdsObj).length > 0 ? clickIdsObj : null;
   const channel = channelFromWebhookPayload({
     source,
     utmSource,
     utmMedium,
     gclid,
+    gbraid,
+    wbraid,
     fbclid,
   });
   // Granular provenance for the detail column: campaign name, else the raw
@@ -119,6 +141,53 @@ export async function POST(
   const sourceDetail =
     utmCampaign ??
     (source && source.toLowerCase() !== "webhook" ? source : null);
+
+  // The click-id columns to write on a fresh insert (undefined → column stays
+  // NULL). Shared by the booking and website-form insert paths.
+  const clickIdInsert = {
+    gclid: gclid ?? undefined,
+    gbraid: gbraid ?? undefined,
+    wbraid: wbraid ?? undefined,
+    fbclid: fbclid ?? undefined,
+    utmSource: utmSource ?? undefined,
+    utmMedium: utmMedium ?? undefined,
+    utmCampaign: utmCampaign ?? undefined,
+    clickIds: clickIdsJson ?? undefined,
+  };
+  // First-touch (dedupe hit): keep the FIRST click id — coalesce keeps the
+  // existing non-null value, so a later submission with an empty gclid can never
+  // blank it. Only fills columns that are currently NULL.
+  const clickIdFirstTouch = {
+    gclid: sql`coalesce(${prospects.gclid}, ${gclid ?? null})` as unknown as string,
+    gbraid: sql`coalesce(${prospects.gbraid}, ${gbraid ?? null})` as unknown as string,
+    wbraid: sql`coalesce(${prospects.wbraid}, ${wbraid ?? null})` as unknown as string,
+    fbclid: sql`coalesce(${prospects.fbclid}, ${fbclid ?? null})` as unknown as string,
+    utmSource: sql`coalesce(${prospects.utmSource}, ${utmSource ?? null})` as unknown as string,
+    utmMedium: sql`coalesce(${prospects.utmMedium}, ${utmMedium ?? null})` as unknown as string,
+    utmCampaign: sql`coalesce(${prospects.utmCampaign}, ${utmCampaign ?? null})` as unknown as string,
+    clickIds: sql`coalesce(${prospects.clickIds}, ${clickIdsJson ? JSON.stringify(clickIdsJson) : null}::jsonb)` as unknown as Record<string, unknown>,
+  };
+  // Calendar-booking attribution (item 3): the booking form's "How did you hear
+  // about me?" answer rides in the event description, which the poller passes
+  // through as `message` (pipe-delimited). A click id, if present, is harder
+  // evidence and wins; otherwise map the answer; never a silent swallow — an
+  // unparsed answer falls back to `other` with a note in source_detail.
+  const bookingAnswer = parseHearAboutAnswer(message);
+  const hasClickId = Boolean(gclid || gbraid || wbraid || fbclid);
+  const bookingChannel = hasClickId
+    ? channel
+    : bookingAnswer
+      ? channelFromHearAboutAnswer(bookingAnswer)
+      : "other";
+  const bookingSourceDetail = bookingAnswer
+    ? `Calendar booking (${bookingAnswer})`
+    : "Calendar booking (source not stated)";
+  if (!bookingAnswer) {
+    console.warn(
+      "[api/leads] booking: could not parse 'How did you hear about me?' from message; defaulting source to other.",
+    );
+  }
+
   const website = pick(body, ["website", "company_website", "url"]);
   const linkedin = pick(body, ["linkedin", "linkedin_url"]);
   const facebook = pick(body, ["facebook", "facebook_url"]);
@@ -190,6 +259,8 @@ export async function POST(
               // First-touch: keep the earliest booked date if one exists.
               bookedSessionAt:
                 sql`coalesce(${prospects.bookedSessionAt}, ${sessionAt.toISOString()})` as unknown as Date,
+              // First-touch click ids (never blank an existing one).
+              ...clickIdFirstTouch,
               nextActionNote: "Send follow-through email 1",
               nextActionDate: new Date(),
               lastContactAt: new Date(),
@@ -205,11 +276,13 @@ export async function POST(
               contactEmail: email,
               phone: phone ?? undefined,
               companyWebsite: website ?? undefined,
-              // "Booking" is the descriptive label; the acquisition channel
-              // (`source`) stays whatever the payload implies — a bare
-              // calendar booking carries none, so it derives to `other`.
+              // "Booking" is the descriptive display label; the acquisition
+              // channel comes from the "How did you hear about me?" answer (or a
+              // click id, which wins). source_detail records the exact answer.
               leadSource: "Booking",
-              source: channel,
+              source: bookingChannel,
+              sourceDetail: bookingSourceDetail,
+              ...clickIdInsert,
               firstSeenAt: new Date(),
               bookedSessionAt: sessionAt,
               status: "meeting_scheduled",
@@ -270,7 +343,12 @@ export async function POST(
         prospectId = existing.id;
         await tx
           .update(prospects)
-          .set({ lastContactAt: new Date() })
+          .set({
+            lastContactAt: new Date(),
+            // First-touch: fill any click id we didn't already have, never
+            // overwrite one. First click id wins.
+            ...clickIdFirstTouch,
+          })
           .where(eq(prospects.id, existing.id));
       } else {
         const [row] = await tx
@@ -288,6 +366,7 @@ export async function POST(
             leadSource: source,
             source: channel,
             sourceDetail: sourceDetail ?? undefined,
+            ...clickIdInsert,
             firstSeenAt: new Date(),
             status: "new_lead",
             notes: message ?? undefined,

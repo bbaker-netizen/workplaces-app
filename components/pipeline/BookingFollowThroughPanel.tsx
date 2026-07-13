@@ -20,6 +20,10 @@ type Props = {
   email3SentAtISO: string | null;
   documentsReceived: boolean;
   cancelled: boolean;
+  /** Whether the prospect has a valid email. When false the "Send now" buttons
+   *  are disabled — sending a blank recipient once deactivated the whole Make
+   *  scenario (2026-07-13). */
+  hasEmail: boolean;
 };
 
 const EMAILS: { n: BookingEmailNum; label: string; when: string }[] = [
@@ -121,8 +125,13 @@ export function BookingFollowThroughPanel(props: Props) {
                   <button
                     type="button"
                     onClick={() => sendNow(n)}
-                    disabled={pending}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 whitespace-nowrap"
+                    disabled={pending || !props.hasEmail}
+                    title={
+                      props.hasEmail
+                        ? undefined
+                        : "No email address on this prospect — add one before sending."
+                    }
+                    className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {sendingN === n ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
@@ -153,6 +162,13 @@ export function BookingFollowThroughPanel(props: Props) {
             </span>
           </span>
         </label>
+
+        {!props.hasEmail && (
+          <p className="text-[11px] font-medium text-tbb-danger">
+            No email address on this prospect — add one to enable the
+            follow-through emails.
+          </p>
+        )}
 
         {error && <p className="text-sm text-tbb-danger">{error}</p>}
       </div>

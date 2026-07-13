@@ -871,6 +871,55 @@ Tagged `v0.24.0` on 2026-05-09. Adobe Sign API access is gated behind a paid tie
 
 ---
 
+## What was built — ERP follow-through & attribution (2026-07-13)
+
+Per the "ERP build spec 2026-07-13". Migration `0082_click_ids_and_conversions.sql`
+(raw SQL, `IF NOT EXISTS`, applied by `scripts/migrate-on-deploy.mjs`).
+
+1. **Empty-recipient guard.** On 12 Jul the booking cron POSTed the Make sender a
+   blank `to`; Gmail 400'd and Make deactivated the whole scenario. `lib/booking/
+   follow-through.ts` now validates the prospect email (`lib/pipeline/email.ts`
+   `isValidEmail`) BEFORE POSTing: no valid email → don't send, don't stamp
+   `*_sent_at`, and raise a next action "Follow-through blocked, no email address."
+   once (guarded by `failure_flagged_at` so the 15-min sweep doesn't re-raise).
+   The "Send now" button (`BookingFollowThroughPanel`) is disabled with a tooltip
+   when the prospect has no email. Investigation: `scripts/investigate-empty-email-
+   bookings.mjs` (read-only) lists booking rows whose prospect email is null/blank/
+   invalid.
+2. **Kill the test rows.** `scripts/suppress-test-prospects.mjs` reports the three
+   11-Jul test prospects (Testy Three, ERP Shape Test / 4workplaces+erptest@gmail.com,
+   QC Test) + their booking rows, then sets `documents_received_at` on the armed
+   rows (immediate mitigation — stops emails 2 & 3). Soft-delete (archive) is gated
+   behind `--archive` and Bruce's confirmation; nothing is hard-deleted.
+3. **Calendar-booking source.** `/api/leads/[token]` booking branch parses the
+   "How did you hear about me?" answer out of the pipe-delimited `message`
+   (`parseHearAboutAnswer`) and maps it (`channelFromHearAboutAnswer`) with the
+   same mapping as the website snippet; `source_detail = "Calendar booking (<answer>)"`.
+   Unparsed → `other` with a note (never silently swallowed). A click id, if
+   present, wins over the answer.
+4. **Meta mapping confirmed.** `channelFromWebhookPayload("Facebook Ads")` →
+   `meta` (the `/facebook/` branch, and `channelFromLegacyLeadSource`). No change
+   needed; extended to also treat `gbraid`/`wbraid` as `google_ads`.
+5. **Click-id capture.** `prospects` gains `gclid/gbraid/wbraid/fbclid/utm_source/
+   utm_medium/utm_campaign` + `click_ids` jsonb. `/api/leads/[token]` persists them
+   from the payload's top-level `gclid` and `click_ids` object; first-touch wins
+   (coalesce — a later empty gclid never blanks an existing one). Surfaced on the
+   prospect detail page as a "Paid click" panel.
+6. **Google Ads offline conversions.** `lib/google-ads/` (config + REST client +
+   `runGoogleAdsConversionSync`). An idempotent SWEEP (cron `/api/cron/google-ads-
+   conversions`, `netlify/functions/google-ads-conversions.mts`, every 30 min):
+   for each prospect with a gclid that reached booked (`meeting_scheduled`+) or
+   signed (`contract_signed`+) and whose per-kind watermark
+   (`google_booked_conversion_uploaded_at` / `google_signed_conversion_uploaded_at`)
+   is NULL, upload a `ClickConversion` via `UploadClickConversions` (with
+   `login-customer-id` = manager account), stamp the watermark on success. Never
+   uploads the same (gclid, action) twice; retries transient failures; logs the
+   Google response verbatim on failure. Degrades to a logged no-op when the
+   `GOOGLE_ADS_*` env vars are missing — never crashes the booking flow. **Bruce
+   supplies** the 8 `GOOGLE_ADS_*` env vars (see `.env.example`) and creates the
+   two "import / offline" conversion actions (Booked session, Client signed) in
+   Google Ads; until then the feature is dormant.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
