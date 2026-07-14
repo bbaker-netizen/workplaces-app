@@ -14,21 +14,46 @@ import { withSystemContext } from "@/lib/db/tenant";
 import {
   STAGE_ORDER,
   STAGE_STYLES,
+  disqualificationReasonLabel,
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
 
 const WON: ProspectStatus[] = ["onboarded"];
-const LOST: ProspectStatus[] = ["lost", "not_qualified"];
+// "Lost" = a genuine sales loss on a QUALIFIED lead. Disqualified junk
+// ("not_qualified") is deliberately NOT here — it's a marketing lead-quality
+// signal, tracked separately so it never drags down the conversion rate.
+const LOST: ProspectStatus[] = ["lost"];
+const DISQUALIFIED: ProspectStatus[] = ["not_qualified"];
 // Open pipeline stages, in funnel order (excludes terminal states).
 const FUNNEL_STAGES: ProspectStatus[] = STAGE_ORDER.filter(
-  (s) => !WON.includes(s) && !LOST.includes(s),
+  (s) =>
+    !WON.includes(s) && !LOST.includes(s) && !DISQUALIFIED.includes(s),
 );
 
 export type LeadSourceStat = {
   source: string;
   total: number;
   won: number;
+  /** Won / qualified leads from this source (disqualified excluded), so a
+   *  junk-heavy channel isn't penalised on conversion — its junk shows up in
+   *  the Marketing Lead Quality breakdown instead. */
   conversionPct: number;
+  /** How many leads from this source were disqualified. */
+  disqualified: number;
+};
+
+/** Disqualified-lead breakdown for the Marketing Lead Quality section. */
+export type DisqualifiedSourceStat = {
+  source: string;
+  count: number;
+  /** Disqualified as a % of ALL leads from this source. */
+  ratePct: number;
+};
+
+export type DisqualifiedReasonStat = {
+  reason: string;
+  label: string;
+  count: number;
 };
 
 export type FunnelStat = {
@@ -69,10 +94,21 @@ export type MonthlyLeadStat = {
 
 export type PipelineReport = {
   totalLeads: number;
+  /** Total leads minus disqualified — the denominator sales performance is
+   *  actually measured against. */
+  qualifiedLeads: number;
   activeClients: number;
   lostCount: number;
+  /** Leads marked "Not qualified" — a marketing lead-quality signal, kept out
+   *  of the conversion / funnel / time-to-close numbers. */
+  disqualifiedCount: number;
+  /** Disqualified as a % of all leads. */
+  disqualifiedRatePct: number;
+  disqualifiedBySource: DisqualifiedSourceStat[];
+  disqualifiedByReason: DisqualifiedReasonStat[];
   openCount: number;
-  /** Won / (leads that reached a decision), as a percentage. */
+  /** Won / (qualified leads that reached a decision), as a percentage.
+   *  Disqualified leads are excluded from the denominator. */
   conversionPct: number;
   /** Median days from lead created → contract signed. Null if none yet. */
   medianDaysToClose: number | null;
@@ -107,6 +143,7 @@ export async function getPipelineReport(): Promise<PipelineReport> {
         archivedAt: prospects.archivedAt,
         expectedValueCents: prospects.expectedValueCents,
         monthlyFeeCents: prospects.monthlyFeeCents,
+        disqualifiedReason: prospects.disqualifiedReason,
       })
       .from(prospects)
       .where(eq(prospects.orgId, master.id));
@@ -114,37 +151,87 @@ export async function getPipelineReport(): Promise<PipelineReport> {
 
   const isWon = (s: string) => WON.includes(s as ProspectStatus);
   const isLost = (s: string) => LOST.includes(s as ProspectStatus);
+  const isDisqualified = (s: string) =>
+    DISQUALIFIED.includes(s as ProspectStatus);
 
   const totalLeads = rows.length;
   const activeClients = rows.filter((r) => isWon(r.status)).length;
   const lostCount = rows.filter((r) => isLost(r.status)).length;
+  const disqualifiedCount = rows.filter((r) => isDisqualified(r.status)).length;
+  const qualifiedLeads = totalLeads - disqualifiedCount;
+  const disqualifiedRatePct =
+    totalLeads > 0 ? (disqualifiedCount / totalLeads) * 100 : 0;
   const openCount = rows.filter(
-    (r) => !isWon(r.status) && !isLost(r.status) && !r.archivedAt,
+    (r) =>
+      !isWon(r.status) &&
+      !isLost(r.status) &&
+      !isDisqualified(r.status) &&
+      !r.archivedAt,
   ).length;
 
-  // Conversion: won over everyone who reached a decision (won + lost).
-  // "not_qualified" junk still counts as a lost decision — a real part of
-  // the funnel Bruce wants visibility into.
+  // Conversion: won over qualified leads that reached a decision (won + lost).
+  // Disqualified junk is excluded entirely — it's a marketing lead-quality
+  // problem, not a sales-conversion one, so it never drags this number down.
   const decided = activeClients + lostCount;
   const conversionPct = decided > 0 ? (activeClients / decided) * 100 : 0;
 
-  // Lead-source breakdown with per-source conversion.
-  const bySource = new Map<string, { total: number; won: number }>();
+  // Lead-source breakdown. `total` is raw volume (every lead from the source);
+  // `disqualified` is the junk; conversion is measured on qualified only.
+  const bySource = new Map<
+    string,
+    { total: number; won: number; disqualified: number }
+  >();
   for (const r of rows) {
     const key = r.leadSource?.trim() || "Unknown";
-    const cur = bySource.get(key) ?? { total: 0, won: 0 };
+    const cur = bySource.get(key) ?? { total: 0, won: 0, disqualified: 0 };
     cur.total += 1;
     if (isWon(r.status)) cur.won += 1;
+    if (isDisqualified(r.status)) cur.disqualified += 1;
     bySource.set(key, cur);
   }
   const leadSources: LeadSourceStat[] = Array.from(bySource.entries())
+    .map(([source, v]) => {
+      const qualified = v.total - v.disqualified;
+      return {
+        source,
+        total: v.total,
+        won: v.won,
+        conversionPct: qualified > 0 ? (v.won / qualified) * 100 : 0,
+        disqualified: v.disqualified,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  // Marketing Lead Quality — which channels send junk, and why.
+  const disqualifiedBySource: DisqualifiedSourceStat[] = Array.from(
+    bySource.entries(),
+  )
+    .filter(([, v]) => v.disqualified > 0)
     .map(([source, v]) => ({
       source,
-      total: v.total,
-      won: v.won,
-      conversionPct: v.total > 0 ? (v.won / v.total) * 100 : 0,
+      count: v.disqualified,
+      ratePct: v.total > 0 ? (v.disqualified / v.total) * 100 : 0,
     }))
-    .sort((a, b) => b.total - a.total);
+    .sort((a, b) => b.count - a.count);
+
+  const byReason = new Map<string, number>();
+  for (const r of rows) {
+    if (!isDisqualified(r.status)) continue;
+    const key = r.disqualifiedReason ?? "unspecified";
+    byReason.set(key, (byReason.get(key) ?? 0) + 1);
+  }
+  const disqualifiedByReason: DisqualifiedReasonStat[] = Array.from(
+    byReason.entries(),
+  )
+    .map(([reason, count]) => ({
+      reason,
+      label:
+        reason === "unspecified"
+          ? "No reason given"
+          : disqualificationReasonLabel(reason),
+      count,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   // Funnel — count of active (non-archived) prospects at each open stage,
   // plus won at the end so the "shape" reads left to right.
@@ -204,8 +291,13 @@ export async function getPipelineReport(): Promise<PipelineReport> {
 
   return {
     totalLeads,
+    qualifiedLeads,
     activeClients,
     lostCount,
+    disqualifiedCount,
+    disqualifiedRatePct,
+    disqualifiedBySource,
+    disqualifiedByReason,
     openCount,
     conversionPct,
     medianDaysToClose,

@@ -209,6 +209,20 @@ const updateSchema = z.object({
   nextActionLocation: optionalString,
   ownerUserProfileId: z.string().uuid().nullable().optional(),
   status: statusEnum.optional(),
+  /** Why the lead was disqualified — only meaningful when status is (or is
+   *  being set to) not_qualified. One of DISQUALIFICATION_REASONS values. */
+  disqualifiedReason: z
+    .enum([
+      "spam",
+      "wrong_region",
+      "no_budget",
+      "not_a_fit",
+      "bad_contact",
+      "duplicate",
+      "other",
+    ])
+    .nullable()
+    .optional(),
   notes: z.string().max(40000).nullable().optional(),
   /** Bypass the "company name looks like a person" soft warning. */
   legalNameConfirmed: z.boolean().optional(),
@@ -314,6 +328,23 @@ export async function updateProspect(
         if (data.status === "onboarded") {
           updates.becameClientAt = sql`coalesce(${prospects.becameClientAt}, now())` as unknown as Date;
         }
+        // Disqualification is a marketing lead-quality signal, tracked
+        // separately from sales performance. Entering not_qualified stamps
+        // the reason + a first-touch timestamp; moving to any other stage
+        // means the lead was re-qualified, so clear both.
+        if (data.status === "not_qualified") {
+          updates.disqualifiedAt = sql`coalesce(${prospects.disqualifiedAt}, now())` as unknown as Date;
+          if (data.disqualifiedReason !== undefined) {
+            updates.disqualifiedReason = data.disqualifiedReason;
+          }
+        } else {
+          updates.disqualifiedReason = null;
+          updates.disqualifiedAt = null;
+        }
+      } else if (data.disqualifiedReason !== undefined) {
+        // Editing just the reason on an already-disqualified lead (no stage
+        // change) — persist it without touching status.
+        updates.disqualifiedReason = data.disqualifiedReason;
       }
       if (data.notes !== undefined) updates.notes = data.notes;
       if (data.programType !== undefined)

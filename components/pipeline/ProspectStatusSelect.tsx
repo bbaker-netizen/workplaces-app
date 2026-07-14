@@ -23,8 +23,10 @@ import {
   STAGE_STYLES,
   STAGE_ORDER,
   type ProspectStatus,
+  type DisqualificationReason,
 } from "@/lib/pipeline/stages";
 import { ConfettiBurst } from "@/components/fun/ConfettiBurst";
+import { DisqualifyReasonModal } from "./DisqualifyReasonModal";
 import {
   hidePendingFeedback,
   showPendingFeedback,
@@ -33,10 +35,18 @@ import {
 export function ProspectStatusSelect({
   prospectId,
   current,
+  companyName = "this lead",
+  currentReason = null,
   alreadyConverted = false,
 }: {
   prospectId: string;
   current: ProspectStatus;
+  /** Shown in the disqualify-reason modal so the coach knows which lead
+   *  they're marking. */
+  companyName?: string;
+  /** The lead's existing disqualification reason, pre-selected when the
+   *  reason modal re-opens on an already-disqualified lead. */
+  currentReason?: DisqualificationReason | null;
   /** True once this prospect already has an engagement workspace, so
    *  moving to "Won" doesn't re-offer to start onboarding. */
   alreadyConverted?: boolean;
@@ -46,9 +56,42 @@ export function ProspectStatusSelect({
   const [value, setValue] = useState<ProspectStatus>(current);
   const [converted, setConverted] = useState(alreadyConverted);
   const [showConfetti, setShowConfetti] = useState(false);
+  // When set, the disqualify-reason modal is open for this pending stage move.
+  const [pendingDisqualify, setPendingDisqualify] = useState(false);
   const style = STAGE_STYLES[value] ?? STAGE_STYLES.new_lead;
 
+  /** Commit a plain stage move (used for everything except the onboarding
+   *  and disqualify intercepts). Optionally carries a disqualify reason. */
+  function commitStatus(next: ProspectStatus, reason?: DisqualificationReason) {
+    const wasNotSigned = value !== "contract_signed";
+    setValue(next);
+    showPendingFeedback("Updating stage…");
+    startTransition(async () => {
+      const r = await updateProspect({
+        id: prospectId,
+        status: next,
+        ...(reason ? { disqualifiedReason: reason } : {}),
+      });
+      hidePendingFeedback();
+      if (!r.ok) {
+        setValue(current);
+        return;
+      }
+      if (next === "contract_signed" && wasNotSigned) {
+        setShowConfetti(true);
+      }
+      // Reason drives a report section, so make sure it re-reads.
+      if (next === "not_qualified") router.refresh();
+    });
+  }
+
   function onChange(next: ProspectStatus) {
+    // Disqualifying opens the reason picker first — the reason feeds the
+    // Marketing Lead Quality report, so we don't commit without it.
+    if (next === "not_qualified") {
+      setPendingDisqualify(true);
+      return;
+    }
     // Reaching "Won" (onboarded) on a prospect that isn't an engagement yet
     // offers to start onboarding in one click — creating the client's
     // workspace — but guarded by a confirm so a mis-click never provisions.
@@ -83,21 +126,7 @@ export function ProspectStatusSelect({
       return;
     }
 
-    const wasNotSigned = value !== "contract_signed";
-    setValue(next);
-    showPendingFeedback("Updating stage…");
-    startTransition(async () => {
-      const r = await updateProspect({ id: prospectId, status: next });
-      hidePendingFeedback();
-      if (!r.ok) {
-        // Revert on failure.
-        setValue(current);
-        return;
-      }
-      if (next === "contract_signed" && wasNotSigned) {
-        setShowConfetti(true);
-      }
-    });
+    commitStatus(next);
   }
 
   return (
@@ -139,6 +168,17 @@ export function ProspectStatusSelect({
       </span>
       {showConfetti && (
         <ConfettiBurst onDone={() => setShowConfetti(false)} />
+      )}
+      {pendingDisqualify && (
+        <DisqualifyReasonModal
+          companyName={companyName}
+          initialReason={currentReason}
+          onConfirm={(reason) => {
+            setPendingDisqualify(false);
+            commitStatus("not_qualified", reason);
+          }}
+          onCancel={() => setPendingDisqualify(false)}
+        />
       )}
     </>
   );

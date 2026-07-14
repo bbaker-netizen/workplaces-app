@@ -70,7 +70,15 @@ export default async function ReportsPage({
 
       {/* Headline numbers */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total leads" value={String(r.totalLeads)} />
+        <StatCard
+          label="Total leads"
+          value={String(r.totalLeads)}
+          hint={
+            r.disqualifiedCount > 0
+              ? `${r.qualifiedLeads} qualified · ${r.disqualifiedCount} disqualified`
+              : "All qualified"
+          }
+        />
         <StatCard
           label="Active clients"
           value={String(r.activeClients)}
@@ -79,7 +87,7 @@ export default async function ReportsPage({
         <StatCard
           label="Conversion rate"
           value={`${r.conversionPct.toFixed(0)}%`}
-          hint={`${r.activeClients} won · ${r.lostCount} lost`}
+          hint={`${r.activeClients} won · ${r.lostCount} lost · qualified only`}
           accent
         />
         <StatCard
@@ -103,6 +111,60 @@ export default async function ReportsPage({
         fromDate={isoDay(from)}
         toDate={isoDay(to)}
       />
+
+      {/* Marketing Lead Quality — disqualified leads, kept out of the sales
+          performance numbers and surfaced here as a channel-quality signal. */}
+      <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm">
+        <header className="px-5 py-3 border-b border-tbb-line-soft flex items-baseline justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="font-bold text-tbb-navy">Marketing lead quality</h2>
+            <p className="text-[11px] text-tbb-ink-3 mt-0.5">
+              Leads you marked Not qualified — kept out of your conversion
+              numbers, tracked here so you can see which channels send junk.
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="font-display font-bold text-2xl text-tbb-navy leading-none">
+              {r.disqualifiedRatePct.toFixed(0)}%
+            </p>
+            <p className="text-[11px] text-tbb-ink-3 mt-0.5">
+              {r.disqualifiedCount} of {r.totalLeads} disqualified
+            </p>
+          </div>
+        </header>
+        {r.disqualifiedCount === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-tbb-ink-3 italic">
+            No disqualified leads yet. When you mark a lead Not qualified,
+            it shows up here by channel and reason.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-tbb-line-soft">
+            <div className="px-5 py-4">
+              <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-3">
+                By channel
+              </p>
+              <HBarList
+                rows={r.disqualifiedBySource.map((s) => ({
+                  label: s.source,
+                  value: s.count,
+                  sub: `${s.ratePct.toFixed(0)}% of that channel's leads`,
+                }))}
+              />
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-3">
+                By reason
+              </p>
+              <HBarList
+                rows={r.disqualifiedByReason.map((s) => ({
+                  label: s.label,
+                  value: s.count,
+                }))}
+              />
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Lead source */}

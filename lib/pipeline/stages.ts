@@ -201,6 +201,37 @@ export function prospectPhase(status: ProspectStatus): ProspectPhase {
   }
 }
 
+/**
+ * Disqualification reasons — captured when a lead is marked "Not qualified"
+ * so the Reports → Marketing Lead Quality section can show WHY leads are being
+ * disqualified and from WHICH channels. Disqualified leads are pulled out of
+ * the sales performance stats (conversion, funnel, time-to-close) and tracked
+ * here as a marketing lead-quality signal instead.
+ *
+ * `value` is stored on `prospects.disqualified_reason`; keep values stable
+ * (they're persisted). Labels are display-only and safe to reword.
+ */
+export const DISQUALIFICATION_REASONS = [
+  { value: "spam", label: "Spam / bot" },
+  { value: "wrong_region", label: "Wrong region / out of area" },
+  { value: "no_budget", label: "No budget" },
+  { value: "not_a_fit", label: "Not a fit (wrong type or size)" },
+  { value: "bad_contact", label: "Bad contact info / unreachable" },
+  { value: "duplicate", label: "Duplicate lead" },
+  { value: "other", label: "Other" },
+] as const;
+
+export type DisqualificationReason =
+  (typeof DISQUALIFICATION_REASONS)[number]["value"];
+
+/** Display label for a stored disqualification reason value. */
+export function disqualificationReasonLabel(value: string | null): string {
+  if (!value) return "No reason given";
+  return (
+    DISQUALIFICATION_REASONS.find((r) => r.value === value)?.label ?? value
+  );
+}
+
 /** Common lead-source values for the dropdown. */
 export const LEAD_SOURCES = [
   // Automatic channels — written verbatim by the Make scenarios that

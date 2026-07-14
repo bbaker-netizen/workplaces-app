@@ -2113,6 +2113,16 @@ export const prospects = pgTable(
     /** When the contract was signed — set when status moves to
      *  contract_signed. Drives the "Date signed" sort on the pipeline. */
     contractSignedAt: timestamp("contract_signed_at", { withTimezone: true }),
+    /** Why a lead was marked "Not qualified" — one of
+     *  DISQUALIFICATION_REASONS. Disqualified leads are pulled OUT of the
+     *  sales performance stats and reported separately as a marketing
+     *  lead-quality signal (Reports → Marketing Lead Quality). Set when
+     *  status moves to not_qualified; cleared if the lead is re-qualified. */
+    disqualifiedReason: text("disqualified_reason"),
+    /** When the lead was disqualified (status → not_qualified). Stamped
+     *  first-touch; cleared on re-qualify. Drives the "disqualified this
+     *  period" marketing-quality metrics. */
+    disqualifiedAt: timestamp("disqualified_at", { withTimezone: true }),
     /** Paid-click attribution captured by the website snippet (WPCode) into
      *  90-day cookies on landing and posted with the lead. First-touch: the
      *  first non-empty click id wins and is never overwritten (a later dedupe

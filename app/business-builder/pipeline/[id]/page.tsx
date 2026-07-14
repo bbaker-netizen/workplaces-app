@@ -81,7 +81,9 @@ import { isSmsConfigured } from "@/lib/integrations/twilio";
 import {
   prospectPhase,
   STAGE_STYLES,
+  disqualificationReasonLabel,
   type ProspectStatus,
+  type DisqualificationReason,
 } from "@/lib/pipeline/stages";
 
 // Always render fresh from the database. Without this the prospect page
@@ -233,6 +235,10 @@ export default async function ProspectDetailPage({
             <ProspectStatusSelect
               prospectId={prospect.id}
               current={prospect.status as ProspectStatus}
+              companyName={prospect.companyName}
+              currentReason={
+                prospect.disqualifiedReason as DisqualificationReason | null
+              }
               alreadyConverted={Boolean(prospect.convertedEngagementId)}
             />
           </span>
@@ -245,6 +251,14 @@ export default async function ProspectDetailPage({
             day: "numeric",
           })}
         </p>
+        {prospect.status === "not_qualified" && (
+          <p className="inline-flex items-center gap-1.5 text-xs font-bold text-tbb-ink-2 bg-tbb-cream-100 border border-tbb-line rounded-pill px-2.5 py-1">
+            <span className="uppercase tracking-tbb-caps text-tbb-ink-3">
+              Disqualified:
+            </span>
+            {disqualificationReasonLabel(prospect.disqualifiedReason)}
+          </p>
+        )}
       </header>
 
       {isProspectStale({

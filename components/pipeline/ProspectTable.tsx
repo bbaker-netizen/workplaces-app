@@ -36,6 +36,7 @@ import {
   STAGE_ORDER,
   STAGE_STYLES,
   type ProspectStatus,
+  type DisqualificationReason,
 } from "@/lib/pipeline/stages";
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
@@ -1336,6 +1337,10 @@ function CellByKey({
           <ProspectStatusSelect
             prospectId={prospect.id}
             current={prospect.status as ProspectStatus}
+            companyName={prospect.companyName}
+            currentReason={
+              prospect.disqualifiedReason as DisqualificationReason | null
+            }
             alreadyConverted={Boolean(prospect.convertedEngagementId)}
           />
         </Td>
