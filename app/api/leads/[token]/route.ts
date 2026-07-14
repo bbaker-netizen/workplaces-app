@@ -27,6 +27,7 @@ import {
   channelFromWebhookPayload,
   parseHearAboutAnswer,
 } from "@/lib/pipeline/lead-source";
+import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,6 +102,11 @@ export async function POST(
   ]);
   const phone = pick(body, ["phone", "phone_number", "tel", "mobile"]);
   const message = pick(body, ["message", "notes", "comments", "comment", "body", "inquiry"]);
+  // The lead's own words for the profile Notes: the primary message field
+  // PLUS any other free-text answer the form sent (Facebook custom questions,
+  // extra website-form fields), so nothing a lead types is dropped just
+  // because the platform named the field something we didn't expect.
+  const leadNote = extractLeadNote(body);
   const source =
     pick(body, ["source", "lead_source", "channel", "utm_source", "platform"]) ??
     "Webhook";
@@ -238,7 +244,7 @@ export async function POST(
 
         // Find or create the prospect (dedupe by email).
         const [existingP] = await tx
-          .select({ id: prospects.id })
+          .select({ id: prospects.id, notes: prospects.notes })
           .from(prospects)
           .where(
             and(
@@ -261,6 +267,10 @@ export async function POST(
                 sql`coalesce(${prospects.bookedSessionAt}, ${sessionAt.toISOString()})` as unknown as Date,
               // First-touch click ids (never blank an existing one).
               ...clickIdFirstTouch,
+              // Fold any note this booking carried into the profile Notes,
+              // non-destructively (nothing the lead typed is lost, existing
+              // notes are preserved).
+              notes: mergeLeadNote(existingP.notes, leadNote, "Booking", new Date()),
               nextActionNote: "Send follow-through email 1",
               nextActionDate: new Date(),
               lastContactAt: new Date(),
@@ -288,7 +298,7 @@ export async function POST(
               status: "meeting_scheduled",
               nextActionNote: "Send follow-through email 1",
               nextActionDate: new Date(),
-              notes: message ?? undefined,
+              notes: leadNote ?? undefined,
               lastContactAt: new Date(),
             })
             .returning({ id: prospects.id });
@@ -327,7 +337,7 @@ export async function POST(
 
       // De-dupe by email within the org (ignore archived).
       const [existing] = await tx
-        .select({ id: prospects.id })
+        .select({ id: prospects.id, notes: prospects.notes })
         .from(prospects)
         .where(
           and(
@@ -348,6 +358,10 @@ export async function POST(
             // First-touch: fill any click id we didn't already have, never
             // overwrite one. First click id wins.
             ...clickIdFirstTouch,
+            // Fold this submission's note into the profile Notes,
+            // non-destructively — a returning lead's new words reach the
+            // profile without clobbering earlier notes.
+            notes: mergeLeadNote(existing.notes, leadNote, source, new Date()),
           })
           .where(eq(prospects.id, existing.id));
       } else {
@@ -369,7 +383,7 @@ export async function POST(
             ...clickIdInsert,
             firstSeenAt: new Date(),
             status: "new_lead",
-            notes: message ?? undefined,
+            notes: leadNote ?? undefined,
             lastContactAt: new Date(),
           })
           .returning({ id: prospects.id });
@@ -382,7 +396,7 @@ export async function POST(
         prospectId,
         type: "lead",
         subject: `New lead from ${source}`,
-        body: message ?? null,
+        body: leadNote ?? message ?? null,
       });
 
       return { status: 200 as const, prospectId, deduped: !!existing };

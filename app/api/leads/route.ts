@@ -41,6 +41,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { channelFromWebhookPayload } from "@/lib/pipeline/lead-source";
+import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { newLeadEmail } from "@/lib/email/templates";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -76,6 +77,9 @@ const intakeSchema = z.object({
   // name="honeypot"> to your form to activate it.
   honeypot: z.string().max(300).optional().nullable(),
 });
+// Keep unknown fields on the parsed object so extractLeadNote can sweep any
+// extra free-text answers the form sent (e.g. custom questions) into Notes.
+const intakeSchemaPassthrough = intakeSchema.passthrough();
 
 export async function OPTIONS(): Promise<Response> {
   return new NextResponse(null, {
@@ -116,7 +120,7 @@ export async function POST(req: Request): Promise<Response> {
       { status: 400, headers: corsHeaders },
     );
   }
-  const parsed = intakeSchema.safeParse(raw);
+  const parsed = intakeSchemaPassthrough.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
       {
@@ -143,6 +147,11 @@ export async function POST(req: Request): Promise<Response> {
     data.leadSource && data.leadSource.trim().length > 0
       ? data.leadSource.trim()
       : "Web form";
+
+  // The lead's own words for the profile Notes: the `message` field plus any
+  // other free-text answer the form sent, so nothing a lead types is dropped
+  // just because the platform named the field something we didn't expect.
+  const leadNote = extractLeadNote(data as Record<string, unknown>);
 
   // Canonical channel from the UTM/click-id signals (falls back to `other`
   // when the form gives us nothing to attribute on).
@@ -175,7 +184,7 @@ export async function POST(req: Request): Promise<Response> {
       // endpoint) shouldn't spawn a new pipeline card. Touch the existing
       // prospect, log the activity, and skip the notification email.
       const [existing] = await tx
-        .select({ id: prospects.id })
+        .select({ id: prospects.id, notes: prospects.notes })
         .from(prospects)
         .where(
           and(
@@ -189,14 +198,20 @@ export async function POST(req: Request): Promise<Response> {
       if (existing) {
         await tx
           .update(prospects)
-          .set({ lastContactAt: new Date() })
+          .set({
+            lastContactAt: new Date(),
+            // Fold this submission's note into the profile Notes,
+            // non-destructively — a returning lead's new words reach the
+            // profile without clobbering earlier notes.
+            notes: mergeLeadNote(existing.notes, leadNote, leadSource, new Date()),
+          })
           .where(eq(prospects.id, existing.id));
         await tx.insert(prospectActivities).values({
           prospectId: existing.id,
           orgId: master.id,
           type: "web_lead",
           subject: `Repeat lead from ${leadSource}`,
-          body: data.message ?? null,
+          body: leadNote ?? data.message ?? null,
         });
         return { id: existing.id, recipients: [], deduped: true };
       }
@@ -216,7 +231,7 @@ export async function POST(req: Request): Promise<Response> {
           sourceDetail,
           firstSeenAt: new Date(),
           status: "new_lead",
-          notes: data.message ?? null,
+          notes: leadNote ?? null,
           lastContactAt: new Date(),
         })
         .returning({ id: prospects.id });
@@ -226,7 +241,7 @@ export async function POST(req: Request): Promise<Response> {
         orgId: master.id,
         type: "web_lead",
         subject: `New lead from ${leadSource}`,
-        body: data.message ?? null,
+        body: leadNote ?? data.message ?? null,
       });
 
       // Notify every master_admin + Coach in the master org so the

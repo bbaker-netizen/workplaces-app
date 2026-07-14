@@ -577,6 +577,7 @@ export default async function ProspectDetailPage({
           <CollapsibleSection
             title="Notes"
             storageKey="notes"
+            defaultOpen={Boolean(prospect.notes)}
             icon={<StickyNote className="w-3.5 h-3.5" aria-hidden />}
             badge={prospect.notes ? undefined : "empty"}
           >

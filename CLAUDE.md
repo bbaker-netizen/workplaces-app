@@ -955,6 +955,60 @@ writes the refresh token into `.env.local`), `google-ads-create-conversion-actio
 Booked `…/conversionActions/7683937191`, Signed `…/conversionActions/7683959902`.
 Both validated (HTTP 200, validate-only) on 2026-07-13.
 
+## What was built — lead-note capture into the profile (2026-07-14)
+
+Per Bruce's ask: "if an app lead adds any notes in Facebook ads or any other
+notes coming from the website contact form, I'd like to have these notes in
+their profile." No migration — the `prospects.notes` column already existed;
+this is capture + surfacing logic only.
+
+Two gaps closed:
+1. **Facebook Ads answers were dropped.** Both intake routes only read the note
+   from a fixed pick list (`message`/`notes`/`comments`/…). Facebook Lead Ads
+   name each custom-question field after the question itself (e.g.
+   `what_is_your_biggest_challenge`), so a lead's typed answer arrived under a
+   name we didn't look for and never reached the profile.
+2. **Repeat leads lost their note.** A returning prospect's submission only wrote
+   an activity-log row; the profile Notes field was never touched.
+
+`lib/pipeline/lead-notes.ts` (new, pure, no deps):
+- `extractLeadNote(body)` — reads the primary message field first, then a
+  **catch-all** that folds in ANY other free-text answer the form sent
+  (Facebook custom questions, extra website-form fields), each labelled via
+  `humanizeKey` (`what_is_your_biggest_challenge` → "What is your biggest
+  challenge: …"). Skips `STRUCTURED_KEYS` (fields we map to columns — name,
+  email, phone, company, website, socials, utm/click-ids, calendar/booking
+  keys, honeypot) and `METADATA_KEYS` (Facebook platform junk — form_id,
+  ad_id, campaign_id, created_time, is_organic, …). Objects/arrays (e.g.
+  `click_ids`) are never folded in. 8000-char cap. Means **no Make.com scenario
+  change is needed** — whatever the platform calls the field, the answer lands.
+- `mergeLeadNote(existing, incoming, sourceLabel, at)` — non-destructive merge
+  for repeat submissions: empty existing → incoming; incoming already present →
+  no change (idempotent against a re-fired webhook); otherwise append under a
+  dated `— From <source> · <YYYY-MM-DD> —` header. Hand-typed notes are never
+  clobbered.
+
+Wired into both intake paths:
+- `app/api/leads/[token]/route.ts` (Make.com bridge — website contact form +
+  Meta/Google/etc. ads): `leadNote = extractLeadNote(body)` drives the `notes`
+  column on the website-form insert AND the booking-branch insert; both dedupe
+  branches (website + booking) now `mergeLeadNote` into the existing notes;
+  activity `body` uses `leadNote ?? message`. `message` is still computed the
+  old way for the booking `parseHearAboutAnswer` attribution — unchanged.
+- `app/api/leads/route.ts` (JSON web-form intake): schema switched to
+  `intakeSchema.passthrough()` so unknown answer fields survive for the
+  catch-all; insert + dedupe + activity mirror the token route.
+
+Surfacing: `app/business-builder/pipeline/[id]/page.tsx` Notes `CollapsibleSection`
+now `defaultOpen={Boolean(prospect.notes)}` so an incoming lead note is visible
+on load (per-person localStorage toggle still overrides).
+
+Not retroactive — applies to leads from deploy forward; existing prospects are
+untouched. Verified: `tsc --noEmit` + `next lint` clean; the pure
+extract/merge logic exercised through 9 scenarios (Facebook custom question,
+website message, message+extra-answers, metadata-only, repeat append, re-fired
+webhook, structured-excluded) — all pass.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
