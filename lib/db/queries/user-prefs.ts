@@ -32,6 +32,7 @@ export type PipelineColumnPrefs = {
     // on load. The sentinel ["__archived__"] means the Archived view.
     stage?: string | string[];
     source?: string; // lead-source filter value
+    owner?: string; // owner (Business Builder) filter: a user_profile id, "__unassigned__", or "all"
     sort?: string; // sort key
   };
 };

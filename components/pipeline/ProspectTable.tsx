@@ -208,6 +208,13 @@ export function ProspectTable({
   const [sourceFilter, setSourceFilter] = useState<string>(
     savedFilters?.source ?? "all",
   );
+  // Owner (Business Builder) filter — "all" shows every owner,
+  // "__unassigned__" shows prospects with no owner set, otherwise a specific
+  // owner's user_profile id. Lets a Business Builder see just their own book.
+  const OWNER_UNASSIGNED = "__unassigned__";
+  const [ownerFilter, setOwnerFilter] = useState<string>(
+    savedFilters?.owner ?? "all",
+  );
   const [sortBy, setSortBy] = useState<
     "company" | "updated" | "owner" | "signed"
   >(
@@ -267,6 +274,13 @@ export function ProspectTable({
       if (sourceFilter !== "all" && (p.leadSource ?? "") !== sourceFilter) {
         return false;
       }
+      if (ownerFilter !== "all") {
+        if (ownerFilter === OWNER_UNASSIGNED) {
+          if (p.ownerUserProfileId) return false;
+        } else if (p.ownerUserProfileId !== ownerFilter) {
+          return false;
+        }
+      }
       if (!q) return true;
       return (
         p.companyName.toLowerCase().includes(q) ||
@@ -307,7 +321,7 @@ export function ProspectTable({
       }
       return a.companyName.localeCompare(b.companyName);
     });
-  }, [prospects, query, stages, archived, sourceFilter, sortBy]);
+  }, [prospects, query, stages, archived, sourceFilter, ownerFilter, sortBy]);
 
   // Per-stage counts (active rows only) shown next to each checkbox.
   const stageCounts = useMemo(() => {
@@ -354,6 +368,24 @@ export function ProspectTable({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [prospects]);
 
+  // Owner dropdown options — every Business Builder who owns at least one row
+  // in the data, plus an "Unassigned" bucket when any row has no owner.
+  const ownerOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    let hasUnassigned = false;
+    for (const p of prospects) {
+      if (p.ownerUserProfileId) {
+        byId.set(p.ownerUserProfileId, p.ownerName ?? "(unknown)");
+      } else {
+        hasUnassigned = true;
+      }
+    }
+    const owners = Array.from(byId, ([id, name]) => ({ id, name })).sort(
+      (a, b) => a.name.localeCompare(b.name),
+    );
+    return { owners, hasUnassigned };
+  }, [prospects]);
+
   /* Persist the chosen view (filter + search + sort) across reloads and
      navigations until the coach resets it. Hydrate from localStorage on
      mount (after first paint, to avoid an SSR mismatch), then mirror any
@@ -369,6 +401,7 @@ export function ProspectTable({
           archived?: boolean;
           stageFilter?: string; // legacy single-select value
           sourceFilter?: string;
+          ownerFilter?: string;
           query?: string;
           sortBy?: string;
         };
@@ -387,6 +420,8 @@ export function ProspectTable({
         }
         if (typeof v.sourceFilter === "string")
           setSourceFilter(v.sourceFilter);
+        if (typeof v.ownerFilter === "string")
+          setOwnerFilter(v.ownerFilter);
         if (typeof v.query === "string") setQuery(v.query);
         if (
           v.sortBy === "company" ||
@@ -410,6 +445,7 @@ export function ProspectTable({
           stages: Array.from(stages),
           archived,
           sourceFilter,
+          ownerFilter,
           query,
           sortBy,
         }),
@@ -417,18 +453,20 @@ export function ProspectTable({
     } catch {
       /* ignore */
     }
-  }, [stages, archived, sourceFilter, query, sortBy]);
+  }, [stages, archived, sourceFilter, ownerFilter, query, sortBy]);
 
   const viewIsDefault =
     !archived &&
     sameStages(stages, FUNNEL_STAGES) &&
     sourceFilter === "all" &&
+    ownerFilter === "all" &&
     query === "" &&
     sortBy === "updated";
   function resetView() {
     setStages(new Set(FUNNEL_STAGES));
     setArchived(false);
     setSourceFilter("all");
+    setOwnerFilter("all");
     setQuery("");
     setSortBy("updated");
     try {
@@ -445,12 +483,23 @@ export function ProspectTable({
   const stagePref: string[] = archived
     ? [ARCHIVED_SENTINEL]
     : Array.from(stages);
-  const filterRef = useRef<{ stage: string[]; source: string; sort: string }>({
+  const filterRef = useRef<{
+    stage: string[];
+    source: string;
+    owner: string;
+    sort: string;
+  }>({
     stage: stagePref,
     source: sourceFilter,
+    owner: ownerFilter,
     sort: sortBy,
   });
-  filterRef.current = { stage: stagePref, source: sourceFilter, sort: sortBy };
+  filterRef.current = {
+    stage: stagePref,
+    source: sourceFilter,
+    owner: ownerFilter,
+    sort: sortBy,
+  };
   const viewStateRef = useRef({ visible, widths });
   viewStateRef.current = { visible, widths };
   const persist = useCallback(
@@ -463,6 +512,7 @@ export function ProspectTable({
           filters: {
             stage: filterRef.current.stage,
             source: filterRef.current.source,
+            owner: filterRef.current.owner,
             sort: filterRef.current.sort,
           },
         });
@@ -485,7 +535,7 @@ export function ProspectTable({
       return;
     }
     persist(viewStateRef.current.visible, viewStateRef.current.widths);
-  }, [stages, archived, sourceFilter, sortBy, persist]);
+  }, [stages, archived, sourceFilter, ownerFilter, sortBy, persist]);
 
   function toggleColumn(key: ColumnKey) {
     setVisible((prev) => {
@@ -791,6 +841,24 @@ export function ProspectTable({
               {src}
             </option>
           ))}
+        </select>
+        {/* Owner (Business Builder) filter — slice the pipeline to a single
+            owner's book, or the Unassigned bucket. */}
+        <select
+          value={ownerFilter}
+          onChange={(e) => setOwnerFilter(e.target.value)}
+          className="bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+          aria-label="Filter by owner (Business Builder)"
+        >
+          <option value="all">All owners</option>
+          {ownerOptions.owners.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+          {ownerOptions.hasUnassigned && (
+            <option value={OWNER_UNASSIGNED}>Unassigned</option>
+          )}
         </select>
         <select
           value={sortBy}
