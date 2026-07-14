@@ -33,9 +33,19 @@ export default async function PipelinePage() {
     getCurrentUserPrefs(),
   ]);
 
+  // Scoreboard reflects the ACTIVE pipeline only — archived rows are
+  // excluded, exactly like the list below (which hides archived by default
+  // and skips them in its own per-stage counts). Archiving a prospect only
+  // stamps `archivedAt`; it leaves `status` unchanged, so an archived "new
+  // lead" would otherwise keep inflating the New Lead chip even though it's
+  // gone from the working list. Counting active rows only keeps the chip
+  // and the list in agreement.
+  const activeProspects = prospects.filter((p) => !p.archivedAt);
+  const archivedCount = prospects.length - activeProspects.length;
+
   // Stage counts for the summary chips above the table.
   const counts = new Map<string, number>();
-  for (const p of prospects) {
+  for (const p of activeProspects) {
     counts.set(p.status, (counts.get(p.status) ?? 0) + 1);
   }
 
@@ -48,8 +58,9 @@ export default async function PipelinePage() {
             Prospects &amp; Clients
           </h1>
           <p className="text-sm text-tbb-ink-3">
-            {prospects.length} record{prospects.length === 1 ? "" : "s"} across
-            all stages.
+            {activeProspects.length} active record
+            {activeProspects.length === 1 ? "" : "s"} across all stages
+            {archivedCount > 0 ? ` · ${archivedCount} archived` : ""}.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
