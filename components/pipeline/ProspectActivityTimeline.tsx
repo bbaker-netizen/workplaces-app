@@ -270,18 +270,14 @@ export function ProspectActivityTimeline({
                       </div>
                     </div>
                   ) : (
-                    <>
-                      {a.subject && (
-                        <p className="font-bold text-tbb-navy mt-0.5">
-                          {a.subject}
-                        </p>
-                      )}
-                      {a.body && (
-                        <p className="text-sm text-tbb-ink-2 mt-0.5 whitespace-pre-wrap">
-                          {a.body}
-                        </p>
-                      )}
-                    </>
+                    // Subject line is hidden — the note body is the entry.
+                    // System events (documents, signatures, QuickBooks links,
+                    // stage changes) carry their text in the subject with no
+                    // body, so fall back to the subject for those instead of
+                    // rendering nothing.
+                    <p className="text-sm text-tbb-ink-2 mt-0.5 whitespace-pre-wrap">
+                      {a.body || a.subject}
+                    </p>
                   )}
                 </div>
               </li>
