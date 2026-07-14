@@ -1009,6 +1009,41 @@ extract/merge logic exercised through 9 scenarios (Facebook custom question,
 website message, message+extra-answers, metadata-only, repeat append, re-fired
 webhook, structured-excluded) — all pass.
 
+## What was built — new-lead email alert to the shared inbox (2026-07-14)
+
+Per Bruce's ask: every new lead, as it comes in, emails `info@4workplaces.com`.
+Root cause it addressed: the Make.com bridge route (`/api/leads/[token]`) — which
+carries the website contact form AND the Meta/Google ads — sent **no email at
+all**, so most real inbound leads were arriving silently. Only `/api/leads` (the
+JSON intake) emailed anyone, and only the master_admin/coach profiles.
+
+`lib/pipeline/notify-new-lead.ts` (new): `leadNotifyEmail()` returns
+`process.env.LEADS_NOTIFY_EMAIL` or defaults to `info@4workplaces.com` (works
+with no setup). `notifyNewLead()` sends the existing `newLeadEmail` template to
+that address via `sendEmailQuietly({ bypassWorkingHours: true })` — a fresh lead
+shouldn't wait for business hours, matching the existing coach-alert behaviour.
+Best-effort: a send failure logs and never fails the webhook response.
+
+Wired in:
+- `/api/leads/[token]`: after the tx, `if (result.prospectId && !result.deduped)`
+  fires the alert. Label is "Booking" for the booking branch, else the raw
+  `source`. Fires for BOTH new website-form/ads leads and new bookings; skipped
+  on a repeat submission and on a re-seen booking no-op (`deduped`).
+- `/api/leads`: sends the `info@` alert alongside the existing per-coach emails,
+  gated on `!deduped` (new leads only). Coach alerts unchanged.
+
+`.env.example` documents `LEADS_NOTIFY_EMAIL` (optional; defaults to
+info@4workplaces.com). Note: this deliberately targets `info@`, per Bruce's
+explicit request — distinct from the `bbaker@4workplaces.com` scheduled-report
+address in the root CLAUDE.md.
+
+Depends on the Phase 1.4 Resend env vars (`RESEND_API_KEY` / `RESEND_FROM_EMAIL`)
+being set in Netlify — already required for the existing `/api/leads` coach
+alerts. Verified: `tsc --noEmit` + `next lint` clean (type-narrowing across the
+booking/website/dedupe result branches checks out). True end-to-end confirmation
+("email lands in info@") happens on the first real lead after deploy, or a test
+POST to the live endpoint.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.

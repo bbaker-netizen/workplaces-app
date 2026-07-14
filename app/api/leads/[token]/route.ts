@@ -28,6 +28,7 @@ import {
   parseHearAboutAnswer,
 } from "@/lib/pipeline/lead-source";
 import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
+import { notifyNewLead } from "@/lib/pipeline/notify-new-lead";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -408,6 +409,24 @@ export async function POST(
         { status: 401 },
       );
     }
+
+    // Alert the shared inbox for a genuinely NEW lead (not a repeat submission
+    // touching an existing prospect, and not a re-seen booking no-op). Best-
+    // effort; a send failure won't fail the webhook.
+    if (result.prospectId && !result.deduped) {
+      const leadSourceLabel =
+        "booking" in result && result.booking ? "Booking" : source;
+      await notifyNewLead({
+        prospectId: result.prospectId,
+        companyName: (company ?? name ?? email).slice(0, 200),
+        contactName: name,
+        contactEmail: email,
+        phone,
+        leadSource: leadSourceLabel,
+        message: leadNote,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       prospectId: result.prospectId,

@@ -42,6 +42,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { channelFromWebhookPayload } from "@/lib/pipeline/lead-source";
 import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
+import { notifyNewLead } from "@/lib/pipeline/notify-new-lead";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { newLeadEmail } from "@/lib/email/templates";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -171,6 +172,7 @@ export async function POST(req: Request): Promise<Response> {
   let prospectId: string;
   let recipientEmails: string[] = [];
   let recipientIds: string[] = [];
+  let deduped = false;
   try {
     const result = await withSystemContext(async (tx) => {
       const [master] = await tx
@@ -275,6 +277,7 @@ export async function POST(req: Request): Promise<Response> {
     prospectId = result.id;
     recipientEmails = result.recipients.map((r) => r.email);
     recipientIds = result.recipients.map((r) => r.id);
+    deduped = result.deduped;
   } catch (e) {
     console.error("[/api/leads] insert failed:", e);
     return NextResponse.json(
@@ -318,6 +321,20 @@ export async function POST(req: Request): Promise<Response> {
       }),
     ),
   );
+
+  // Shared-inbox alert (info@) — one email per genuinely new lead, alongside
+  // the per-coach alerts above. Skipped on a repeat submission.
+  if (!deduped) {
+    await notifyNewLead({
+      prospectId,
+      companyName: data.companyName,
+      contactName: data.contactName ?? null,
+      contactEmail: data.contactEmail,
+      phone: data.phone ?? null,
+      leadSource,
+      message: leadNote,
+    });
+  }
 
   return NextResponse.json(
     { ok: true, prospectId },
