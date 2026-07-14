@@ -70,7 +70,6 @@ export function ProspectActivityTimeline({
   // manual entry is stored as a plain "note".
   const [type] =
     useState<(typeof ACTIVITY_TYPES)[number]["value"]>("note");
-  const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -89,8 +88,8 @@ export function ProspectActivityTimeline({
     setEditError(null);
   }
   function saveEdit() {
-    if (!editSubject.trim() && !editBody.trim()) {
-      setEditError("Add a subject or body.");
+    if (!editBody.trim()) {
+      setEditError("Write a note.");
       return;
     }
     setEditError(null);
@@ -112,8 +111,8 @@ export function ProspectActivityTimeline({
   }
 
   function submit() {
-    if (!subject.trim() && !body.trim()) {
-      setError("Add a subject or body before logging.");
+    if (!body.trim()) {
+      setError("Write a note before logging.");
       return;
     }
     setError(null);
@@ -121,12 +120,10 @@ export function ProspectActivityTimeline({
       const r = await logProspectActivity({
         prospectId,
         type,
-        subject: subject.trim() || undefined,
         body: body.trim() || undefined,
       });
       if (!r.ok) setError(r.error);
       else {
-        setSubject("");
         setBody("");
       }
     });
@@ -158,21 +155,13 @@ export function ProspectActivityTimeline({
         }}
         className="px-5 py-4 border-b border-tbb-line-soft space-y-2"
       >
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          disabled={isPending}
-          spellCheck
-          placeholder="Subject (e.g., call, site visit, quick note)"
-          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-        />
         <textarea
           rows={3}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           disabled={isPending}
           spellCheck
-          placeholder="What was said, decided, or learned…"
+          placeholder="Log a call, site visit, or quick note — what was said, decided, or learned…"
           className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
         />
         <p className="text-[11px] text-tbb-ink-3">
@@ -244,14 +233,6 @@ export function ProspectActivityTimeline({
 
                   {editingId === a.id ? (
                     <div className="mt-1.5 space-y-2">
-                      <input
-                        value={editSubject}
-                        onChange={(e) => setEditSubject(e.target.value)}
-                        disabled={isEditPending}
-                        spellCheck
-                        placeholder="Subject"
-                        className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
-                      />
                       <textarea
                         rows={3}
                         value={editBody}
