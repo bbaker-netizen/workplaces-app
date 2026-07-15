@@ -8,9 +8,13 @@
  * teammates, who get an email + an in-app notification. Distinct from
  * the Activity log (a factual touchpoint record) — this is where Bruce,
  * Jen, and the team actually talk about a lead.
+ *
+ * The composer supports emoji, inserted as unicode at the caret via the
+ * shared EmojiPickerButton. Emoji need no server config and render as
+ * plain text, so nothing downstream changes.
  */
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MessageCircle, Send, Trash2, Users } from "lucide-react";
 import {
@@ -18,6 +22,7 @@ import {
   deleteProspectComment,
 } from "@/lib/actions/prospect-comments";
 import type { ProspectCommentWithAuthor } from "@/lib/db/queries/prospect-comments";
+import { EmojiPickerButton } from "@/components/communication/EmojiPickerButton";
 
 export type Teammate = { id: string; fullName: string };
 
@@ -44,6 +49,7 @@ export function ProspectComments({
   const [notify, setNotify] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function toggleNotify(id: string) {
     setNotify((prev) => {
@@ -51,6 +57,25 @@ export function ProspectComments({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+  }
+
+  /** Insert a glyph at the caret, keeping the cursor after it. */
+  function insertAtCursor(glyph: string) {
+    const el = textareaRef.current;
+    if (!el) {
+      setBody((b) => b + glyph);
+      return;
+    }
+    const start = el.selectionStart ?? body.length;
+    const end = el.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + glyph + body.slice(end);
+    setBody(next);
+    // Restore focus + caret after React re-renders.
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + glyph.length;
+      el.setSelectionRange(pos, pos);
     });
   }
 
@@ -147,15 +172,26 @@ export function ProspectComments({
 
       {/* Composer */}
       <div className="px-5 py-4 border-t border-tbb-line-soft space-y-2">
-        <textarea
-          rows={3}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          disabled={isPending}
-          spellCheck
-          placeholder="Add a comment for the team…"
-          className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
-        />
+        <div className="border border-tbb-line rounded-md focus-within:ring-2 focus-within:ring-tbb-blue bg-white">
+          <textarea
+            ref={textareaRef}
+            rows={3}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            disabled={isPending}
+            spellCheck
+            placeholder="Add a comment for the team…"
+            className="w-full bg-transparent px-3 py-2 text-sm focus:outline-none resize-y rounded-t-md"
+          />
+          {/* Toolbar */}
+          <div className="flex items-center gap-1 px-2 py-1 border-t border-tbb-line-soft">
+            <EmojiPickerButton
+              onSelect={insertAtCursor}
+              anchor="top"
+              align="left"
+            />
+          </div>
+        </div>
 
         {teammates.length > 0 && (
           <div className="space-y-1.5">
