@@ -300,10 +300,16 @@ export default async function CalendarPage({
     ...externalEvents,
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // Bucket events by day.
+  // Bucket events by their Mountain-Time calendar day. The server clock is
+  // UTC, so bucketing on the raw ISO date pushed evening MT sessions onto
+  // the next day — and the displayed times read in UTC (e.g. a 5pm MT
+  // session showing as 11pm). en-CA gives a YYYY-MM-DD that lines up with
+  // the grid's cell keys. (Same fix already applied on /portal/calendar.)
+  const mtDayKey = (d: Date) =>
+    d.toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
   const byDay = new Map<string, CalendarEvent[]>();
   for (const e of events) {
-    const key = e.date.toISOString().slice(0, 10);
+    const key = mtDayKey(e.date);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key)!.push(e);
   }
@@ -596,6 +602,7 @@ export default async function CalendarPage({
                         day: "numeric",
                         hour: "numeric",
                         minute: "2-digit",
+                        timeZone: "America/Edmonton",
                       })}
                     </span>
                     <TypePill type={e.type} />
@@ -661,6 +668,7 @@ function EventChip({ event }: { event: CalendarEvent }) {
           ? event.date.toLocaleTimeString("en-CA", {
               hour: "numeric",
               minute: "2-digit",
+              timeZone: "America/Edmonton",
             })
           : isAction
             ? "Due"

@@ -294,25 +294,44 @@ export async function sendGmailMessage(
 /* --------------------------- list + get --------------------------- */
 
 /**
- * List message ids newer than the given epoch ms. Uses Gmail's search
- * `after:` operator so we don't have to walk the full mailbox.
+ * List ALL message ids newer than the given epoch ms, paginating through
+ * every page. Uses Gmail's `after:` search operator so we only ever look at
+ * new mail, never the full mailbox.
+ *
+ * Why pagination matters: the caller advances a watermark to the newest
+ * message it processes. A single 100-id page returns only the NEWEST 100
+ * messages since the watermark — so on any interval with more than 100 new
+ * messages, the older ones would never be fetched, yet the watermark would
+ * still jump to the newest, skipping them permanently. Paging through every
+ * result closes that gap. `max` is a pure runaway guard; reaching it is
+ * logged rather than silently truncated.
  */
 export async function listMessagesSince(
   accessToken: string,
   sinceEpochMs: number,
-  pageSize = 100,
+  max = 1000,
 ): Promise<string[]> {
   const sinceSeconds = Math.floor(sinceEpochMs / 1000);
   const q = `after:${sinceSeconds}`;
-  const params = new URLSearchParams({
-    q,
-    maxResults: String(pageSize),
-  });
-  const data = await gmail<{
-    messages?: { id: string }[];
-    nextPageToken?: string;
-  }>(accessToken, `/users/me/messages?${params.toString()}`);
-  return (data.messages ?? []).map((m) => m.id);
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  while (ids.length < max) {
+    const params = new URLSearchParams({ q, maxResults: "100" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await gmail<{
+      messages?: { id: string }[];
+      nextPageToken?: string;
+    }>(accessToken, `/users/me/messages?${params.toString()}`);
+    for (const m of data.messages ?? []) ids.push(m.id);
+    if (!data.nextPageToken) return ids;
+    pageToken = data.nextPageToken;
+  }
+  console.warn(
+    `[gmail-sync] listMessagesSince hit the ${max}-id cap — there was more ` +
+      `new mail in one interval than a single run expects. The watermark ` +
+      `will still advance; investigate if this recurs.`,
+  );
+  return ids.slice(0, max);
 }
 
 export async function getMessage(
@@ -488,7 +507,7 @@ export async function syncUserGmail(args: {
   const ids = await listMessagesSince(
     token.token,
     args.since.getTime(),
-    args.maxMessages ?? 100,
+    args.maxMessages,
   );
 
   if (ids.length === 0) {
