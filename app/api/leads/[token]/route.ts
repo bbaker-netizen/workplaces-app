@@ -29,6 +29,7 @@ import {
 } from "@/lib/pipeline/lead-source";
 import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
 import { notifyNewLead } from "@/lib/pipeline/notify-new-lead";
+import { parseWebhookBody } from "@/lib/pipeline/parse-webhook-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,27 +50,6 @@ function pick(
   return null;
 }
 
-async function parseBody(req: Request): Promise<Record<string, unknown>> {
-  const ct = req.headers.get("content-type") ?? "";
-  try {
-    if (ct.includes("application/json")) {
-      return (await req.json()) as Record<string, unknown>;
-    }
-    if (
-      ct.includes("application/x-www-form-urlencoded") ||
-      ct.includes("multipart/form-data")
-    ) {
-      const form = await req.formData();
-      return Object.fromEntries(form.entries());
-    }
-    // Best-effort: try JSON anyway.
-    const text = await req.text();
-    return text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
 export async function POST(
   req: Request,
   { params }: { params: { token: string } },
@@ -79,7 +59,31 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Invalid token." }, { status: 401 });
   }
 
-  const body = await parseBody(req);
+  const parsed = await parseWebhookBody(req);
+  if (!parsed.ok) {
+    // A body we genuinely can't read is NOT the same as "no email". Say so and
+    // log it, so a sender emitting malformed JSON is diagnosable instead of
+    // silently swallowed and mislabelled as a missing email.
+    if (parsed.reason === "unparseable") {
+      console.error(
+        "[api/leads] unreadable request body (not valid JSON even after repair):",
+        parsed.raw.slice(0, 500),
+      );
+    }
+    return NextResponse.json(
+      { ok: false, error: "Could not read the request body." },
+      { status: 400 },
+    );
+  }
+  if (parsed.repaired) {
+    // The body only parsed after repair — the sender (e.g. a Make.com raw-JSON
+    // template) is transmitting unescaped free-text. We recovered the lead;
+    // flag it so the source can be tightened too.
+    console.warn(
+      "[api/leads] request body required JSON repair before parsing (unescaped free-text from sender).",
+    );
+  }
+  const body = parsed.body;
   const email = pick(body, ["email", "contact_email", "e-mail", "emailaddress"]);
   if (!email) {
     return NextResponse.json(
