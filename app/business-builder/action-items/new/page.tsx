@@ -6,14 +6,21 @@ import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
 import { BusinessBuilderNewActionItemForm } from "@/components/action-items/BusinessBuilderNewActionItemForm";
 import { STATUSES_VISIBLE_TO_COACH } from "@/components/action-items/utils";
 
-export default async function NewCoachActionItemPage() {
+export default async function NewCoachActionItemPage({
+  searchParams,
+}: {
+  searchParams?: { engagement?: string };
+}) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     redirect("/portal");
   }
 
-  const engagements = await listCoachEngagements();
+  // includeInternal: tasking a teammate is a first-class use of this
+  // form. Without it the internal workspace is invisible here and the
+  // only way to task Jen would be from inside a meeting agenda.
+  const engagements = await listCoachEngagements({ includeInternal: true });
   if (engagements.length === 0) {
     return (
       <main className="max-w-3xl mx-auto px-6 py-16">
@@ -33,6 +40,15 @@ export default async function NewCoachActionItemPage() {
       </main>
     );
   }
+
+  // Deep-link support: /business-builder/action-items/new?engagement=<id>
+  // lets the Team page hand you a form already pointed at the internal
+  // workspace. Ignored unless the id is one this Business Builder can
+  // actually reach, so the param can't widen access.
+  const requested = searchParams?.engagement;
+  const preselectedId = engagements.some((e) => e.id === requested)
+    ? requested
+    : null;
 
   // Pre-fetch members + projects for each engagement so the form's
   // engagement picker can switch context without an extra round-trip.
@@ -68,7 +84,7 @@ export default async function NewCoachActionItemPage() {
 
       <BusinessBuilderNewActionItemForm
         engagements={engagementsWithMembers}
-        initialEngagementId={engagementsWithMembers[0].id}
+        initialEngagementId={preselectedId ?? engagementsWithMembers[0].id}
         currentUserProfileId={profile.userProfileId}
         statusOptions={STATUSES_VISIBLE_TO_COACH}
       />

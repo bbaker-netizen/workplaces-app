@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { MapPin, Users, Video } from "lucide-react";
+import { MapPin, Plus, Users, Video } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   ensureInternalEngagementId,
@@ -161,9 +161,21 @@ export default async function TeamPage() {
 
       {/* Commitments -------------------------------------------------- */}
       <section className="space-y-3">
-        <h2 className="font-bold text-tbb-navy text-lg tracking-tight">
-          Who owes what
-        </h2>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <h2 className="font-bold text-tbb-navy text-lg tracking-tight">
+            Who owes what
+          </h2>
+          {/* Tasking a teammate shouldn't require a meeting to hang it
+              off — the agenda route covers "this came out of a
+              discussion", this covers everything else. */}
+          <Link
+            href={`/business-builder/action-items/new?engagement=${engagementId}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-tbb-line bg-white px-3.5 py-2 font-mono text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden />
+            Task a teammate
+          </Link>
+        </div>
         {owners.length === 0 ? (
           <p className="rounded-xl border border-dashed border-tbb-line bg-white p-6 text-center font-sans text-sm text-muted-foreground">
             No open commitments between the team right now.

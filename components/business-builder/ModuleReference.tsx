@@ -49,6 +49,15 @@ export function ModuleReference() {
         linkLabel="Open sessions (pick an engagement)"
       />
       <ModuleCard
+        icon={<Users />}
+        name="Team touch-bases"
+        what="Your own internal workspace — the recurring touch-bases you run with the rest of the practice, the agenda for each one, and the commitments you and your fellow Business Builders make to each other. Clients never see any of it. Set a cadence once and the meetings generate forward; add talking points to any meeting; hit Task it on a point to turn it into an assigned action item with a due date."
+        when="Set up your recurring touch-base once. Add talking points as they come up during the week rather than scrambling before the meeting. During the meeting, mark points Discussed and task the follow-ups. Carry anything unfinished to the next one."
+        replaces={`Your internal Monday board plus the running list of "things to raise with Jen" living in a notes app. Commitments here are real action items — same reminders and My Work as client work.`}
+        link="/business-builder/team"
+        linkLabel="Open team touch-bases"
+      />
+      <ModuleCard
         icon={<CheckSquare />}
         name="Action items"
         what="The commitments coming out of every session — and the ones you create manually between sessions. Each item has a title, description, assignee, due date, status, and revenue/margin impact flags."
