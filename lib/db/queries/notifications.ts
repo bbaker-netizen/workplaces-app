@@ -32,6 +32,19 @@ export async function getUnreadNotificationCount(): Promise<number> {
         and(
           eq(notifications.userProfileId, profile.userProfileId),
           isNull(notifications.readAt),
+          // Exclude notifications whose prospect has since been deleted.
+          // The feed hides these (see listBusinessBuilderNotifications);
+          // without the same rule here the bell badge would claim unread
+          // items that aren't in the list, which reads as a broken badge.
+          sql`(
+            ${notifications.parentEntityType} NOT IN (
+              'prospect_comment','prospect_stale','prospect_new_lead',
+              'prospect_assigned','prospect_followup_due'
+            )
+            OR EXISTS (
+              SELECT 1 FROM prospects p WHERE p.id = ${notifications.parentEntityId}
+            )
+          )`,
         ),
       );
     return rows[0]?.count ?? 0;
@@ -127,7 +140,23 @@ export async function listBusinessBuilderNotifications(): Promise<
     for (const e of eRows) engNameById.set(e.id, e.name ?? "your client");
   }
 
-  return rows.map((n) => {
+  // `notifications.parent_entity_id` carries no foreign key, so deleting
+  // a prospect leaves its notifications behind. They used to render as
+  // "Follow-up due: a lead" pointing at a dead link. Drop them instead —
+  // a notification about a record that no longer exists is noise the
+  // reader can't act on.
+  const PROSPECT_SCOPED = new Set([
+    "prospect_comment",
+    "prospect_stale",
+    "prospect_new_lead",
+    "prospect_assigned",
+    "prospect_followup_due",
+  ]);
+  const live = rows.filter(
+    (n) => !PROSPECT_SCOPED.has(n.parentEntityType) || nameById.has(n.parentEntityId),
+  );
+
+  return live.map((n) => {
     if (n.parentEntityType === "prospect_comment") {
       const name = nameById.get(n.parentEntityId) ?? "a lead";
       return {

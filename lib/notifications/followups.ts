@@ -9,7 +9,7 @@
  * Idempotent within ~20h per (prospect, user) so repeat runs don't spam.
  */
 
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { notifications, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -44,6 +44,7 @@ export async function scanFollowupsDue(): Promise<{
         orgId: prospects.orgId,
         ownerUserProfileId: prospects.ownerUserProfileId,
         companyName: prospects.companyName,
+        nextActionDate: prospects.nextActionDate,
       })
       .from(prospects)
       .where(
@@ -60,22 +61,41 @@ export async function scanFollowupsDue(): Promise<{
       return { scanned: 0, created: 0, pushTargets: [] };
     }
 
-    // Don't re-nudge the same (prospect, user) within ~20h.
-    const recent = await tx
+    // Nudge ONCE per follow-up, not once per day.
+    //
+    // This used to suppress only within a 20-hour window, which meant an
+    // overdue lead nobody had actioned produced a brand-new notification
+    // every single weekday, forever — one lead left overdue for a
+    // fortnight generated ten identical rows. That trains you to ignore
+    // the bell, which is the opposite of the point.
+    //
+    // A follow-up's identity is (prospect, next_action_date). If a
+    // notification for this pair already exists that was created at or
+    // after the CURRENT due date, this follow-up has been announced and
+    // we stay quiet. Reschedule the lead and next_action_date moves past
+    // that notification, so the new follow-up nudges once when it comes
+    // due. No new column needed — the timestamps already encode it.
+    const prospectIds = candidates.map((c) => c.id);
+    const priorRows = await tx
       .select({
         prospectId: notifications.parentEntityId,
         userProfileId: notifications.userProfileId,
+        createdAt: notifications.createdAt,
       })
       .from(notifications)
       .where(
         and(
           eq(notifications.parentEntityType, "prospect_followup_due"),
-          sql`${notifications.createdAt} > now() - interval '20 hours'`,
+          inArray(notifications.parentEntityId, prospectIds),
         ),
       );
-    const alreadyNotified = new Set(
-      recent.map((r) => `${r.prospectId}:${r.userProfileId}`),
-    );
+    // Latest announcement per (prospect, user).
+    const lastNotifiedAt = new Map<string, Date>();
+    for (const r of priorRows) {
+      const key = `${r.prospectId}:${r.userProfileId}`;
+      const prev = lastNotifiedAt.get(key);
+      if (!prev || r.createdAt > prev) lastNotifiedAt.set(key, r.createdAt);
+    }
 
     const toInsert: (typeof notifications.$inferInsert)[] = [];
     const pushTargets: { uid: string; prospectId: string; name: string }[] = [];
@@ -85,7 +105,10 @@ export async function scanFollowupsDue(): Promise<{
         internal,
       );
       for (const uid of recipients) {
-        if (alreadyNotified.has(`${c.id}:${uid}`)) continue;
+        const last = lastNotifiedAt.get(`${c.id}:${uid}`);
+        // Already announced for this due date — stay quiet until the
+        // follow-up is actually rescheduled.
+        if (last && c.nextActionDate && last >= c.nextActionDate) continue;
         toInsert.push({
           orgId: c.orgId,
           userProfileId: uid,

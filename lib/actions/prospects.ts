@@ -404,6 +404,29 @@ export async function updateProspect(
         );
       }
 
+      // Acting on a lead resolves its outstanding nudges. Rescheduling
+      // the follow-up, logging contact, or closing the lead all mean the
+      // old "follow-up due" / "gone quiet" rows have served their purpose
+      // — leaving them unread is how a notification feed becomes a
+      // graveyard you stop reading.
+      const resolves: string[] = [];
+      if (data.nextActionDate !== undefined) resolves.push("prospect_followup_due");
+      if (data.status !== undefined) {
+        resolves.push("prospect_followup_due", "prospect_stale");
+      }
+      if (resolves.length > 0) {
+        await tx
+          .update(notifications)
+          .set({ readAt: sql`now()` })
+          .where(
+            and(
+              eq(notifications.parentEntityId, data.id),
+              inArray(notifications.parentEntityType, Array.from(new Set(resolves))),
+              isNull(notifications.readAt),
+            ),
+          );
+      }
+
       if (newOwnerToNotify) {
         await tx.insert(notifications).values({
           orgId: newOwnerToNotify.orgId,
