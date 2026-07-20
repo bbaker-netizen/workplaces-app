@@ -6,8 +6,10 @@
  * notification so a Business Builder acts on them — follow up, or move
  * the lead to Lost so it doesn't rot in the pipeline.
  *
- * Recipient: the prospect's owner if one is set, otherwise every
- * Business Builder (so an unowned stale lead doesn't fall through).
+ * Recipient: the prospect's owner if one is set, otherwise the
+ * master-admin triage inbox — so an unowned stale lead doesn't fall
+ * through, without filling every Business Builder's bell with work that
+ * isn't theirs. Shared rule in lib/notifications/prospect-recipients.ts.
  *
  * Auth: Bearer `CRON_SECRET`. Callers:
  *   - the Netlify Scheduled Function (`netlify/functions/stale-leads.mts`)
@@ -18,12 +20,16 @@
  * lead nudges roughly every ~10 days rather than daily.
  */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { notifications, orgs, prospects, userProfiles } from "@/lib/db/schema";
+import { notifications, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { STALE_DAYS, STALE_RENOTIFY_DAYS } from "@/lib/pipeline/staleness";
 import { sendPushToUser } from "@/lib/push/web-push";
+import {
+  loadInternalUsers,
+  recipientIdsForProspect,
+} from "@/lib/notifications/prospect-recipients";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,18 +55,8 @@ export async function GET(req: Request) {
       .limit(1);
     if (!master) return { scanned: 0, created: 0 };
 
-    // Every internal user — the fallback recipients for unowned leads.
-    const bbs = await tx
-      .select({ id: userProfiles.id })
-      .from(userProfiles)
-      .where(
-        and(
-          eq(userProfiles.orgId, master.id),
-          inArray(userProfiles.role, ["master_admin", "coach"]),
-        ),
-      );
-    const bbIds = bbs.map((b) => b.id);
-    if (bbIds.length === 0) return { scanned: 0, created: 0 };
+    const internal = await loadInternalUsers(tx, master.id);
+    if (internal.all.length === 0) return { scanned: 0, created: 0 };
 
     // Candidate stale prospects.
     const staleCutoff = sql`now() - ${`${STALE_DAYS} days`}::interval`;
@@ -103,9 +99,10 @@ export async function GET(req: Request) {
     const toInsert: (typeof notifications.$inferInsert)[] = [];
     const pushTargets: { uid: string; prospectId: string; name: string }[] = [];
     for (const c of candidates) {
-      const recipients = c.ownerUserProfileId
-        ? [c.ownerUserProfileId]
-        : bbIds;
+      const recipients = recipientIdsForProspect(
+        c.ownerUserProfileId,
+        internal,
+      );
       for (const uid of recipients) {
         if (alreadyNotified.has(`${c.id}:${uid}`)) continue;
         toInsert.push({

@@ -49,7 +49,7 @@ function getDb(): ReturnType<typeof drizzle> {
 // Extract the transaction-callback's tx parameter type from Drizzle's
 // signature. The tx itself isn't generic over the callback return type,
 // so this resolves to a concrete Drizzle PgTransaction.
-type Tx = Parameters<
+export type Tx = Parameters<
   Parameters<ReturnType<typeof drizzle>["transaction"]>[0]
 >[0];
 

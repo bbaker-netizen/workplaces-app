@@ -4,14 +4,19 @@
  *
  * Finds OPEN prospects whose scheduled follow-up date has arrived (due today
  * in Mountain Time, or overdue) and drops an in-app notification on the owner
- * (or every Business Builder if unowned), then best-effort desktop push.
+ * (or the master-admin triage inbox if unowned — shared rule in
+ * lib/notifications/prospect-recipients.ts), then best-effort desktop push.
  * Idempotent within ~20h per (prospect, user) so repeat runs don't spam.
  */
 
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { notifications, orgs, prospects, userProfiles } from "@/lib/db/schema";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { notifications, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { sendPushToUser } from "@/lib/push/web-push";
+import {
+  loadInternalUsers,
+  recipientIdsForProspect,
+} from "@/lib/notifications/prospect-recipients";
 
 export async function scanFollowupsDue(): Promise<{
   scanned: number;
@@ -25,17 +30,10 @@ export async function scanFollowupsDue(): Promise<{
       .limit(1);
     if (!master) return { scanned: 0, created: 0, pushTargets: [] };
 
-    const bbs = await tx
-      .select({ id: userProfiles.id })
-      .from(userProfiles)
-      .where(
-        and(
-          eq(userProfiles.orgId, master.id),
-          inArray(userProfiles.role, ["master_admin", "coach"]),
-        ),
-      );
-    const bbIds = bbs.map((b) => b.id);
-    if (bbIds.length === 0) return { scanned: 0, created: 0, pushTargets: [] };
+    const internal = await loadInternalUsers(tx, master.id);
+    if (internal.all.length === 0) {
+      return { scanned: 0, created: 0, pushTargets: [] };
+    }
 
     // "Due" = the follow-up moment is before the start of TOMORROW in
     // Mountain Time — i.e. due today or overdue.
@@ -82,7 +80,10 @@ export async function scanFollowupsDue(): Promise<{
     const toInsert: (typeof notifications.$inferInsert)[] = [];
     const pushTargets: { uid: string; prospectId: string; name: string }[] = [];
     for (const c of candidates) {
-      const recipients = c.ownerUserProfileId ? [c.ownerUserProfileId] : bbIds;
+      const recipients = recipientIdsForProspect(
+        c.ownerUserProfileId,
+        internal,
+      );
       for (const uid of recipients) {
         if (alreadyNotified.has(`${c.id}:${uid}`)) continue;
         toInsert.push({

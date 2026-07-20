@@ -91,6 +91,7 @@ export async function listBusinessBuilderNotifications(): Promise<
             r.parentEntityType === "prospect_comment" ||
             r.parentEntityType === "prospect_stale" ||
             r.parentEntityType === "prospect_new_lead" ||
+            r.parentEntityType === "prospect_assigned" ||
             r.parentEntityType === "prospect_followup_due",
         )
         .map((r) => r.parentEntityId),
@@ -148,6 +149,14 @@ export async function listBusinessBuilderNotifications(): Promise<
       return {
         ...n,
         contextLabel: `New lead: ${name} — strike while warm`,
+        href: `/business-builder/pipeline/${n.parentEntityId}`,
+      };
+    }
+    if (n.parentEntityType === "prospect_assigned") {
+      const name = nameById.get(n.parentEntityId) ?? "A lead";
+      return {
+        ...n,
+        contextLabel: `${name} was assigned to you`,
         href: `/business-builder/pipeline/${n.parentEntityId}`,
       };
     }
