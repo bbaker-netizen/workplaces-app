@@ -18,6 +18,14 @@ import {
   recipientIdsForProspect,
 } from "@/lib/notifications/prospect-recipients";
 
+/**
+ * How long an already-announced follow-up stays quiet before nudging
+ * again, while it remains overdue. Per Bruce: weekly. Long enough that
+ * the bell stays worth reading, short enough that a lead can't rot
+ * unnoticed between its due date and the 14-day gone-quiet sweep.
+ */
+export const FOLLOWUP_RENUDGE_DAYS = 7;
+
 export async function scanFollowupsDue(): Promise<{
   scanned: number;
   created: number;
@@ -61,7 +69,7 @@ export async function scanFollowupsDue(): Promise<{
       return { scanned: 0, created: 0, pushTargets: [] };
     }
 
-    // Nudge ONCE per follow-up, not once per day.
+    // Nudge once per follow-up, then weekly while it stays overdue.
     //
     // This used to suppress only within a 20-hour window, which meant an
     // overdue lead nobody had actioned produced a brand-new notification
@@ -70,11 +78,16 @@ export async function scanFollowupsDue(): Promise<{
     // the bell, which is the opposite of the point.
     //
     // A follow-up's identity is (prospect, next_action_date). If a
-    // notification for this pair already exists that was created at or
-    // after the CURRENT due date, this follow-up has been announced and
-    // we stay quiet. Reschedule the lead and next_action_date moves past
-    // that notification, so the new follow-up nudges once when it comes
+    // notification for this pair already exists created at or after the
+    // CURRENT due date, this follow-up has been announced — it then goes
+    // quiet for FOLLOWUP_RENUDGE_DAYS before nudging again, so a lead
+    // left overdue resurfaces weekly rather than every weekday.
+    // Reschedule the lead and next_action_date moves past that
+    // notification, so the new follow-up nudges promptly when it comes
     // due. No new column needed — the timestamps already encode it.
+    const renudgeCutoff = new Date(
+      Date.now() - FOLLOWUP_RENUDGE_DAYS * 24 * 60 * 60 * 1000,
+    );
     const prospectIds = candidates.map((c) => c.id);
     const priorRows = await tx
       .select({
@@ -106,9 +119,16 @@ export async function scanFollowupsDue(): Promise<{
       );
       for (const uid of recipients) {
         const last = lastNotifiedAt.get(`${c.id}:${uid}`);
-        // Already announced for this due date — stay quiet until the
-        // follow-up is actually rescheduled.
-        if (last && c.nextActionDate && last >= c.nextActionDate) continue;
+        // Has this particular follow-up — prospect plus its CURRENT due
+        // date — already been announced?
+        const announced = Boolean(
+          last && c.nextActionDate && last >= c.nextActionDate,
+        );
+        // Announced already: stay quiet for a week, then nudge again so
+        // an overdue lead can't slip away silently. Not yet announced
+        // (brand new, or rescheduled to a date that has now arrived):
+        // nudge immediately rather than waiting out the weekly cadence.
+        if (announced && last && last >= renudgeCutoff) continue;
         toInsert.push({
           orgId: c.orgId,
           userProfileId: uid,
