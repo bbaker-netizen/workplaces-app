@@ -182,9 +182,31 @@ export const firefliesSync = inngest.createFunction(
   },
 );
 
+/* --------------------- Session series horizon --------------------- */
+
+export const sessionSeriesTopUp = inngest.createFunction(
+  { id: "session-series-top-up" },
+  // Nightly at 08:00 UTC (01:00/02:00 MT — outside Bruce's working
+  // window, so a long sweep never competes with real traffic). Keeps
+  // every active recurring meeting materialized ~90 days out, so a
+  // touch-base defined once keeps producing instances indefinitely.
+  //
+  // Idempotent: instance creation is guarded by a UNIQUE index on
+  // (series_id, series_occurrence_at), so a retry or an overlapping run
+  // inserts nothing rather than duplicating meetings.
+  { cron: "0 8 * * *" },
+  async ({ step }) => {
+    return step.run("top-up", async () => {
+      const { topUpAllSeries } = await import("@/lib/actions/session-series");
+      return topUpAllSeries();
+    });
+  },
+);
+
 export const allFunctions = [
   dueSoonFlush,
   firefliesExtract,
   calendarSync,
   firefliesSync,
+  sessionSeriesTopUp,
 ];

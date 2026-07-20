@@ -13,6 +13,7 @@ import { and, eq } from "drizzle-orm";
 import {
   googleCalendarEventMappings,
   googleCalendarTokens,
+  sessionSeriesCalendarMappings,
   type GoogleCalendarToken,
 } from "@/lib/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secret-vault";
@@ -602,6 +603,130 @@ export async function syncBbsSessionToGoogle(args: {
     }
   } catch (e) {
     console.error("[google-calendar] sync failed:", e);
+  }
+}
+
+/**
+ * Push a recurring session series to the creator's Google Calendar as
+ * ONE event carrying an RRULE.
+ *
+ * Deliberately creates the event on the creating user's own calendar
+ * with NO attendees. Adding teammates as attendees would make Google
+ * email them an invitation on the user's behalf, which is not something
+ * to trigger as a side effect of defining a schedule — the teammate can
+ * be added from Google, or each Business Builder can create their own.
+ *
+ * Best-effort, like every other calendar push here: a failure is logged
+ * and swallowed so the series still exists in The Builder.
+ */
+export async function syncSeriesToGoogle(args: {
+  orgId: string;
+  userProfileId: string;
+  sessionSeriesId: string;
+  summary: string;
+  description?: string;
+  startAt: Date;
+  endAt: Date;
+  recurrence: string[];
+}): Promise<void> {
+  try {
+    const existing = await withTenantContext(args.orgId, async (tx) => {
+      const [m] = await tx
+        .select()
+        .from(sessionSeriesCalendarMappings)
+        .where(
+          and(
+            eq(
+              sessionSeriesCalendarMappings.sessionSeriesId,
+              args.sessionSeriesId,
+            ),
+            eq(sessionSeriesCalendarMappings.userProfileId, args.userProfileId),
+          ),
+        )
+        .limit(1);
+      return m ?? null;
+    });
+
+    const payload: GoogleEventPayload = {
+      summary: args.summary,
+      description: args.description,
+      start: {
+        dateTime: args.startAt.toISOString(),
+        timeZone: "America/Edmonton",
+      },
+      end: { dateTime: args.endAt.toISOString(), timeZone: "America/Edmonton" },
+    };
+
+    if (existing) {
+      await updateCalendarEvent(
+        args.userProfileId,
+        existing.googleEventId,
+        existing.googleCalendarId,
+        payload,
+      );
+      await withTenantContext(args.orgId, async (tx) => {
+        await tx
+          .update(sessionSeriesCalendarMappings)
+          .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
+          .where(eq(sessionSeriesCalendarMappings.id, existing.id));
+      });
+      return;
+    }
+
+    const created = await createMeetingWithInvite(args.userProfileId, {
+      ...payload,
+      recurrence: args.recurrence,
+    });
+    await withTenantContext(args.orgId, async (tx) => {
+      await tx.insert(sessionSeriesCalendarMappings).values({
+        orgId: args.orgId,
+        sessionSeriesId: args.sessionSeriesId,
+        userProfileId: args.userProfileId,
+        googleEventId: created.eventId,
+        googleCalendarId: created.calendarId,
+      });
+    });
+  } catch (e) {
+    console.error("[google-calendar] series sync failed:", e);
+  }
+}
+
+/** Remove the recurring event when a series is ended. */
+export async function removeSeriesFromGoogle(args: {
+  orgId: string;
+  userProfileId: string;
+  sessionSeriesId: string;
+}): Promise<void> {
+  try {
+    const existing = await withTenantContext(args.orgId, async (tx) => {
+      const [m] = await tx
+        .select()
+        .from(sessionSeriesCalendarMappings)
+        .where(
+          and(
+            eq(
+              sessionSeriesCalendarMappings.sessionSeriesId,
+              args.sessionSeriesId,
+            ),
+            eq(sessionSeriesCalendarMappings.userProfileId, args.userProfileId),
+          ),
+        )
+        .limit(1);
+      return m ?? null;
+    });
+    if (!existing) return;
+    await deleteCalendarEvent(
+      args.userProfileId,
+      existing.googleEventId,
+      existing.googleCalendarId,
+    );
+    await withTenantContext(args.orgId, async (tx) => {
+      await tx
+        .delete(sessionSeriesCalendarMappings)
+        .where(eq(sessionSeriesCalendarMappings.id, existing.id));
+    });
+  } catch (e) {
+    console.error("[google-calendar] series remove failed:", e);
   }
 }
 

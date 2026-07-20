@@ -49,7 +49,7 @@ function getDb(): ReturnType<typeof drizzle> {
 // Extract the transaction-callback's tx parameter type from Drizzle's
 // signature. The tx itself isn't generic over the callback return type,
 // so this resolves to a concrete Drizzle PgTransaction.
-type Tx = Parameters<
+export type Tx = Parameters<
   Parameters<ReturnType<typeof drizzle>["transaction"]>[0]
 >[0];
 
@@ -252,10 +252,23 @@ export async function resolveEngagementIdFromRecord(
     | "courses"
     | "cohorts"
     | "lessons"
-    | "enrollments",
+    | "enrollments"
+    | "session_series"
+    | "agenda_items",
   recordId: string,
 ): Promise<string | null> {
   return getDb().transaction(async (tx) => {
+    if (table === "agenda_items") {
+      // Agenda items resolve through their session.
+      const result = await tx.execute(
+        sql`SELECT s.engagement_id AS "engagementId"
+            FROM agenda_items a JOIN bbs_sessions s ON s.id = a.bbs_session_id
+            WHERE a.id = ${recordId}
+            LIMIT 1`,
+      );
+      const rows = result.rows as Array<{ engagementId: string }>;
+      return rows[0]?.engagementId ?? null;
+    }
     if (table === "message_reactions") {
       const result = await tx.execute(
         sql`SELECT m.engagement_id AS "engagementId"

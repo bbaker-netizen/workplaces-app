@@ -206,6 +206,12 @@ export async function listCoachEngagements(): Promise<Engagement[]> {
         );
     }
 
+    // The practice's own internal workspace is an engagement row so it
+    // can reuse action items / sessions / notifications, but it is not
+    // a client. Keep it out of every client list and switcher — it has
+    // its own home in the Team module.
+    rows = rows.filter((e) => !e.isInternal);
+
     // Alphabetical by client name (case-insensitive) so the switcher and
     // any list reads A→Z.
     return rows.sort((a, b) =>
