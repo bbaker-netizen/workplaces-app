@@ -113,6 +113,20 @@ export const bbsSessionStatusEnum = pgEnum("bbs_session_status", [
   "cancelled",
 ]);
 
+// ---------- Team touch-base enums (migration 0084) ----------
+
+export const sessionCadenceEnum = pgEnum("session_cadence", [
+  "weekly",
+  "biweekly",
+  "monthly",
+]);
+
+export const agendaItemStatusEnum = pgEnum("agenda_item_status", [
+  "pending",
+  "discussed",
+  "deferred",
+]);
+
 // ---------- Phase 1.10 enums ----------
 
 export const goalStatusEnum = pgEnum("goal_status", [
@@ -548,6 +562,14 @@ export const engagements = pgTable(
      *  was originally suggested from. Lets us show drift over time
      *  ("you set this at $1,500 but the tier is now $1,800"). */
     pricingTier: text("pricing_tier"),
+    /** Marks the practice's OWN workspace rather than a client. Holds
+     *  the internal team touch-bases and the action items Business
+     *  Builders task each other with. Exactly one per org (partial
+     *  unique index). Client-facing console lists filter these OUT;
+     *  the Team module filters them IN. Riding on a real engagement row
+     *  means action items, notifications, the due-soon email cron, and
+     *  My Work all work internally with no parallel system. */
+    isInternal: boolean("is_internal").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -555,6 +577,12 @@ export const engagements = pgTable(
     orgIdx: index("engagements_org_idx").on(t.orgId),
     coachIdx: index("engagements_coach_idx").on(t.coachId),
     slugIdx: uniqueIndex("engagements_slug_idx").on(t.slug),
+    /** One internal workspace per org. Partial — client engagements are
+     *  unconstrained. `ensureInternalEngagementId` targets this index by
+     *  name in its ON CONFLICT, so it must stay declared here. */
+    internalUniq: uniqueIndex("engagements_internal_uniq")
+      .on(t.orgId)
+      .where(sql`${t.isInternal}`),
   })
 );
 
@@ -933,6 +961,58 @@ export const soulFileAiInsights = pgTable(
  * higher-value once a real client engagement is running through The
  * Builder (Phase 1.7+).
  */
+/**
+ * `session_series` — a recurring schedule that generates sessions.
+ *
+ * Holds the cadence plus an `anchor_at` that fixes the weekday and time
+ * of day. The materializer (lib/actions/session-series.ts) walks forward
+ * from the anchor and inserts one `bbs_sessions` row per slot out to a
+ * rolling horizon. Instance creation is idempotent via the UNIQUE on
+ * (series_id, series_occurrence_at), so re-running it is always safe.
+ *
+ * Used by the internal team touch-base ("every Tuesday 9:00 AM"), but
+ * deliberately engagement-scoped rather than internal-only so a client's
+ * twice-monthly BBS rhythm can be driven the same way later.
+ */
+export const sessionSeries = pgTable(
+  "session_series",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    type: bbsSessionTypeEnum("type").notNull(),
+    cadence: sessionCadenceEnum("cadence").notNull(),
+    /** First occurrence — fixes weekday + time of day for the series.
+     *  Generation arithmetic runs in America/Edmonton so a DST boundary
+     *  never drifts a 9:00 AM touch-base to 8:00 AM. */
+    anchorAt: timestamp("anchor_at", { withTimezone: true }).notNull(),
+    durationMin: integer("duration_min").notNull().default(60),
+    notes: text("notes"),
+    /** Cleared when the series is ended. Past instances survive. */
+    active: boolean("active").notNull().default(true),
+    /** How far ahead instances exist. Topped up by the rolling-horizon
+     *  job; advisory only — the UNIQUE constraint is what actually
+     *  prevents duplicates. */
+    materializedUntil: timestamp("materialized_until", { withTimezone: true }),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("session_series_org_idx").on(t.orgId),
+    engagementIdx: index("session_series_engagement_idx").on(t.engagementId),
+    activeIdx: index("session_series_active_idx").on(t.active),
+  }),
+);
+
 export const bbsSessions = pgTable(
   "bbs_sessions",
   {
@@ -944,6 +1024,21 @@ export const bbsSessions = pgTable(
       .notNull()
       .references(() => engagements.id, { onDelete: "cascade" }),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    /** Nullable — client BBS sessions have never had a title and label
+     *  themselves from the engagement name. Internal touch-bases and
+     *  series-generated instances carry one. */
+    title: text("title"),
+    durationMin: integer("duration_min").notNull().default(120),
+    seriesId: uuid("series_id").references(
+      (): AnyPgColumn => sessionSeries.id,
+      { onDelete: "set null" },
+    ),
+    /** The slot this instance was generated for. Distinct from
+     *  `scheduled_at` so moving a single occurrence doesn't make the
+     *  materializer regenerate the slot it already filled. */
+    seriesOccurrenceAt: timestamp("series_occurrence_at", {
+      withTimezone: true,
+    }),
     type: bbsSessionTypeEnum("type").notNull(),
     status: bbsSessionStatusEnum("status").notNull().default("scheduled"),
     notes: text("notes"),
@@ -959,6 +1054,59 @@ export const bbsSessions = pgTable(
     engagementIdx: index("bbs_sessions_engagement_idx").on(t.engagementId),
     scheduledAtIdx: index("bbs_sessions_scheduled_at_idx").on(t.scheduledAt),
     statusIdx: index("bbs_sessions_status_idx").on(t.status),
+    /** THE idempotency key for series materialization — the reason the
+     *  nightly top-up job can re-run without duplicating meetings. Must
+     *  stay declared; the materializer's onConflictDoNothing() relies on
+     *  it existing. */
+    seriesOccurrenceUniq: uniqueIndex("bbs_sessions_series_occurrence_uniq")
+      .on(t.seriesId, t.seriesOccurrenceAt)
+      .where(sql`${t.seriesId} IS NOT NULL`),
+  }),
+);
+
+/**
+ * `agenda_items` — talking points attached to a session.
+ *
+ * Deliberately generic (any `bbs_session`, not internal-only) so client
+ * BBS sessions get agendas from the same table with no second build.
+ *
+ * Items carry forward: when a meeting is closed out, anything still
+ * `pending` can spawn a copy on the next instance with
+ * `carried_from_agenda_item_id` pointing back, which preserves the
+ * "we keep punting this" trail rather than silently resetting it.
+ *
+ * Action items link here via `action_items.agenda_item_id`, so every
+ * commitment traces back to the discussion that produced it.
+ */
+export const agendaItems = pgTable(
+  "agenda_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    bbsSessionId: uuid("bbs_session_id")
+      .notNull()
+      .references(() => bbsSessions.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    status: agendaItemStatusEnum("status").notNull().default("pending"),
+    raisedByUserProfileId: uuid("raised_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    carriedFromAgendaItemId: uuid("carried_from_agenda_item_id").references(
+      (): AnyPgColumn => agendaItems.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("agenda_items_org_idx").on(t.orgId),
+    sessionIdx: index("agenda_items_session_idx").on(t.bbsSessionId, t.sortOrder),
+    statusIdx: index("agenda_items_status_idx").on(t.status),
   }),
 );
 
@@ -1011,6 +1159,12 @@ export const actionItems = pgTable(
       (): AnyPgColumn => bbsSessions.id,
       { onDelete: "set null" },
     ),
+    /** The agenda item this commitment came out of. SET NULL on delete —
+     *  removing a talking point must never destroy the commitment. */
+    agendaItemId: uuid("agenda_item_id").references(
+      (): AnyPgColumn => agendaItems.id,
+      { onDelete: "set null" },
+    ),
     confidenceFlag: confidenceFlagEnum("confidence_flag"),
     createdBy: actionItemCreatedByEnum("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1022,6 +1176,7 @@ export const actionItems = pgTable(
     assigneeIdx: index("action_items_assignee_idx").on(t.assigneeUserProfileId),
     statusIdx: index("action_items_status_idx").on(t.status),
     projectIdx: index("action_items_project_idx").on(t.projectId),
+    agendaItemIdx: index("action_items_agenda_item_idx").on(t.agendaItemId),
     eaExternalIdx: index("action_items_ea_external_id_idx").on(t.eaExternalId),
   })
 );
@@ -1540,6 +1695,45 @@ export const googleCalendarEventMappings = pgTable(
     ),
     uniqByUser: uniqueIndex("google_calendar_event_mappings_uniq").on(
       t.bbsSessionId,
+      t.userProfileId,
+    ),
+  }),
+);
+
+/**
+ * `session_series_calendar_mappings` — the ONE recurring Google event
+ * behind a session series.
+ *
+ * Separate from `google_calendar_event_mappings` because that table's
+ * `bbs_session_id` is NOT NULL and per-instance. A series maps to a
+ * single Google event carrying an RRULE; pushing one event per
+ * generated instance would bury the actual rhythm in the calendar.
+ */
+export const sessionSeriesCalendarMappings = pgTable(
+  "session_series_calendar_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    sessionSeriesId: uuid("session_series_id")
+      .notNull()
+      .references(() => sessionSeries.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    googleEventId: text("google_event_id").notNull(),
+    googleCalendarId: text("google_calendar_id").notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("ssc_mappings_org_idx").on(t.orgId),
+    uniqBySeriesUser: uniqueIndex("ssc_mappings_uniq").on(
+      t.sessionSeriesId,
       t.userProfileId,
     ),
   }),
@@ -2728,6 +2922,10 @@ export type MessageAttachment = typeof messageAttachments.$inferSelect;
 export type NewMessageAttachment = typeof messageAttachments.$inferInsert;
 export type BbsSession = typeof bbsSessions.$inferSelect;
 export type NewBbsSession = typeof bbsSessions.$inferInsert;
+export type SessionSeries = typeof sessionSeries.$inferSelect;
+export type NewSessionSeries = typeof sessionSeries.$inferInsert;
+export type AgendaItem = typeof agendaItems.$inferSelect;
+export type NewAgendaItem = typeof agendaItems.$inferInsert;
 export type SoulFile = typeof soulFiles.$inferSelect;
 export type NewSoulFile = typeof soulFiles.$inferInsert;
 export type SoulFileAiInsight = typeof soulFileAiInsights.$inferSelect;

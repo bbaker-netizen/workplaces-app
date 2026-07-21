@@ -118,7 +118,31 @@ export async function canCurrentBbAccessEngagement(
   const access = await getCurrentBbAccess();
   if (!access.isBusinessBuilder) return false;
   if (access.isMasterAdmin || access.allClientsAccess) return true;
-  return access.grantedEngagementIds.includes(engagementId);
+  if (access.grantedEngagementIds.includes(engagementId)) return true;
+
+  // The practice's internal workspace is not a client — per-client
+  // grants don't govern it. Every Business Builder is a participant in
+  // the team's own touch-bases and can be tasked by a teammate, even
+  // one restricted to a subset of clients. Checked last so the common
+  // path costs no extra query.
+  return isInternalEngagement(engagementId);
+}
+
+/** True when this engagement is the practice's own team workspace. */
+async function isInternalEngagement(engagementId: string): Promise<boolean> {
+  try {
+    return await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({ isInternal: engagements.isInternal })
+        .from(engagements)
+        .where(eq(engagements.id, engagementId))
+        .limit(1);
+      return row?.isInternal ?? false;
+    });
+  } catch (e) {
+    console.error("[bb-access] isInternalEngagement read failed", e);
+    return false;
+  }
 }
 
 export type BbUserAdminRow = {
@@ -178,11 +202,18 @@ export async function listBusinessBuildersForAdmin(): Promise<{
       byCoach.set(g.coachUserProfileId, list);
     }
 
+    // Internal workspace excluded — it isn't a client, and access to it
+    // is never granted per-person (see canCurrentBbAccessEngagement).
     const clients = (
       await tx
         .select({ id: engagements.id, name: engagements.name })
         .from(engagements)
-        .where(isNull(engagements.archivedAt))
+        .where(
+          and(
+            isNull(engagements.archivedAt),
+            eq(engagements.isInternal, false),
+          ),
+        )
     )
       .map((c) => ({ id: c.id, name: c.name ?? "Untitled client" }))
       .sort((a, b) =>

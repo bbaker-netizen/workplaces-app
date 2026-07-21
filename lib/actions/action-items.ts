@@ -15,7 +15,7 @@
  *     items where they are the assignee.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -25,6 +25,8 @@ import {
 } from "@/lib/server/engagement-guard";
 import {
   actionItems,
+  agendaItems,
+  bbsSessions,
   notifications,
   userProfiles,
   type UserProfile,
@@ -74,6 +76,12 @@ const createSchema = z.object({
   /** Optional link to the parent project this action item is part
    *  of. Null = one-off commitment, not part of a project. */
   projectId: z.string().uuid().nullable().optional(),
+  /** Optional link to the agenda item this commitment came out of.
+   *  Set when a talking point is turned into a task during a meeting,
+   *  so the commitment traces back to the discussion. */
+  agendaItemId: z.string().uuid().nullable().optional(),
+  /** Optional link to the session this came out of. */
+  bbsSessionId: z.string().uuid().nullable().optional(),
 });
 
 const updateSchema = z.object({
@@ -132,6 +140,43 @@ export async function createActionItem(
       profile.role,
       data.engagementId,
       async (tx, boundOrgId) => {
+      // Both link ids arrive from a client component, so neither can be
+      // trusted to belong to this engagement. RLS blocks cross-ORG, not
+      // cross-engagement-within-org, and FK checks run as the table
+      // owner so a bad id would insert happily and then render nowhere.
+      // Verify inside the bound transaction and drop anything that
+      // doesn't match rather than failing the whole create.
+      let validSessionId: string | null = null;
+      if (data.bbsSessionId) {
+        const [s] = await tx
+          .select({ id: bbsSessions.id })
+          .from(bbsSessions)
+          .where(
+            and(
+              eq(bbsSessions.id, data.bbsSessionId),
+              eq(bbsSessions.engagementId, data.engagementId),
+            ),
+          )
+          .limit(1);
+        validSessionId = s?.id ?? null;
+      }
+
+      let validAgendaItemId: string | null = null;
+      if (data.agendaItemId) {
+        const [a] = await tx
+          .select({ id: agendaItems.id })
+          .from(agendaItems)
+          .innerJoin(bbsSessions, eq(bbsSessions.id, agendaItems.bbsSessionId))
+          .where(
+            and(
+              eq(agendaItems.id, data.agendaItemId),
+              eq(bbsSessions.engagementId, data.engagementId),
+            ),
+          )
+          .limit(1);
+        validAgendaItemId = a?.id ?? null;
+      }
+
       const [item] = await tx
         .insert(actionItems)
         .values({
@@ -145,6 +190,8 @@ export async function createActionItem(
           revenueImpact: data.revenueImpact,
           marginImpact: data.marginImpact,
           projectId: data.projectId ?? null,
+          agendaItemId: validAgendaItemId,
+          bbsSessionId: validSessionId,
           createdBy: "coach",
         })
         .returning({ id: actionItems.id });

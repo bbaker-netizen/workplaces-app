@@ -1044,6 +1044,128 @@ booking/website/dedupe result branches checks out). True end-to-end confirmation
 ("email lands in info@") happens on the first real lead after deploy, or a test
 POST to the live endpoint.
 
+## What was built — internal team touch-bases + session agendas (2026-07-19)
+
+Per Bruce's ask: he and Jen need to task each other with commitments, and
+run their own recurring touch-bases with agenda items that the action
+items hang off. Migration `0084_team_touch_bases.sql`.
+
+**Three decisions Bruce made up front:** agendas are generic (any session,
+not internal-only) so client BBS sessions get them free; the app generates
+the recurring series rather than mirroring Google; and membership is any
+Business Builder rather than a hardcoded Bruce+Jen.
+
+**Internal work rides on a real engagement row.** `engagements.is_internal`
+(partial UNIQUE per org) marks the practice's own workspace, created on
+first visit to the Team module by `ensureInternalEngagementId()` in
+`lib/db/queries/internal-workspace.ts` — nothing for Bruce to run first.
+This is the load-bearing choice: because internal action items are just
+action items on an engagement, assignment, in-app notifications, the
+assignment email, the due-soon reminder cron, and My Work all work
+internally on day one with **no parallel system to keep in sync**. The
+flag is what keeps internal work out of client surfaces —
+`listCoachEngagements` filters it out, as does the Team-access admin
+client list.
+
+**Access.** `canCurrentBbAccessEngagement` now returns true for the
+internal engagement for ANY Business Builder. Without this, a coach
+restricted to a subset of clients (`all_clients_access=false`) would have
+been locked out of the team's own touch-bases — the per-client grant
+model doesn't apply to a non-client. Checked last so the common path
+costs no extra query.
+
+**Recurrence** (`lib/scheduling/recurrence.ts`, pure/no-deps-on-DB).
+`session_series` holds cadence (weekly/biweekly/monthly) + an `anchor_at`
+that fixes weekday and time of day. The materializer walks forward **from
+the anchor**, not from "now", which is what makes the series phase-stable
+and top-ups idempotent. All arithmetic runs on a Luxon DateTime pinned to
+`America/Edmonton`, so a 9:00 AM touch-base stays 9:00 AM across both DST
+boundaries (verified: spring-forward, fall-back, biweekly phase stability,
+monthly clamp). `(series_id, series_occurrence_at)` UNIQUE is the entire
+idempotency mechanism — a re-run or overlapping job inserts nothing.
+Known edge case documented in the module header: monthly anchored on the
+29th–31st clamps stickily (Jan 31 → Feb 28 → Mar 28), diverging from
+Google's FREQ=MONTHLY skip behaviour. Anchor monthly meetings on the
+1st–28th.
+
+Cadence and anchor are deliberately **not editable** — changing them would
+re-phase every future slot and orphan agenda items already attached to
+generated instances. End the series and start a new one.
+
+**Google Calendar.** `syncSeriesToGoogle` pushes ONE recurring event
+carrying an RRULE (not one event per instance, which would bury the
+rhythm). New table `session_series_calendar_mappings` — separate from
+`google_calendar_event_mappings` because that table's `bbs_session_id` is
+NOT NULL and per-instance. Ending a series removes the calendar event.
+**Deliberately creates the event with NO attendees** — adding teammates
+would make Google email them an invitation as a side effect of defining a
+schedule. Bruce adds Jen from Google, or each Business Builder creates
+their own.
+
+**Agenda items** (`agenda_items`) attach to any `bbs_session`. Status
+pending/discussed/deferred, explicit `sort_order`, `raised_by`, and
+`carried_from_agenda_item_id` — `carryForwardAgenda` copies everything
+still pending onto the next scheduled session and marks the sources
+deferred, so "we keep punting this" stays visible and a double-run can't
+duplicate. `action_items.agenda_item_id` (ON DELETE **SET NULL**, never
+CASCADE — a talking point is not the commitment that came out of it).
+
+Agenda permissions are split, because these are generic across CLIENT
+sessions too: **contribute** (add / edit / set status) is open to
+everyone in the engagement except `prospect` — an agenda only one person
+can add to isn't an agenda. **Delete** is author-or-leadership.
+**Reorder** and **carry-forward** are leadership-only: reorder rewrites
+everyone's agenda and carry-forward mutates a *different* session. Left
+open, a `client_employee` could delete the coach's talking points.
+
+`createActionItem` validates that a supplied `agendaItemId` /
+`bbsSessionId` actually belongs to the target engagement, inside the
+bound transaction. RLS blocks cross-org but not cross-engagement-within-
+org, and FK checks run as the table owner — so an unvalidated id would
+insert happily and then render nowhere. Mismatches are dropped to null
+rather than failing the create.
+
+**UI.** `/business-builder/team` (schedules, upcoming, "who owes what"
+grouped by owner, past) and `/business-builder/team/[sessionId]` (the
+AgendaBoard + the existing SessionDetail). The detail page hard-checks
+`session.engagementId === internalEngagementId` so a client session id
+can't be reached through the team route. "Task it" on any agenda item
+creates a linked action item, defaulting the assignee to the other
+person when the team is exactly two. Reorder is arrow-based, not drag —
+works on touch, no dependency, and agendas are short.
+
+**Nightly job.** Inngest `sessionSeriesTopUp` (`0 8 * * *`, ~01:00 MT,
+outside Bruce's working window) keeps every active series materialized
+~90 days out via `topUpAllSeries()`. One bad series is logged and
+skipped rather than stopping the sweep.
+
+**Caught in adversarial review, worth remembering:**
+- `endSessionSeries` originally detached `series_id` from ALL instances
+  including past ones. That destroys the materializer's idempotency key,
+  so re-creating the same cadence later would regenerate slots the kept
+  instances already occupied — double-booking every date. Now scoped to
+  future/scheduled only.
+- Series `notes` were being copied onto every generated instance, which
+  made the "delete empty future instances" cleanup a permanent no-op
+  (every instance looked non-empty). Series notes now stay on the series.
+- `topUpAllSeries` used `withEngagementContext`, which calls
+  `ensureUserProfile()`. There's no signed-in user in a cron run, so the
+  access check would have denied every engagement and the nightly sweep
+  would have silently created nothing. Uses `withSystemContext` now, same
+  as the due-soon email cron. **This is the trap for any future cron
+  work in this repo.**
+- `occurrencesBetween` emitted back-dated slots when its 500-step guard
+  was exhausted rather than bailing. Returns `[]` now.
+
+**Verified:** `tsc --noEmit` + `next lint` clean; `next build` compiles
+successfully (the prerender errors in a local run are a missing Clerk
+publishable key in `.env.local`, and hit pre-existing pages like
+`/_not-found` identically — Netlify has the key). Recurrence math
+exercised through four scenarios as above. **Not yet exercised against a
+live database** — migration 0084 applies on next deploy via
+`scripts/migrate-on-deploy.mjs`; first real touch-base is the acceptance
+test.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.

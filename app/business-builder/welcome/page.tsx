@@ -27,6 +27,7 @@ import {
   Sparkles,
   Target,
   UserCheck,
+  Users,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { TakeTheTourButton } from "@/components/business-builder/TakeTheBusinessBuilderTourButton";
@@ -569,6 +570,45 @@ export default async function CoachWelcomePage() {
             <strong>margin impact</strong> — that&apos;s the quality
             gate. Items without either flag get demoted in coaching
             priority.
+          </p>
+        </Step>
+
+        <Step
+          icon={<Users className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Run your own team touch-bases"
+          href="/business-builder/team"
+          hrefLabel="Open team touch-bases"
+        >
+          <p>
+            This is the practice&apos;s own workspace — you, and every
+            Business Builder after you. Clients never see any of it.
+            Set your touch-base cadence once (weekly, every two weeks,
+            or monthly) and The Builder generates the meetings forward
+            and puts one recurring event on your Google Calendar.
+          </p>
+          <p className="mt-2">
+            Each meeting has an <strong>agenda</strong>. Add talking
+            points during the week as they occur to you rather than
+            scrambling beforehand; anyone on the team can add, edit, and
+            reorder them. During the meeting, mark each one Discussed —
+            and hit <strong>Task it</strong> to turn a point into a real
+            action item assigned to a teammate with a due date. It shows
+            up underneath the point it came from, so you can see what
+            was said and who owes what because of it in one place.
+          </p>
+          <p className="mt-2">
+            Anything you don&apos;t get to carries forward to the next
+            meeting in one click, tagged &ldquo;carried over&rdquo; — so
+            a point you keep punting stops hiding. The{" "}
+            <strong>Who owes what</strong> panel groups every open
+            internal commitment by owner.
+          </p>
+          <p className="mt-2 text-sm text-tbb-ink-3">
+            To task a teammate without a meeting, use{" "}
+            <strong>Task a teammate</strong> on the Team page. Internal
+            action items are ordinary action items — same assignment
+            email, same reminders, same My Work — just on the practice&apos;s
+            own workspace instead of a client&apos;s.
           </p>
         </Step>
 
