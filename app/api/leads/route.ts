@@ -234,7 +234,13 @@ export async function POST(req: Request): Promise<Response> {
           firstSeenAt: new Date(),
           status: "new_lead",
           notes: leadNote ?? null,
-          lastContactAt: new Date(),
+          // Deliberately NOT setting lastContactAt. A brand-new inbound
+          // lead has not been CONTACTED by anyone — stamping "now" made
+          // the profile show "Last contact: today" for a lead nobody had
+          // spoken to. Staleness is unaffected: daysSinceContact falls
+          // back to createdAt (the same timestamp) when this is null.
+          // A later real touchpoint — reply, booking, logged follow-up —
+          // sets it for the first time.
         })
         .returning({ id: prospects.id });
 

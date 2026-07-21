@@ -389,7 +389,10 @@ export async function POST(
             firstSeenAt: new Date(),
             status: "new_lead",
             notes: leadNote ?? undefined,
-            lastContactAt: new Date(),
+            // NOT setting lastContactAt — see the matching note in
+            // app/api/leads/route.ts. A fresh inbound lead has not been
+            // contacted; showing "Last contact: today" for it is wrong.
+            // Staleness still works via the createdAt fallback.
           })
           .returning({ id: prospects.id });
         prospectId = row.id;
