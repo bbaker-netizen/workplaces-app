@@ -897,6 +897,182 @@ export async function listEventsForSync(
     .filter((x): x is SyncEvent => x !== null);
 }
 
+/* ------------- Google-owned internal touch-base series ------------- */
+
+export type RecurringSeriesOption = {
+  /** The master recurring event id — stable link key. */
+  recurringEventId: string;
+  calendarId: string;
+  summary: string;
+  /** Human-readable cadence line built from the RRULE, best-effort. */
+  scheduleHint: string | null;
+  /** The next upcoming instance start, for display. */
+  nextStart: Date | null;
+};
+
+/**
+ * List the recurring events on the user's primary calendar, for the
+ * "link your touch-base" picker. Uses singleEvents=false so Google
+ * returns the recurring MASTERS (each carrying an RRULE) rather than
+ * expanded instances.
+ */
+export async function listRecurringSeries(
+  userProfileId: string,
+): Promise<RecurringSeriesOption[]> {
+  const auth = await getValidAccessToken(userProfileId);
+  if (!auth) return [];
+  const params = new URLSearchParams({
+    singleEvents: "false",
+    maxResults: "250",
+    showDeleted: "false",
+    // Only events that still have upcoming occurrences are worth linking.
+    timeMax: new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString(),
+  });
+  const data = await api<{
+    items: {
+      id: string;
+      summary?: string;
+      status?: string;
+      recurrence?: string[];
+      start?: { dateTime?: string; date?: string };
+    }[];
+  }>(
+    auth.token,
+    `/calendars/${encodeURIComponent(auth.calendarId)}/events?${params.toString()}`,
+  );
+
+  const masters = (data.items ?? []).filter(
+    (e) => Array.isArray(e.recurrence) && e.recurrence.length > 0 && e.status !== "cancelled",
+  );
+
+  const out: RecurringSeriesOption[] = [];
+  for (const m of masters) {
+    // Pull the next instance so the picker can show "next: Tue 9:00".
+    let nextStart: Date | null = null;
+    try {
+      const instances = await listSeriesInstances(
+        userProfileId,
+        auth.calendarId,
+        m.id,
+        new Date(),
+        new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      );
+      nextStart = instances[0]?.start ?? null;
+    } catch {
+      nextStart = null;
+    }
+    out.push({
+      recurringEventId: m.id,
+      calendarId: auth.calendarId,
+      summary: m.summary ?? "(no title)",
+      scheduleHint: rruleToHint(m.recurrence ?? []),
+      nextStart,
+    });
+  }
+  // Series with an upcoming instance first, then by title.
+  return out.sort((a, b) => {
+    if (Boolean(a.nextStart) !== Boolean(b.nextStart)) {
+      return a.nextStart ? -1 : 1;
+    }
+    return a.summary.localeCompare(b.summary);
+  });
+}
+
+export type SeriesInstance = {
+  /** Google instance id — the per-occurrence idempotency key. */
+  instanceId: string;
+  start: Date;
+  end: Date;
+  /** "cancelled" for an occurrence deleted/declined in Google. */
+  status: string;
+  isVirtual: boolean;
+  summary: string;
+};
+
+/**
+ * Expand ONE recurring event into its dated occurrences in a window,
+ * via the events/{id}/instances endpoint. showDeleted so a single
+ * cancelled occurrence comes back with status=cancelled (the sync marks
+ * the matching session cancelled rather than leaving a ghost).
+ */
+export async function listSeriesInstances(
+  userProfileId: string,
+  calendarId: string,
+  recurringEventId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<SeriesInstance[]> {
+  const auth = await getValidAccessToken(userProfileId);
+  if (!auth) return [];
+  const params = new URLSearchParams({
+    timeMin: rangeStart.toISOString(),
+    timeMax: rangeEnd.toISOString(),
+    maxResults: "250",
+    showDeleted: "true",
+  });
+  const data = await api<{
+    items: {
+      id: string;
+      summary?: string;
+      status?: string;
+      start?: { dateTime?: string; date?: string };
+      end?: { dateTime?: string; date?: string };
+      location?: string;
+      hangoutLink?: string;
+      conferenceData?: unknown;
+    }[];
+  }>(
+    auth.token,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(
+      recurringEventId,
+    )}/instances?${params.toString()}`,
+  );
+
+  return (data.items ?? [])
+    .map((e) => {
+      const startStr = e.start?.dateTime;
+      // Skip all-day rows — a touch-base is a timed event.
+      if (!startStr) return null;
+      const endStr = e.end?.dateTime ?? e.end?.date ?? startStr;
+      const locationVirtual = /\b(zoom|meet\.google|teams\.microsoft|https?:\/\/)/i.test(
+        e.location ?? "",
+      );
+      return {
+        instanceId: e.id,
+        start: new Date(startStr),
+        end: new Date(endStr),
+        status: e.status ?? "confirmed",
+        isVirtual:
+          Boolean(e.hangoutLink) || Boolean(e.conferenceData) || locationVirtual,
+        summary: e.summary ?? "(no title)",
+      };
+    })
+    .filter((x): x is SeriesInstance => x !== null)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/** Crude RRULE → "Weekly on Tuesday" hint. Display-only, best-effort. */
+function rruleToHint(recurrence: string[]): string | null {
+  const rule = recurrence.find((r) => r.startsWith("RRULE:"));
+  if (!rule) return null;
+  const body = rule.slice("RRULE:".length);
+  const parts = Object.fromEntries(
+    body.split(";").map((kv) => {
+      const [k, v] = kv.split("=");
+      return [k, v];
+    }),
+  );
+  const freq = parts.FREQ;
+  const interval = parts.INTERVAL ? Number(parts.INTERVAL) : 1;
+  if (freq === "WEEKLY") {
+    return interval > 1 ? `Every ${interval} weeks` : "Weekly";
+  }
+  if (freq === "DAILY") return "Daily";
+  if (freq === "MONTHLY") return "Monthly";
+  if (freq === "YEARLY") return "Yearly";
+  return freq ? freq.toLowerCase() : null;
+}
+
 /** Pull the connected Google account email via the userinfo endpoint. */
 export async function fetchGoogleEmail(accessToken: string): Promise<string | null> {
   try {

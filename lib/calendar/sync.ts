@@ -111,7 +111,15 @@ export async function syncCoachCalendar(
       })
       .from(engagements)
       .where(
-        and(eq(engagements.coachId, coach.id), isNull(engagements.archivedAt)),
+        and(
+          eq(engagements.coachId, coach.id),
+          isNull(engagements.archivedAt),
+          // The internal team workspace is fed by its own linked-Google
+          // series sync (lib/actions/session-series.syncGoogleSeries).
+          // Excluding it here prevents this client-oriented sweep from
+          // also turning the touch-base event into duplicate sessions.
+          eq(engagements.isInternal, false),
+        ),
       );
 
     const emailMap = new Map<string, { engagementId: string; orgId: string }>();

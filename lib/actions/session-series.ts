@@ -25,6 +25,8 @@ import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { clientWriteBlocked, READ_ONLY_ERROR } from "@/lib/server/engagement-guard";
 import {
+  actionItems,
+  agendaItems,
   bbsSessions,
   coaches,
   engagements,
@@ -96,6 +98,9 @@ async function materializeInTx(
     .where(eq(sessionSeries.id, seriesId))
     .limit(1);
   if (!series || !series.active) return 0;
+  // App-source only. A google-source series has null cadence/anchor and
+  // is materialized by syncGoogleSeries instead.
+  if (series.source !== "app" || !series.anchorAt || !series.cadence) return 0;
 
   const now = new Date();
   const until = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
@@ -379,8 +384,10 @@ export async function updateSessionSeries(
     );
 
     // Re-push to Google so a retitled or relengthened series doesn't
-    // leave a stale recurring event on the calendar.
-    if (updated) {
+    // leave a stale recurring event on the calendar. App-source only —
+    // a google-source series is read-only from the app's side (Google
+    // owns it), and has no anchor to push.
+    if (updated && updated.source === "app" && updated.anchorAt) {
       await syncSeriesToGoogle({
         orgId: updated.orgId,
         userProfileId: profile.userProfileId,
@@ -529,6 +536,502 @@ export async function endSessionSeries(
  * Uses system context to sweep across orgs, then binds per-engagement
  * for the writes — the same pattern the due-soon email cron uses.
  */
+/* ==================================================================== */
+/*  Google-owned series — the internal touch-base reads Google Calendar */
+/* ==================================================================== */
+
+/** How far ahead of now to pull Google occurrences into sessions. */
+const GOOGLE_SYNC_HORIZON_DAYS = 90;
+/** A little history so a session that just happened isn't dropped. */
+const GOOGLE_SYNC_PAST_DAYS = 1;
+
+/**
+ * List the recurring Google events on the current internal user's
+ * calendar, for the Team "link your touch-base" picker.
+ */
+export async function listLinkableGoogleSeries(): Promise<
+  import("@/lib/integrations/google-calendar").RecurringSeriesOption[]
+> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return [];
+  const { isInternalRole } = await import(
+    "@/lib/db/queries/internal-workspace"
+  );
+  if (!isInternalRole(profile.role)) return [];
+  const { listRecurringSeries } = await import(
+    "@/lib/integrations/google-calendar"
+  );
+  return listRecurringSeries(profile.userProfileId);
+}
+
+const linkSchema = z.object({
+  googleCalendarId: z.string().min(1),
+  googleRecurringEventId: z.string().min(1),
+  title: z.string().min(1).max(200),
+});
+
+export type LinkGoogleSeriesInput = z.input<typeof linkSchema>;
+
+/**
+ * Link a recurring Google event to the team workspace. Google owns the
+ * schedule from here — we pull its occurrences into sessions and never
+ * push back. Idempotent on (calendar, recurring event): re-linking the
+ * same event reactivates the existing series rather than duplicating it.
+ */
+export async function linkGoogleSeries(
+  input: LinkGoogleSeriesInput,
+): Promise<ActionResult<{ id: string; synced: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") {
+    return { ok: false, error: "Not authenticated." };
+  }
+  const { ensureInternalEngagementId, isInternalRole } = await import(
+    "@/lib/db/queries/internal-workspace"
+  );
+  if (!isInternalRole(profile.role)) {
+    return { ok: false, error: "Only Business Builders can link a team calendar." };
+  }
+  const parsed = linkSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Check the form and try again.",
+    };
+  }
+  const engagementId = await ensureInternalEngagementId();
+  if (!engagementId) {
+    return { ok: false, error: "Team workspace isn't set up yet." };
+  }
+
+  const { withSystemContext } = await import("@/lib/db/tenant");
+  try {
+    const seriesId = await withSystemContext(async (tx) => {
+      const [existing] = await tx
+        .select({ id: sessionSeries.id })
+        .from(sessionSeries)
+        .where(
+          and(
+            eq(sessionSeries.googleCalendarId, parsed.data.googleCalendarId),
+            eq(
+              sessionSeries.googleRecurringEventId,
+              parsed.data.googleRecurringEventId,
+            ),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        // Re-link: reactivate, refresh title + which account we read.
+        await tx
+          .update(sessionSeries)
+          .set({
+            active: true,
+            title: parsed.data.title,
+            linkedByUserProfileId: profile.userProfileId,
+          })
+          .where(eq(sessionSeries.id, existing.id));
+        return existing.id;
+      }
+
+      const [row] = await tx
+        .insert(sessionSeries)
+        .values({
+          orgId: profile.orgId,
+          engagementId,
+          title: parsed.data.title,
+          type: "virtual",
+          source: "google",
+          googleCalendarId: parsed.data.googleCalendarId,
+          googleRecurringEventId: parsed.data.googleRecurringEventId,
+          linkedByUserProfileId: profile.userProfileId,
+          createdByUserProfileId: profile.userProfileId,
+        })
+        .returning({ id: sessionSeries.id });
+      return row.id;
+    });
+
+    const synced = await syncGoogleSeries(seriesId);
+    revalidateTeamPaths();
+    return { ok: true, data: { id: seriesId, synced } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't link the calendar.",
+    };
+  }
+}
+
+/** Stop syncing a linked Google series. Empty future sessions are removed;
+ *  ones carrying agendas/notes are kept and detached. */
+export async function unlinkGoogleSeries(
+  seriesId: string,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") {
+    return { ok: false, error: "Not authenticated." };
+  }
+  const { isInternalRole } = await import(
+    "@/lib/db/queries/internal-workspace"
+  );
+  if (!isInternalRole(profile.role)) {
+    return { ok: false, error: "Only Business Builders can unlink a team calendar." };
+  }
+  const { withSystemContext } = await import("@/lib/db/tenant");
+  try {
+    await withSystemContext(async (tx) => {
+      const future = await tx
+        .select({
+          id: bbsSessions.id,
+          notes: bbsSessions.notes,
+          agendaCount: sql<number>`(
+            SELECT count(*)::int FROM agenda_items a
+            WHERE a.bbs_session_id = ${bbsSessions.id}
+          )`,
+        })
+        .from(bbsSessions)
+        .where(
+          and(
+            eq(bbsSessions.seriesId, seriesId),
+            eq(bbsSessions.status, "scheduled"),
+            gt(bbsSessions.scheduledAt, new Date()),
+          ),
+        );
+
+      const empty = future.filter(
+        (s) => s.agendaCount === 0 && (s.notes ?? "").trim().length === 0,
+      );
+      if (empty.length > 0) {
+        await tx.delete(bbsSessions).where(
+          inArray(
+            bbsSessions.id,
+            empty.map((s) => s.id),
+          ),
+        );
+      }
+      if (future.length > 0) {
+        await tx
+          .update(bbsSessions)
+          .set({ seriesId: null, googleInstanceId: null })
+          .where(
+            inArray(
+              bbsSessions.id,
+              future.map((s) => s.id),
+            ),
+          );
+      }
+      await tx
+        .update(sessionSeries)
+        .set({ active: false })
+        .where(eq(sessionSeries.id, seriesId));
+    });
+    revalidateTeamPaths();
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't unlink the calendar.",
+    };
+  }
+}
+
+/**
+ * Pull a linked Google series' occurrences into internal sessions.
+ *
+ * Idempotent via bbs_sessions.google_instance_id: each occurrence maps
+ * to exactly one session. Handles three changes a coach can make in
+ * Google:
+ *   - a NEW occurrence appears        → insert a session
+ *   - an occurrence MOVES (same id)   → update its time
+ *   - an occurrence is CANCELLED, or the whole series is rescheduled so
+ *     its instance ids change         → the now-absent future session is
+ *                                       marked cancelled
+ *
+ * System context: also called by the cron, which has no signed-in user.
+ * Returns the number of sessions created or updated.
+ */
+export async function syncGoogleSeries(seriesId: string): Promise<number> {
+  const { withSystemContext } = await import("@/lib/db/tenant");
+  const { listSeriesInstances } = await import(
+    "@/lib/integrations/google-calendar"
+  );
+
+  const series = await withSystemContext(async (tx) => {
+    const [s] = await tx
+      .select()
+      .from(sessionSeries)
+      .where(eq(sessionSeries.id, seriesId))
+      .limit(1);
+    return s ?? null;
+  });
+  if (
+    !series ||
+    !series.active ||
+    series.source !== "google" ||
+    !series.googleCalendarId ||
+    !series.googleRecurringEventId ||
+    !series.linkedByUserProfileId
+  ) {
+    return 0;
+  }
+
+  // Resolve the creator for any new session rows (NOT NULL column).
+  let creatorId: string | null = series.linkedByUserProfileId;
+  if (!creatorId) {
+    creatorId = await withSystemContext(async (tx) => {
+      const [owner] = await tx
+        .select({ userProfileId: coaches.userProfileId })
+        .from(engagements)
+        .innerJoin(coaches, eq(coaches.id, engagements.coachId))
+        .where(eq(engagements.id, series.engagementId))
+        .limit(1);
+      return owner?.userProfileId ?? null;
+    });
+  }
+  if (!creatorId) return 0;
+
+  const now = new Date();
+  const rangeStart = new Date(now.getTime() - GOOGLE_SYNC_PAST_DAYS * 864e5);
+  const rangeEnd = new Date(now.getTime() + GOOGLE_SYNC_HORIZON_DAYS * 864e5);
+
+  // Network fetch OUTSIDE the transaction so a slow Google call doesn't
+  // hold a DB tx open.
+  const instances = await listSeriesInstances(
+    series.linkedByUserProfileId,
+    series.googleCalendarId,
+    series.googleRecurringEventId,
+    rangeStart,
+    rangeEnd,
+  );
+
+  return withSystemContext(async (tx) => {
+    const existing = await tx
+      .select({
+        id: bbsSessions.id,
+        googleInstanceId: bbsSessions.googleInstanceId,
+        status: bbsSessions.status,
+        scheduledAt: bbsSessions.scheduledAt,
+      })
+      .from(bbsSessions)
+      .where(
+        and(
+          eq(bbsSessions.seriesId, seriesId),
+          // only google-sourced rows carry an instance id
+          sql`${bbsSessions.googleInstanceId} IS NOT NULL`,
+        ),
+      );
+    const byInstance = new Map(
+      existing.filter((e) => e.googleInstanceId).map((e) => [e.googleInstanceId as string, e]),
+    );
+
+    let touched = 0;
+    const seen = new Set<string>();
+    // New sessions created this run, for rehoming orphaned agendas on a
+    // whole-series reschedule (see below).
+    const newlyInserted: { id: string; start: Date }[] = [];
+
+    for (const inst of instances) {
+      seen.add(inst.instanceId);
+      const durationMin = Math.max(
+        5,
+        Math.round((inst.end.getTime() - inst.start.getTime()) / 60000),
+      );
+      const type = inst.isVirtual ? "virtual" : "in_person";
+      const prior = byInstance.get(inst.instanceId);
+
+      if (inst.status === "cancelled") {
+        // Occurrence cancelled in Google → cancel our session if present.
+        if (prior && prior.status !== "cancelled") {
+          await tx
+            .update(bbsSessions)
+            .set({ status: "cancelled" })
+            .where(eq(bbsSessions.id, prior.id));
+          touched += 1;
+        }
+        continue;
+      }
+
+      if (prior) {
+        // Update in place only when something actually changed. Never
+        // clobber a coach's manual "completed" — Google timing changes
+        // shouldn't un-complete a meeting that already happened.
+        const timeChanged =
+          prior.scheduledAt.getTime() !== inst.start.getTime();
+        if (timeChanged || prior.status === "cancelled") {
+          await tx
+            .update(bbsSessions)
+            .set({
+              scheduledAt: inst.start,
+              durationMin,
+              type,
+              // A cancelled-then-restored occurrence comes back scheduled.
+              status: prior.status === "cancelled" ? "scheduled" : prior.status,
+            })
+            .where(eq(bbsSessions.id, prior.id));
+          touched += 1;
+        }
+        continue;
+      }
+
+      // New occurrence → create a session. onConflictDoNothing so a race
+      // with a concurrent sync (the 30-min cron overlapping the initial
+      // link sync) is a no-op rather than a unique-violation that aborts
+      // the whole transaction.
+      const [row] = await tx
+        .insert(bbsSessions)
+        .values({
+          orgId: series.orgId,
+          engagementId: series.engagementId,
+          scheduledAt: inst.start,
+          seriesId: series.id,
+          googleInstanceId: inst.instanceId,
+          title: series.title,
+          type,
+          durationMin,
+          createdByUserProfileId: creatorId as string,
+        })
+        .onConflictDoNothing()
+        .returning({ id: bbsSessions.id });
+      if (row) {
+        newlyInserted.push({ id: row.id, start: inst.start });
+        touched += 1;
+      }
+    }
+
+    // CRITICAL GUARD: if Google returned no occurrences at all, do NOT
+    // cancel anything. An empty result almost always means the fetch
+    // failed — the linking user disconnected Google (token row gone →
+    // listSeriesInstances returns []) or a transient error — NOT that
+    // the series genuinely ended. Without this guard, a disconnect would
+    // silently cancel every future touch-base. A truly-ended series just
+    // keeps stale future sessions until someone unlinks it, which is far
+    // less harmful than wiping the schedule.
+    if (instances.length === 0) {
+      if (existing.some((e) => e.scheduledAt > now && e.status === "scheduled")) {
+        console.warn(
+          `[session-series] google sync for ${seriesId} got 0 occurrences with future sessions present — skipping cancel (likely disconnected calendar).`,
+        );
+      }
+      return touched;
+    }
+
+    // Occurrences that vanished. On a WHOLE-series reschedule the instance
+    // ids all change, so every future session's id disappears and new ones
+    // are inserted — the old sessions would be cancelled out from under any
+    // agenda items / tasked action items pointing at them. Rehome that
+    // prepped work onto the new occurrences (ordinal-paired by time, which
+    // is exact for a uniform time shift) before cancelling the stragglers.
+    const vanished = existing
+      .filter(
+        (e) =>
+          e.googleInstanceId &&
+          !seen.has(e.googleInstanceId) &&
+          e.status === "scheduled" &&
+          e.scheduledAt > now,
+      )
+      .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+
+    if (vanished.length > 0) {
+      // Which vanished sessions carry agendas or tasked actions worth moving?
+      const vanishedIds = vanished.map((v) => v.id);
+      const withAgenda = new Set(
+        (
+          await tx
+            .selectDistinct({ sid: agendaItems.bbsSessionId })
+            .from(agendaItems)
+            .where(inArray(agendaItems.bbsSessionId, vanishedIds))
+        ).map((r) => r.sid),
+      );
+      const withActions = new Set(
+        (
+          await tx
+            .selectDistinct({ sid: actionItems.bbsSessionId })
+            .from(actionItems)
+            .where(inArray(actionItems.bbsSessionId, vanishedIds))
+        )
+          .map((r) => r.sid)
+          .filter((v): v is string => Boolean(v)),
+      );
+
+      const hasContent = vanished.filter(
+        (v) => withAgenda.has(v.id) || withActions.has(v.id),
+      );
+      // Pair each content-bearing vanished session with the NEAREST new
+      // occurrence by time (not ordinal — only some vanished sessions may
+      // carry content, so ordinal indices wouldn't line up with weeks).
+      // Each target is consumed once so two old meetings can't collapse
+      // onto the same new one.
+      const usedTargets = new Set<string>();
+      for (const from of hasContent) {
+        let best: { id: string; start: Date } | null = null;
+        let bestGap = Infinity;
+        for (const t of newlyInserted) {
+          if (usedTargets.has(t.id)) continue;
+          const gap = Math.abs(t.start.getTime() - from.scheduledAt.getTime());
+          if (gap < bestGap) {
+            bestGap = gap;
+            best = t;
+          }
+        }
+        if (!best) break; // no unused new occurrence to rehome onto
+        usedTargets.add(best.id);
+        await tx
+          .update(agendaItems)
+          .set({ bbsSessionId: best.id })
+          .where(eq(agendaItems.bbsSessionId, from.id));
+        await tx
+          .update(actionItems)
+          .set({ bbsSessionId: best.id })
+          .where(eq(actionItems.bbsSessionId, from.id));
+      }
+
+      await tx
+        .update(bbsSessions)
+        .set({ status: "cancelled" })
+        .where(inArray(bbsSessions.id, vanishedIds));
+      touched += vanished.length;
+    }
+
+    await tx
+      .update(sessionSeries)
+      .set({ materializedUntil: rangeEnd })
+      .where(eq(sessionSeries.id, seriesId));
+
+    return touched;
+  });
+}
+
+/**
+ * Sweep every active google-linked series. Called from the 30-minute
+ * calendar cron so a reschedule in Google shows up in the app within
+ * half an hour, rather than waiting for the nightly top-up.
+ */
+export async function syncAllGoogleLinkedSeries(): Promise<{
+  seriesProcessed: number;
+  sessionsTouched: number;
+}> {
+  const { withSystemContext } = await import("@/lib/db/tenant");
+  const rows = await withSystemContext(async (tx) =>
+    tx
+      .select({ id: sessionSeries.id })
+      .from(sessionSeries)
+      .where(
+        and(
+          eq(sessionSeries.active, true),
+          eq(sessionSeries.source, "google"),
+        ),
+      ),
+  );
+  let sessionsTouched = 0;
+  for (const row of rows) {
+    try {
+      sessionsTouched += await syncGoogleSeries(row.id);
+    } catch (err) {
+      console.error(`[session-series] google sync failed for ${row.id}`, err);
+    }
+  }
+  return { seriesProcessed: rows.length, sessionsTouched };
+}
+
 export async function topUpAllSeries(): Promise<{
   seriesProcessed: number;
   instancesCreated: number;
@@ -541,6 +1044,7 @@ export async function topUpAllSeries(): Promise<{
         id: sessionSeries.id,
         engagementId: sessionSeries.engagementId,
         orgId: sessionSeries.orgId,
+        source: sessionSeries.source,
       })
       .from(sessionSeries)
       .where(eq(sessionSeries.active, true)),
@@ -549,17 +1053,21 @@ export async function topUpAllSeries(): Promise<{
   let instancesCreated = 0;
   for (const row of rows) {
     try {
-      // System context, NOT withEngagementContext. There is no signed-in
-      // user behind a cron run, so the per-Business-Builder access check
-      // inside withEngagementContext (which calls ensureUserProfile)
-      // would deny every engagement and the sweep would silently create
-      // nothing. Same reason the due-soon email cron uses system context.
-      // The org id comes from the series row itself, so inserts are still
-      // written into the right tenant.
-      const created = await withSystemContext((tx) =>
-        materializeInTx(tx, row.orgId, row.id),
-      );
-      instancesCreated += created;
+      if (row.source === "google") {
+        // Google owns the schedule — pull its occurrences in.
+        instancesCreated += await syncGoogleSeries(row.id);
+      } else {
+        // System context, NOT withEngagementContext. There is no signed-in
+        // user behind a cron run, so the per-Business-Builder access check
+        // inside withEngagementContext (which calls ensureUserProfile)
+        // would deny every engagement and the sweep would silently create
+        // nothing. Same reason the due-soon email cron uses system context.
+        // The org id comes from the series row itself, so inserts are still
+        // written into the right tenant.
+        instancesCreated += await withSystemContext((tx) =>
+          materializeInTx(tx, row.orgId, row.id),
+        );
+      }
     } catch (err) {
       // One bad series must not stop the sweep.
       console.error(`[session-series] top-up failed for ${row.id}`, err);

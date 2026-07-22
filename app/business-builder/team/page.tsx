@@ -22,7 +22,8 @@ import {
   type TeamMeeting,
 } from "@/lib/db/queries/team-workspace";
 import { describeCadence, type Cadence } from "@/lib/scheduling/recurrence";
-import { NewSeriesForm } from "@/components/team/NewSeriesForm";
+import { LinkGoogleSeries } from "@/components/team/LinkGoogleSeries";
+import { LinkedSeriesRow } from "@/components/team/LinkedSeriesRow";
 
 export const dynamic = "force-dynamic";
 
@@ -108,34 +109,35 @@ export default async function TeamPage() {
         </p>
       </header>
 
-      {/* Schedules ---------------------------------------------------- */}
+      {/* Linked calendar --------------------------------------------- */}
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <h2 className="font-bold text-tbb-navy text-lg tracking-tight">
             Recurring meetings
           </h2>
-          <NewSeriesForm engagementId={engagementId} />
+          {series.length === 0 && <LinkGoogleSeries />}
         </div>
         {series.length === 0 ? (
           <p className="rounded-xl border border-dashed border-tbb-line bg-white p-6 text-center font-sans text-sm text-muted-foreground">
-            No recurring meeting set up yet. Create one and The Builder will
-            keep generating the instances.
+            Link the recurring touch-base from your Google Calendar. You keep
+            managing the schedule in Google; The Builder mirrors each meeting
+            here and adds the agenda on top.
           </p>
         ) : (
           <ul className="space-y-2">
             {series.map((s) => (
-              <li
+              <LinkedSeriesRow
                 key={s.id}
-                className="flex items-baseline gap-3 flex-wrap rounded-xl border border-tbb-line bg-white px-4 py-3 shadow-tbb-xs"
-              >
-                <span className="font-sans text-sm font-bold text-tbb-navy">
-                  {s.title}
-                </span>
-                <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-ink-3">
-                  {describeCadence(s.anchorAt, s.cadence as Cadence)} ·{" "}
-                  {s.durationMin} min
-                </span>
-              </li>
+                seriesId={s.id}
+                title={s.title}
+                scheduleHint={
+                  s.source === "google"
+                    ? "Recurring"
+                    : s.anchorAt && s.cadence
+                      ? describeCadence(s.anchorAt, s.cadence as Cadence)
+                      : "Recurring"
+                }
+              />
             ))}
           </ul>
         )}
