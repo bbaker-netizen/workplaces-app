@@ -157,10 +157,19 @@ export const calendarSync = inngest.createFunction(
   // Calendar events into BBS sessions for the matching engagement.
   { cron: "*/30 * * * *" },
   async ({ step }) => {
-    return step.run("sync", async () => {
+    const clients = await step.run("sync-clients", async () => {
       const { syncAllConnectedCalendars } = await import("@/lib/calendar/sync");
       return syncAllConnectedCalendars();
     });
+    // Pull internal team touch-bases from their linked Google events in
+    // the same cadence, so a reschedule shows up within ~30 min.
+    const internal = await step.run("sync-internal-series", async () => {
+      const { syncAllGoogleLinkedSeries } = await import(
+        "@/lib/actions/session-series"
+      );
+      return syncAllGoogleLinkedSeries();
+    });
+    return { clients, internal };
   },
 );
 

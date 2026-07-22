@@ -127,6 +127,13 @@ export const agendaItemStatusEnum = pgEnum("agenda_item_status", [
   "deferred",
 ]);
 
+/** A session series is either app-generated from a cadence, or linked to
+ *  a recurring Google Calendar event that owns the schedule. */
+export const sessionSeriesSourceEnum = pgEnum("session_series_source", [
+  "app",
+  "google",
+]);
+
 // ---------- Phase 1.10 enums ----------
 
 export const goalStatusEnum = pgEnum("goal_status", [
@@ -986,11 +993,24 @@ export const sessionSeries = pgTable(
       .references(() => engagements.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     type: bbsSessionTypeEnum("type").notNull(),
-    cadence: sessionCadenceEnum("cadence").notNull(),
+    /** 'app' = cadence-generated (anchor_at + cadence drive it).
+     *  'google' = linked to a recurring Google event that owns the
+     *  schedule; occurrences are pulled in and cadence/anchor stay null. */
+    source: sessionSeriesSourceEnum("source").notNull().default("app"),
+    /** app-source only. Null for google-source series. */
+    cadence: sessionCadenceEnum("cadence"),
     /** First occurrence — fixes weekday + time of day for the series.
      *  Generation arithmetic runs in America/Edmonton so a DST boundary
-     *  never drifts a 9:00 AM touch-base to 8:00 AM. */
-    anchorAt: timestamp("anchor_at", { withTimezone: true }).notNull(),
+     *  never drifts a 9:00 AM touch-base to 8:00 AM. app-source only. */
+    anchorAt: timestamp("anchor_at", { withTimezone: true }),
+    /** google-source: the calendar + recurring-event id this series
+     *  mirrors, and whose connected account the sync reads through. */
+    googleCalendarId: text("google_calendar_id"),
+    googleRecurringEventId: text("google_recurring_event_id"),
+    linkedByUserProfileId: uuid("linked_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
     durationMin: integer("duration_min").notNull().default(60),
     notes: text("notes"),
     /** Cleared when the series is ended. Past instances survive. */
@@ -1010,6 +1030,10 @@ export const sessionSeries = pgTable(
     orgIdx: index("session_series_org_idx").on(t.orgId),
     engagementIdx: index("session_series_engagement_idx").on(t.engagementId),
     activeIdx: index("session_series_active_idx").on(t.active),
+    /** One series per linked Google event — re-linking is idempotent. */
+    googleEventUniq: uniqueIndex("session_series_google_event_uniq")
+      .on(t.googleCalendarId, t.googleRecurringEventId)
+      .where(sql`${t.googleRecurringEventId} IS NOT NULL`),
   }),
 );
 
@@ -1035,10 +1059,15 @@ export const bbsSessions = pgTable(
     ),
     /** The slot this instance was generated for. Distinct from
      *  `scheduled_at` so moving a single occurrence doesn't make the
-     *  materializer regenerate the slot it already filled. */
+     *  materializer regenerate the slot it already filled. app-source. */
     seriesOccurrenceAt: timestamp("series_occurrence_at", {
       withTimezone: true,
     }),
+    /** google-source: the Google Calendar instance id this session
+     *  mirrors. Stable per occurrence, so it's the idempotency key for
+     *  the pull sync — re-syncing updates in place and detects a moved
+     *  or cancelled occurrence. */
+    googleInstanceId: text("google_instance_id"),
     type: bbsSessionTypeEnum("type").notNull(),
     status: bbsSessionStatusEnum("status").notNull().default("scheduled"),
     notes: text("notes"),
@@ -1061,6 +1090,10 @@ export const bbsSessions = pgTable(
     seriesOccurrenceUniq: uniqueIndex("bbs_sessions_series_occurrence_uniq")
       .on(t.seriesId, t.seriesOccurrenceAt)
       .where(sql`${t.seriesId} IS NOT NULL`),
+    /** Idempotency key for google-sourced instances. */
+    googleInstanceUniq: uniqueIndex("bbs_sessions_google_instance_uniq")
+      .on(t.seriesId, t.googleInstanceId)
+      .where(sql`${t.googleInstanceId} IS NOT NULL`),
   }),
 );
 
