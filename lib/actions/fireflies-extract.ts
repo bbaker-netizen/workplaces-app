@@ -97,59 +97,76 @@ export async function extractActionItemsFromFireflies(
   if (!engagementId)
     return { ok: false, error: "Session not found." };
 
-  // Load session + engagement members to map assigneeName → user_profile.
-  const ctx = await withEngagementContext(
-    profile.orgId,
-    profile.role,
-    engagementId,
-    async (tx) => {
-      const [session] = await tx
-        .select()
-        .from(bbsSessions)
-        .where(eq(bbsSessions.id, sessionId))
-        .limit(1);
-      if (!session) throw new Error("Session not found.");
-      if (!session.firefliesRecordingId) {
-        throw new Error(
-          "This session has no Fireflies recording id. Add one before extracting.",
-        );
-      }
-      const members = await tx
-        .select({
-          id: userProfiles.id,
-          fullName: userProfiles.fullName,
-          email: userProfiles.email,
-        })
-        .from(userProfiles)
-        .where(eq(userProfiles.orgId, session.orgId));
-      return { session, members };
-    },
-  );
+  // Load session + engagement members, pull the transcript, and run the
+  // extraction. All wrapped so a thrown error (missing recording id, a
+  // Fireflies API failure / missing FIREFLIES_API_KEY, or a Claude API
+  // error) surfaces as a real inline message instead of throwing out of
+  // the server action — an uncaught throw renders the generic "we hit a
+  // snag" error page with no detail.
+  let ctx: {
+    session: typeof bbsSessions.$inferSelect;
+    members: Array<{ id: string; fullName: string; email: string }>;
+  };
+  let result: Awaited<ReturnType<typeof complete>>;
+  try {
+    ctx = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [session] = await tx
+          .select()
+          .from(bbsSessions)
+          .where(eq(bbsSessions.id, sessionId))
+          .limit(1);
+        if (!session) throw new Error("Session not found.");
+        if (!session.firefliesRecordingId) {
+          throw new Error(
+            "This session has no Fireflies recording id. Add one before extracting.",
+          );
+        }
+        const members = await tx
+          .select({
+            id: userProfiles.id,
+            fullName: userProfiles.fullName,
+            email: userProfiles.email,
+          })
+          .from(userProfiles)
+          .where(eq(userProfiles.orgId, session.orgId));
+        return { session, members };
+      },
+    );
 
-  // Fetch transcript via Fireflies API.
-  const transcript = await fetchTranscript(
-    ctx.session.firefliesRecordingId!,
-  );
-  if (!transcript) {
+    // Fetch transcript via Fireflies API.
+    const transcript = await fetchTranscript(
+      ctx.session.firefliesRecordingId!,
+    );
+    if (!transcript) {
+      return {
+        ok: false,
+        error: "Fireflies didn't return a transcript for that id.",
+      };
+    }
+    const transcriptText = transcriptToPlainText(transcript);
+
+    // Run extraction.
+    result = await complete({
+      system: ACTION_ITEM_EXTRACT_SYSTEM,
+      user: actionItemExtractUserPrompt({
+        meetingTitle: transcript.title,
+        meetingDate: new Date(transcript.date).toISOString().slice(0, 10),
+        transcriptText,
+      }),
+      model: "claude-sonnet-5",
+      maxTokens: 4000,
+      temperature: 0.1,
+    });
+  } catch (e) {
     return {
       ok: false,
-      error: "Fireflies didn't return a transcript for that id.",
+      error: e instanceof Error ? e.message : String(e),
     };
   }
-  const transcriptText = transcriptToPlainText(transcript);
-
-  // Run extraction.
-  const result = await complete({
-    system: ACTION_ITEM_EXTRACT_SYSTEM,
-    user: actionItemExtractUserPrompt({
-      meetingTitle: transcript.title,
-      meetingDate: new Date(transcript.date).toISOString().slice(0, 10),
-      transcriptText,
-    }),
-    model: "claude-sonnet-5",
-    maxTokens: 4000,
-    temperature: 0.1,
-  });
 
   // Parse JSON output. The prompt asks for strict JSON; if the model
   // wrapped it in code fences anyway, strip them.
@@ -173,34 +190,41 @@ export async function extractActionItemsFromFireflies(
 
   // Insert each as a draft action item, mapping assigneeName → id.
   let created = 0;
-  await withEngagementContext(
-    profile.orgId,
-    profile.role,
-    engagementId,
-    async (tx, boundOrgId) => {
-      for (const item of parsedOutput.items) {
-        const assigneeId = item.assigneeName
-          ? matchAssignee(item.assigneeName, ctx.members)
-          : null;
-        await tx.insert(actionItems).values({
-          orgId: boundOrgId,
-          engagementId,
-          title: item.title,
-          description: item.description ?? null,
-          status: "draft",
-          assigneeUserProfileId: assigneeId,
-          dueDate: item.dueDate ? new Date(item.dueDate) : null,
-          revenueImpact: item.revenueImpact,
-          marginImpact: item.marginImpact,
-          confidenceFlag: item.confidence,
-          firefliesTranscriptId: ctx.session.firefliesRecordingId,
-          bbsSessionId: ctx.session.id,
-          createdBy: "claude",
-        });
-        created += 1;
-      }
-    },
-  );
+  try {
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx, boundOrgId) => {
+        for (const item of parsedOutput.items) {
+          const assigneeId = item.assigneeName
+            ? matchAssignee(item.assigneeName, ctx.members)
+            : null;
+          await tx.insert(actionItems).values({
+            orgId: boundOrgId,
+            engagementId,
+            title: item.title,
+            description: item.description ?? null,
+            status: "draft",
+            assigneeUserProfileId: assigneeId,
+            dueDate: item.dueDate ? new Date(item.dueDate) : null,
+            revenueImpact: item.revenueImpact,
+            marginImpact: item.marginImpact,
+            confidenceFlag: item.confidence,
+            firefliesTranscriptId: ctx.session.firefliesRecordingId,
+            bbsSessionId: ctx.session.id,
+            createdBy: "claude",
+          });
+          created += 1;
+        }
+      },
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
 
   revalidatePath(`/portal/sessions/${sessionId}`);
   revalidatePath("/portal/action-items");

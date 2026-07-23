@@ -26,13 +26,17 @@ export function MeetingDeliverableButton({ meetingId }: { meetingId: string }) {
     setError(null);
     setMessage(null);
     startTransition(async () => {
-      const r = await draftDeliverableFromMeeting({ meetingId, type });
-      if (!r.ok) {
-        setError(r.error);
-      } else {
-        setMessage(
-          `Drafted “${r.data.title}”. Find it under Deliverables (In progress) to review and edit before delivering.`,
-        );
+      try {
+        const r = await draftDeliverableFromMeeting({ meetingId, type });
+        if (!r.ok) {
+          setError(r.error);
+        } else {
+          setMessage(
+            `Drafted “${r.data.title}”. Find it under Deliverables (In progress) to review and edit before delivering.`,
+          );
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong.");
       }
     });
   };

@@ -93,27 +93,40 @@ async function draftFromRecording(args: {
 }): Promise<ActionResult<{ id: string; type: string; title: string }>> {
   const { profile, engagementId, firefliesRecordingId, type } = args;
 
-  // Soul File for grounding context (access-checked via the bound context).
-  const soulFileBody = await withEngagementContext(
-    profile.orgId,
-    profile.role,
-    engagementId,
-    async (tx) => {
-      const [sf] = await tx
-        .select({ body: soulFiles.body })
-        .from(soulFiles)
-        .where(eq(soulFiles.engagementId, engagementId))
-        .limit(1);
-      return sf?.body ?? "";
-    },
-  );
-
-  // Fetch the transcript via Fireflies.
-  const transcript = await fetchTranscript(firefliesRecordingId);
+  // Soul File for grounding context (access-checked via the bound context)
+  // + the Fireflies transcript. Both are wrapped so a thrown error (a
+  // Fireflies API failure, or a missing FIREFLIES_API_KEY) surfaces as a
+  // real inline message instead of throwing out of the server action —
+  // an uncaught throw here is what renders the generic "we hit a snag"
+  // error page with no detail.
+  let soulFileBody: string;
+  let transcript: Awaited<ReturnType<typeof fetchTranscript>>;
+  try {
+    soulFileBody = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [sf] = await tx
+          .select({ body: soulFiles.body })
+          .from(soulFiles)
+          .where(eq(soulFiles.engagementId, engagementId))
+          .limit(1);
+        return sf?.body ?? "";
+      },
+    );
+    transcript = await fetchTranscript(firefliesRecordingId);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      error: `Couldn't pull the transcript from Fireflies: ${detail}`,
+    };
+  }
   if (!transcript) {
     return {
       ok: false,
-      error: "Fireflies didn't return a transcript for that id.",
+      error: "Fireflies didn't return a transcript for that meeting.",
     };
   }
   const meetingDate = new Date(transcript.date).toISOString().slice(0, 10);
@@ -287,18 +300,30 @@ export async function draftDeliverableFromMeeting(
   // Look up the meeting to get its engagement + transcript id. System
   // context reads across the client org (meetings live in the client
   // org); withEngagementContext below enforces the caller's access when
-  // we actually write the deliverable.
-  const meeting = await withSystemContext(async (tx) => {
-    const [m] = await tx
-      .select({
-        engagementId: engagementMeetings.engagementId,
-        firefliesTranscriptId: engagementMeetings.firefliesTranscriptId,
-      })
-      .from(engagementMeetings)
-      .where(eq(engagementMeetings.id, meetingId))
-      .limit(1);
-    return m ?? null;
-  });
+  // we actually write the deliverable. Wrapped so a DB error returns a
+  // real message rather than throwing out of the action.
+  let meeting: {
+    engagementId: string;
+    firefliesTranscriptId: string;
+  } | null;
+  try {
+    meeting = await withSystemContext(async (tx) => {
+      const [m] = await tx
+        .select({
+          engagementId: engagementMeetings.engagementId,
+          firefliesTranscriptId: engagementMeetings.firefliesTranscriptId,
+        })
+        .from(engagementMeetings)
+        .where(eq(engagementMeetings.id, meetingId))
+        .limit(1);
+      return m ?? null;
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
   if (!meeting) return { ok: false, error: "Meeting not found." };
 
   return draftFromRecording({
