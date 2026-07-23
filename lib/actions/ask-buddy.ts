@@ -92,8 +92,6 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 **03 Deliver — ship the deep work**
 - Deliverables (/business-builder/deliverables) — the 9 BIG artifacts produced for clients over weeks. SOPs, Org Charts, Job Profiles & Interview Guides, Financial Dashboards, App Onboarding Guides, Client Operations Setup Guides, Business Plans, Marketing Plans, Stages of Growth Assessments. Lifecycle: Not started → In progress → Review → Done.
 - Projects (/business-builder/projects) — bigger initiatives within an engagement that span weeks/months. "Build Acme's hiring system." Tasks live in a Monday.com-style grid: inline-editable Owner / Status (colored pill) / Due / Progress cells that save instantly, with indented sub-tasks. Deliverables are the OUTPUTS of a project.
-- Goals (/business-builder/goals) — SMART measurement targets clients are aiming at. "Hit $2M revenue by EOY." "Get turnover under 10%." Different from action items (commitments), deliverables (artifacts), and projects (initiatives). Goals are the DESTINATION; everything else is the journey.
-- Soul File search (/business-builder/soul-search) — search across every client's Soul File using AI.
 
 **04 Bill**
 - Billing happens directly in QuickBooks Online, not in The Builder. Connect QBO at /business-builder/profile/quickbooks. The Builder reads each client's lifetime payments from QuickBooks and shows them as the "Value" on the pipeline; it does not create invoices or track subscriptions itself.
@@ -119,7 +117,7 @@ CONNECTING YOUR TOOLS (first-time setup — what each Business Builder does them
 - **Text messaging (SMS / Twilio) and the Netlify "cloud" account for embedded apps are PLATFORM-LEVEL, not per-person.** They're configured once via environment variables by the master admin (Bruce) and then work for everyone — a standard Business Builder does NOT set up their own SMS or Netlify. If SMS isn't sending or apps won't sync, that's a master-admin/env-var setup task, not something Jen configures.
 
 SETTING UP A CLIENT'S PORTAL (this all lives on the engagement detail page, /business-builder/engagements/[id] — the per-client "workspace" hub):
-- **Invite the client** — the "Invite client" button on the engagement page sends the portal sign-up invitation. You can build out the engagement first (modules, apps, Soul File) and invite the client later — invitation is separate from creating the engagement. When you invite a client, the Business Builder who sent it gets a copy by email, and the moment the client accepts and joins their portal, that Business Builder gets a confirmation (email + a notification in their feed) with the next steps.
+- **Invite the client** — the "Invite client" button on the engagement page sends the portal sign-up invitation. You can build out the engagement first (modules, apps) and invite the client later — invitation is separate from creating the engagement. When you invite a client, the Business Builder who sent it gets a copy by email, and the moment the client accepts and joins their portal, that Business Builder gets a confirmation (email + a notification in their feed) with the next steps.
 - **Choose which modules the client sees** — the engagement page has portal module toggles ("what this client sees"). Every module is on by default; turn off the ones a given client doesn't need. This tailors each client's portal.
 - **Add an app to a client's portal (Embedded Apps)** — TWO steps: (1) sync your Netlify projects under Client tools & tutorials (/business-builder/library); (2) on the engagement page, use the Embedded Apps manager to pick a Netlify project, name it for the client, and set its auth mode (public or token_passthrough). It then shows as an iframed widget in that client's portal under "Apps."
 - The engagement page is also where you reach Preview portal, Documents & Drive, Meeting transcripts, rename/archive, and quick deliverable adds.
@@ -132,14 +130,12 @@ OTHER KEY CONCEPTS:
 
 **BBS Sessions** = the actual MEETINGS Bruce has with clients. Twice-monthly, 2 hours, one in-person and one virtual. Fireflies records them. Claude reads the transcript and drafts the action items. Per-engagement Fireflies recaps sync via the "Sync from Fireflies" button on the coach Meetings page (/business-builder/engagements/<id>/meetings); clients see their own recaps + a "View recording & notes" link in their portal's "Meeting notes" module (/portal/meetings).
 
-**Soul File** = a long-form context document Bruce maintains per engagement. The "Soul" of the client — why they exist, where they are today, where they want to go in 12 months, founder backstory, hard-won learnings. This is the most important methodology IP per client. It gets vector-embedded so future AI features can pull deep context across all clients. The Soul File search lets Bruce ask natural-language questions across every client's Soul File at once — e.g., "Which clients are struggling with hiring?" answered by searching all Soul Files semantically.
-
 **Schedule Meeting** = a button on each prospect that sends a real Google Calendar invite (with optional Google Meet link for video). Supports recurring meetings.
 
 **Builder Buddy** = that's you. The in-app AI assistant.
 
 **Methodology vocabulary you may need:**
-- Top-line revenue vs. margin — every deliverable / action item / goal should move one of these. "Quality Gate."
+- Top-line revenue vs. margin — every deliverable / action item / project should move one of these. "Quality Gate."
 - Stages of Growth framework — Workplaces tracks where each client sits in their growth journey.
 - Models A / B / C — billing approaches. Model C (Productized Retention) is the default — Bruce keeps the client's infrastructure running indefinitely.
 - TTI TriMetrix HD — assessment tool used in hiring. Bruce uploads gap reports.
