@@ -32,15 +32,23 @@ export function LinkGoogleSeries() {
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
   const [options, setOptions] = useState<Option[] | null>(null);
 
   async function load() {
     setError(null);
+    setNeedsReconnect(false);
     setLoading(true);
     try {
-      const rows = await listLinkableGoogleSeries();
+      const res = await listLinkableGoogleSeries();
+      if (!res.ok) {
+        setError(res.error);
+        setNeedsReconnect(res.needsReconnect);
+        setOptions(null);
+        return;
+      }
       setOptions(
-        rows.map((r) => ({
+        res.series.map((r) => ({
           recurringEventId: r.recurringEventId,
           calendarId: r.calendarId,
           summary: r.summary,
@@ -48,8 +56,10 @@ export function LinkGoogleSeries() {
           nextStart: r.nextStart ? new Date(r.nextStart).toISOString() : null,
         })),
       );
-    } catch {
-      setError("Couldn't read your Google Calendar. Is it connected?");
+    } catch (e) {
+      // A thrown error here is unexpected (the action returns a result
+      // shape) — surface it rather than a generic message.
+      setError(e instanceof Error ? e.message : "Couldn't read your calendar.");
     } finally {
       setLoading(false);
     }
@@ -114,12 +124,20 @@ export function LinkGoogleSeries() {
       </p>
 
       {error && (
-        <p
+        <div
           role="alert"
-          className="rounded-lg bg-tbb-orange/10 border border-tbb-orange/30 px-3 py-2 font-sans text-sm text-tbb-orange"
+          className="rounded-lg bg-tbb-orange/10 border border-tbb-orange/30 px-3 py-2 space-y-2"
         >
-          {error}
-        </p>
+          <p className="font-sans text-sm text-tbb-orange">{error}</p>
+          {needsReconnect && (
+            <a
+              href="/business-builder/profile/google-calendar"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-tbb-navy px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-tbb-caps text-white hover:bg-tbb-blue transition-colors"
+            >
+              Reconnect Google Calendar
+            </a>
+          )}
+        </div>
       )}
 
       {loading && (

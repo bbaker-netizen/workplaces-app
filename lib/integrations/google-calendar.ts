@@ -897,6 +897,23 @@ export async function listEventsForSync(
     .filter((x): x is SyncEvent => x !== null);
 }
 
+/** Cheap check: does this user have a stored Google connection at all?
+ *  Distinguishes "never connected" from "connected but the API call
+ *  failed" so callers can show the right message. */
+export async function hasGoogleConnection(
+  userProfileId: string,
+): Promise<boolean> {
+  const row = await withSystemContext(async (tx) => {
+    const [r] = await tx
+      .select({ id: googleCalendarTokens.userProfileId })
+      .from(googleCalendarTokens)
+      .where(eq(googleCalendarTokens.userProfileId, userProfileId))
+      .limit(1);
+    return r ?? null;
+  });
+  return Boolean(row);
+}
+
 /* ------------- Google-owned internal touch-base series ------------- */
 
 export type RecurringSeriesOption = {

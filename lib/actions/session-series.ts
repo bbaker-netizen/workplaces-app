@@ -549,19 +549,59 @@ const GOOGLE_SYNC_PAST_DAYS = 1;
  * List the recurring Google events on the current internal user's
  * calendar, for the Team "link your touch-base" picker.
  */
-export async function listLinkableGoogleSeries(): Promise<
-  import("@/lib/integrations/google-calendar").RecurringSeriesOption[]
-> {
+export type LinkableSeriesResult =
+  | {
+      ok: true;
+      series: import("@/lib/integrations/google-calendar").RecurringSeriesOption[];
+    }
+  | { ok: false; error: string; needsReconnect: boolean };
+
+export async function listLinkableGoogleSeries(): Promise<LinkableSeriesResult> {
   const profile = await ensureUserProfile();
-  if (profile.status !== "ok") return [];
+  if (profile.status !== "ok") {
+    return { ok: false, error: "Not authenticated.", needsReconnect: false };
+  }
   const { isInternalRole } = await import(
     "@/lib/db/queries/internal-workspace"
   );
-  if (!isInternalRole(profile.role)) return [];
-  const { listRecurringSeries } = await import(
-    "@/lib/integrations/google-calendar"
-  );
-  return listRecurringSeries(profile.userProfileId);
+  if (!isInternalRole(profile.role)) {
+    return {
+      ok: false,
+      error: "Only Business Builders can link a team calendar.",
+      needsReconnect: false,
+    };
+  }
+
+  const { listRecurringSeries, hasGoogleConnection, GoogleReconnectRequiredError } =
+    await import("@/lib/integrations/google-calendar");
+
+  // Distinguish "not connected" from "connected but the read failed" —
+  // the old generic "Is it connected?" message was wrong when it WAS
+  // connected and the real problem was a stale token or missing scope.
+  if (!(await hasGoogleConnection(profile.userProfileId))) {
+    return {
+      ok: false,
+      error: "Google Calendar isn't connected for your account yet.",
+      needsReconnect: true,
+    };
+  }
+
+  try {
+    const series = await listRecurringSeries(profile.userProfileId);
+    return { ok: true, series };
+  } catch (err) {
+    const reconnect =
+      err instanceof GoogleReconnectRequiredError ||
+      /invalid_grant|\b401\b|\b403\b|insufficient|unauthenticated|permission/i.test(
+        err instanceof Error ? err.message : String(err),
+      );
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Couldn't read your Google Calendar.",
+      needsReconnect: reconnect,
+    };
+  }
 }
 
 const linkSchema = z.object({
