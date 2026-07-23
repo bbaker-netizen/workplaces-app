@@ -962,37 +962,45 @@ export async function listRecurringSeries(
     (e) => Array.isArray(e.recurrence) && e.recurrence.length > 0 && e.status !== "cancelled",
   );
 
-  const out: RecurringSeriesOption[] = [];
-  for (const m of masters) {
-    // Pull the next instance so the picker can show "next: Tue 9:00".
-    let nextStart: Date | null = null;
-    try {
-      const instances = await listSeriesInstances(
-        userProfileId,
-        auth.calendarId,
-        m.id,
-        new Date(),
-        new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-      );
-      nextStart = instances[0]?.start ?? null;
-    } catch {
-      nextStart = null;
-    }
-    out.push({
-      recurringEventId: m.id,
-      calendarId: auth.calendarId,
-      summary: m.summary ?? "(no title)",
-      scheduleHint: rruleToHint(m.recurrence ?? []),
-      nextStart,
-    });
-  }
-  // Series with an upcoming instance first, then by title.
-  return out.sort((a, b) => {
-    if (Boolean(a.nextStart) !== Boolean(b.nextStart)) {
-      return a.nextStart ? -1 : 1;
-    }
-    return a.summary.localeCompare(b.summary);
-  });
+  // Look ahead far enough that a monthly series still shows a next date.
+  const lookaheadEnd = new Date(Date.now() + 120 * 24 * 60 * 60 * 1000);
+
+  // Resolve each master's next occurrence in parallel — one Google call
+  // per master, but concurrent so the picker doesn't stall on a long list.
+  const resolved = await Promise.all(
+    masters.map(async (m) => {
+      let nextStart: Date | null = null;
+      try {
+        const instances = await listSeriesInstances(
+          userProfileId,
+          auth.calendarId,
+          m.id,
+          new Date(),
+          lookaheadEnd,
+        );
+        // First non-cancelled upcoming occurrence.
+        nextStart =
+          instances.find((i) => i.status !== "cancelled")?.start ?? null;
+      } catch {
+        nextStart = null;
+      }
+      return {
+        recurringEventId: m.id,
+        calendarId: auth.calendarId,
+        summary: m.summary ?? "(no title)",
+        scheduleHint: rruleToHint(m.recurrence ?? []),
+        nextStart,
+      };
+    }),
+  );
+
+  // Only surface series that actually still meet — a recurring event with
+  // no upcoming occurrence is an old/ended series (its master keeps the
+  // RRULE, e.g. an UNTIL in the past or an exhausted COUNT). Those are the
+  // "meetings I don't recognize" noise; drop them.
+  return resolved
+    .filter((s) => s.nextStart !== null)
+    .sort((a, b) => (a.nextStart!.getTime() - b.nextStart!.getTime()));
 }
 
 export type SeriesInstance = {

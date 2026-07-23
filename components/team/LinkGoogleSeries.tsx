@@ -149,8 +149,9 @@ export function LinkGoogleSeries() {
 
       {!loading && options && options.length === 0 && (
         <p className="rounded-lg border border-dashed border-tbb-line p-4 text-center font-sans text-sm text-muted-foreground">
-          No repeating events found on your calendar in the next year. Create
-          the touch-base in Google first, then come back and link it.
+          No upcoming repeating meetings found on your calendar. Create the
+          touch-base in Google first (with a recurring schedule), then come
+          back and link it.
         </p>
       )}
 
