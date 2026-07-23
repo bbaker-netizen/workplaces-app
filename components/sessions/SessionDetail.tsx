@@ -128,15 +128,19 @@ export function SessionDetail({
     setError(null);
     setExtractMessage(null);
     startTransition(async () => {
-      const result = await extractActionItemsFromFireflies({
-        sessionId: session.id,
-      });
-      if (!result.ok) {
-        setError(result.error);
-      } else {
-        setExtractMessage(
-          `${result.data.created} draft action items created.`,
-        );
+      try {
+        const result = await extractActionItemsFromFireflies({
+          sessionId: session.id,
+        });
+        if (!result.ok) {
+          setError(result.error);
+        } else {
+          setExtractMessage(
+            `${result.data.created} draft action items created.`,
+          );
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong.");
       }
     });
   };
@@ -153,16 +157,20 @@ export function SessionDetail({
     setError(null);
     setDeliverableMessage(null);
     startTransition(async () => {
-      const result = await draftDeliverableFromFireflies({
-        sessionId: session.id,
-        type: deliverableType,
-      });
-      if (!result.ok) {
-        setError(result.error);
-      } else {
-        setDeliverableMessage(
-          `Drafted “${result.data.title}”. Find it under Deliverables (In progress) to review and edit before delivering.`,
-        );
+      try {
+        const result = await draftDeliverableFromFireflies({
+          sessionId: session.id,
+          type: deliverableType,
+        });
+        if (!result.ok) {
+          setError(result.error);
+        } else {
+          setDeliverableMessage(
+            `Drafted “${result.data.title}”. Find it under Deliverables (In progress) to review and edit before delivering.`,
+          );
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong.");
       }
     });
   };
