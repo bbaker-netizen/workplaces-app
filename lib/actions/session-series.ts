@@ -791,7 +791,7 @@ export async function unlinkGoogleSeries(
  */
 export async function syncGoogleSeries(seriesId: string): Promise<number> {
   const { withSystemContext } = await import("@/lib/db/tenant");
-  const { listSeriesInstances } = await import(
+  const { listSeriesInstancesExpanded } = await import(
     "@/lib/integrations/google-calendar"
   );
 
@@ -834,10 +834,10 @@ export async function syncGoogleSeries(seriesId: string): Promise<number> {
   const rangeEnd = new Date(now.getTime() + GOOGLE_SYNC_HORIZON_DAYS * 864e5);
 
   // Network fetch OUTSIDE the transaction so a slow Google call doesn't
-  // hold a DB tx open.
-  const instances = await listSeriesInstances(
+  // hold a DB tx open. Expanded-instances path (robust to events the user
+  // was invited to rather than organizes).
+  const instances = await listSeriesInstancesExpanded(
     series.linkedByUserProfileId,
-    series.googleCalendarId,
     series.googleRecurringEventId,
     rangeStart,
     rangeEnd,
