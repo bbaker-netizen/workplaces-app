@@ -150,7 +150,7 @@ Draft the renewal proposal now.`;
     const result = await complete({
       system: RENEWAL_SYSTEM,
       user: userPrompt,
-      model: "claude-opus-4-7",
+      model: "claude-opus-4-8",
       maxTokens: 6000,
     });
     return { ok: true, data: { proposal: result.text } };

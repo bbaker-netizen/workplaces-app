@@ -146,7 +146,7 @@ export async function extractActionItemsFromFireflies(
       meetingDate: new Date(transcript.date).toISOString().slice(0, 10),
       transcriptText,
     }),
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-5",
     maxTokens: 4000,
     temperature: 0.1,
   });
@@ -275,7 +275,7 @@ export async function extractFromFirefliesAsSystem(
       meetingDate: new Date(transcript.date).toISOString().slice(0, 10),
       transcriptText,
     }),
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-5",
     maxTokens: 4000,
     temperature: 0.1,
   });

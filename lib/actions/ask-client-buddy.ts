@@ -80,7 +80,7 @@ export async function askClientBuddy(
     const system = SYSTEM_PROMPT + "\n\n--- Live context ---\n" + ctx;
 
     const response = await client().messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       max_tokens: 1024,
       temperature: 0.4,
       system: [

@@ -142,7 +142,7 @@ async function draftFromRecording(args: {
           `**Meeting:** ${transcript.title} (${meetingDate})\n\n` +
           `**Transcript:**\n\n${transcriptText}`,
       }),
-      model: "claude-opus-4-7",
+      model: "claude-opus-4-8",
       maxTokens: 8000,
     });
     draftText = result.text;

@@ -132,7 +132,7 @@ export async function summarizeThread(
     const result = await complete({
       system: SUMMARY_SYSTEM,
       user: `Thread type: ${threadTypeLabel(threadType)}\n\nMessages:\n\n${flat.slice(0, 80_000)}`,
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       maxTokens: 2000,
       temperature: 0.2,
     });

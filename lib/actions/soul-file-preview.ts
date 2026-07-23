@@ -251,7 +251,7 @@ export async function previewSoulFileDraft(input: {
     const result = await complete({
       system: SOUL_FILE_DRAFT_SYSTEM,
       user: userPrompt,
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       maxTokens: 3500,
       temperature: 0.5,
     });

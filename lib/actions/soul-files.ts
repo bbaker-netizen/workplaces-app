@@ -265,7 +265,7 @@ export async function searchSoulFiles(
     const result = await complete({
       system: SEARCH_SYSTEM,
       user: userPrompt,
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       maxTokens: 2000,
       temperature: 0.1,
     });
