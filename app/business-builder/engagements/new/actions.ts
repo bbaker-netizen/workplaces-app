@@ -20,8 +20,10 @@ function slugify(name: string, id: string): string {
  * Server action: create a new engagement and invite its client lead.
  *
  * Steps (order matters — see failure-mode comments below):
- *   1. Verify the caller is a master_admin (extra check on top of the
- *      Coach layout role gate — defence in depth for direct API hits).
+ *   1. Verify the caller is a Business Builder (master_admin or coach) —
+ *      extra check on top of the Console layout role gate, defence in
+ *      depth for direct API hits. Every Business Builder can invite their
+ *      own clients, not just the master admin.
  *   2. Validate the form input (Zod).
  *   3. Ensure the caller has a `coaches` row (lazy create on first call).
  *   4. Create a Clerk Organization for the new engagement (Bruce auto-
@@ -131,13 +133,21 @@ export async function createEngagementAction(
   _prevState: CreateEngagementState,
   formData: FormData,
 ): Promise<CreateEngagementState> {
-  // 1. Verify caller is master_admin
+  // 1. Verify caller is a Business Builder (master_admin or coach). Any
+  //    Business Builder can create an engagement and invite its client
+  //    lead — not just the master admin.
   const callerProfile = await ensureUserProfile();
   if (callerProfile.status !== "ok") {
     return { kind: "error", message: "Not signed in." };
   }
-  if (callerProfile.role !== "master_admin") {
-    return { kind: "error", message: "Only master admins can create engagements." };
+  if (
+    callerProfile.role !== "master_admin" &&
+    callerProfile.role !== "coach"
+  ) {
+    return {
+      kind: "error",
+      message: "Only Business Builders can create engagements.",
+    };
   }
 
   // 2. Validate input
