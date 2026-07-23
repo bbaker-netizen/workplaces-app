@@ -938,19 +938,31 @@ export async function listRecurringSeries(
 ): Promise<RecurringSeriesOption[]> {
   const auth = await getValidAccessToken(userProfileId);
   if (!auth) return [];
+
+  // Discover by EXPANDED upcoming instances (singleEvents=true), not by
+  // recurring masters. Two reasons:
+  //   1. A recurring event you were INVITED to (someone else organizes,
+  //      e.g. Jen's touch-base) often has NO `recurrence` field on your
+  //      copy of the master — so a master-based scan silently skips it.
+  //      Its expanded INSTANCES, however, still carry `recurringEventId`.
+  //   2. Expanded instances in a forward window are exactly "events that
+  //      still meet", so old/ended series never appear.
+  // We group the instances back into series by `recurringEventId`.
+  const lookaheadEnd = new Date(Date.now() + 120 * 24 * 60 * 60 * 1000);
   const params = new URLSearchParams({
-    singleEvents: "false",
-    maxResults: "250",
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "2500",
     showDeleted: "false",
-    // Only events that still have upcoming occurrences are worth linking.
-    timeMax: new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString(),
+    timeMin: new Date().toISOString(),
+    timeMax: lookaheadEnd.toISOString(),
   });
   const data = await api<{
     items: {
       id: string;
       summary?: string;
       status?: string;
-      recurrence?: string[];
+      recurringEventId?: string;
       start?: { dateTime?: string; date?: string };
     }[];
   }>(
@@ -958,49 +970,59 @@ export async function listRecurringSeries(
     `/calendars/${encodeURIComponent(auth.calendarId)}/events?${params.toString()}`,
   );
 
-  const masters = (data.items ?? []).filter(
-    (e) => Array.isArray(e.recurrence) && e.recurrence.length > 0 && e.status !== "cancelled",
+  // Group the upcoming instances by their parent recurring event.
+  const groups = new Map<
+    string,
+    { summary: string; starts: Date[] }
+  >();
+  for (const e of data.items ?? []) {
+    if (!e.recurringEventId) continue; // only instances of a recurring event
+    if (e.status === "cancelled") continue;
+    const startStr = e.start?.dateTime;
+    if (!startStr) continue; // timed events only
+    const start = new Date(startStr);
+    const g = groups.get(e.recurringEventId);
+    if (g) {
+      g.starts.push(start);
+      // Prefer a non-empty title if the first instance lacked one.
+      if (g.summary === "(no title)" && e.summary) g.summary = e.summary;
+    } else {
+      groups.set(e.recurringEventId, {
+        summary: e.summary ?? "(no title)",
+        starts: [start],
+      });
+    }
+  }
+
+  const out: RecurringSeriesOption[] = [];
+  for (const [recurringEventId, g] of Array.from(groups.entries())) {
+    g.starts.sort((a, b) => a.getTime() - b.getTime());
+    out.push({
+      recurringEventId,
+      calendarId: auth.calendarId,
+      summary: g.summary,
+      // Infer cadence from the spacing between the first two occurrences.
+      scheduleHint: hintFromSpacing(g.starts),
+      nextStart: g.starts[0] ?? null,
+    });
+  }
+
+  return out.sort(
+    (a, b) => (a.nextStart?.getTime() ?? 0) - (b.nextStart?.getTime() ?? 0),
   );
+}
 
-  // Look ahead far enough that a monthly series still shows a next date.
-  const lookaheadEnd = new Date(Date.now() + 120 * 24 * 60 * 60 * 1000);
-
-  // Resolve each master's next occurrence in parallel — one Google call
-  // per master, but concurrent so the picker doesn't stall on a long list.
-  const resolved = await Promise.all(
-    masters.map(async (m) => {
-      let nextStart: Date | null = null;
-      try {
-        const instances = await listSeriesInstances(
-          userProfileId,
-          auth.calendarId,
-          m.id,
-          new Date(),
-          lookaheadEnd,
-        );
-        // First non-cancelled upcoming occurrence.
-        nextStart =
-          instances.find((i) => i.status !== "cancelled")?.start ?? null;
-      } catch {
-        nextStart = null;
-      }
-      return {
-        recurringEventId: m.id,
-        calendarId: auth.calendarId,
-        summary: m.summary ?? "(no title)",
-        scheduleHint: rruleToHint(m.recurrence ?? []),
-        nextStart,
-      };
-    }),
+/** Guess a cadence label from the gap between the first two occurrences. */
+function hintFromSpacing(starts: Date[]): string | null {
+  if (starts.length < 2) return "Recurring";
+  const days = Math.round(
+    (starts[1].getTime() - starts[0].getTime()) / (24 * 60 * 60 * 1000),
   );
-
-  // Only surface series that actually still meet — a recurring event with
-  // no upcoming occurrence is an old/ended series (its master keeps the
-  // RRULE, e.g. an UNTIL in the past or an exhausted COUNT). Those are the
-  // "meetings I don't recognize" noise; drop them.
-  return resolved
-    .filter((s) => s.nextStart !== null)
-    .sort((a, b) => (a.nextStart!.getTime() - b.nextStart!.getTime()));
+  if (days <= 1) return "Daily";
+  if (days <= 10) return "Weekly";
+  if (days <= 18) return "Every 2 weeks";
+  if (days <= 45) return "Monthly";
+  return "Recurring";
 }
 
 export type SeriesInstance = {
@@ -1015,14 +1037,15 @@ export type SeriesInstance = {
 };
 
 /**
- * Expand ONE recurring event into its dated occurrences in a window,
- * via the events/{id}/instances endpoint. showDeleted so a single
- * cancelled occurrence comes back with status=cancelled (the sync marks
- * the matching session cancelled rather than leaving a ghost).
+ * Instances of ONE recurring series in a window, discovered by expanding
+ * the calendar (singleEvents=true) and filtering to the given
+ * recurringEventId — same invited-event-robust path as the picker, and
+ * avoids the events/{id}/instances endpoint (which can 404 for an event
+ * you don't organize). showDeleted so a single cancelled occurrence comes
+ * back with status=cancelled.
  */
-export async function listSeriesInstances(
+export async function listSeriesInstancesExpanded(
   userProfileId: string,
-  calendarId: string,
   recurringEventId: string,
   rangeStart: Date,
   rangeEnd: Date,
@@ -1030,33 +1053,36 @@ export async function listSeriesInstances(
   const auth = await getValidAccessToken(userProfileId);
   if (!auth) return [];
   const params = new URLSearchParams({
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "2500",
+    showDeleted: "true",
     timeMin: rangeStart.toISOString(),
     timeMax: rangeEnd.toISOString(),
-    maxResults: "250",
-    showDeleted: "true",
   });
   const data = await api<{
     items: {
       id: string;
       summary?: string;
       status?: string;
+      recurringEventId?: string;
       start?: { dateTime?: string; date?: string };
       end?: { dateTime?: string; date?: string };
+      originalStartTime?: { dateTime?: string; date?: string };
       location?: string;
       hangoutLink?: string;
       conferenceData?: unknown;
     }[];
   }>(
     auth.token,
-    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(
-      recurringEventId,
-    )}/instances?${params.toString()}`,
+    `/calendars/${encodeURIComponent(auth.calendarId)}/events?${params.toString()}`,
   );
 
   return (data.items ?? [])
+    .filter((e) => e.recurringEventId === recurringEventId)
     .map((e) => {
-      const startStr = e.start?.dateTime;
-      // Skip all-day rows — a touch-base is a timed event.
+      // Cancelled occurrences may carry only originalStartTime.
+      const startStr = e.start?.dateTime ?? e.originalStartTime?.dateTime;
       if (!startStr) return null;
       const endStr = e.end?.dateTime ?? e.end?.date ?? startStr;
       const locationVirtual = /\b(zoom|meet\.google|teams\.microsoft|https?:\/\/)/i.test(
@@ -1074,28 +1100,6 @@ export async function listSeriesInstances(
     })
     .filter((x): x is SeriesInstance => x !== null)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-}
-
-/** Crude RRULE → "Weekly on Tuesday" hint. Display-only, best-effort. */
-function rruleToHint(recurrence: string[]): string | null {
-  const rule = recurrence.find((r) => r.startsWith("RRULE:"));
-  if (!rule) return null;
-  const body = rule.slice("RRULE:".length);
-  const parts = Object.fromEntries(
-    body.split(";").map((kv) => {
-      const [k, v] = kv.split("=");
-      return [k, v];
-    }),
-  );
-  const freq = parts.FREQ;
-  const interval = parts.INTERVAL ? Number(parts.INTERVAL) : 1;
-  if (freq === "WEEKLY") {
-    return interval > 1 ? `Every ${interval} weeks` : "Weekly";
-  }
-  if (freq === "DAILY") return "Daily";
-  if (freq === "MONTHLY") return "Monthly";
-  if (freq === "YEARLY") return "Yearly";
-  return freq ? freq.toLowerCase() : null;
 }
 
 /** Pull the connected Google account email via the userinfo endpoint. */
