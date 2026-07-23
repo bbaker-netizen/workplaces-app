@@ -74,7 +74,7 @@ export async function searchClientMeetings(
   try {
     const client = new Anthropic({ apiKey: key });
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       max_tokens: 1024,
       temperature: 0.2,
       system: [{ type: "text", text: SYSTEM }],

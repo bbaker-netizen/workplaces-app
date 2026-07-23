@@ -176,7 +176,7 @@ export async function generateGapAnalysis(
         roleName: loaded.hire.roleName,
         gapReportText: gapText.slice(0, 100_000),
       }),
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       maxTokens: 6000,
     });
 
@@ -238,7 +238,7 @@ export async function generateInterviewGuide(
         gapReportText: gapText.slice(0, 100_000),
         resumeText: resumeText.slice(0, 50_000),
       }),
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       maxTokens: 6000,
     });
 
@@ -302,7 +302,7 @@ export async function generateHiringAssessment(
         gapReportText: gapText.slice(0, 100_000),
         interviewTranscript: interviewTranscript.slice(0, 200_000),
       }),
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       maxTokens: 6000,
     });
 
@@ -363,7 +363,7 @@ export async function generateOnboardingPack(
         startDate,
         compensation,
       }),
-      model: "claude-opus-4-7",
+      model: "claude-opus-4-8",
       maxTokens: 8000,
     });
 

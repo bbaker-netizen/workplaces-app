@@ -78,7 +78,7 @@ export async function generateDeliverableDraft(
         soulFileBody: ctx.soulFileBody,
         extraContext,
       }),
-      model: "claude-opus-4-7",
+      model: "claude-opus-4-8",
       maxTokens: 8000,
     });
 

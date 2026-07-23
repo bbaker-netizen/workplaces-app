@@ -15,8 +15,8 @@
  *     tokens via callback. Used by long-form Generate buttons where
  *     the UI surfaces partial text.
  *
- * Model selection: claude-sonnet-4-6 (the default for built-in
- * features) unless the caller overrides for a specific job. Opus 4.7
+ * Model selection: claude-sonnet-5 (the default for built-in
+ * features) unless the caller overrides for a specific job. Opus 4.8
  * for the heavy methodology generation (Soul File, business plans,
  * marketing plans). Haiku 4.5 for cheap classification (mention
  * extraction, action item categorization).
@@ -42,24 +42,22 @@ function client(): Anthropic {
 }
 
 export type ClaudeModel =
-  | "claude-opus-4-7"
-  | "claude-sonnet-4-6"
+  | "claude-opus-4-8"
+  | "claude-sonnet-5"
   | "claude-haiku-4-5-20251001";
 
 /**
  * Newer Claude models (Opus 4.7 / 4.8, Sonnet 5, Fable 5) REMOVED the
  * sampling parameters — sending `temperature` / `top_p` / `top_k` to them
- * returns a 400 `invalid_request_error`. The 4.6-era models (and Haiku
- * 4.5) still accept them. We allowlist the models that accept sampling so
- * that (a) Opus 4.7 stops 400ing and (b) if we later bump the registry to
- * Opus 4.8 / Sonnet 5, those also correctly omit the param without another
- * edit. Models not on this list simply run at the API default.
+ * returns a 400 `invalid_request_error`. Only the 4.5/4.6-era models (here,
+ * Haiku 4.5) still accept them. We allowlist the models that accept
+ * sampling and omit the param for the rest, so Opus 4.8 and Sonnet 5 (both
+ * in the current registry) run at the API default rather than 400ing.
+ * Adding an older model back to the registry is the only case that needs a
+ * new allowlist entry here.
  */
 function modelAcceptsSampling(model: ClaudeModel): boolean {
-  return (
-    model === "claude-sonnet-4-6" ||
-    model.startsWith("claude-haiku-4-5")
-  );
+  return model.startsWith("claude-haiku-4-5");
 }
 
 export type CompletionInput = {
@@ -67,7 +65,7 @@ export type CompletionInput = {
   system: string;
   /** User prompt — the one-off content being processed. */
   user: string;
-  /** Optional override; defaults to claude-sonnet-4-6. */
+  /** Optional override; defaults to claude-sonnet-5. */
   model?: ClaudeModel;
   /** Default 4096. Hard cap by Anthropic per model. */
   maxTokens?: number;
@@ -92,7 +90,7 @@ export type CompletionResult = {
 export async function complete(
   input: CompletionInput,
 ): Promise<CompletionResult> {
-  const model = input.model ?? "claude-sonnet-4-6";
+  const model = input.model ?? "claude-sonnet-5";
   const maxTokens = input.maxTokens ?? 4096;
   const temperature = input.temperature ?? 0.3;
 
@@ -149,7 +147,7 @@ export async function completeWithImage(input: {
   maxTokens?: number;
   temperature?: number;
 }): Promise<CompletionResult> {
-  const model = input.model ?? "claude-sonnet-4-6";
+  const model = input.model ?? "claude-sonnet-5";
   const response = await client().messages.create({
     model,
     max_tokens: input.maxTokens ?? 1024,
@@ -195,7 +193,7 @@ export async function completeWithImage(input: {
 export async function streamComplete(
   input: CompletionInput & { onToken: (delta: string) => void },
 ): Promise<CompletionResult> {
-  const model = input.model ?? "claude-sonnet-4-6";
+  const model = input.model ?? "claude-sonnet-5";
   const maxTokens = input.maxTokens ?? 4096;
   const temperature = input.temperature ?? 0.3;
 
