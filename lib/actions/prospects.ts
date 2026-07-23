@@ -23,7 +23,18 @@ import {
   LEAD_SOURCE_CHANNELS,
   LEAD_SOURCE_LABELS,
 } from "@/lib/pipeline/lead-source";
+import {
+  DISQUALIFICATION_REASONS,
+  type DisqualificationReason,
+} from "@/lib/pipeline/stages";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
+
+// Derive the validation set from the single source of truth so the
+// server can never drift from the reasons the UI offers (adding a reason
+// in stages.ts is now enough).
+const DISQUALIFICATION_REASON_VALUES = DISQUALIFICATION_REASONS.map(
+  (r) => r.value,
+) as [DisqualificationReason, ...DisqualificationReason[]];
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -212,15 +223,7 @@ const updateSchema = z.object({
   /** Why the lead was disqualified — only meaningful when status is (or is
    *  being set to) not_qualified. One of DISQUALIFICATION_REASONS values. */
   disqualifiedReason: z
-    .enum([
-      "spam",
-      "wrong_region",
-      "no_budget",
-      "not_a_fit",
-      "bad_contact",
-      "duplicate",
-      "other",
-    ])
+    .enum(DISQUALIFICATION_REASON_VALUES)
     .nullable()
     .optional(),
   notes: z.string().max(40000).nullable().optional(),

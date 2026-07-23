@@ -218,6 +218,7 @@ export const DISQUALIFICATION_REASONS = [
   { value: "not_a_fit", label: "Not a fit (wrong type or size)" },
   { value: "bad_contact", label: "Bad contact info / unreachable" },
   { value: "duplicate", label: "Duplicate lead" },
+  { value: "clicked_in_error", label: "Clicked in error" },
   { value: "other", label: "Other" },
 ] as const;
 
