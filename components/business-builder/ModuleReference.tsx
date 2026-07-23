@@ -18,7 +18,6 @@ import {
   MessagesSquare,
   PenSquare,
   Puzzle,
-  Target,
   UserCheck,
   Users,
   Filter,
@@ -74,15 +73,6 @@ export function ModuleReference() {
         replaces={`Your per-client Project Management Plan boards in Monday. Same multi-phase / task layout, surfaced inside the engagement.`}
         link="/business-builder/projects"
         linkLabel="Open projects"
-      />
-      <ModuleCard
-        icon={<Target />}
-        name="Goals"
-        what="SMART outcomes for the engagement or a specific leader. Each goal has a target metric, target date, owner, and status, tagged with the same revenue / margin quality gate as action items."
-        when="At engagement kickoff (top-line and margin goals for the year). When a leader sets personal accountability targets."
-        replaces={`The Partner Accountability Framework form pattern in Monday — each leader's annual outcomes + measurement become Goals here.`}
-        link="/business-builder/goals"
-        linkLabel="Open goals (pick an engagement)"
       />
       <ModuleCard
         icon={<FileText />}

@@ -453,7 +453,7 @@ export default async function CoachWelcomePage() {
             <li>
               <strong>Invite the client.</strong> The <strong>Invite client</strong>{" "}
               button sends their portal sign-up email. You can prepare the
-              engagement first (modules, apps, Soul File) and invite later —
+              engagement first (modules, apps) and invite later —
               inviting is separate from creating the engagement.
             </li>
           </ul>
@@ -497,21 +497,6 @@ export default async function CoachWelcomePage() {
               scans your Drive and matches folders to clients by name.
             </li>
           </ul>
-        </Step>
-
-        <Step
-          icon={<Sparkles className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Write the Soul File"
-          href="/business-builder/soul-file/[engagementId]"
-          hrefLabel="(from each engagement)"
-        >
-          <p>
-            The Soul File is the long-form context document for the
-            engagement. Why the business exists, where it is today,
-            where it wants to be in 12 months, founders, learnings.
-            Write it once after your kickoff, edit as you go. The
-            client sees it read-only on their portal.
-          </p>
         </Step>
       </Phase>
 
@@ -689,15 +674,15 @@ export default async function CoachWelcomePage() {
 
         <Step
           icon={<Target className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Goals and projects"
-          href="/business-builder/goals"
-          hrefLabel="Goals · Projects"
+          title="Run projects"
+          href="/business-builder/projects"
+          hrefLabel="Projects"
         >
           <p>
-            Goals are SMART; projects are larger initiatives with tasks
-            and milestones. Both inherit the revenue/margin quality gate.
-            Use Goals for outcomes; use Projects for app builds, hires,
-            marketing campaigns.
+            Projects are the larger initiatives with tasks and milestones,
+            all inheriting the revenue/margin quality gate — app builds,
+            hires, marketing campaigns. Each shows up in the client&apos;s
+            portal so they can follow progress.
           </p>
         </Step>
       </Phase>
@@ -736,8 +721,8 @@ export default async function CoachWelcomePage() {
         >
           <p>
             Two to four weeks before the engagement end date, Claude
-            Opus drafts a renewal proposal from the Soul File, recent
-            BBS notes, and outstanding deliverables. You edit, sign
+            Opus drafts a renewal proposal from recent BBS notes and
+            outstanding deliverables. You edit, sign
             (your stored signature applies automatically), and send
             back through the Signing flow.
           </p>
@@ -828,11 +813,6 @@ export default async function CoachWelcomePage() {
             href="/business-builder/calendar"
             label="Calendar — sessions, due dates & targets across clients"
             icon={<CalendarClock className="w-4 h-4 text-tbb-blue" aria-hidden />}
-          />
-          <CheatSheetItem
-            href="/business-builder/soul-search"
-            label="Soul File semantic search"
-            icon={<Folder className="w-4 h-4 text-tbb-blue" aria-hidden />}
           />
           <CheatSheetItem
             href="/business-builder/tools"
