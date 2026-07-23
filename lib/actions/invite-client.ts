@@ -35,8 +35,9 @@ export async function inviteClientToPortal(
 ): Promise<Result> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
-  if (profile.role !== "master_admin") {
-    return { ok: false, error: "Only master admins can invite clients." };
+  // Any Business Builder (master_admin or coach) can invite their clients.
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Only Business Builders can invite clients." };
   }
 
   // Load engagement + its org + the client lead (from the linked prospect)

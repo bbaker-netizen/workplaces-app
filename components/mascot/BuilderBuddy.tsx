@@ -26,12 +26,19 @@ import {
   HelpCircle,
   Loader2,
   MessageCircle,
+  Minus,
   Send,
-  X,
 } from "lucide-react";
 import { askBuddy, type BuddyMessage } from "@/lib/actions/ask-buddy";
 
 const STORAGE_MUTED = "tbb_buddy_muted_v2";
+// Ongoing conversation + draft, kept in sessionStorage so minimizing the
+// panel (or a page refresh / navigation) never loses an in-progress
+// message. Per-tab and ephemeral — clears when the tab closes, which is
+// the right lifetime for transient in-app help.
+const STORAGE_THREAD = "tbb_buddy_thread_v2";
+
+type PersistedThread = { messages: BuddyMessage[]; draft: string };
 
 type Starter = { label: string; text: string };
 
@@ -78,15 +85,46 @@ export function BuilderBuddy({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Gate persistence until after we've hydrated from storage, so the
+  // initial empty state doesn't clobber a saved thread on first render.
+  const hydratedRef = useRef(false);
 
-  // Load mute pref once.
+  // Load mute pref + any saved conversation once, on mount.
   useEffect(() => {
     try {
       setMuted(localStorage.getItem(STORAGE_MUTED) === "1");
     } catch {
       /* SSR / private mode */
     }
+    try {
+      const raw = sessionStorage.getItem(STORAGE_THREAD);
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<PersistedThread>;
+        if (Array.isArray(saved.messages)) setMessages(saved.messages);
+        if (typeof saved.draft === "string") setDraft(saved.draft);
+      }
+    } catch {
+      /* SSR / private mode / malformed JSON — start fresh */
+    }
+    hydratedRef.current = true;
   }, []);
+
+  // Persist the conversation + draft whenever either changes. Skipped
+  // until hydration completes (see hydratedRef). This is what makes the
+  // minimize button — and a mid-conversation refresh — non-destructive.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      if (messages.length === 0 && draft.trim() === "") {
+        sessionStorage.removeItem(STORAGE_THREAD);
+      } else {
+        const payload: PersistedThread = { messages, draft };
+        sessionStorage.setItem(STORAGE_THREAD, JSON.stringify(payload));
+      }
+    } catch {
+      /* storage full / unavailable — non-fatal */
+    }
+  }, [messages, draft]);
 
   // Keyboard: "?" or "/" toggles Buddy, "Esc" closes.
   useEffect(() => {
@@ -227,10 +265,11 @@ export function BuilderBuddy({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Close"
+              aria-label="Minimize"
+              title="Minimize — your conversation is kept"
               className="grid place-items-center w-8 h-8 rounded-full text-white/70 hover:text-white hover:bg-white/15 transition-colors"
             >
-              <X className="w-4 h-4" aria-hidden />
+              <Minus className="w-4 h-4" aria-hidden />
             </button>
           </div>
 
@@ -324,7 +363,13 @@ export function BuilderBuddy({
                     type="button"
                     onClick={() => {
                       setMessages([]);
+                      setDraft("");
                       setError(null);
+                      try {
+                        sessionStorage.removeItem(STORAGE_THREAD);
+                      } catch {
+                        /* no-op */
+                      }
                     }}
                     className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
                   >
@@ -347,6 +392,7 @@ export function BuilderBuddy({
       <BeaconCharacter
         open={open}
         onOpen={() => setOpen(true)}
+        hasThread={messages.length > 0}
       />
     </div>
   );
@@ -368,9 +414,11 @@ export function BuilderBuddy({
 function BeaconCharacter({
   open,
   onOpen,
+  hasThread = false,
 }: {
   open: boolean;
   onOpen: () => void;
+  hasThread?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -384,7 +432,7 @@ function BeaconCharacter({
           never extends past the right edge of the viewport. */}
       {hovered && !open && (
         <div className="buddy-tooltip absolute right-[72px] top-1/2 -translate-y-1/2 whitespace-nowrap bg-tbb-navy text-white text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill shadow-tbb-md">
-          Ask Buddy
+          {hasThread ? "Back to your chat" : "Ask Buddy"}
           {/* Arrow */}
           <span
             aria-hidden
@@ -422,6 +470,15 @@ function BeaconCharacter({
           aria-hidden
           className="app-pulse absolute bottom-0 right-0 w-3 h-3 rounded-full bg-tbb-success ring-2 ring-white"
         />
+        {/* Ongoing-conversation cue — an orange dot top-right when a
+            chat is minimized but still has history, so it's obvious the
+            conversation is waiting to be reopened, not lost. */}
+        {hasThread && (
+          <span
+            aria-hidden
+            className="absolute top-0 right-0 w-3 h-3 rounded-full bg-tbb-warning ring-2 ring-white"
+          />
+        )}
       </button>
     </div>
   );
