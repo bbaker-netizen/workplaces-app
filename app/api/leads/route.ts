@@ -29,7 +29,7 @@
  * site may not be on the same domain as the portal).
  */
 
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -37,12 +37,15 @@ import {
   orgs,
   prospectActivities,
   prospects,
-  userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { channelFromWebhookPayload } from "@/lib/pipeline/lead-source";
 import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
 import { notifyNewLead } from "@/lib/pipeline/notify-new-lead";
+import {
+  loadInternalUsers,
+  recipientsForProspect,
+} from "@/lib/notifications/prospect-recipients";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { newLeadEmail } from "@/lib/email/templates";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -246,17 +249,18 @@ export async function POST(req: Request): Promise<Response> {
         body: leadNote ?? data.message ?? null,
       });
 
-      // Notify every master_admin + Coach in the master org so the
-      // first one to see it can claim and follow up.
-      const recipients = await tx
-        .select({ id: userProfiles.id, email: userProfiles.email })
-        .from(userProfiles)
-        .where(
-          or(
-            eq(userProfiles.role, "master_admin"),
-            eq(userProfiles.role, "coach"),
-          ),
-        );
+      // Route to the triage inbox — the master admin(s) — rather than
+      // every internal user. A brand-new lead has no owner yet, and
+      // fanning it out to the whole practice fills each Business
+      // Builder's bell with work that isn't theirs. Whoever triages
+      // assigns an owner, and ownership drives every later nudge.
+      //
+      // NOTE the org filter. This runs under withSystemContext (RLS
+      // off), so a role-only predicate would match coach/master_admin
+      // rows in ANY org — including a client org with a mis-assigned
+      // role — and leak the practice's lead flow to them by email.
+      const internal = await loadInternalUsers(tx, master.id);
+      const recipients = recipientsForProspect(null, internal);
 
       // In-app notification per Business Builder so the new lead surfaces in
       // the bell + toast (and, below, desktop push) — not just email.

@@ -16,7 +16,7 @@ import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { engagements, orgs, prospects } from "@/lib/db/schema";
+import { engagements, notifications, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
 import {
@@ -287,6 +287,10 @@ export async function updateProspect(
       error: "Add the referrer's name — Referral leads need a referrer on file.",
     };
   }
+  // Set inside the transaction when ownership actually changes hands;
+  // the notification row is written after the update lands.
+  let newOwnerToNotify: { userProfileId: string; orgId: string } | null = null;
+
   try {
     await withSystemContext(async (tx) => {
       const updates: Partial<typeof prospects.$inferInsert> = {};
@@ -358,6 +362,33 @@ export async function updateProspect(
           ? new Date(data.expectedStartDate)
           : null;
       if (Object.keys(updates).length === 0) return;
+
+      // Read the current owner BEFORE the write so we can tell a real
+      // reassignment from a no-op save. Notifications for prospects are
+      // owner-scoped (lib/notifications/prospect-recipients.ts), so
+      // handing a lead to a teammate is the moment they need to hear
+      // about it — otherwise the first they'd know is a stale-lead nudge
+      // days later.
+      if (data.ownerUserProfileId) {
+        const [before] = await tx
+          .select({
+            ownerUserProfileId: prospects.ownerUserProfileId,
+            orgId: prospects.orgId,
+          })
+          .from(prospects)
+          .where(eq(prospects.id, data.id))
+          .limit(1);
+        if (
+          before &&
+          before.ownerUserProfileId !== data.ownerUserProfileId &&
+          data.ownerUserProfileId !== profile.userProfileId
+        ) {
+          newOwnerToNotify = {
+            userProfileId: data.ownerUserProfileId,
+            orgId: before.orgId,
+          };
+        }
+      }
       // .returning() proves the row was actually written. If it comes back
       // empty the UPDATE matched no row (bad id / not writable), which used
       // to surface as a false "Saved" that vanished on reload — fail loudly
@@ -371,6 +402,40 @@ export async function updateProspect(
         throw new Error(
           `Save didn't stick — no prospect row matched id ${data.id}.`,
         );
+      }
+
+      // Acting on a lead resolves its outstanding nudges. Rescheduling
+      // the follow-up, logging contact, or closing the lead all mean the
+      // old "follow-up due" / "gone quiet" rows have served their purpose
+      // — leaving them unread is how a notification feed becomes a
+      // graveyard you stop reading.
+      const resolves: string[] = [];
+      if (data.nextActionDate !== undefined) resolves.push("prospect_followup_due");
+      if (data.status !== undefined) {
+        resolves.push("prospect_followup_due", "prospect_stale");
+      }
+      if (resolves.length > 0) {
+        await tx
+          .update(notifications)
+          .set({ readAt: sql`now()` })
+          .where(
+            and(
+              eq(notifications.parentEntityId, data.id),
+              inArray(notifications.parentEntityType, Array.from(new Set(resolves))),
+              isNull(notifications.readAt),
+            ),
+          );
+      }
+
+      if (newOwnerToNotify) {
+        await tx.insert(notifications).values({
+          orgId: newOwnerToNotify.orgId,
+          userProfileId: newOwnerToNotify.userProfileId,
+          type: "message",
+          parentEntityType: "prospect_assigned",
+          parentEntityId: data.id,
+          sentVia: "in_app",
+        });
       }
     });
 
