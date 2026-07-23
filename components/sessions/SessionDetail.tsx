@@ -27,7 +27,13 @@ import {
   updateSession,
 } from "@/lib/actions/bbs-sessions";
 import { extractActionItemsFromFireflies } from "@/lib/actions/fireflies-extract";
-import { Sparkles } from "lucide-react";
+import { draftDeliverableFromFireflies } from "@/lib/actions/deliverables-fireflies";
+import {
+  DELIVERABLE_TYPES,
+  DELIVERABLE_TYPE_LABEL,
+  type DeliverableType,
+} from "@/lib/deliverables/types";
+import { FileText, Sparkles } from "lucide-react";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import {
   fromDateTimeLocalValue,
@@ -130,6 +136,32 @@ export function SessionDetail({
       } else {
         setExtractMessage(
           `${result.data.created} draft action items created.`,
+        );
+      }
+    });
+  };
+
+  // Draft one of the nine deliverables from this meeting's transcript.
+  // The Builder picks the type; the draft lands in the Deliverables
+  // module as "In progress" to edit before delivering to the client.
+  const [deliverableType, setDeliverableType] =
+    useState<DeliverableType>(DELIVERABLE_TYPES[0]);
+  const [deliverableMessage, setDeliverableMessage] = useState<string | null>(
+    null,
+  );
+  const onDraftDeliverable = () => {
+    setError(null);
+    setDeliverableMessage(null);
+    startTransition(async () => {
+      const result = await draftDeliverableFromFireflies({
+        sessionId: session.id,
+        type: deliverableType,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setDeliverableMessage(
+          `Drafted “${result.data.title}”. Find it under Deliverables (In progress) to review and edit before delivering.`,
         );
       }
     });
@@ -297,6 +329,40 @@ export function SessionDetail({
             <Sparkles className="w-3.5 h-3.5" aria-hidden />
             Extract action items
           </button>
+          <span className="inline-flex items-center rounded-pill border border-tbb-blue overflow-hidden">
+            <label className="sr-only" htmlFor="draft-deliverable-type">
+              Deliverable type
+            </label>
+            <select
+              id="draft-deliverable-type"
+              value={deliverableType}
+              onChange={(e) =>
+                setDeliverableType(e.target.value as DeliverableType)
+              }
+              disabled={isPending || !session.firefliesRecordingId}
+              className="font-sans text-xs px-2 py-1.5 bg-white text-tbb-navy border-r border-tbb-line focus:outline-none disabled:opacity-50 max-w-[9rem]"
+            >
+              {DELIVERABLE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {DELIVERABLE_TYPE_LABEL[t]}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={onDraftDeliverable}
+              disabled={isPending || !session.firefliesRecordingId}
+              title={
+                session.firefliesRecordingId
+                  ? "Pull the Fireflies transcript and draft this deliverable for you to review"
+                  : "Add a Fireflies recording id to this session first"
+              }
+              className="font-sans text-xs uppercase tracking-tbb-caps font-bold px-3 py-1.5 text-tbb-navy hover:bg-tbb-cream-50 disabled:opacity-50 inline-flex items-center gap-1"
+            >
+              <FileText className="w-3.5 h-3.5" aria-hidden />
+              Draft from meeting
+            </button>
+          </span>
           <button
             type="button"
             onClick={onDelete}
@@ -319,6 +385,11 @@ export function SessionDetail({
         {extractMessage && !isPending && (
           <p className="font-sans text-sm text-tbb-navy border border-tbb-line rounded-md px-3 py-2 bg-tbb-cream-50">
             {extractMessage}
+          </p>
+        )}
+        {deliverableMessage && !isPending && (
+          <p className="font-sans text-sm text-tbb-navy border border-tbb-line rounded-md px-3 py-2 bg-tbb-cream-50">
+            {deliverableMessage}
           </p>
         )}
       </header>
