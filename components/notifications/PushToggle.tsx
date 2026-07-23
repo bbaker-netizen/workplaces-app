@@ -16,6 +16,29 @@ import {
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
+// Per-browser record of what the user WANTS. Push subscriptions can be
+// dropped by the browser between visits even while permission stays
+// granted; without a durable intent flag the toggle read the (transiently
+// missing) subscription and flipped itself back to "off". Intent lets us
+// re-establish a dropped subscription on return, while still letting an
+// intentional "off" stick.
+const INTENT_KEY = "tbb-push-intent";
+
+function readIntent(): boolean {
+  try {
+    return localStorage.getItem(INTENT_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+function writeIntent(on: boolean) {
+  try {
+    localStorage.setItem(INTENT_KEY, on ? "on" : "off");
+  } catch {
+    /* private mode / storage disabled — best effort */
+  }
+}
+
 type State =
   | "loading"
   | "unsupported"
@@ -38,6 +61,36 @@ async function getReg(): Promise<ServiceWorkerRegistration> {
   const existing = await navigator.serviceWorker.getRegistration("/push-sw.js");
   if (existing) return existing;
   return navigator.serviceWorker.register("/push-sw.js");
+}
+
+/**
+ * Ensure an active push subscription exists on this registration and is
+ * saved server-side. Reuses the existing browser subscription when
+ * present, otherwise creates one. Re-saving is a cheap idempotent upsert
+ * that also revives a server row that was cleared (e.g. after a failed
+ * send). Returns whether the server accepted it.
+ */
+async function ensureSubscribedAndSaved(
+  reg: ServiceWorkerRegistration,
+): Promise<boolean> {
+  const existing = await reg.pushManager.getSubscription();
+  const sub =
+    existing ??
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(
+        VAPID_PUBLIC_KEY as string,
+      ) as BufferSource,
+    }));
+  const json = sub.toJSON();
+  const keys = json.keys ?? {};
+  const res = await savePushSubscription({
+    endpoint: sub.endpoint,
+    p256dh: keys.p256dh ?? "",
+    auth: keys.auth ?? "",
+    userAgent: navigator.userAgent.slice(0, 500),
+  });
+  return res.ok;
 }
 
 export function PushToggle() {
@@ -63,13 +116,21 @@ export function PushToggle() {
         setState("blocked");
         return;
       }
-      try {
-        const reg = await navigator.serviceWorker.getRegistration("/push-sw.js");
-        const sub = reg ? await reg.pushManager.getSubscription() : null;
-        setState(sub ? "on" : "off");
-      } catch {
-        setState("off");
+      // Drive the toggle from durable intent, not the (possibly dropped)
+      // browser subscription. If the user wants push and permission is
+      // granted, re-establish the subscription so it survives returns.
+      if (readIntent() && Notification.permission === "granted") {
+        try {
+          const reg = await getReg();
+          await navigator.serviceWorker.ready;
+          const ok = await ensureSubscribedAndSaved(reg);
+          setState(ok ? "on" : "off");
+        } catch {
+          setState("off");
+        }
+        return;
       }
+      setState("off");
     })();
   }, []);
 
@@ -84,25 +145,13 @@ export function PushToggle() {
       }
       const reg = await getReg();
       await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(
-          VAPID_PUBLIC_KEY as string,
-        ) as BufferSource,
-      });
-      const json = sub.toJSON();
-      const keys = json.keys ?? {};
-      const res = await savePushSubscription({
-        endpoint: sub.endpoint,
-        p256dh: keys.p256dh ?? "",
-        auth: keys.auth ?? "",
-        userAgent: navigator.userAgent.slice(0, 500),
-      });
-      if (!res.ok) {
-        setError(res.error);
+      const ok = await ensureSubscribedAndSaved(reg);
+      if (!ok) {
+        setError("Couldn't save the subscription. Try again.");
         setState("off");
         return;
       }
+      writeIntent(true);
       setState("on");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't enable notifications.");
@@ -113,6 +162,9 @@ export function PushToggle() {
   async function disable() {
     setError(null);
     setState("working");
+    // Record intent first so an intentional off sticks across returns even
+    // if the unsubscribe/delete below partly fails.
+    writeIntent(false);
     try {
       const reg = await navigator.serviceWorker.getRegistration("/push-sw.js");
       const sub = reg ? await reg.pushManager.getSubscription() : null;
