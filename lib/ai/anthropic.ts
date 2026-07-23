@@ -46,6 +46,22 @@ export type ClaudeModel =
   | "claude-sonnet-4-6"
   | "claude-haiku-4-5-20251001";
 
+/**
+ * Newer Claude models (Opus 4.7 / 4.8, Sonnet 5, Fable 5) REMOVED the
+ * sampling parameters — sending `temperature` / `top_p` / `top_k` to them
+ * returns a 400 `invalid_request_error`. The 4.6-era models (and Haiku
+ * 4.5) still accept them. We allowlist the models that accept sampling so
+ * that (a) Opus 4.7 stops 400ing and (b) if we later bump the registry to
+ * Opus 4.8 / Sonnet 5, those also correctly omit the param without another
+ * edit. Models not on this list simply run at the API default.
+ */
+function modelAcceptsSampling(model: ClaudeModel): boolean {
+  return (
+    model === "claude-sonnet-4-6" ||
+    model.startsWith("claude-haiku-4-5")
+  );
+}
+
 export type CompletionInput = {
   /** System prompt — pinned to the prompt cache by default. */
   system: string;
@@ -93,7 +109,8 @@ export async function complete(
   const response = await client().messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    // Only send temperature to models that accept it (see note above).
+    ...(modelAcceptsSampling(model) ? { temperature } : {}),
     system: systemBlocks,
     messages: [{ role: "user", content: input.user }],
   });
@@ -136,7 +153,9 @@ export async function completeWithImage(input: {
   const response = await client().messages.create({
     model,
     max_tokens: input.maxTokens ?? 1024,
-    temperature: input.temperature ?? 0,
+    ...(modelAcceptsSampling(model)
+      ? { temperature: input.temperature ?? 0 }
+      : {}),
     system: input.system,
     messages: [
       {
@@ -193,7 +212,7 @@ export async function streamComplete(
   const stream = client().messages.stream({
     model,
     max_tokens: maxTokens,
-    temperature,
+    ...(modelAcceptsSampling(model) ? { temperature } : {}),
     system: systemBlocks,
     messages: [{ role: "user", content: input.user }],
   });
