@@ -36,12 +36,14 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   bbsSessions,
   deliverables,
+  engagementMeetings,
   soulFiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
+  withSystemContext,
 } from "@/lib/db/tenant";
 import { complete } from "@/lib/ai/anthropic";
 import {
@@ -68,65 +70,46 @@ export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-const inputSchema = z.object({
-  sessionId: z.string().uuid(),
-  type: z.enum(DELIVERABLE_TYPES),
-  /** Optional override for the deliverable title. When omitted we build
-   *  one from the type label + the meeting title. */
-  title: z.string().min(1).max(500).optional(),
-});
+const typeEnum = z.enum(DELIVERABLE_TYPES);
+type DType = z.infer<typeof typeEnum>;
 
-export async function draftDeliverableFromFireflies(
-  input: z.input<typeof inputSchema>,
-): Promise<ActionResult<{ id: string; type: string; title: string }>> {
-  const profile = await ensureUserProfile();
-  if (profile.status !== "ok")
-    return { ok: false, error: "Not authenticated." };
-  if (!canEdit(profile.role))
-    return { ok: false, error: "Your role can't draft deliverables." };
-  const parsed = inputSchema.safeParse(input);
-  if (!parsed.success)
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input",
-    };
-  const { sessionId, type } = parsed.data;
+/**
+ * Shared drafting core. Given an engagement, a Fireflies recording id,
+ * and a deliverable type, fetches the transcript + Soul File, drafts the
+ * deliverable with Claude, and inserts it as `in_progress`. Both entry
+ * points (a BBS session, or a meeting from the library) resolve down to
+ * this. Not exported — "use server" requires every export to be an async
+ * action, and this is an internal helper.
+ */
+async function draftFromRecording(args: {
+  profile: Extract<
+    Awaited<ReturnType<typeof ensureUserProfile>>,
+    { status: "ok" }
+  >;
+  engagementId: string;
+  firefliesRecordingId: string;
+  type: DType;
+  titleOverride?: string;
+}): Promise<ActionResult<{ id: string; type: string; title: string }>> {
+  const { profile, engagementId, firefliesRecordingId, type } = args;
 
-  const engagementId = await resolveEngagementIdFromRecord(
-    "bbs_sessions",
-    sessionId,
-  );
-  if (!engagementId) return { ok: false, error: "Session not found." };
-
-  // Load the session (needs a Fireflies recording id) + the engagement's
-  // Soul File for grounding context.
-  const ctx = await withEngagementContext(
+  // Soul File for grounding context (access-checked via the bound context).
+  const soulFileBody = await withEngagementContext(
     profile.orgId,
     profile.role,
     engagementId,
     async (tx) => {
-      const [session] = await tx
-        .select()
-        .from(bbsSessions)
-        .where(eq(bbsSessions.id, sessionId))
-        .limit(1);
-      if (!session) throw new Error("Session not found.");
-      if (!session.firefliesRecordingId) {
-        throw new Error(
-          "This session has no Fireflies recording id. Add one before drafting.",
-        );
-      }
       const [sf] = await tx
         .select({ body: soulFiles.body })
         .from(soulFiles)
         .where(eq(soulFiles.engagementId, engagementId))
         .limit(1);
-      return { session, soulFileBody: sf?.body ?? "" };
+      return sf?.body ?? "";
     },
   );
 
   // Fetch the transcript via Fireflies.
-  const transcript = await fetchTranscript(ctx.session.firefliesRecordingId!);
+  const transcript = await fetchTranscript(firefliesRecordingId);
   if (!transcript) {
     return {
       ok: false,
@@ -137,7 +120,7 @@ export async function draftDeliverableFromFireflies(
   const transcriptText = transcriptToPlainText(transcript);
 
   const title =
-    parsed.data.title ??
+    args.titleOverride ??
     `${DELIVERABLE_TYPE_LABEL[type]} — from ${transcript.title}`;
 
   // Draft the deliverable. The transcript rides in as extra context on
@@ -150,7 +133,7 @@ export async function draftDeliverableFromFireflies(
       user: deliverableUserPrompt({
         title,
         type,
-        soulFileBody: ctx.soulFileBody,
+        soulFileBody,
         extraContext:
           `This deliverable should be drafted from the following Business ` +
           `Building Session transcript. Pull concrete facts, decisions, ` +
@@ -210,4 +193,119 @@ export async function draftDeliverableFromFireflies(
   revalidatePath("/portal/deliverables");
   revalidatePath("/business-builder/deliverables");
   return { ok: true, data: { id: createdId, type, title } };
+}
+
+const sessionInputSchema = z.object({
+  sessionId: z.string().uuid(),
+  type: typeEnum,
+  /** Optional override for the deliverable title. When omitted we build
+   *  one from the type label + the meeting title. */
+  title: z.string().min(1).max(500).optional(),
+});
+
+/** Draft a deliverable from a BBS session that has a Fireflies recording id. */
+export async function draftDeliverableFromFireflies(
+  input: z.input<typeof sessionInputSchema>,
+): Promise<ActionResult<{ id: string; type: string; title: string }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (!canEdit(profile.role))
+    return { ok: false, error: "Your role can't draft deliverables." };
+  const parsed = sessionInputSchema.safeParse(input);
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  const { sessionId, type } = parsed.data;
+
+  const engagementId = await resolveEngagementIdFromRecord(
+    "bbs_sessions",
+    sessionId,
+  );
+  if (!engagementId) return { ok: false, error: "Session not found." };
+
+  const recordingId = await withEngagementContext(
+    profile.orgId,
+    profile.role,
+    engagementId,
+    async (tx) => {
+      const [session] = await tx
+        .select({ rec: bbsSessions.firefliesRecordingId })
+        .from(bbsSessions)
+        .where(eq(bbsSessions.id, sessionId))
+        .limit(1);
+      return session?.rec ?? null;
+    },
+  );
+  if (!recordingId) {
+    return {
+      ok: false,
+      error:
+        "This session has no Fireflies recording id. Add one before drafting.",
+    };
+  }
+
+  return draftFromRecording({
+    profile,
+    engagementId,
+    firefliesRecordingId: recordingId,
+    type,
+    titleOverride: parsed.data.title,
+  });
+}
+
+const meetingInputSchema = z.object({
+  meetingId: z.string().uuid(),
+  type: typeEnum,
+  title: z.string().min(1).max(500).optional(),
+});
+
+/**
+ * Draft a deliverable from a meeting in the engagement's Meetings library
+ * (a Fireflies-synced `engagement_meetings` row). Lets the Builder pull a
+ * deliverable straight from any recent meeting without wiring it to a BBS
+ * session first.
+ */
+export async function draftDeliverableFromMeeting(
+  input: z.input<typeof meetingInputSchema>,
+): Promise<ActionResult<{ id: string; type: string; title: string }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (!canEdit(profile.role))
+    return { ok: false, error: "Your role can't draft deliverables." };
+  const parsed = meetingInputSchema.safeParse(input);
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  const { meetingId, type } = parsed.data;
+
+  // Look up the meeting to get its engagement + transcript id. System
+  // context reads across the client org (meetings live in the client
+  // org); withEngagementContext below enforces the caller's access when
+  // we actually write the deliverable.
+  const meeting = await withSystemContext(async (tx) => {
+    const [m] = await tx
+      .select({
+        engagementId: engagementMeetings.engagementId,
+        firefliesTranscriptId: engagementMeetings.firefliesTranscriptId,
+      })
+      .from(engagementMeetings)
+      .where(eq(engagementMeetings.id, meetingId))
+      .limit(1);
+    return m ?? null;
+  });
+  if (!meeting) return { ok: false, error: "Meeting not found." };
+
+  return draftFromRecording({
+    profile,
+    engagementId: meeting.engagementId,
+    firefliesRecordingId: meeting.firefliesTranscriptId,
+    type,
+    titleOverride: parsed.data.title,
+  });
 }

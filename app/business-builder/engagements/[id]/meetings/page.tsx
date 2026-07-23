@@ -31,6 +31,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
+import { MeetingDeliverableButton } from "@/components/meetings/MeetingDeliverableButton";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { formatMeetingSummary } from "@/lib/meetings/format";
 
@@ -177,6 +178,7 @@ function MeetingCard({
               <ExternalLink className="w-3 h-3" aria-hidden /> Open in Fireflies
             </a>
           )}
+          <MeetingDeliverableButton meetingId={meeting.id} />
           {meeting.summaryOverview && (
             <section>
               <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">
