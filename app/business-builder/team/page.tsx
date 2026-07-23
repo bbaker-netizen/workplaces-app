@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { MapPin, Plus, Users, Video } from "lucide-react";
+import { ChevronDown, MapPin, Plus, Users, Video } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   ensureInternalEngagementId,
@@ -153,11 +153,36 @@ export default async function TeamPage() {
             Nothing scheduled.
           </p>
         ) : (
-          <ul className="space-y-2.5">
-            {upcoming.map((m) => (
-              <MeetingRow key={m.id} meeting={m} />
-            ))}
-          </ul>
+          <div className="space-y-2.5">
+            {/* The next meeting is always shown; the rest of the series
+                collapses behind a toggle so a weekly touch-base doesn't
+                render a dozen rows. Native <details> keeps this a server
+                component. */}
+            <ul className="space-y-2.5">
+              <MeetingRow key={upcoming[0].id} meeting={upcoming[0]} />
+            </ul>
+            {upcoming.length > 1 && (
+              <details className="group">
+                <summary className="cursor-pointer list-none rounded-lg border border-tbb-line bg-white px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:border-tbb-blue hover:text-tbb-blue transition-colors flex items-center gap-2">
+                  <ChevronDown
+                    className="w-3.5 h-3.5 transition-transform group-open:rotate-180"
+                    aria-hidden
+                  />
+                  <span className="group-open:hidden">
+                    Show {upcoming.length - 1} more upcoming
+                  </span>
+                  <span className="hidden group-open:inline">
+                    Hide later meetings
+                  </span>
+                </summary>
+                <ul className="space-y-2.5 mt-2.5">
+                  {upcoming.slice(1).map((m) => (
+                    <MeetingRow key={m.id} meeting={m} />
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
         )}
       </section>
 
