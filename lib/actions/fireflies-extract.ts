@@ -241,14 +241,19 @@ const meetingInputSchema = z.object({
 });
 
 /**
- * Draft action items from a meeting in the engagement's Meetings library
- * (a Fireflies-synced `engagement_meetings` row). The everyday path: after
- * a client meeting, pull the to-dos straight from the full transcript, then
- * review and assign them.
+ * Kick off drafting action items from a meeting in the engagement's Meetings
+ * library. This is intentionally an ENQUEUE, not the work itself: pulling an
+ * hour-plus Fireflies transcript and running it through Claude takes far
+ * longer than Netlify's ~26s synchronous-function ceiling, so doing it inline
+ * gets the server action killed mid-run and returns `undefined` to the
+ * browser. Instead we do the fast checks here, then hand off to a Netlify
+ * Background Function (15-min budget) that reads the FULL transcript, extracts
+ * the commitments, and writes them as draft action items. The drafts appear
+ * under Action items when it finishes (usually under a minute).
  */
 export async function extractActionItemsFromMeeting(
   input: z.input<typeof meetingInputSchema>,
-): Promise<ActionResult<{ created: number }>> {
+): Promise<ActionResult<{ queued: true }>> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
@@ -262,18 +267,14 @@ export async function extractActionItemsFromMeeting(
     };
   const { meetingId } = parsed.data;
 
-  // Meetings live in the client org; a system read resolves the engagement +
-  // transcript id. The write below re-binds to the engagement's org and
-  // enforces the caller's access.
-  let meeting: {
-    engagementId: string;
-    firefliesTranscriptId: string;
-  } | null;
+  // Fast pre-flight: confirm the meeting exists and has a transcript before we
+  // spend a background invocation on it. Meetings live in the client org, so a
+  // system read resolves it.
+  let meeting: { firefliesTranscriptId: string | null } | null;
   try {
     meeting = await withSystemContext(async (tx) => {
       const [m] = await tx
         .select({
-          engagementId: engagementMeetings.engagementId,
           firefliesTranscriptId: engagementMeetings.firefliesTranscriptId,
         })
         .from(engagementMeetings)
@@ -296,12 +297,48 @@ export async function extractActionItemsFromMeeting(
     };
   }
 
-  return draftActionItemsFromRecording({
-    profile,
-    engagementId: meeting.engagementId,
-    firefliesRecordingId: meeting.firefliesTranscriptId,
-    bbsSessionId: null,
-  });
+  // Hand off to the background function. It returns 202 immediately; the
+  // extraction continues there with the 15-minute budget.
+  const baseUrl =
+    process.env.URL ??
+    process.env.DEPLOY_PRIME_URL ??
+    process.env.NEXT_PUBLIC_APP_URL;
+  const secret = process.env.CRON_SECRET;
+  if (!baseUrl || !secret) {
+    return {
+      ok: false,
+      error:
+        "Background drafting isn't configured on the server (missing URL or CRON_SECRET).",
+    };
+  }
+  try {
+    const resp = await fetch(
+      `${baseUrl}/.netlify/functions/extract-meeting-action-items-background`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ meetingId }),
+      },
+    );
+    // Background functions answer 202 Accepted. Anything else means the job
+    // never started — surface it rather than pretending it's running.
+    if (resp.status !== 202 && !resp.ok) {
+      return {
+        ok: false,
+        error: `Couldn't start the draft job (HTTP ${resp.status}). Try again in a moment.`,
+      };
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  return { ok: true, data: { queued: true } };
 }
 
 const sessionInputSchema = z.object({
