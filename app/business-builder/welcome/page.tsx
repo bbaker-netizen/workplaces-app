@@ -536,6 +536,20 @@ export default async function CoachWelcomePage() {
             their own portal with the recaps and a one-click link to the
             recording — so they can revisit any session.
           </p>
+          <p className="mt-2">
+            On that same <strong>Meetings</strong> page, every recorded
+            meeting has a <strong>Draft action items from this meeting</strong>{" "}
+            button — one click, no picker. It reads the <em>full</em>{" "}
+            transcript (not just the Fireflies highlights), so nothing gets
+            missed. Because a long meeting takes a moment to work through, it
+            runs in the background: the button says &quot;drafting in the
+            background,&quot; and the drafts land under{" "}
+            <Link href="/business-builder/action-items" className="text-tbb-blue underline">
+              Action items
+            </Link>{" "}
+            in about a minute, ready for you to review, assign (to you, a
+            teammate, or the client), and publish.
+          </p>
         </Step>
 
         <Step
