@@ -59,7 +59,7 @@ export function ModuleReference() {
       <ModuleCard
         icon={<CheckSquare />}
         name="Action items"
-        what="The commitments coming out of every session — and the ones you create manually between sessions. Each item has a title, description, assignee, due date, status, and revenue/margin impact flags."
+        what="The commitments coming out of every session — and the ones you create manually between sessions. Each item has a title, description, assignee, due date, status, and revenue/margin impact flags. Draft them straight from a recorded meeting: the 'Draft action items from this meeting' button on a client's Meetings page reads the full transcript in the background and drops the to-dos here as drafts to review, assign, and publish."
         when="During and after every BBS. Whenever the client agrees to do something. Whenever you spot a gap that needs fixing."
         replaces={`The Monday BBS subitems with the Pending / In progress / Waiting / Completed status track. Action items roll up to a session and live on each assignee's portal automatically.`}
         link="/business-builder/action-items"
