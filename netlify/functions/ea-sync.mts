@@ -5,17 +5,19 @@
  * route, where the real work lives (full app/db context). Mirrors the
  * `fireflies-sync` setup so there's one pattern to maintain.
  *
- * Schedule: every 15 minutes. The Builder already pushes its own changes
- * out instantly; this is the reverse leg, bringing status changes Bruce
- * makes in Command Central back to the Builder. Fifteen minutes keeps the
- * two copies in step without hammering the sheet. The job only reads the
- * sheet and updates statuses; it sends no email or notification, so there's
- * no working-hours window to respect.
+ * Schedule: `*\/30 14-23 * * 1-5` — every 30 minutes, Mon–Fri during
+ * Bruce's working window (14:00–23:59 UTC ≈ 8am–6pm MST / 7am–5pm MDT).
+ * This is the reverse leg, bringing status changes Bruce makes in Command
+ * Central back to the Builder — and Bruce only edits Command Central
+ * during work hours, so there's nothing to mirror overnight. Restricting
+ * to the workday lets Neon scale to zero the rest of the time, which is
+ * what keeps the compute bill down. (Star-slash escaped as `*\/30` so it
+ * doesn't close this JSDoc block early.)
  */
 
 import { schedule } from "@netlify/functions";
 
-export const handler = schedule("*/15 * * * *", async () => {
+export const handler = schedule("*/30 14-23 * * 1-5", async () => {
   const url = process.env.URL ?? process.env.DEPLOY_PRIME_URL;
   if (!url) {
     return {

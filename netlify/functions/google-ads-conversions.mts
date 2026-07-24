@@ -6,13 +6,18 @@
  * been uploaded, and push a ClickConversion for each). Keeping the logic in the
  * route means one place with full app/db context. Idempotent — safe to run often.
  *
- * Schedule: every 30 minutes. Offline conversions are not time-critical (Google
- * accepts them for days after the click), so a relaxed cadence is plenty.
+ * Schedule: `0 15,21 * * 1-5` — twice a day (15:00 and 21:00 UTC, Mon–Fri
+ * ≈ 8am/9am and 2pm/3pm MT). Offline conversions are not time-critical
+ * (Google accepts them for days after the click), so twice-daily is plenty
+ * — and dropping the round-the-clock cadence lets Neon scale to zero the
+ * rest of the time, which is what keeps the compute bill down. Both runs
+ * land inside the daytime window the other syncs already use, so they add
+ * no extra database wake-ups.
  */
 
 import { schedule } from "@netlify/functions";
 
-export const handler = schedule("*/30 * * * *", async () => {
+export const handler = schedule("0 15,21 * * 1-5", async () => {
   const url = process.env.URL ?? process.env.DEPLOY_PRIME_URL;
   if (!url) {
     return {
