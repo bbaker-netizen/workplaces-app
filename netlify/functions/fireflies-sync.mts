@@ -5,17 +5,18 @@
  * cron route, where the real work lives (full app/db context). Mirrors
  * the `calendar-sync` setup so there's one pattern to maintain.
  *
- * Schedule: `0 * * * *` — hourly. Fireflies recaps land a few minutes
- * after each call ends, so an hourly pull keeps every client's meeting
- * notes (including their recurring Business Building sessions) current
- * without hammering the Fireflies API. The job only reads Fireflies and
- * upserts rows; it sends no email or notification, so there's no
- * working-hours window to respect.
+ * Schedule: `0 14-23 * * 1-5` — hourly, Mon–Fri during Bruce's working
+ * window (14:00–23:59 UTC ≈ 8am–6pm MST / 7am–5pm MDT). Calls happen
+ * during work hours and recaps land a few minutes after each call ends,
+ * so an hourly daytime pull keeps every client's meeting notes current
+ * without hammering the Fireflies API. Restricting it to the workday lets
+ * Neon scale to zero overnight and on weekends, which is what keeps the
+ * compute bill down. The job only reads Fireflies and upserts rows.
  */
 
 import { schedule } from "@netlify/functions";
 
-export const handler = schedule("0 * * * *", async () => {
+export const handler = schedule("0 14-23 * * 1-5", async () => {
   const url = process.env.URL ?? process.env.DEPLOY_PRIME_URL;
   if (!url) {
     return {
