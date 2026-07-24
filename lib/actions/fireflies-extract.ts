@@ -3,18 +3,26 @@
 /**
  * Fireflies → action item drafts pipeline.
  *
- * Phase 2.3. The full flow per CLAUDE.md "Action Items — Draft /
- * Publish Flow":
+ * The full flow per CLAUDE.md "Action Items — Draft / Publish Flow":
  *
- *   1. Coach pastes a Fireflies transcript id into a BBS session.
- *   2. This action fetches the transcript, runs it through Claude
- *      with the extraction prompt, and inserts each proposed item
- *      as a `draft` action_item with `created_by: claude` and the
- *      confidence flag from the LLM.
- *   3. Coach reviews drafts in the portal (or via the BBS Prep Live
- *      Artifact in Cowork), edits, assigns, and clicks Publish.
+ *   1. A client meeting is recorded; Fireflies produces the transcript.
+ *   2. The Business Builder clicks "Draft action items from this meeting"
+ *      (on the Meetings library or a BBS session). This action fetches the
+ *      FULL transcript — not just the Fireflies highlights — runs it through
+ *      Claude with the extraction prompt, and inserts each proposed item as a
+ *      `draft` action_item with `created_by: claude` and a confidence flag.
+ *   3. The Builder reviews the drafts, edits, assigns each to whoever's
+ *      appropriate (themselves, a teammate, or the client), and clicks
+ *      Publish — which submits it to that person's portal + emails them.
  *
- * Authorization: leadership-only.
+ * Two entry points, one shared core (`draftActionItemsFromRecording`):
+ *   - `extractActionItemsFromMeeting` — from a synced meeting in the
+ *     engagement's Meetings library (the everyday path).
+ *   - `extractActionItemsFromFireflies` — from a BBS session that has a
+ *     recording id attached.
+ *
+ * Authorization: Business Builders only (master_admin / coach). The coach
+ * controls extraction, review, and assignment; clients can't pull drafts.
  */
 
 import { eq } from "drizzle-orm";
@@ -24,12 +32,14 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
   bbsSessions,
+  engagementMeetings,
   userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
+  withSystemContext,
 } from "@/lib/db/tenant";
 import { complete } from "@/lib/ai/anthropic";
 import {
@@ -42,6 +52,11 @@ import {
 } from "@/lib/integrations/fireflies";
 
 type Role = UserProfile["role"];
+type OkProfile = Extract<
+  Awaited<ReturnType<typeof ensureUserProfile>>,
+  { status: "ok" }
+>;
+
 function canEdit(role: Role): boolean {
   // Business Builders only — the coach controls action-item extraction,
   // creation, and assignment. Clients can't pull drafts from a meeting.
@@ -51,10 +66,6 @@ function canEdit(role: Role): boolean {
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
-
-const inputSchema = z.object({
-  sessionId: z.string().uuid(),
-});
 
 const llmOutputSchema = z.object({
   items: z.array(
@@ -74,82 +85,76 @@ const llmOutputSchema = z.object({
   ),
 });
 
-export async function extractActionItemsFromFireflies(
-  input: z.input<typeof inputSchema>,
-): Promise<ActionResult<{ created: number }>> {
-  const profile = await ensureUserProfile();
-  if (profile.status !== "ok")
-    return { ok: false, error: "Not authenticated." };
-  if (!canEdit(profile.role))
-    return { ok: false, error: "Your role can't run extraction." };
-  const parsed = inputSchema.safeParse(input);
-  if (!parsed.success)
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input",
-    };
-  const { sessionId } = parsed.data;
+/**
+ * Parse the extractor's JSON output. The prompt asks for strict JSON; if the
+ * model wrapped it in code fences anyway, strip them before parsing.
+ */
+function parseExtractorOutput(
+  text: string,
+): z.infer<typeof llmOutputSchema> {
+  const cleaned = text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```/, "")
+    .replace(/```$/, "")
+    .trim();
+  return llmOutputSchema.parse(JSON.parse(cleaned));
+}
 
-  const engagementId = await resolveEngagementIdFromRecord(
-    "bbs_sessions",
-    sessionId,
-  );
-  if (!engagementId)
-    return { ok: false, error: "Session not found." };
+/**
+ * Shared drafting core. Given an engagement + a Fireflies recording id,
+ * pulls the full transcript, runs the extractor, and inserts each proposed
+ * item as a `draft` action item on the engagement. Both entry points (a
+ * meeting or a BBS session) resolve down to this. Not exported — "use
+ * server" requires every export to be an async action, and this is an
+ * internal helper.
+ *
+ * Every external call (Fireflies, Claude, the DB) is wrapped so a thrown
+ * error surfaces as a real inline message instead of throwing out of the
+ * server action — an uncaught throw renders the generic "we hit a snag"
+ * page with no detail.
+ */
+async function draftActionItemsFromRecording(args: {
+  profile: OkProfile;
+  engagementId: string;
+  firefliesRecordingId: string;
+  /** The BBS session this came from, if any. Null for a Meetings-library
+   *  draft. Stored on each item so a session-sourced draft links back. */
+  bbsSessionId: string | null;
+}): Promise<ActionResult<{ created: number }>> {
+  const { profile, engagementId, firefliesRecordingId, bbsSessionId } = args;
 
-  // Load session + engagement members, pull the transcript, and run the
-  // extraction. All wrapped so a thrown error (missing recording id, a
-  // Fireflies API failure / missing FIREFLIES_API_KEY, or a Claude API
-  // error) surfaces as a real inline message instead of throwing out of
-  // the server action — an uncaught throw renders the generic "we hit a
-  // snag" error page with no detail.
-  let ctx: {
-    session: typeof bbsSessions.$inferSelect;
-    members: Array<{ id: string; fullName: string; email: string }>;
-  };
+  let members: Array<{ id: string; fullName: string; email: string }>;
   let result: Awaited<ReturnType<typeof complete>>;
   try {
-    ctx = await withEngagementContext(
+    // Members (for assignee name-matching) live in the engagement's owning
+    // org; bind to it via withEngagementContext so a coach can read across
+    // into the client org.
+    members = await withEngagementContext(
       profile.orgId,
       profile.role,
       engagementId,
-      async (tx) => {
-        const [session] = await tx
-          .select()
-          .from(bbsSessions)
-          .where(eq(bbsSessions.id, sessionId))
-          .limit(1);
-        if (!session) throw new Error("Session not found.");
-        if (!session.firefliesRecordingId) {
-          throw new Error(
-            "This session has no Fireflies recording id. Add one before extracting.",
-          );
-        }
-        const members = await tx
+      async (tx, boundOrgId) =>
+        tx
           .select({
             id: userProfiles.id,
             fullName: userProfiles.fullName,
             email: userProfiles.email,
           })
           .from(userProfiles)
-          .where(eq(userProfiles.orgId, session.orgId));
-        return { session, members };
-      },
+          .where(eq(userProfiles.orgId, boundOrgId)),
     );
 
-    // Fetch transcript via Fireflies API.
-    const transcript = await fetchTranscript(
-      ctx.session.firefliesRecordingId!,
-    );
+    const transcript = await fetchTranscript(firefliesRecordingId);
     if (!transcript) {
       return {
         ok: false,
-        error: "Fireflies didn't return a transcript for that id.",
+        error:
+          "Fireflies didn't return a transcript for that meeting yet. It can take a few minutes to finish processing after the call ends — try again shortly.",
       };
     }
     const transcriptText = transcriptToPlainText(transcript);
 
-    // Run extraction.
     result = await complete({
       system: ACTION_ITEM_EXTRACT_SYSTEM,
       user: actionItemExtractUserPrompt({
@@ -168,17 +173,9 @@ export async function extractActionItemsFromFireflies(
     };
   }
 
-  // Parse JSON output. The prompt asks for strict JSON; if the model
-  // wrapped it in code fences anyway, strip them.
   let parsedOutput: z.infer<typeof llmOutputSchema>;
   try {
-    const cleaned = result.text
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/^```/, "")
-      .replace(/```$/, "")
-      .trim();
-    parsedOutput = llmOutputSchema.parse(JSON.parse(cleaned));
+    parsedOutput = parseExtractorOutput(result.text);
   } catch (e) {
     return {
       ok: false,
@@ -188,7 +185,14 @@ export async function extractActionItemsFromFireflies(
     };
   }
 
-  // Insert each as a draft action item, mapping assigneeName → id.
+  if (parsedOutput.items.length === 0) {
+    return {
+      ok: false,
+      error:
+        "Claude read the full transcript but didn't find any clear, owned commitments to draft. If you expected some, open the transcript in Fireflies to double-check.",
+    };
+  }
+
   let created = 0;
   try {
     await withEngagementContext(
@@ -198,7 +202,7 @@ export async function extractActionItemsFromFireflies(
       async (tx, boundOrgId) => {
         for (const item of parsedOutput.items) {
           const assigneeId = item.assigneeName
-            ? matchAssignee(item.assigneeName, ctx.members)
+            ? matchAssignee(item.assigneeName, members)
             : null;
           await tx.insert(actionItems).values({
             orgId: boundOrgId,
@@ -211,8 +215,8 @@ export async function extractActionItemsFromFireflies(
             revenueImpact: item.revenueImpact,
             marginImpact: item.marginImpact,
             confidenceFlag: item.confidence,
-            firefliesTranscriptId: ctx.session.firefliesRecordingId,
-            bbsSessionId: ctx.session.id,
+            firefliesTranscriptId: firefliesRecordingId,
+            bbsSessionId,
             createdBy: "claude",
           });
           created += 1;
@@ -226,10 +230,144 @@ export async function extractActionItemsFromFireflies(
     };
   }
 
-  revalidatePath(`/portal/sessions/${sessionId}`);
+  if (bbsSessionId) revalidatePath(`/portal/sessions/${bbsSessionId}`);
   revalidatePath("/portal/action-items");
   revalidatePath("/business-builder/action-items");
   return { ok: true, data: { created } };
+}
+
+const meetingInputSchema = z.object({
+  meetingId: z.string().uuid(),
+});
+
+/**
+ * Draft action items from a meeting in the engagement's Meetings library
+ * (a Fireflies-synced `engagement_meetings` row). The everyday path: after
+ * a client meeting, pull the to-dos straight from the full transcript, then
+ * review and assign them.
+ */
+export async function extractActionItemsFromMeeting(
+  input: z.input<typeof meetingInputSchema>,
+): Promise<ActionResult<{ created: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (!canEdit(profile.role))
+    return { ok: false, error: "Your role can't draft action items." };
+  const parsed = meetingInputSchema.safeParse(input);
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  const { meetingId } = parsed.data;
+
+  // Meetings live in the client org; a system read resolves the engagement +
+  // transcript id. The write below re-binds to the engagement's org and
+  // enforces the caller's access.
+  let meeting: {
+    engagementId: string;
+    firefliesTranscriptId: string;
+  } | null;
+  try {
+    meeting = await withSystemContext(async (tx) => {
+      const [m] = await tx
+        .select({
+          engagementId: engagementMeetings.engagementId,
+          firefliesTranscriptId: engagementMeetings.firefliesTranscriptId,
+        })
+        .from(engagementMeetings)
+        .where(eq(engagementMeetings.id, meetingId))
+        .limit(1);
+      return m ?? null;
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+  if (!meeting) return { ok: false, error: "Meeting not found." };
+  if (!meeting.firefliesTranscriptId) {
+    return {
+      ok: false,
+      error:
+        "This meeting has no Fireflies transcript on file. Hit Sync from Fireflies, then try again.",
+    };
+  }
+
+  return draftActionItemsFromRecording({
+    profile,
+    engagementId: meeting.engagementId,
+    firefliesRecordingId: meeting.firefliesTranscriptId,
+    bbsSessionId: null,
+  });
+}
+
+const sessionInputSchema = z.object({
+  sessionId: z.string().uuid(),
+});
+
+/**
+ * Draft action items from a BBS session that has a Fireflies recording id.
+ */
+export async function extractActionItemsFromFireflies(
+  input: z.input<typeof sessionInputSchema>,
+): Promise<ActionResult<{ created: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (!canEdit(profile.role))
+    return { ok: false, error: "Your role can't run extraction." };
+  const parsed = sessionInputSchema.safeParse(input);
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  const { sessionId } = parsed.data;
+
+  const engagementId = await resolveEngagementIdFromRecord(
+    "bbs_sessions",
+    sessionId,
+  );
+  if (!engagementId) return { ok: false, error: "Session not found." };
+
+  let recordingId: string | null;
+  try {
+    recordingId = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [session] = await tx
+          .select({ rec: bbsSessions.firefliesRecordingId })
+          .from(bbsSessions)
+          .where(eq(bbsSessions.id, sessionId))
+          .limit(1);
+        return session?.rec ?? null;
+      },
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+  if (!recordingId) {
+    return {
+      ok: false,
+      error:
+        "This session has no Fireflies recording id. Add one before extracting.",
+    };
+  }
+
+  return draftActionItemsFromRecording({
+    profile,
+    engagementId,
+    firefliesRecordingId: recordingId,
+    bbsSessionId: sessionId,
+  });
 }
 
 function matchAssignee(
@@ -258,8 +396,6 @@ function matchAssignee(
 export async function extractFromFirefliesAsSystem(
   sessionId: string,
 ): Promise<ActionResult<{ created: number }>> {
-  const { withSystemContext } = await import("@/lib/db/tenant");
-
   const ctx = await withSystemContext(async (tx) => {
     const [session] = await tx
       .select()
@@ -281,9 +417,7 @@ export async function extractFromFirefliesAsSystem(
     return { session, members };
   });
 
-  const transcript = await fetchTranscript(
-    ctx.session.firefliesRecordingId!,
-  );
+  const transcript = await fetchTranscript(ctx.session.firefliesRecordingId!);
   if (!transcript) {
     return {
       ok: false,
@@ -306,13 +440,7 @@ export async function extractFromFirefliesAsSystem(
 
   let parsedOutput: z.infer<typeof llmOutputSchema>;
   try {
-    const cleaned = result.text
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/^```/, "")
-      .replace(/```$/, "")
-      .trim();
-    parsedOutput = llmOutputSchema.parse(JSON.parse(cleaned));
+    parsedOutput = parseExtractorOutput(result.text);
   } catch (e) {
     return {
       ok: false,
