@@ -116,8 +116,11 @@ export default async function CoachWelcomePage() {
             {" "}— every send goes through your connected Gmail as
             multipart/alternative, so bold, lists, links, and emoji
             render correctly in the recipient&apos;s inbox. Your
-            signature is auto-appended. Attach files via the paperclip
-            (up to ~24MB).
+            signature is auto-appended. And when you compose from the
+            Inbox, <strong>Attach document</strong> lets you attach any
+            file already on that client — the Climb PDF, uploaded docs —
+            with no re-upload. Perfect for the post-meeting email: pick
+            the client, attach their Climb PDF, send.
           </li>
         </ul>
       </section>
@@ -774,6 +777,31 @@ export default async function CoachWelcomePage() {
             Everyone has full access by default — the controls only appear
             once a standard Business Builder is on the team, and master
             admins always keep full access.
+          </p>
+          <p className="text-tbb-ink-2 max-w-prose">
+            <strong>Who owns which client</strong> is driven by the{" "}
+            <strong>Owner</strong> you set on the lead in the Pipeline — not the
+            access control above (access limits what someone <em>can</em> see;
+            the Owner decides <em>whose</em> client it is). When a lead
+            converts, the client is assigned to its Owner, and changing the
+            Owner later moves that client — its deliverables, notifications, and
+            My Work — to the new Business Builder. As master admin you get an{" "}
+            <strong>All clients / Just mine</strong> toggle on the Console home
+            and Deliverables tracker to switch between oversight and your own
+            book; standard Business Builders always see only their own.
+          </p>
+          <p className="text-tbb-ink-2 max-w-prose">
+            One-time cleanup: clients set up before ownership followed the Owner
+            keep their original assignment. On the{" "}
+            <Link
+              href="/business-builder/engagements"
+              className="text-tbb-blue underline"
+            >
+              Engagements
+            </Link>{" "}
+            page, hit <strong>&quot;Sync assignments to Owners&quot;</strong>{" "}
+            once (after setting Owners in the Pipeline) and every existing
+            client snaps to match its Owner.
           </p>
         </section>
       )}
