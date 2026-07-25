@@ -15,6 +15,7 @@ import { EngagementSearchList } from "@/components/business-builder/EngagementSe
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { CollapsibleSection } from "@/components/business-builder/CollapsibleSection";
 import { SeedDemoButton } from "@/components/business-builder/SeedDemoButton";
+import { SyncAssignmentsButton } from "@/components/business-builder/SyncAssignmentsButton";
 
 export default async function EngagementsListPage() {
   const profile = await ensureUserProfile();
@@ -106,6 +107,7 @@ export default async function EngagementsListPage() {
             >
               <FolderSymlink className="w-3.5 h-3.5" aria-hidden /> Auto-link Drive folders
             </Link>
+            {profile.role === "master_admin" && <SyncAssignmentsButton />}
           </div>
         )}
       </header>
