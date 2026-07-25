@@ -1434,6 +1434,16 @@ Deliberately conservative: only time the system can see is counted, so
 email, prep, and thinking time are all missing. A rate that looks thin
 here is thinner in life, which is the correct direction to err.
 
+**The warning threshold is the practice's own median, not a number
+picked in advance.** A coach selling monthly retainers has never had to
+know their hourly rate, and asking them to invent one produces a figure
+with nothing behind it. Anything below 60% of the median across the book
+is flagged, so the benchmark calibrates itself whatever the numbers turn
+out to be. Below three rated engagements the median is just one of them,
+so nothing is coloured at all and the email says so — the worst-first
+ordering still identifies who is eating the time, without dressing a
+guess up as a warning.
+
 `engagements.monthly_fee_cents` already existed (migration 0035) but was
 only ever written at engagement creation from the originating lead,
 which made it unfixable afterwards. `setEngagementMonthlyFee` plus

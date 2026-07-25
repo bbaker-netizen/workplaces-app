@@ -55,6 +55,49 @@ export type EngagementHours = {
   monthsElapsed: number;
 };
 
+export type EngagementHoursReport = {
+  rows: EngagementHours[];
+  /** Median effective rate across the rated engagements. */
+  medianRate: number | null;
+  /**
+   * Below this, an engagement is flagged. Null means "not enough to go
+   * on yet" and nothing is flagged at all.
+   */
+  thinRateThreshold: number | null;
+};
+
+/**
+ * How far below the median counts as thin.
+ *
+ * The benchmark is the practice's OWN median rather than a figure picked
+ * in advance, because a coach selling monthly retainers has never had to
+ * know their hourly rate and asking them to invent one produces a number
+ * with nothing behind it. Once a few engagements are running, the median
+ * across the book is the honest benchmark: whatever it turns out to be,
+ * an engagement well below it is the outlier.
+ */
+const THIN_FRACTION_OF_MEDIAN = 0.6;
+
+/**
+ * Rated engagements needed before anything is flagged.
+ *
+ * With one or two clients the median is just one of them, so "below 60%
+ * of the median" would be noise. Under this count the table still sorts
+ * worst-first — the ordering alone says which client is eating the most
+ * time — but nothing is coloured, because a red flag drawn from two data
+ * points is a guess wearing a warning's clothes.
+ */
+const MIN_RATED_FOR_BENCHMARK = 3;
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+    : sorted[mid];
+}
+
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
@@ -64,11 +107,17 @@ export async function loadEngagementHours(
   recipient: EaRecipient,
   periodStart: Date,
   now: Date,
-): Promise<EngagementHours[]> {
+): Promise<EngagementHoursReport> {
+  const empty: EngagementHoursReport = {
+    rows: [],
+    medianRate: null,
+    thinRateThreshold: null,
+  };
+
   const owned = await listEngagementsForRecipient(tx, recipient);
   // listEngagementsForRecipient already excludes the internal workspace,
   // which has no fee and no client to serve.
-  if (owned.length === 0) return [];
+  if (owned.length === 0) return empty;
 
   const ids = owned.map((e) => e.id);
 
@@ -107,7 +156,7 @@ export async function loadEngagementHours(
 
   const nowMt = DateTime.fromJSDate(now, { zone: EA_TIMEZONE });
 
-  return owned
+  const rows = owned
     .map((e) => {
       const mySessions = heldSessions.filter((s) => s.engagementId === e.id);
       const myBlocks = blockList.filter((b) => b.engagementId === e.id);
@@ -175,4 +224,18 @@ export async function loadEngagementHours(
       if (b.toDateHourlyRate === null) return -1;
       return a.toDateHourlyRate - b.toDateHourlyRate;
     });
+
+  const rated = rows
+    .map((r) => r.toDateHourlyRate)
+    .filter((v): v is number => v !== null);
+  const medianRate = median(rated);
+
+  return {
+    rows,
+    medianRate,
+    thinRateThreshold:
+      medianRate !== null && rated.length >= MIN_RATED_FOR_BENCHMARK
+        ? Math.round(medianRate * THIN_FRACTION_OF_MEDIAN)
+        : null,
+  };
 }

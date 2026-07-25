@@ -489,7 +489,7 @@ const envelope =
         // Hours. Seeded to show all four states the table distinguishes:
         // a thin rate (red), two healthy ones, an engagement with hours
         // but no fee recorded, and a brand new one with no hours yet.
-        engagementHours: [
+        engagementHours: { medianRate: 273, thinRateThreshold: 164, rows: [
           {
             engagementId: "e1",
             engagementLabel: "Summit Cabinets",
@@ -555,7 +555,8 @@ const envelope =
             toDateHourlyRate: null,
             monthsElapsed: 1,
           },
-        ],
+          ],
+        },
         heartbeats: heartbeatSample,
       })
     : dailyDigestEmail({ to: "bbaker@4workplaces.com", payload });
