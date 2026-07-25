@@ -1355,6 +1355,50 @@ top line nor margin — that count is the number worth looking at. It also
 carries the three state-of-the-book sections that came out of the daily
 briefing.
 
+### Heartbeat (migration 0088)
+
+`ea_job_runs` — one row per background-job run, written on completion
+INCLUDING failures, via `withHeartbeat` in `lib/ea/job-runs.ts`.
+
+The failure this catches is silence. Every EA job is a cron nobody
+watches; it can stop firing, lose its Google token, or throw on every
+run, and the only symptom is an email that does not arrive. A missing
+email is indistinguishable from a quiet week, so without a heartbeat
+"the assistant has been dead for a month" and "nothing needed saying"
+look identical.
+
+Six jobs report: `ea-daily-digest`, `ea-time-blocks`, `ea-inbox-sweep`,
+`ea-recap-sweep`, `ea-client-nudge`, `ea-friday-rollup`. Focus-time
+proposals get their own line despite running inside the digest, because
+they are the piece most likely to fail alone — a Google account that has
+lost calendar access produces a briefing with no blocks, which reads as
+a quiet week rather than a broken integration.
+
+The Friday rollup renders them as one compact table at the bottom.
+Anything with no successful run in 8 days goes red and carries its last
+error inline. Three states have to stay distinguishable and the preview
+script exercises all of them: healthy with work done, healthy but idle
+(zero items is a quiet week, NOT a fault), stale-with-a-date (worked for
+weeks then the token died), and never-run-at-all.
+
+`EA_JOBS` is a hard-coded registry rather than a `SELECT DISTINCT` over
+the rows. A job that has never fired writes no rows, and that is exactly
+the case worth catching — deriving the list from the data would make the
+worst failure invisible.
+
+Two rules the table itself enforces. **Writes never throw** — a
+heartbeat that could fail the job it only observes would be worse than
+none, so every path swallows and logs. And **a stale job un-suppresses
+the rollup**: the "nothing to report this week, skip the email" check
+ignores emptiness when anything is red, because silence is the precise
+failure being guarded against.
+
+Deliberately NOT tenant-scoped: no `org_id`, and 0088 enables RLS with
+no policy at all, so `workplaces_app` matches no rows for any command
+and the table is reachable only through `withSystemContext`. Stronger
+than a tenant policy — no tenant-bound query can reach operational data
+even by accident.
+
 ### Previewing the emails without sending
 
 `npx tsx scripts/preview-ea-email.ts digest|rollup [outputPath]` renders

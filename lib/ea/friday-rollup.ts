@@ -21,6 +21,7 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { fridayRollupEmail } from "@/lib/email/templates";
 import { EA_TIMEZONE, gatherDigest } from "./digest-data";
+import { loadHeartbeats } from "./job-runs";
 import {
   engagementLabel,
   listEaRecipients,
@@ -34,6 +35,11 @@ export async function runFridayRollup(
 ): Promise<RollupResult> {
   const out: RollupResult = { sent: 0, failed: 0 };
   const builders = await listEaRecipients();
+
+  // Read once for the whole sweep — the heartbeat describes the
+  // practice's machinery, not any one Builder's, so every rollup this
+  // run carries the same table.
+  const heartbeats = await loadHeartbeats(now);
 
   const nowMt = DateTime.fromJSDate(now, { zone: EA_TIMEZONE });
   const weekStart = nowMt.startOf("week").toJSDate(); // Luxon weeks start Monday
@@ -175,7 +181,12 @@ export async function runFridayRollup(
         gatherDigest(tx, builder, now),
       );
 
+      // A stale job is itself worth an email even in a week with nothing
+      // else to report. Silence is the failure mode the heartbeat exists
+      // to break, so it must never be suppressed by a quiet week.
+      const anyStale = heartbeats.some((h) => h.stale);
       const nothingToSay =
+        !anyStale &&
         data.shipped.length === 0 &&
         data.slipped.length === 0 &&
         payload.deliverablesByStatus.length === 0 &&
@@ -196,6 +207,7 @@ export async function runFridayRollup(
           deliverablesPastTarget: payload.deliverablesPastTarget,
           clientOverdue: payload.clientOverdue,
           quietEngagements: payload.quietEngagements,
+          heartbeats,
         }),
       );
       if (result.delivered) out.sent++;

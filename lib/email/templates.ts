@@ -22,6 +22,7 @@
 import { DateTime } from "luxon";
 import type { EmailEnvelope } from "./send";
 import type { DigestPayload } from "@/lib/ea/digest-data";
+import type { JobHeartbeat } from "@/lib/ea/job-runs";
 
 function appUrl(): string {
   // Trim a trailing slash so concatenation with a path is clean.
@@ -1415,7 +1416,87 @@ export type FridayRollupEmailInput = {
   deliverablesPastTarget: DigestPayload["deliverablesPastTarget"];
   clientOverdue: DigestPayload["clientOverdue"];
   quietEngagements: DigestPayload["quietEngagements"];
+  /** Heartbeat for the assistant's own background jobs. Bottom of the
+   *  email, because it is the section you should be able to ignore. */
+  heartbeats: JobHeartbeat[];
 };
+
+/**
+ * The heartbeat table.
+ *
+ * Bottom of the rollup and deliberately plain: this is the section that
+ * should be boring every week. Its whole job is to make the ONE week it
+ * is not boring impossible to miss, which is why a stale job goes red
+ * and carries its last error inline rather than asking you to go and
+ * look somewhere else.
+ *
+ * A job that has never run at all is stale by definition. That is the
+ * case that matters most, because a job which never fired writes no rows
+ * and would otherwise be invisible.
+ */
+function heartbeatTable(beats: JobHeartbeat[]): string {
+  if (beats.length === 0) return "";
+
+  const cell = "padding:7px 8px;font-family:Arial,sans-serif;font-size:12px;vertical-align:top;";
+  const head = `padding:7px 8px;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;color:${MUTED};text-align:left;border-bottom:1px solid ${RULE};`;
+
+  const rows = beats
+    .map((b) => {
+      const colour = b.stale ? "#C0392B" : INK;
+      const weight = b.stale ? "bold" : "normal";
+      const lastRun = b.lastSuccessAt
+        ? DateTime.fromJSDate(b.lastSuccessAt, {
+            zone: "America/Edmonton",
+          }).toFormat("ccc d LLL, h:mm a")
+        : "never";
+      const did =
+        b.lastSuccessItems === null
+          ? "&mdash;"
+          : `${b.lastSuccessItems}`;
+      return `
+<tr>
+  <td style="${cell}color:${colour};font-weight:${weight};border-bottom:1px solid ${RULE};">
+    ${escapeHtml(b.label)}
+    <div style="font-size:10px;color:${MUTED};font-weight:normal;">${escapeHtml(b.cadence)}</div>
+  </td>
+  <td style="${cell}color:${colour};font-weight:${weight};border-bottom:1px solid ${RULE};">${escapeHtml(lastRun)}</td>
+  <td style="${cell}color:${colour};font-weight:${weight};border-bottom:1px solid ${RULE};text-align:right;">${did}</td>
+</tr>${
+        b.stale
+          ? `
+<tr>
+  <td colspan="3" style="padding:0 8px 10px 8px;font-family:Arial,sans-serif;font-size:11px;color:#C0392B;line-height:1.5;border-bottom:1px solid ${RULE};">
+    ${escapeHtml(
+      b.lastError
+        ? `Last error: ${b.lastError}`
+        : "No successful run in over a week, and no error recorded. The job may not be firing at all.",
+    )}
+  </td>
+</tr>`
+          : ""
+      }`;
+    })
+    .join("");
+
+  const anyStale = beats.some((b) => b.stale);
+
+  return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${RULE};border-collapse:collapse;">
+  <tr>
+    <th style="${head}">Job</th>
+    <th style="${head}">Last worked</th>
+    <th style="${head}text-align:right;">Did</th>
+  </tr>
+  ${rows}
+</table>
+<p style="margin:10px 0 0 0;font-family:Arial,sans-serif;font-size:11px;color:${anyStale ? "#C0392B" : MUTED};line-height:1.6;">
+  ${
+    anyStale
+      ? "Something in red has not worked in over a week. That usually means a disconnected Google account or a job that has stopped firing."
+      : "Everything has run. A zero in the last column is a quiet week, not a fault."
+  }
+</p>`;
+}
 
 /**
  * What shipped, what slipped, both tagged against the quality gate.
@@ -1514,7 +1595,8 @@ ${
 }
 ${eaSection("Deliverables in flight", delivHtml)}
 ${eaSection("Waiting on the client", clientHtml, { subtitle: "they get their own nudge on Monday, this is so you know" })}
-${eaSection("Gone quiet", quietHtml, { accent: ORANGE, subtitle: "the earliest signal of a renewal at risk" })}`;
+${eaSection("Gone quiet", quietHtml, { accent: ORANGE, subtitle: "the earliest signal of a renewal at risk" })}
+${eaSection("Your assistant", heartbeatTable(input.heartbeats), { subtitle: "proof it actually ran" })}`;
 
   const html = shell({
     preheader: `${input.shipped.length} shipped, ${input.slipped.length} slipped.`,
@@ -1573,8 +1655,22 @@ ${eaSection("Gone quiet", quietHtml, { accent: ORANGE, subtitle: "the earliest s
           ...input.quietEngagements.map(
             (q) => `  ${q.engagementLabel} - ${q.quietDays} days with no activity`,
           ),
+          "",
         ]
       : []),
+    "YOUR ASSISTANT",
+    ...input.heartbeats.map((b) => {
+      const lastRun = b.lastSuccessAt
+        ? DateTime.fromJSDate(b.lastSuccessAt, {
+            zone: "America/Edmonton",
+          }).toFormat("ccc d LLL, h:mm a")
+        : "never";
+      const flag = b.stale ? "  [!] " : "  ";
+      const err = b.stale
+        ? `\n        ${b.lastError ? `Last error: ${b.lastError}` : "No successful run in over a week, and no error recorded."}`
+        : "";
+      return `${flag}${b.label} - last worked ${lastRun}, did ${b.lastSuccessItems ?? 0}${err}`;
+    }),
   ].join("\n");
 
   return {

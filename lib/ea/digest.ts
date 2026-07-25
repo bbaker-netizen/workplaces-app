@@ -35,6 +35,7 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { dailyDigestEmail } from "@/lib/email/templates";
 import { EA_TIMEZONE, gatherDigest, type DigestPayload } from "./digest-data";
+import { gradeSweep, recordJobRun } from "./job-runs";
 import { listEaRecipients, type EaRecipient } from "./recipients";
 import { loadCalendarWindow, proposeBlocks } from "./time-blocks";
 
@@ -148,15 +149,21 @@ export async function runDailyDigest(
     details: [],
   };
 
+  let blocksProposed = 0;
+  let blockFailures = 0;
+
   for (const r of recipients) {
     try {
       const res = await runDigestForRecipient(r, now);
       if (res.outcome === "sent") out.sent++;
       else if (res.outcome === "already_sent") out.skipped++;
       else out.failed++;
+      blocksProposed += res.blocks ?? 0;
+      if (res.outcome === "failed") blockFailures++;
       out.details.push({ userProfileId: r.userProfileId, ...res });
     } catch (e) {
       out.failed++;
+      blockFailures++;
       const error = e instanceof Error ? e.message : String(e);
       console.error(`[ea] digest failed for ${r.userProfileId}:`, e);
       out.details.push({
@@ -166,6 +173,19 @@ export async function runDailyDigest(
       });
     }
   }
+
+  // Focus-time proposals get their own heartbeat even though they run
+  // inside this job. They are the piece most likely to fail on its own
+  // while the rest of the digest still lands — a Google token that has
+  // lost calendar access produces a briefing with no blocks in it, which
+  // reads as "a quiet week" rather than as a broken integration. A
+  // separate line in the rollup makes that distinguishable.
+  await recordJobRun({
+    jobId: "ea-time-blocks",
+    startedAt: now,
+    status: gradeSweep({ succeeded: out.sent, failed: blockFailures }),
+    itemsProcessed: blocksProposed,
+  });
 
   return out;
 }
