@@ -1303,6 +1303,36 @@ copy, because the fallback is what ships when the model call fails.
 
 ### Phase 4 — post-session recaps
 
+**Transcripts attach themselves** (`lib/ea/transcript-match.ts`). This
+closed a gap that made the whole phase near-useless: every
+transcript-driven feature keys off
+`bbs_sessions.fireflies_recording_id`, and the only thing that had ever
+written it was a person pasting the id in by hand. So "hold a session,
+get a recap" was really "hold a session, remember to paste an id, then
+get a recap" — and the same was true of action-item drafting, which is
+why that had always felt manual.
+
+The join is **client plus time**, not the title convention the original
+spec proposed. `engagement_meetings` already carries the engagement, the
+transcript id, and when the meeting happened, refreshed hourly by the
+existing sync — so a session held at 10:00 for a client pairs with that
+client's transcript recorded near 10:00, whatever the meeting was
+called. Title-based matching would have made the pipeline depend on
+naming discipline forever and failed silently the first time somebody
+typed something different.
+
+Three guards against a wrong pairing: same engagement only (cross-client
+matching is impossible by construction), inside a ±120-minute window
+with the closest candidate winning, and a transcript already claimed by
+another session is never reused. Ambiguous matches (more than one
+candidate in range) are counted — a rising number means the window wants
+narrowing. Capped at 5 per run, because attaching emits
+`bbs.fireflies.attached` and an uncapped first run would draft a week of
+action items in one burst.
+
+Runs at the START of the recap sweep, so a newly attached transcript
+produces its recap in the same pass rather than an hour later.
+
 Rides the existing hourly `firefliesSync` cron as a second step, which
 is what makes "within an hour of the transcript landing" true without a
 second schedule. `lib/ea/recap-sweep.ts` has a seven-day lookback and a
