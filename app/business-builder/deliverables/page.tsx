@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { listCoachDeliverables } from "@/lib/db/queries/business-builder-cross-engagement";
+import {
+  getClientScope,
+  listCoachDeliverables,
+} from "@/lib/db/queries/business-builder-cross-engagement";
+import { ClientScopeToggle } from "@/components/business-builder/ClientScopeToggle";
 
 export default async function CoachDeliverablesCrossPage() {
   const profile = await ensureUserProfile();
@@ -9,6 +13,7 @@ export default async function CoachDeliverablesCrossPage() {
   if (profile.role !== "master_admin" && profile.role !== "coach")
     redirect("/portal");
 
+  const scope = await getClientScope();
   const items = await listCoachDeliverables();
   // Group by status for the tracker view.
   const groups = new Map<string, typeof items>();
@@ -40,12 +45,17 @@ export default async function CoachDeliverablesCrossPage() {
         <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight leading-none">
           Deliverables tracker · cross-client
         </h1>
-        <Link
-          href="/business-builder"
-          className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
-        >
-          ← Console
-        </Link>
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+          <Link
+            href="/business-builder"
+            className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
+          >
+            ← Console
+          </Link>
+          {profile.role === "master_admin" && (
+            <ClientScopeToggle current={scope} />
+          )}
+        </div>
       </header>
 
       {items.length === 0 ? (

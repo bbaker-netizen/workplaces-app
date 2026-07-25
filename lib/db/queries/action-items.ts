@@ -17,7 +17,6 @@
 import { eq } from "drizzle-orm";
 import {
   actionItems,
-  coaches,
   engagements,
   userProfiles,
   type ActionItem,
@@ -25,6 +24,7 @@ import {
 import { withEngagementContext, withSystemContext, withTenantContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 import { canCurrentBbAccessEngagement } from "./bb-access";
+import { coachScopeWhere } from "./business-builder-cross-engagement";
 
 export type ListedActionItem = ActionItem & {
   assigneeName: string | null;
@@ -133,14 +133,12 @@ export async function listCoachActionItems(): Promise<
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
 
-  return withSystemContext(async (tx) => {
-    const [Coach] = await tx
-      .select({ id: coaches.id })
-      .from(coaches)
-      .where(eq(coaches.userProfileId, profile.userProfileId))
-      .limit(1);
-    if (!Coach) return [];
+  // Same scope as the other coach cross-client views: standard BB → their own
+  // clients; master admin → all, or just theirs when the "mine" toggle is on.
+  const where = await coachScopeWhere(profile);
+  if (where === false) return [];
 
+  return withSystemContext(async (tx) => {
     const rows = await tx
       .select({
         item: actionItems,
@@ -155,7 +153,7 @@ export async function listCoachActionItems(): Promise<
         userProfiles,
         eq(userProfiles.id, actionItems.assigneeUserProfileId),
       )
-      .where(eq(engagements.coachId, Coach.id));
+      .where(where);
 
     return rows.map((r) => ({
       ...r.item,

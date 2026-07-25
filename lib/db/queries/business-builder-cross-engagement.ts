@@ -10,7 +10,8 @@
  * caller isn't a Coach, returns empty.
  */
 
-import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, type SQL } from "drizzle-orm";
+import { cookies } from "next/headers";
 import {
   bbsSessions,
   coaches,
@@ -23,6 +24,22 @@ import {
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
+/** Cookie the "My clients / All clients" toggle sets (master admin only). */
+export const CLIENT_SCOPE_COOKIE = "bb_client_scope";
+
+export type ClientScope = "mine" | "all";
+
+/**
+ * Current client scope for the coach views. Master admin defaults to "all"
+ * (oversight) and can flip to "mine"; everyone else is always "mine".
+ */
+export async function getClientScope(): Promise<ClientScope> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok" || profile.role !== "master_admin") return "mine";
+  const v = (await cookies()).get(CLIENT_SCOPE_COOKIE)?.value;
+  return v === "mine" ? "mine" : "all";
+}
+
 async function coachId(userProfileId: string): Promise<string | null> {
   return withSystemContext(async (tx) => {
     const [c] = await tx
@@ -32,6 +49,34 @@ async function coachId(userProfileId: string): Promise<string | null> {
       .limit(1);
     return c?.id ?? null;
   });
+}
+
+type OkProfile = Extract<
+  Awaited<ReturnType<typeof ensureUserProfile>>,
+  { status: "ok" }
+>;
+
+/**
+ * The engagements.coachId filter for the calling Business Builder's
+ * cross-client views. Returns:
+ *   - an `eq(coachId, mine)` condition — scope to my own clients,
+ *   - `undefined` — no filter, i.e. ALL clients (master admin, "all" scope),
+ *   - `false` — the caller has no coach row and no all-access, so show nothing.
+ *
+ * A standard Business Builder is always scoped to their own clients. A master
+ * admin defaults to ALL clients (for oversight) and can flip to "just mine"
+ * via the toggle, which sets the CLIENT_SCOPE_COOKIE.
+ */
+export async function coachScopeWhere(
+  profile: OkProfile,
+): Promise<SQL | undefined | false> {
+  const cid = await coachId(profile.userProfileId);
+  if (profile.role === "master_admin") {
+    const scope = (await cookies()).get(CLIENT_SCOPE_COOKIE)?.value;
+    if (scope === "mine") return cid ? eq(engagements.coachId, cid) : false;
+    return undefined; // all clients
+  }
+  return cid ? eq(engagements.coachId, cid) : false;
 }
 
 export type CoachProjectRow = {
@@ -47,8 +92,8 @@ export async function listCoachProjects(): Promise<CoachProjectRow[]> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
-  const cid = await coachId(profile.userProfileId);
-  if (!cid) return [];
+  const where = await coachScopeWhere(profile);
+  if (where === false) return [];
   return withSystemContext(async (tx) =>
     tx
       .select({
@@ -61,7 +106,7 @@ export async function listCoachProjects(): Promise<CoachProjectRow[]> {
       })
       .from(projects)
       .innerJoin(engagements, eq(engagements.id, projects.engagementId))
-      .where(eq(engagements.coachId, cid))
+      .where(where)
       .orderBy(desc(projects.updatedAt)),
   );
 }
@@ -79,8 +124,8 @@ export async function listCoachHires(): Promise<CoachHireRow[]> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
-  const cid = await coachId(profile.userProfileId);
-  if (!cid) return [];
+  const where = await coachScopeWhere(profile);
+  if (where === false) return [];
   return withSystemContext(async (tx) =>
     tx
       .select({
@@ -93,7 +138,7 @@ export async function listCoachHires(): Promise<CoachHireRow[]> {
       })
       .from(hires)
       .innerJoin(engagements, eq(engagements.id, hires.engagementId))
-      .where(eq(engagements.coachId, cid))
+      .where(where)
       .orderBy(desc(hires.updatedAt)),
   );
 }
@@ -111,8 +156,8 @@ export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
-  const cid = await coachId(profile.userProfileId);
-  if (!cid) return [];
+  const where = await coachScopeWhere(profile);
+  if (where === false) return [];
   return withSystemContext(async (tx) =>
     tx
       .select({
@@ -125,7 +170,7 @@ export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
       })
       .from(deliverables)
       .innerJoin(engagements, eq(engagements.id, deliverables.engagementId))
-      .where(eq(engagements.coachId, cid))
+      .where(where)
       .orderBy(desc(deliverables.updatedAt)),
   );
 }
@@ -143,8 +188,8 @@ export async function listCoachGoals(): Promise<CoachGoalRow[]> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
-  const cid = await coachId(profile.userProfileId);
-  if (!cid) return [];
+  const where = await coachScopeWhere(profile);
+  if (where === false) return [];
   return withSystemContext(async (tx) =>
     tx
       .select({
@@ -157,7 +202,7 @@ export async function listCoachGoals(): Promise<CoachGoalRow[]> {
       })
       .from(goals)
       .innerJoin(engagements, eq(engagements.id, goals.engagementId))
-      .where(eq(engagements.coachId, cid))
+      .where(where)
       .orderBy(desc(goals.updatedAt)),
   );
 }
@@ -176,8 +221,8 @@ export async function listCoachUpcomingSessions(): Promise<
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
-  const cid = await coachId(profile.userProfileId);
-  if (!cid) return [];
+  const where = await coachScopeWhere(profile);
+  if (where === false) return [];
   // Only sessions from now onward count as "upcoming". Without this,
   // past sessions that were never marked completed (still status
   // "scheduled") sort to the top and masquerade as upcoming. Matches the
@@ -196,7 +241,7 @@ export async function listCoachUpcomingSessions(): Promise<
       .innerJoin(engagements, eq(engagements.id, bbsSessions.engagementId))
       .where(
         and(
-          eq(engagements.coachId, cid),
+          where,
           eq(bbsSessions.status, "scheduled"),
           isNotNull(bbsSessions.scheduledAt),
           gte(bbsSessions.scheduledAt, now),

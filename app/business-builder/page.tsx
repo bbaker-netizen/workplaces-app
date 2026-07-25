@@ -27,11 +27,13 @@ import { listCoachEngagements } from "@/lib/db/queries/engagements";
 import { ClientQuickSearch } from "@/components/business-builder/ClientQuickSearch";
 import { listCoachActionItems } from "@/lib/db/queries/action-items";
 import {
+  getClientScope,
   listCoachDeliverables,
   listCoachGoals,
   listCoachProjects,
   listCoachUpcomingSessions,
 } from "@/lib/db/queries/business-builder-cross-engagement";
+import { ClientScopeToggle } from "@/components/business-builder/ClientScopeToggle";
 import { listProspects } from "@/lib/db/queries/prospects";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
 import { formatSessionTime } from "@/components/sessions/utils";
@@ -626,6 +628,8 @@ export default async function CoachConsole() {
     negotiationCount: negotiationProspects.length,
   });
 
+  const scope = await getClientScope();
+
   return (
     <main className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-6 py-10 sm:py-12 space-y-8">
@@ -642,7 +646,10 @@ export default async function CoachConsole() {
             </h1>
             <p className="text-sm text-muted-foreground">{encouragements}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {profile.role === "master_admin" && (
+              <ClientScopeToggle current={scope} />
+            )}
             <Link
               href="/business-builder/engagements/new"
               className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
