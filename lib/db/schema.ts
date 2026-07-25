@@ -381,6 +381,13 @@ export const userProfiles = pgTable(
     // Phase 5: email signature appended to outbound emails sent from
     // the communications panel. Plain text.
     emailSignature: text("email_signature"),
+    // Where this Business Builder's Executive Assistant mail goes — the
+    // morning briefing, recap approvals, the Friday rollup. NULL means
+    // "use `email` above". Exists because the sign-in provider's address
+    // is not always the inbox the person actually watches, and a daily
+    // briefing sent to an unwatched address reports success while
+    // reaching nobody (migration 0087).
+    eaNotifyEmail: text("ea_notify_email"),
     // Per-user Anthropic API key for Ask Buddy (Builder Buddy). Each
     // Business Builder supplies their own; stored encrypted via secret-vault.
     anthropicApiKey: text("anthropic_api_key"),
@@ -1183,6 +1190,11 @@ export const actionItems = pgTable(
     dueDate: timestamp("due_date", { withTimezone: true }),
     revenueImpact: boolean("revenue_impact").notNull().default(false),
     marginImpact: boolean("margin_impact").notNull().default(false),
+    /** How long this commitment is expected to take. Sizes the focus
+     *  block the EA proposes for it (migration 0086). Defaults to 60 so
+     *  every pre-existing row is usable by the proposer with no
+     *  backfill. */
+    estimatedMinutes: integer("estimated_minutes").notNull().default(60),
     firefliesTranscriptId: text("fireflies_transcript_id"),
     /** BB-#### id of the matching row in the EA Action Items sheet
      *  (Command Central). Set when this item is pushed to the EA gateway;
@@ -3165,3 +3177,276 @@ export type NotificationRead = typeof notificationReads.$inferSelect;
 export type NewNotificationRead = typeof notificationReads.$inferInsert;
 export type LessonCompletion = typeof lessonCompletions.$inferSelect;
 export type NewLessonCompletion = typeof lessonCompletions.$inferInsert;
+
+// ---------- Executive Assistant module (migration 0086) ----------
+
+export const eaTimeBlockStatusEnum = pgEnum("ea_time_block_status", [
+  "proposed",
+  "approved",
+  "declined",
+  "completed",
+  "rescheduled",
+]);
+
+export const eaEmailClassificationEnum = pgEnum("ea_email_classification", [
+  "meeting_request",
+  "other",
+]);
+
+export const eaEmailThreadStatusEnum = pgEnum("ea_email_thread_status", [
+  "drafted",
+  "skipped",
+  "failed",
+]);
+
+export const sessionRecapStatusEnum = pgEnum("session_recap_status", [
+  "draft",
+  "approved",
+  "sent",
+]);
+
+export const eaApprovalSubjectEnum = pgEnum("ea_approval_subject", [
+  "time_block",
+  "session_recap",
+]);
+
+/**
+ * `ea_digests` — one row per digest send.
+ *
+ * `payload` is the SNAPSHOT the email was rendered from, and it is what
+ * the approve links in that email resolve against. Without it, a link
+ * clicked two days later would place a block sized from whatever the
+ * action item looks like now rather than what Bruce actually agreed to.
+ *
+ * UNIQUE on (user_profile_id, sent_for_date) makes the job idempotent —
+ * an Inngest retry after a partial failure cannot send a second digest.
+ */
+export const eaDigests = pgTable(
+  "ea_digests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    /** The MT calendar date this digest covers. */
+    sentForDate: date("sent_for_date").notNull(),
+    payload: jsonb("payload").notNull(),
+    /** Written after a successful send; the row itself is inserted
+     *  BEFORE sending so a Resend failure loses the email, not the
+     *  snapshot. */
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("ea_digests_org_idx").on(t.orgId),
+    userDateUniq: uniqueIndex("ea_digests_user_date_uniq").on(
+      t.userProfileId,
+      t.sentForDate,
+    ),
+  }),
+);
+
+/**
+ * `ea_time_blocks` — a proposed, then approved, block of focus time for
+ * one action item.
+ *
+ * UNIQUE on (action_item_id, proposed_start) is the entire idempotency
+ * mechanism, the same role (series_id, series_occurrence_at) plays for
+ * bbs_sessions: a re-run of the digest job inserts nothing rather than
+ * proposing the same slot twice. The proposer's onConflictDoNothing()
+ * relies on this index existing.
+ */
+export const eaTimeBlocks = pgTable(
+  "ea_time_blocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    actionItemId: uuid("action_item_id")
+      .notNull()
+      .references((): AnyPgColumn => actionItems.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    proposedStart: timestamp("proposed_start", { withTimezone: true }).notNull(),
+    proposedEnd: timestamp("proposed_end", { withTimezone: true }).notNull(),
+    status: eaTimeBlockStatusEnum("status").notNull().default("proposed"),
+    /** Set once approved and the Google event exists. Needed to delete
+     *  the event when the item is completed. */
+    googleEventId: text("google_event_id"),
+    googleCalendarId: text("google_calendar_id"),
+    /** How many times this commitment has been re-proposed after its
+     *  block elapsed with the item still open. Drives the escalation
+     *  ladder in the digest. */
+    rescheduleCount: integer("reschedule_count").notNull().default(0),
+    digestId: uuid("digest_id").references((): AnyPgColumn => eaDigests.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("ea_time_blocks_org_idx").on(t.orgId),
+    actionItemIdx: index("ea_time_blocks_action_item_idx").on(t.actionItemId),
+    userIdx: index("ea_time_blocks_user_idx").on(t.userProfileId),
+    statusIdx: index("ea_time_blocks_status_idx").on(t.status),
+    itemStartUniq: uniqueIndex("ea_time_blocks_item_start_uniq").on(
+      t.actionItemId,
+      t.proposedStart,
+    ),
+  }),
+);
+
+/**
+ * `ea_email_threads` — the inbound triage ledger.
+ *
+ * UNIQUE on gmail_thread_id stops a re-sweep drafting a second reply on
+ * a thread already handled. Threads are logged whether or not they
+ * classified as a meeting request, so classification never repeats (and
+ * never bills twice) on the same thread.
+ */
+export const eaEmailThreads = pgTable(
+  "ea_email_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    gmailThreadId: text("gmail_thread_id").notNull(),
+    classification: eaEmailClassificationEnum("classification").notNull(),
+    prospectId: uuid("prospect_id").references(
+      (): AnyPgColumn => prospects.id,
+      { onDelete: "set null" },
+    ),
+    /** Gmail's draft id, so the draft can be found or replaced later. */
+    draftId: text("draft_id"),
+    status: eaEmailThreadStatusEnum("status").notNull(),
+    /** Why we skipped, or why the draft failed. Operator breadcrumb. */
+    note: text("note"),
+    handledAt: timestamp("handled_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("ea_email_threads_org_idx").on(t.orgId),
+    userIdx: index("ea_email_threads_user_idx").on(t.userProfileId),
+    gmailThreadUniq: uniqueIndex("ea_email_threads_gmail_thread_uniq").on(
+      t.gmailThreadId,
+    ),
+  }),
+);
+
+/**
+ * `session_recaps` — one recap per BBS session, enforced at the database
+ * via UNIQUE on bbs_session_id.
+ *
+ * Recaps are drafts until Bruce approves. `message_id` records the
+ * portal thread row written on send, so the client-visible record traces
+ * back here.
+ */
+export const sessionRecaps = pgTable(
+  "session_recaps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    bbsSessionId: uuid("bbs_session_id")
+      .notNull()
+      .references((): AnyPgColumn => bbsSessions.id, { onDelete: "cascade" }),
+    status: sessionRecapStatusEnum("status").notNull().default("draft"),
+    subject: text("subject").notNull(),
+    bodyHtml: text("body_html").notNull(),
+    bodyText: text("body_text").notNull(),
+    /** Markdown rendering, for the copy filed on the client's portal
+     *  thread. The portal strips raw HTML from message bodies, so HTML
+     *  would show as escaped tags and plain text as an unformatted wall.
+     *  Nullable — pre-0087 rows fall back to `body_text`. */
+    bodyMarkdown: text("body_markdown"),
+    firefliesUrl: text("fireflies_url"),
+    /** The session this recap points forward to, and whose
+     *  carried-forward agenda it publishes. */
+    nextSessionId: uuid("next_session_id").references(
+      (): AnyPgColumn => bbsSessions.id,
+      { onDelete: "set null" },
+    ),
+    approvedByUserProfileId: uuid("approved_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    messageId: uuid("message_id").references((): AnyPgColumn => messages.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("session_recaps_org_idx").on(t.orgId),
+    engagementIdx: index("session_recaps_engagement_idx").on(t.engagementId),
+    statusIdx: index("session_recaps_status_idx").on(t.status),
+    sessionUniq: uniqueIndex("session_recaps_session_uniq").on(t.bbsSessionId),
+  }),
+);
+
+/**
+ * `ea_approval_tokens` — every approve link in every EA email resolves
+ * through this table.
+ *
+ * Single use (consumed_at), 72-hour expiry, and the token is HASHED at
+ * rest: the row is a verifier, not a copy of the secret, so database
+ * read access alone does not let someone approve on Bruce's behalf.
+ */
+export const eaApprovalTokens = pgTable(
+  "ea_approval_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    /** SHA-256 of the 32-byte random token. */
+    tokenHash: text("token_hash").notNull(),
+    subjectType: eaApprovalSubjectEnum("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    /** Who the link was issued to, so a consumed token attributes the
+     *  approval to a real person. */
+    userProfileId: uuid("user_profile_id")
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    hashUniq: uniqueIndex("ea_approval_tokens_hash_uniq").on(t.tokenHash),
+    orgIdx: index("ea_approval_tokens_org_idx").on(t.orgId),
+    subjectIdx: index("ea_approval_tokens_subject_idx").on(
+      t.subjectType,
+      t.subjectId,
+    ),
+  }),
+);
+
+export type EaDigest = typeof eaDigests.$inferSelect;
+export type NewEaDigest = typeof eaDigests.$inferInsert;
+export type EaTimeBlock = typeof eaTimeBlocks.$inferSelect;
+export type NewEaTimeBlock = typeof eaTimeBlocks.$inferInsert;
+export type EaEmailThread = typeof eaEmailThreads.$inferSelect;
+export type NewEaEmailThread = typeof eaEmailThreads.$inferInsert;
+export type SessionRecap = typeof sessionRecaps.$inferSelect;
+export type NewSessionRecap = typeof sessionRecaps.$inferInsert;
+export type EaApprovalToken = typeof eaApprovalTokens.$inferSelect;
+export type NewEaApprovalToken = typeof eaApprovalTokens.$inferInsert;

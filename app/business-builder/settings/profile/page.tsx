@@ -9,13 +9,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, ArrowRight, Bot, Mail, MessageSquare, PenTool, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Inbox, Mail, MessageSquare, PenTool, UserRound } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ProfileClerkButton } from "@/components/settings/ProfileClerkButton";
 import { EmailSignatureEditor } from "@/components/templates/EmailSignatureEditor";
 import { AnthropicKeyEditor } from "@/components/settings/AnthropicKeyEditor";
+import { EaNotifyEmailEditor } from "@/components/settings/EaNotifyEmailEditor";
 import { SmsNumberEditor } from "@/components/settings/SmsNumberEditor";
 
 export default async function ProfileSettingsPage() {
@@ -33,6 +34,7 @@ export default async function ProfileSettingsPage() {
         fullName: userProfiles.fullName,
         email: userProfiles.email,
         emailSignature: userProfiles.emailSignature,
+        eaNotifyEmail: userProfiles.eaNotifyEmail,
         signatureImageData: userProfiles.signatureImageData,
         anthropicApiKey: userProfiles.anthropicApiKey,
         smsFromNumber: userProfiles.smsFromNumber,
@@ -121,6 +123,32 @@ export default async function ProfileSettingsPage() {
           </div>
         </div>
         <EmailSignatureEditor initial={me?.emailSignature ?? ""} />
+      </section>
+
+      <section
+        id="assistant-email"
+        className="border border-tbb-line rounded-lg bg-white p-5 space-y-3 shadow-tbb-sm"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid place-items-center w-10 h-10 rounded-md bg-tbb-blue-50 text-tbb-blue shrink-0">
+            <Inbox className="w-5 h-5" aria-hidden />
+          </span>
+          <div className="flex-1">
+            <h2 className="font-bold text-tbb-navy text-base">
+              Assistant email
+            </h2>
+            <p className="text-xs text-tbb-ink-3">
+              Where your Executive Assistant writes to you &mdash; the 7am
+              morning briefing, session recaps waiting for your approval, and
+              the Friday rollup. Each Business Builder sets their own. Leave it
+              blank and it uses your account email.
+            </p>
+          </div>
+        </div>
+        <EaNotifyEmailEditor
+          initial={me?.eaNotifyEmail ?? ""}
+          accountEmail={me?.email ?? ""}
+        />
       </section>
 
       <section

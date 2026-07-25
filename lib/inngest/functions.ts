@@ -182,11 +182,89 @@ export const firefliesSync = inngest.createFunction(
   // "Meeting notes" module stays current, including recurring BBS calls.
   { cron: "0 * * * *" },
   async ({ step }) => {
-    return step.run("sync", async () => {
+    const sync = await step.run("sync", async () => {
       const { syncAllEngagementMeetings } = await import(
         "@/lib/actions/sync-engagement-meetings"
       );
       return syncAllEngagementMeetings();
+    });
+
+    // EA: draft a recap for any session whose transcript has landed and
+    // that has not been recapped yet. Riding this cron rather than
+    // adding another is what makes "within an hour of the transcript
+    // landing" true. A separate step so a recap failure never rolls back
+    // the meeting sync above.
+    const recaps = await step.run("ea-recap-sweep", async () => {
+      const { runRecapSweep } = await import("@/lib/ea/recap-sweep");
+      return runRecapSweep();
+    });
+
+    return { sync, recaps };
+  },
+);
+
+/* ------------------------ EA: morning digest ------------------------ */
+
+export const eaDailyDigest = inngest.createFunction(
+  { id: "ea-daily-digest" },
+  // 13:00 UTC Mon–Fri = 07:00 MDT / 06:00 MST.
+  //
+  // Note the DST asymmetry: this lands at 06:00 through the winter. It
+  // is pinned to UTC because Inngest crons are, and a fixed 07:00 MT
+  // would need two schedules. Arriving an hour early in winter is the
+  // harmless side of the trade; arriving an hour late would mean the
+  // briefing lands after the day has started.
+  { cron: "0 13 * * 1-5" },
+  async ({ step }) => {
+    return step.run("digest", async () => {
+      const { runDailyDigest } = await import("@/lib/ea/digest");
+      return runDailyDigest();
+    });
+  },
+);
+
+/* -------------------------- EA: inbox sweep -------------------------- */
+
+export const eaInboxSweep = inngest.createFunction(
+  { id: "ea-inbox-sweep" },
+  // Fifteen past the hour, weekdays. Offset from the other hourly jobs
+  // so the two are not competing for the same Google rate limit.
+  { cron: "15 * * * 1-5" },
+  async ({ step }) => {
+    return step.run("sweep", async () => {
+      const { runInboxSweep } = await import("@/lib/ea/inbox-triage");
+      return runInboxSweep();
+    });
+  },
+);
+
+/* ------------------------ EA: client chasing ------------------------ */
+
+export const eaClientNudge = inngest.createFunction(
+  { id: "ea-client-nudge" },
+  // Monday 16:00 UTC = 10:00 MDT / 09:00 MST. Inside the working window
+  // year-round, and Monday morning is when a week's commitments are
+  // still salvageable.
+  { cron: "0 16 * * 1" },
+  async ({ step }) => {
+    return step.run("nudge", async () => {
+      const { runClientNudge } = await import("@/lib/ea/client-nudge");
+      return runClientNudge();
+    });
+  },
+);
+
+/* ------------------------ EA: Friday rollup ------------------------ */
+
+export const eaFridayRollup = inngest.createFunction(
+  { id: "ea-friday-rollup" },
+  // Friday 22:00 UTC = 16:00 MDT / 15:00 MST. Late enough that the week
+  // is done, early enough that it is still Friday.
+  { cron: "0 22 * * 5" },
+  async ({ step }) => {
+    return step.run("rollup", async () => {
+      const { runFridayRollup } = await import("@/lib/ea/friday-rollup");
+      return runFridayRollup();
     });
   },
 );
@@ -218,4 +296,8 @@ export const allFunctions = [
   calendarSync,
   firefliesSync,
   sessionSeriesTopUp,
+  eaDailyDigest,
+  eaInboxSweep,
+  eaClientNudge,
+  eaFridayRollup,
 ];

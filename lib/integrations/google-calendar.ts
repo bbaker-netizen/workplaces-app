@@ -40,8 +40,22 @@ import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
  *     Non-sensitive, so it doesn't need extra Google verification.
  *   - openid email — identifies the connected Google account.
  */
+/**
+ * `gmail.compose` was added for the Executive Assistant inbox sweep.
+ *
+ * It is NOT redundant with `gmail.send`. Send permits
+ * `users.messages.send` and nothing else; creating a draft requires
+ * compose. The EA only ever drafts — it must never be able to put mail
+ * in front of a client unread — so compose is precisely the capability
+ * needed and send is not used by that path.
+ *
+ * Anyone already connected before this change holds a token minted
+ * without compose. Google does not widen an existing grant silently:
+ * they have to disconnect and reconnect once (the consent screen will
+ * list the new permission) before drafting works.
+ */
 export const GOOGLE_CALENDAR_SCOPE =
-  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file openid email";
+  "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file openid email";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

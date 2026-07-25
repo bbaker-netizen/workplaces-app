@@ -713,3 +713,138 @@ async function ownerEmailFor(userProfileId: string): Promise<string | null> {
 
 // Surface the row type for callers that want a thin re-export.
 export type { ClientCommunication };
+
+/* ------------------------ drafts + parsing ------------------------ */
+
+/**
+ * A Gmail message reduced to the fields the EA triage cares about.
+ *
+ * `getMessage` returns Gmail's full envelope; this flattens it once so
+ * callers do not each re-implement header lookup and body extraction.
+ */
+export type ParsedGmailMessage = {
+  id: string;
+  threadId: string;
+  from: string[];
+  to: string[];
+  cc: string[];
+  subject: string;
+  /** Plain text body, HTML stripped if that is all the message had. */
+  text: string;
+  internalDate: number;
+  labelIds: string[];
+  /** RFC 5322 Message-ID, needed to thread a reply correctly. */
+  rfcMessageId: string | null;
+  references: string | null;
+};
+
+export function parseGmailMessage(m: GmailMessage): ParsedGmailMessage {
+  const headers = headersToMap(m.payload);
+  const bodies = extractBodies(m.payload);
+  return {
+    id: m.id,
+    threadId: m.threadId,
+    from: extractAddresses(headers.get("from")),
+    to: extractAddresses(headers.get("to")),
+    cc: extractAddresses(headers.get("cc")),
+    subject: headers.get("subject") ?? "",
+    text: bodies.text,
+    internalDate: m.internalDate ? Number(m.internalDate) : 0,
+    labelIds: m.labelIds ?? [],
+    rfcMessageId: headers.get("message-id") ?? null,
+    references: headers.get("references") ?? null,
+  };
+}
+
+export type DraftInput = {
+  to: string[];
+  subject: string;
+  body: string;
+  bodyHtml?: string | null;
+  /** Thread to attach the draft to, so it appears as a reply. */
+  threadId?: string | null;
+  inReplyTo?: string | null;
+  references?: string | null;
+};
+
+/**
+ * Create a DRAFT in the user's Gmail account. Never sends.
+ *
+ * This is the only write the EA inbox sweep performs. The distinction
+ * matters: `gmail.send` would let the job put mail in front of a client
+ * with nobody having read it, and the standing rule is that nothing goes
+ * out under Bruce's name without his approval. Drafting leaves the last
+ * word with him, in the client he already uses.
+ *
+ * Requires the `gmail.compose` scope. `gmail.send` alone cannot create
+ * drafts, which is why the scope set had to grow.
+ */
+export async function createGmailDraft(
+  userProfileId: string,
+  fromAddress: string,
+  input: DraftInput,
+): Promise<{ draftId: string; messageId: string; threadId: string }> {
+  const { getValidAccessToken } = await import("./google-calendar");
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) {
+    throw new Error(
+      "Google not connected. Visit /business-builder/profile/google-calendar.",
+    );
+  }
+
+  const headers: string[] = [
+    `From: ${encodeHeader(fromAddress)}`,
+    `To: ${input.to.map(encodeHeader).join(", ")}`,
+    `Subject: ${encodeHeader(input.subject)}`,
+    "MIME-Version: 1.0",
+  ];
+  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
+  if (input.references) headers.push(`References: ${input.references}`);
+
+  let raw: string;
+  if (input.bodyHtml && input.bodyHtml.trim().length > 0) {
+    const boundary = `=_EA_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    raw =
+      headers.join("\r\n") +
+      "\r\n\r\n" +
+      [
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        input.body,
+        `--${boundary}`,
+        "Content-Type: text/html; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        input.bodyHtml,
+        `--${boundary}--`,
+      ].join("\r\n");
+  } else {
+    headers.push("Content-Type: text/plain; charset=UTF-8");
+    headers.push("Content-Transfer-Encoding: 8bit");
+    raw = headers.join("\r\n") + "\r\n\r\n" + input.body;
+  }
+
+  const message: { raw: string; threadId?: string } = {
+    raw: encodeBase64Url(Buffer.from(raw, "utf8")),
+  };
+  if (input.threadId) message.threadId = input.threadId;
+
+  const data = await gmail<{
+    id: string;
+    message: { id: string; threadId: string };
+  }>(token.token, "/users/me/drafts", {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+
+  return {
+    draftId: data.id,
+    messageId: data.message.id,
+    threadId: data.message.threadId,
+  };
+}

@@ -21,6 +21,7 @@
 
 import { DateTime } from "luxon";
 import type { EmailEnvelope } from "./send";
+import type { DigestPayload } from "@/lib/ea/digest-data";
 
 function appUrl(): string {
   // Trim a trailing slash so concatenation with a path is clean.
@@ -55,7 +56,46 @@ function flattenMarkdown(body: string, max = 240): string {
 
 /* ---------------------------- shared shell ---------------------------- */
 
-function shell({
+/**
+ * Bulletproof button — VML for Outlook, styled anchor everywhere else.
+ *
+ * The shell's single footer button is a plain anchor, which is fine for
+ * a "view thread" link. It is NOT fine for the approve buttons the EA
+ * emails carry: Outlook renders a styled anchor as a bare blue link, and
+ * an approve action that looks like a footnote does not get tapped. The
+ * conditional-comment VML rect below is the only construction Outlook's
+ * Word rendering engine draws as an actual button.
+ *
+ * Used inline inside `bodyHtml`, as many times as a message needs.
+ */
+export function bulletproofButton({
+  href,
+  label,
+  background = "#2E4057",
+  width = 240,
+}: {
+  href: string;
+  label: string;
+  background?: string;
+  width?: number;
+}): string {
+  const safeHref = escapeHtml(href);
+  const safeLabel = escapeHtml(label);
+  return `
+<div>
+  <!--[if mso]>
+  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeHref}" style="height:44px;v-text-anchor:middle;width:${width}px;" arcsize="50%" stroke="f" fillcolor="${background}">
+    <w:anchorlock/>
+    <center style="color:#FFFFFF;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${safeLabel}</center>
+  </v:roundrect>
+  <![endif]-->
+  <!--[if !mso]><!-- -->
+  <a href="${safeHref}" style="display:inline-block;background:${background};color:#FFFFFF;text-decoration:none;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-weight:bold;font-size:15px;line-height:44px;height:44px;padding:0 28px;border-radius:9999px;letter-spacing:0.03em;text-align:center;">${safeLabel}</a>
+  <!--<![endif]-->
+</div>`.trim();
+}
+
+export function shell({
   preheader,
   heading,
   bodyHtml,
@@ -877,4 +917,670 @@ export function clientAcceptedEmail(
     `Workspace: ${url}`,
   ].join("\n");
   return { to: input.to, subject, html, text };
+}
+
+/* ======================================================================
+ * Executive Assistant emails
+ *
+ * All of these ride the shared `shell` above, so the EA mail looks like
+ * the rest of the app's mail rather than a bolted-on second system.
+ *
+ * House rules for this block, per the build spec: sentence-case navy
+ * headings, no em dashes in copy, Canadian spelling, Arial with a
+ * sans-serif fallback (Outlook will not load a web font), inline styles
+ * only, table-based layout, and a plain-text alternative on every send.
+ * Approve actions use `bulletproofButton`, never a styled anchor.
+ * ==================================================================== */
+
+const NAVY = "#2E4057";
+const ORANGE = "#E87722";
+const INK = "#1A1A1A";
+const MUTED = "#666666";
+const RULE = "#E5E5E5";
+const CREAM = "#F5F1E8";
+
+/** Section header plus its rows. Returns "" when there is nothing to
+ *  say, so empty sections vanish rather than printing "None". */
+function eaSection(
+  title: string,
+  innerHtml: string,
+  opts: { accent?: string; subtitle?: string } = {},
+): string {
+  if (!innerHtml.trim()) return "";
+  const accent = opts.accent ?? NAVY;
+  return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px 0;">
+  <tr>
+    <td style="padding:0 0 10px 0;border-bottom:2px solid ${accent};">
+      <span style="font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;font-size:17px;font-weight:bold;color:${accent};">${escapeHtml(title)}</span>
+      ${
+        opts.subtitle
+          ? `<span style="font-family:Arial,sans-serif;font-size:13px;color:${MUTED};"> ${escapeHtml(opts.subtitle)}</span>`
+          : ""
+      }
+    </td>
+  </tr>
+  <tr><td style="padding:12px 0 0 0;">${innerHtml}</td></tr>
+</table>`;
+}
+
+/** One line item: title on the left, a small grey qualifier on the right. */
+function eaRow(
+  title: string,
+  meta: string,
+  opts: { accent?: string; note?: string } = {},
+): string {
+  const accent = opts.accent;
+  return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px 0;border-bottom:1px solid ${RULE};">
+  <tr>
+    <td style="padding:6px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:${INK};">
+      ${accent ? `<span style="color:${accent};font-weight:bold;">&#9632;</span> ` : ""}${escapeHtml(title)}
+      ${meta ? `<br><span style="font-size:12px;color:${MUTED};">${escapeHtml(meta)}</span>` : ""}
+      ${
+        opts.note
+          ? `<br><span style="font-size:12px;color:${ORANGE};font-weight:bold;">${escapeHtml(opts.note)}</span>`
+          : ""
+      }
+    </td>
+  </tr>
+</table>`;
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "no date";
+  return DateTime.fromISO(iso, { zone: "America/Edmonton" }).toFormat("ccc d LLL");
+}
+
+/** "in_progress" reads badly in a briefing. */
+function humanStatus(s: string): string {
+  return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/* --------------------------- daily digest --------------------------- */
+
+export type DailyDigestEmailInput = {
+  to: string;
+  payload: DigestPayload;
+};
+
+/**
+ * The 07:00 briefing. Ordered by what changes Bruce's next hour:
+ * what is happening today, what has already slipped, what the assistant
+ * proposes to do about it, then the wider state of the book.
+ */
+export function dailyDigestEmail(input: DailyDigestEmailInput): EmailEnvelope {
+  const p = input.payload;
+  const firstName = p.recipientName.split(" ")[0] ?? p.recipientName;
+  const dateLabel = DateTime.fromISO(p.forDate, {
+    zone: "America/Edmonton",
+  }).toFormat("cccc d LLLL");
+
+  const totalOverdue = p.myItems.overdue.length;
+  const parts: string[] = [];
+
+  parts.push(
+    `<p style="margin:0 0 20px 0;font-family:Arial,sans-serif;font-size:15px;">Good morning ${escapeHtml(firstName)}. Here is ${escapeHtml(dateLabel)}.</p>`,
+  );
+
+  /* Today's sessions, with what to walk in knowing. */
+  parts.push(
+    eaSection(
+      "Today",
+      p.todaysSessions
+        .map((s) => {
+          const commitments = s.openCommitments.length
+            ? `<ul style="margin:8px 0 0 0;padding-left:18px;font-family:Arial,sans-serif;font-size:13px;color:${INK};">${s.openCommitments
+                .map(
+                  (c) =>
+                    `<li style="margin:0 0 4px 0;">${escapeHtml(c.title)}${
+                      c.assigneeName ? ` <span style="color:${MUTED};">(${escapeHtml(c.assigneeName)})</span>` : ""
+                    }</li>`,
+                )
+                .join("")}</ul>`
+            : `<p style="margin:8px 0 0 0;font-family:Arial,sans-serif;font-size:13px;color:${MUTED};">Nothing open from last time.</p>`;
+          return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;background:${CREAM};">
+  <tr><td style="padding:14px 16px;font-family:Arial,sans-serif;">
+    <div style="font-size:15px;font-weight:bold;color:${NAVY};">${escapeHtml(s.engagementLabel)} at ${escapeHtml(s.whenLabel)}</div>
+    <div style="font-size:12px;color:${MUTED};margin-top:2px;">${escapeHtml(humanStatus(s.type))}${
+      s.previousSessionAt ? ` &middot; last session ${escapeHtml(fmtDate(s.previousSessionAt))}` : " &middot; first session"
+    }</div>
+    <div style="font-size:12px;color:${MUTED};margin-top:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;">Still open</div>
+    ${commitments}
+  </td></tr>
+</table>`;
+        })
+        .join(""),
+      { subtitle: "who you are seeing, and what is still open" },
+    ),
+  );
+
+  /* Escalations, before anything else that competes for attention. */
+  parts.push(
+    eaSection(
+      "Slipping",
+      p.escalations
+        .map((e) =>
+          eaRow(
+            e.title,
+            `${e.engagementLabel} &middot; block ended ${fmtDate(e.blockEndedAt)}`,
+            { accent: ORANGE, note: e.notice },
+          ),
+        )
+        .join(""),
+      { accent: ORANGE, subtitle: "blocks that passed with the work still open" },
+    ),
+  );
+
+  /* Proposed blocks. The one section with buttons. */
+  parts.push(
+    eaSection(
+      "Time I have found for you",
+      p.proposedBlocks
+        .map(
+          (b) => `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px 0;border:1px solid ${RULE};">
+  <tr><td style="padding:14px 16px;font-family:Arial,sans-serif;">
+    <div style="font-size:14px;font-weight:bold;color:${INK};">${escapeHtml(b.title)}</div>
+    <div style="font-size:12px;color:${MUTED};margin:2px 0 12px 0;">${escapeHtml(b.engagementLabel)} &middot; ${escapeHtml(b.whenLabel)}${
+      b.rescheduleCount > 0 ? ` &middot; attempt ${b.rescheduleCount + 1}` : ""
+    }</div>
+    ${bulletproofButton({ href: b.approveUrl, label: "Put it on my calendar", width: 240 })}
+  </td></tr>
+</table>`,
+        )
+        .join(""),
+      { subtitle: "one tap places the event, nothing is booked until you do" },
+    ),
+  );
+
+  /* My items. */
+  const myBuckets = [
+    { label: "Overdue", items: p.myItems.overdue, accent: ORANGE },
+    { label: "Due today", items: p.myItems.today, accent: NAVY },
+    { label: "Due this week", items: p.myItems.thisWeek, accent: NAVY },
+  ];
+  const myHtml = myBuckets
+    .filter((b) => b.items.length > 0)
+    .map(
+      (b) => `
+<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:${b.accent};text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px 0;">${escapeHtml(b.label)} (${b.items.length})</div>
+${b.items
+  .map((i) =>
+    eaRow(
+      i.title,
+      `${i.engagementLabel} &middot; ${i.daysOverdue !== null ? `${i.daysOverdue} day${i.daysOverdue === 1 ? "" : "s"} overdue` : fmtDate(i.dueDate)}`,
+      { accent: i.daysOverdue !== null ? ORANGE : undefined },
+    ),
+  )
+  .join("")}
+<div style="height:12px;"></div>`,
+    )
+    .join("");
+  parts.push(eaSection("Your commitments", myHtml));
+
+  /* Sessions in the next seven days (today's already shown above). */
+  const laterSessions = p.upcomingSessions.filter(
+    (s) => !p.todaysSessions.some((t) => t.id === s.id),
+  );
+  parts.push(
+    eaSection(
+      "Next seven days",
+      laterSessions
+        .map((s) => eaRow(`${s.engagementLabel}`, `${s.whenLabel} &middot; ${humanStatus(s.type)}`))
+        .join(""),
+    ),
+  );
+
+  /* No next step booked.
+   *
+   * Kept in the DAILY rather than moved to Friday with the other
+   * state-of-the-book sections. It is usually two lines, and it is the
+   * one item on that list you act on the same morning: a conversation
+   * that ended without a date decays fast, and Friday afternoon is three
+   * days too late to ring somebody back. */
+  parts.push(
+    eaSection(
+      "No next step booked",
+      p.prospectsWithoutNextStep
+        .map((pr) =>
+          eaRow(
+            pr.companyName,
+            `${pr.contactName ?? "no contact name"} &middot; ${humanStatus(pr.status)} &middot; last touched ${fmtDate(pr.lastActivityAt)}`,
+            { accent: ORANGE },
+          ),
+        )
+        .join(""),
+      { accent: ORANGE, subtitle: "conversations that ended without a date" },
+    ),
+  );
+
+  const anyContent = parts.slice(1).some((s) => s.trim().length > 0);
+  if (!anyContent) {
+    parts.push(
+      `<p style="margin:0;font-family:Arial,sans-serif;font-size:15px;color:${MUTED};">Nothing needs you this morning. No overdue work, no sessions today, nothing waiting on a date.</p>`,
+    );
+  } else {
+    // The daily is deliberately only what you act on today. Deliverable
+    // states, what clients owe, and quiet engagements are a weekly read,
+    // not a 7am one, so they moved to the Friday rollup. The pointer
+    // stops that looking like something quietly went missing.
+    parts.push(
+      `<p style="margin:8px 0 0 0;font-family:Arial,sans-serif;font-size:12px;color:${MUTED};line-height:1.6;">Deliverable states, what your clients owe you, and any engagement gone quiet are in Friday's rollup.</p>`,
+    );
+  }
+
+  const subject =
+    totalOverdue > 0
+      ? `Your day: ${totalOverdue} overdue, ${p.todaysSessions.length} session${p.todaysSessions.length === 1 ? "" : "s"} today`
+      : `Your day: ${p.todaysSessions.length} session${p.todaysSessions.length === 1 ? "" : "s"} today`;
+
+  const html = shell({
+    preheader: `${totalOverdue} overdue, ${p.myItems.today.length} due today, ${p.proposedBlocks.length} block${p.proposedBlocks.length === 1 ? "" : "s"} proposed.`,
+    heading: "Your morning briefing",
+    bodyHtml: parts.join(""),
+    buttonHref: `${appUrl()}/business-builder`,
+    buttonLabel: "Open the console",
+    accent: totalOverdue > 0 ? ORANGE : NAVY,
+  });
+
+  /* ---- plain text alternative ---- */
+  const t: string[] = [`Good morning ${firstName}. Here is ${dateLabel}.`, ""];
+  if (p.todaysSessions.length) {
+    t.push("TODAY");
+    for (const s of p.todaysSessions) {
+      t.push(`  ${s.engagementLabel} at ${s.whenLabel} (${humanStatus(s.type)})`);
+      for (const c of s.openCommitments) {
+        t.push(`    still open: ${c.title}${c.assigneeName ? ` (${c.assigneeName})` : ""}`);
+      }
+    }
+    t.push("");
+  }
+  if (p.escalations.length) {
+    t.push("SLIPPING");
+    for (const e of p.escalations) t.push(`  ${e.title} (${e.engagementLabel}) - ${e.notice}`);
+    t.push("");
+  }
+  if (p.proposedBlocks.length) {
+    t.push("TIME I HAVE FOUND FOR YOU");
+    for (const b of p.proposedBlocks) {
+      t.push(`  ${b.title} (${b.engagementLabel})`);
+      t.push(`    ${b.whenLabel}`);
+      t.push(`    Approve: ${b.approveUrl}`);
+    }
+    t.push("");
+  }
+  for (const b of myBuckets) {
+    if (!b.items.length) continue;
+    t.push(`${b.label.toUpperCase()} (${b.items.length})`);
+    for (const i of b.items) {
+      t.push(
+        `  ${i.title} (${i.engagementLabel}) - ${i.daysOverdue !== null ? `${i.daysOverdue} days overdue` : fmtDate(i.dueDate)}`,
+      );
+    }
+    t.push("");
+  }
+  if (laterSessions.length) {
+    t.push("NEXT SEVEN DAYS");
+    for (const s of laterSessions) t.push(`  ${s.engagementLabel} - ${s.whenLabel}`);
+    t.push("");
+  }
+  if (p.prospectsWithoutNextStep.length) {
+    t.push("NO NEXT STEP BOOKED");
+    for (const pr of p.prospectsWithoutNextStep) {
+      t.push(`  ${pr.companyName} - ${humanStatus(pr.status)}, last touched ${fmtDate(pr.lastActivityAt)}`);
+    }
+    t.push("");
+  }
+  t.push(`Open the console: ${appUrl()}/business-builder`);
+
+  return { to: input.to, subject, html, text: t.join("\n") };
+}
+
+/* ---------------------- session recap: approval ---------------------- */
+
+export type RecapApprovalEmailInput = {
+  to: string;
+  recipientName: string;
+  clientLabel: string;
+  sessionWhen: string;
+  recapHtml: string;
+  approveUrl: string;
+  reviewUrl: string;
+};
+
+/**
+ * Sent to Bruce, not the client. Carries the full recap so it can be
+ * read and approved from a phone without opening the app, because an
+ * unapproved recap ages badly.
+ */
+export function sessionRecapApprovalEmail(
+  input: RecapApprovalEmailInput,
+): EmailEnvelope {
+  const firstName = input.recipientName.split(" ")[0] ?? input.recipientName;
+  const bodyHtml = `
+<p style="margin:0 0 14px 0;font-family:Arial,sans-serif;font-size:15px;">Hi ${escapeHtml(firstName)}, here is the draft recap for <strong>${escapeHtml(input.clientLabel)}</strong> (${escapeHtml(input.sessionWhen)}).</p>
+<p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:14px;color:${MUTED};">Nothing has been sent. Approving emails it to the client contacts and files it on their portal thread as a permanent record.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;border:1px solid ${RULE};background:#FFFFFF;">
+  <tr><td style="padding:18px 20px;">${input.recapHtml}</td></tr>
+</table>
+${bulletproofButton({ href: input.approveUrl, label: "Approve and send to client", width: 280 })}
+<p style="margin:14px 0 0 0;font-family:Arial,sans-serif;font-size:13px;color:${MUTED};">Needs an edit first? <a href="${escapeHtml(input.reviewUrl)}" style="color:${NAVY};">Open it in the console</a>.</p>`;
+
+  const html = shell({
+    preheader: `Draft recap for ${input.clientLabel}. Nothing sent yet.`,
+    heading: "Recap ready for your approval",
+    bodyHtml,
+    buttonHref: input.reviewUrl,
+    buttonLabel: "Open in the console",
+  });
+
+  const text = [
+    `Draft recap for ${input.clientLabel} (${input.sessionWhen}).`,
+    "",
+    "Nothing has been sent. Approving emails it to the client contacts and files it on their portal thread.",
+    "",
+    `Approve and send: ${input.approveUrl}`,
+    `Edit first: ${input.reviewUrl}`,
+  ].join("\n");
+
+  return {
+    to: input.to,
+    subject: `Approve: ${input.clientLabel} session recap`,
+    html,
+    text,
+  };
+}
+
+/* ----------------------- session recap: client ----------------------- */
+
+export type RecapClientEmailInput = {
+  to: string;
+  subject: string;
+  recapHtml: string;
+  recapText: string;
+  portalUrl: string;
+};
+
+/** The recap as the client receives it, once Bruce has approved it. */
+export function sessionRecapClientEmail(
+  input: RecapClientEmailInput,
+): EmailEnvelope {
+  const html = shell({
+    preheader: "Your session recap, decisions, and what happens next.",
+    heading: "Your session recap",
+    bodyHtml: input.recapHtml,
+    buttonHref: input.portalUrl,
+    buttonLabel: "Open your portal",
+  });
+  return {
+    to: input.to,
+    subject: input.subject,
+    html,
+    text: `${input.recapText}\n\nOpen your portal: ${input.portalUrl}`,
+  };
+}
+
+/* ------------------------ client overdue nudge ------------------------ */
+
+export type ClientNudgeEmailInput = {
+  to: string;
+  recipientName: string;
+  items: { title: string; dueDate: string | null; daysOverdue: number | null }[];
+  portalUrl: string;
+};
+
+/**
+ * Weekly nudge to the CLIENT about their own overdue commitments.
+ *
+ * This exists so that chasing is not done by hand. The tone is a
+ * reminder between partners, not a demand: these are commitments they
+ * made, and the email says so plainly without scolding.
+ */
+export function clientOverdueNudgeEmail(
+  input: ClientNudgeEmailInput,
+): EmailEnvelope {
+  const firstName = input.recipientName.split(" ")[0] ?? input.recipientName;
+  const rows = input.items
+    .map((i) =>
+      eaRow(
+        i.title,
+        i.daysOverdue !== null
+          ? `${i.daysOverdue} day${i.daysOverdue === 1 ? "" : "s"} past its date`
+          : `due ${fmtDate(i.dueDate)}`,
+        { accent: ORANGE },
+      ),
+    )
+    .join("");
+
+  const bodyHtml = `
+<p style="margin:0 0 14px 0;font-family:Arial,sans-serif;font-size:15px;">Hi ${escapeHtml(firstName)},</p>
+<p style="margin:0 0 18px 0;font-family:Arial,sans-serif;font-size:15px;">A few commitments from your sessions are past their date. Nothing here is a problem yet, but they are the ones holding up the next step.</p>
+${rows}
+<p style="margin:18px 0 0 0;font-family:Arial,sans-serif;font-size:14px;color:${MUTED};">If a date needs to move, change it in the portal or raise it at the next session. A moved date is fine. A silent one is not.</p>`;
+
+  const html = shell({
+    preheader: `${input.items.length} commitment${input.items.length === 1 ? "" : "s"} past their date.`,
+    heading: "A few open commitments",
+    bodyHtml,
+    buttonHref: input.portalUrl,
+    buttonLabel: "Open your portal",
+    accent: ORANGE,
+  });
+
+  const text = [
+    `Hi ${firstName},`,
+    "",
+    "A few commitments from your sessions are past their date:",
+    "",
+    ...input.items.map(
+      (i) =>
+        `  - ${i.title}${i.daysOverdue !== null ? ` (${i.daysOverdue} days past its date)` : ""}`,
+    ),
+    "",
+    `Open your portal: ${input.portalUrl}`,
+  ].join("\n");
+
+  return {
+    to: input.to,
+    subject: `${input.items.length} open commitment${input.items.length === 1 ? "" : "s"} from your sessions`,
+    html,
+    text,
+  };
+}
+
+/* --------------------------- Friday rollup --------------------------- */
+
+export type FridayRollupEmailInput = {
+  to: string;
+  recipientName: string;
+  weekLabel: string;
+  shipped: {
+    title: string;
+    engagementLabel: string;
+    revenueImpact: boolean;
+    marginImpact: boolean;
+  }[];
+  slipped: {
+    title: string;
+    engagementLabel: string;
+    daysOverdue: number | null;
+    revenueImpact: boolean;
+    marginImpact: boolean;
+  }[];
+  /** State of the book. Moved here out of the 7am briefing, which is
+   *  deliberately only what you act on today. */
+  deliverablesByStatus: DigestPayload["deliverablesByStatus"];
+  deliverablesPastTarget: DigestPayload["deliverablesPastTarget"];
+  clientOverdue: DigestPayload["clientOverdue"];
+  quietEngagements: DigestPayload["quietEngagements"];
+};
+
+/**
+ * What shipped, what slipped, both tagged against the quality gate.
+ *
+ * This is the one report that answers the gate directly: every item is
+ * marked for whether it moves top line, protects margin, or neither.
+ * The "neither" count is the interesting number.
+ */
+export function fridayRollupEmail(input: FridayRollupEmailInput): EmailEnvelope {
+  const firstName = input.recipientName.split(" ")[0] ?? input.recipientName;
+  const tag = (rev: boolean, mar: boolean): string => {
+    if (rev && mar) return "top line + margin";
+    if (rev) return "top line";
+    if (mar) return "margin";
+    return "neither";
+  };
+
+  const shippedHtml = input.shipped
+    .map((s) => eaRow(s.title, `${s.engagementLabel} &middot; ${tag(s.revenueImpact, s.marginImpact)}`))
+    .join("");
+  const slippedHtml = input.slipped
+    .map((s) =>
+      eaRow(
+        s.title,
+        `${s.engagementLabel} &middot; ${tag(s.revenueImpact, s.marginImpact)}${
+          s.daysOverdue !== null ? ` &middot; ${s.daysOverdue} days late` : ""
+        }`,
+        { accent: ORANGE },
+      ),
+    )
+    .join("");
+
+  const untagged =
+    input.shipped.filter((s) => !s.revenueImpact && !s.marginImpact).length +
+    input.slipped.filter((s) => !s.revenueImpact && !s.marginImpact).length;
+
+  /* ---- state of the book: what the daily deliberately leaves out ---- */
+
+  const delivHtml =
+    input.deliverablesByStatus
+      .map(
+        (g) => `
+<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:${NAVY};text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px 0;">${escapeHtml(humanStatus(g.status))} (${g.items.length})</div>
+${g.items
+  .map((d) =>
+    eaRow(
+      d.title,
+      `${d.engagementLabel} &middot; ${d.daysInState} day${d.daysInState === 1 ? "" : "s"} without a change`,
+      { accent: d.daysPastTarget !== null ? ORANGE : undefined },
+    ),
+  )
+  .join("")}
+<div style="height:12px;"></div>`,
+      )
+      .join("") +
+    (input.deliverablesPastTarget.length
+      ? `
+<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:${ORANGE};text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px 0;">Past the promised date (${input.deliverablesPastTarget.length})</div>
+${input.deliverablesPastTarget
+  .map((d) =>
+    eaRow(d.title, `${d.engagementLabel} &middot; promised ${fmtDate(d.targetDate)}`, {
+      accent: ORANGE,
+      note: `${d.daysPastTarget} day${d.daysPastTarget === 1 ? "" : "s"} late`,
+    }),
+  )
+  .join("")}`
+      : "");
+
+  const clientHtml = input.clientOverdue
+    .map((i) =>
+      eaRow(
+        i.title,
+        `${i.engagementLabel} &middot; ${i.assigneeName ?? "unassigned"} &middot; ${i.daysOverdue} day${i.daysOverdue === 1 ? "" : "s"} overdue`,
+      ),
+    )
+    .join("");
+
+  const quietHtml = input.quietEngagements
+    .map((q) =>
+      eaRow(
+        q.engagementLabel,
+        `${q.quietDays} days with no session and no movement on any item`,
+        { accent: ORANGE },
+      ),
+    )
+    .join("");
+
+  const bodyHtml = `
+<p style="margin:0 0 20px 0;font-family:Arial,sans-serif;font-size:15px;">Hi ${escapeHtml(firstName)}, here is ${escapeHtml(input.weekLabel)}.</p>
+${eaSection(`Shipped (${input.shipped.length})`, shippedHtml)}
+${eaSection(`Slipped (${input.slipped.length})`, slippedHtml, { accent: ORANGE })}
+${
+  untagged > 0
+    ? `<p style="margin:0 0 28px 0;font-family:Arial,sans-serif;font-size:14px;color:${ORANGE};"><strong>${untagged}</strong> item${untagged === 1 ? "" : "s"} moved neither top line nor margin. Worth asking why ${untagged === 1 ? "it was" : "they were"} on the list.</p>`
+    : `<p style="margin:0 0 28px 0;font-family:Arial,sans-serif;font-size:14px;color:${MUTED};">Every item this week moved top line, margin, or both.</p>`
+}
+${eaSection("Deliverables in flight", delivHtml)}
+${eaSection("Waiting on the client", clientHtml, { subtitle: "they get their own nudge on Monday, this is so you know" })}
+${eaSection("Gone quiet", quietHtml, { accent: ORANGE, subtitle: "the earliest signal of a renewal at risk" })}`;
+
+  const html = shell({
+    preheader: `${input.shipped.length} shipped, ${input.slipped.length} slipped.`,
+    heading: "Your week",
+    bodyHtml,
+    buttonHref: `${appUrl()}/business-builder`,
+    buttonLabel: "Open the console",
+  });
+
+  const text = [
+    `Hi ${firstName}, here is ${input.weekLabel}.`,
+    "",
+    `SHIPPED (${input.shipped.length})`,
+    ...input.shipped.map(
+      (s) => `  ${s.title} (${s.engagementLabel}) - ${tag(s.revenueImpact, s.marginImpact)}`,
+    ),
+    "",
+    `SLIPPED (${input.slipped.length})`,
+    ...input.slipped.map(
+      (s) => `  ${s.title} (${s.engagementLabel}) - ${tag(s.revenueImpact, s.marginImpact)}`,
+    ),
+    "",
+    untagged > 0
+      ? `${untagged} item(s) moved neither top line nor margin.`
+      : "Every item this week moved top line, margin, or both.",
+    "",
+    ...input.deliverablesByStatus.flatMap((g) => [
+      `DELIVERABLES / ${humanStatus(g.status).toUpperCase()} (${g.items.length})`,
+      ...g.items.map(
+        (d) => `  ${d.title} (${d.engagementLabel}) - ${d.daysInState} days without a change`,
+      ),
+      "",
+    ]),
+    ...(input.deliverablesPastTarget.length
+      ? [
+          "PAST THE PROMISED DATE",
+          ...input.deliverablesPastTarget.map(
+            (d) => `  ${d.title} (${d.engagementLabel}) - ${d.daysPastTarget} days late`,
+          ),
+          "",
+        ]
+      : []),
+    ...(input.clientOverdue.length
+      ? [
+          "WAITING ON THE CLIENT",
+          ...input.clientOverdue.map(
+            (i) =>
+              `  ${i.title} (${i.engagementLabel}) - ${i.assigneeName ?? "unassigned"}, ${i.daysOverdue} days overdue`,
+          ),
+          "",
+        ]
+      : []),
+    ...(input.quietEngagements.length
+      ? [
+          "GONE QUIET",
+          ...input.quietEngagements.map(
+            (q) => `  ${q.engagementLabel} - ${q.quietDays} days with no activity`,
+          ),
+        ]
+      : []),
+  ].join("\n");
+
+  return {
+    to: input.to,
+    subject: `Your week: ${input.shipped.length} shipped, ${input.slipped.length} slipped`,
+    html,
+    text,
+  };
 }

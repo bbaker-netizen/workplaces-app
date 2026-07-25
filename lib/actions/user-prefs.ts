@@ -209,6 +209,57 @@ export async function setAnthropicApiKey(
 
 
 /**
+ * Where this Business Builder's Executive Assistant mail goes — the
+ * morning briefing, recap approvals, the Friday rollup.
+ *
+ * Exists because the sign-in provider holds whatever address the account
+ * was created with, which is not always the inbox the person actually
+ * watches. A daily briefing delivered somewhere unwatched reports
+ * success while reaching nobody.
+ *
+ * Per user, deliberately. A single environment variable would have
+ * redirected every Builder's mail to one address, which is fine for a
+ * one-person practice and wrong the moment a second Builder joins.
+ *
+ * Pass an empty string to clear, which falls back to the account email.
+ */
+export async function setEaNotifyEmail(
+  raw: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof raw !== "string" || raw.length > 254) {
+    return { ok: false, error: "That address is too long." };
+  }
+  let value: string | null = null;
+  const trimmed = raw.trim();
+  if (trimmed.length > 0) {
+    // Deliberately permissive: enough to catch a typo like a missing @
+    // or a stray space, without rejecting a valid but unusual address.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      return {
+        ok: false,
+        error: "That doesn't look like an email address.",
+      };
+    }
+    value = trimmed;
+  }
+  try {
+    const result = await withCaller(async (orgId, userProfileId) => {
+      await withTenantContext(orgId, async (tx) => {
+        await tx
+          .update(userProfiles)
+          .set({ eaNotifyEmail: value, updatedAt: new Date() })
+          .where(eq(userProfiles.id, userProfileId));
+      });
+    });
+    if (result === null) return { ok: false, error: "Not authenticated." };
+    revalidatePath("/business-builder/settings/profile");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Server error." };
+  }
+}
+
+/**
  * Persist this Business Builder's own SMS "from" number (their Twilio
  * number). Outbound texts they send then come from this number so their
  * clients see them, not the shared practice number. E.164 format. Pass
