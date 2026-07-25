@@ -22,7 +22,7 @@
 import { DateTime } from "luxon";
 import type { EmailEnvelope } from "./send";
 import type { DigestPayload } from "@/lib/ea/digest-data";
-import type { EngagementHours } from "@/lib/ea/engagement-hours";
+import type { EngagementHoursReport } from "@/lib/ea/engagement-hours";
 import type { JobHeartbeat } from "@/lib/ea/job-runs";
 
 function appUrl(): string {
@@ -1451,7 +1451,7 @@ export type FridayRollupEmailInput = {
   clientOverdue: DigestPayload["clientOverdue"];
   quietEngagements: DigestPayload["quietEngagements"];
   /** Hours spent per engagement, and what they are earning. */
-  engagementHours: EngagementHours[];
+  engagementHours: EngagementHoursReport;
   /** Heartbeat for the assistant's own background jobs. Bottom of the
    *  email, because it is the section you should be able to ignore. */
   heartbeats: JobHeartbeat[];
@@ -1469,7 +1469,8 @@ export type FridayRollupEmailInput = {
  * counted, so email, prep, and thinking in the car are all missing. A
  * rate that looks thin here is thinner in life.
  */
-function hoursTable(rows: EngagementHours[]): string {
+function hoursTable(report: EngagementHoursReport): string {
+  const rows = report.rows;
   if (rows.length === 0) return "";
 
   const cell =
@@ -1478,14 +1479,19 @@ function hoursTable(rows: EngagementHours[]): string {
     ";";
   const head = `padding:7px 8px;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;color:${MUTED};text-align:left;border-bottom:1px solid ${RULE};`;
 
-  // Anything under this reads as a warning. Not a hard rule, a prompt to
-  // look: an Accelerator running below it is either mispriced or
-  // over-served.
-  const THIN_RATE = 150;
+  // The threshold comes from the practice's own median, not a figure
+  // picked in advance — see lib/ea/engagement-hours.ts. Null means there
+  // is not yet enough to benchmark against, and nothing is coloured: the
+  // worst-first ordering still says which client is eating the time,
+  // without dressing a guess up as a warning.
+  const thinRate = report.thinRateThreshold;
 
   const body = rows
     .map((r) => {
-      const thin = r.toDateHourlyRate !== null && r.toDateHourlyRate < THIN_RATE;
+      const thin =
+        thinRate !== null &&
+        r.toDateHourlyRate !== null &&
+        r.toDateHourlyRate < thinRate;
       const colour = thin ? "#C0392B" : INK;
       const rate =
         r.toDateHourlyRate === null
@@ -1506,9 +1512,11 @@ function hoursTable(rows: EngagementHours[]): string {
     })
     .join("");
 
-  const anyThin = rows.some(
-    (r) => r.toDateHourlyRate !== null && r.toDateHourlyRate < THIN_RATE,
-  );
+  const anyThin =
+    thinRate !== null &&
+    rows.some(
+      (r) => r.toDateHourlyRate !== null && r.toDateHourlyRate < thinRate,
+    );
 
   return `
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${RULE};border-collapse:collapse;">
@@ -1522,9 +1530,15 @@ function hoursTable(rows: EngagementHours[]): string {
 </table>
 <p style="margin:10px 0 0 0;font-family:Arial,sans-serif;font-size:11px;color:${MUTED};line-height:1.6;">
   Hours count sessions actually held plus focus blocks that have passed. Email, prep, and thinking time are not in here, so the real rate is lower than shown.${
-    anyThin
-      ? ` <span style="color:#C0392B;font-weight:bold;">Anything in red is under $${THIN_RATE}/hr and is either mispriced or over-served.</span>`
+    report.medianRate !== null
+      ? ` Your book runs at a median of $${report.medianRate.toLocaleString("en-CA")}/hr.`
       : ""
+  }${
+    anyThin
+      ? ` <span style="color:#C0392B;font-weight:bold;">Anything in red is under $${thinRate?.toLocaleString("en-CA")}/hr, which is well below your own median. Mispriced, over-served, or both.</span>`
+      : thinRate === null
+        ? " Not enough clients with a fee on record to set a benchmark yet, so nothing is flagged. The order still tells you who is eating the most time."
+        : ""
   }
 </p>`;
 }
@@ -1767,10 +1781,10 @@ ${eaSection("Your assistant", heartbeatTable(input.heartbeats), { subtitle: "pro
           "",
         ]
       : []),
-    ...(input.engagementHours.length
+    ...(input.engagementHours.rows.length
       ? [
           "HOURS AND WHAT THEY EARN (worst rate first)",
-          ...input.engagementHours.map((r) => {
+          ...input.engagementHours.rows.map((r) => {
             const rate =
               r.toDateHourlyRate === null
                 ? r.monthlyFeeCents === null
