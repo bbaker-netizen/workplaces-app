@@ -1385,6 +1385,62 @@ top line nor margin — that count is the number worth looking at. It also
 carries the three state-of-the-book sections that came out of the daily
 briefing.
 
+### Drafted session agendas (migrations 0089 + 0090)
+
+The briefing said what was OPEN going into a session; it never helped
+decide what the session should be ABOUT. `lib/ea/agenda-draft.ts` drafts
+a proposed agenda for each of the day's sessions from three inputs, in
+order of weight: the last session's transcript summary (what was left
+unresolved is the strongest signal), open and overdue commitments, and
+deliverables in flight.
+
+**Proposals never touch `agenda_items` until accepted.** Agenda items are
+CLIENT-VISIBLE in the portal, so a model must not be able to put talking
+points in front of a client unread. Drafts live in
+`ea_agenda_proposals` and are copied across only when an approve link is
+tapped — a pure copy of the stored text, no second model call, so what
+lands cannot differ from what was reviewed.
+
+Carried-forward items are passed to the model as "already covered" AND
+filtered out of its output afterwards. Belt and braces, because a
+duplicated talking point makes the carry-forward mechanism look broken.
+
+UNIQUE on `bbs_session_id` means one proposal per session ever: a
+declined agenda stays declined rather than being re-offered every
+morning until the session happens. Only TODAY's sessions get one — prep
+matters on the morning of, and drafting a week ahead would be noise from
+stale material.
+
+The `ALTER TYPE ... ADD VALUE` for the new approval subject is alone in
+0089, separate from the table in 0090. The deploy runner sends each file
+as one implicit transaction, and a newly added enum value cannot be used
+in the transaction that added it. Splitting removes the question
+entirely rather than relying on nothing happening to reference it.
+
+Model calls run AFTER the digest row is claimed, not inside that
+transaction — several Claude requests would otherwise pin a pooled
+connection for their whole duration.
+
+### Hours per engagement, and what they earn
+
+`lib/ea/engagement-hours.ts`, rendered in the Friday rollup. Per
+engagement, for the week and to date: session hours (sessions actually
+`completed`, from `duration_min`), focus-block hours (approved or
+completed blocks whose end has passed), and where a fee exists, the
+effective hourly rate. Sorted lowest rate first — engagements with no fee
+sort last, because no fee is an unknown rate rather than a bad one.
+
+Deliberately conservative: only time the system can see is counted, so
+email, prep, and thinking time are all missing. A rate that looks thin
+here is thinner in life, which is the correct direction to err.
+
+`engagements.monthly_fee_cents` already existed (migration 0035) but was
+only ever written at engagement creation from the originating lead,
+which made it unfixable afterwards. `setEngagementMonthlyFee` plus
+`EngagementFeeControl` on the engagement page close that; blank clears
+it, dropping the engagement out of the rate calculation rather than
+reporting a rate against a fee of zero.
+
 ### Heartbeat (migration 0088)
 
 `ea_job_runs` — one row per background-job run, written on completion

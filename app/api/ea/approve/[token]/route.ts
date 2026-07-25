@@ -25,6 +25,10 @@ import {
   successPage,
   tokenFailureCopy,
 } from "@/lib/ea/approval-page";
+import {
+  acceptAgendaProposal,
+  describeAgendaProposal,
+} from "@/lib/ea/agenda-draft";
 import { approveSessionRecap, describeRecap } from "@/lib/ea/session-recap";
 import { approveTimeBlock, describeTimeBlock } from "@/lib/ea/time-blocks";
 import { consumeApprovalToken, peekApprovalToken } from "@/lib/ea/tokens";
@@ -85,6 +89,44 @@ export async function GET(
     );
   }
 
+  if (peek.token.subjectType === "agenda_proposal") {
+    const proposal = await describeAgendaProposal(peek.token.subjectId);
+    if (!proposal) {
+      return html(
+        errorPage("That agenda is gone", "The session may have been deleted."),
+        404,
+      );
+    }
+    if (proposal.status !== "proposed") {
+      return html(
+        errorPage(
+          "Already actioned",
+          `That agenda has already been ${proposal.status}.`,
+        ),
+        409,
+      );
+    }
+    const list = proposal.items
+      .map(
+        (i) =>
+          `<li style="margin:0 0 8px 0;">${i.title.replace(/[<>&"]/g, "")}${
+            i.body
+              ? `<br><span style="color:#666666;font-size:13px;">${i.body.replace(/[<>&"]/g, "")}</span>`
+              : ""
+          }</li>`,
+      )
+      .join("");
+    return html(
+      confirmPage({
+        heading: "Add these to the agenda?",
+        detail:
+          "This adds them as agenda items on the session, after anything already there. They become visible to the client, and you can edit or delete any of them afterwards.",
+        buttonLabel: "Add to the agenda",
+        previewHtml: `<ol style="margin:0;padding-left:20px;">${list}</ol>`,
+      }),
+    );
+  }
+
   const recap = await describeRecap(peek.token.subjectId);
   if (!recap) {
     return html(errorPage("That recap is gone", "It may have been deleted."), 404);
@@ -131,6 +173,19 @@ export async function POST(
       successPage(
         "Booked",
         `${result.title} is on your calendar${block ? `, ${block.whenLabel}` : ""}. Mark the item done and the block clears itself.`,
+      ),
+    );
+  }
+
+  if (subjectType === "agenda_proposal") {
+    const accepted = await acceptAgendaProposal(subjectId, userProfileId);
+    if (!accepted.ok) {
+      return html(errorPage("Could not add them", accepted.reason), 409);
+    }
+    return html(
+      successPage(
+        "On the agenda",
+        `${accepted.added} talking point${accepted.added === 1 ? "" : "s"} added to the session. Edit or reorder them in the app whenever you like.`,
       ),
     );
   }

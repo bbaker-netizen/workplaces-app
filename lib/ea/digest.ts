@@ -35,6 +35,10 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { dailyDigestEmail } from "@/lib/email/templates";
 import { EA_TIMEZONE, gatherDigest, type DigestPayload } from "./digest-data";
+import {
+  proposeAgendaForSession,
+  type AgendaProposal,
+} from "./agenda-draft";
 import { gradeSweep, recordJobRun } from "./job-runs";
 import { listEaRecipients, type EaRecipient } from "./recipients";
 import { loadCalendarWindow, proposeBlocks } from "./time-blocks";
@@ -92,21 +96,68 @@ export async function runDigestForRecipient(
         ? []
         : await proposeBlocks(tx, recipient, payload, now, digestId, external);
 
-    const finalPayload: DigestPayload = { ...payload, proposedBlocks: blocks };
-
-    await tx
-      .update(eaDigests)
-      .set({ payload: finalPayload as unknown as Record<string, unknown> })
-      .where(eq(eaDigests.id, digestId));
-
-    return { digestId, finalPayload };
+    return { digestId, blocks };
   });
 
   if (claim === null) return { outcome: "already_sent" };
 
-  // 4. Send, then stamp.
+  // 4. Agendas for today's sessions.
+  //
+  //    AFTER the claim, not inside it: each one is a Claude call, and
+  //    holding a database transaction open across several model requests
+  //    would pin a pooled connection for the length of them. The digest
+  //    row already exists, so `proposeAgendaForSession` writes its own
+  //    proposal row and approve token in its own short transaction and
+  //    links back via digest_id.
+  //
+  //    Only today's sessions get one. Prep matters on the morning of;
+  //    drafting agendas for the whole week would be noise, and the
+  //    material would be stale by the time the session came round.
+  const agendaDrafts = new Map<string, AgendaProposal>();
+  for (const s of payload.todaysSessions) {
+    const drafted = await proposeAgendaForSession({
+      session: {
+        id: s.id,
+        engagementId: s.engagementId,
+        orgId: recipient.orgId,
+        scheduledAt: new Date(s.scheduledAt),
+      },
+      engagementLabel: s.engagementLabel,
+      recipientUserProfileId: recipient.userProfileId,
+      recipientOrgId: recipient.orgId,
+      digestId: claim.digestId,
+    });
+    if (drafted) agendaDrafts.set(s.id, drafted);
+  }
+
+  const finalPayload: DigestPayload = {
+    ...payload,
+    todaysSessions: payload.todaysSessions.map((s) => {
+      const drafted = agendaDrafts.get(s.id);
+      return drafted
+        ? {
+            ...s,
+            proposedAgenda: {
+              proposalId: drafted.proposalId,
+              items: drafted.items,
+              approveUrl: drafted.approveUrl,
+            },
+          }
+        : s;
+    }),
+    proposedBlocks: claim.blocks,
+  };
+
+  await withSystemContext((tx) =>
+    tx
+      .update(eaDigests)
+      .set({ payload: finalPayload as unknown as Record<string, unknown> })
+      .where(eq(eaDigests.id, claim.digestId)),
+  );
+
+  // 5. Send, then stamp.
   const result = await sendEmailQuietly({
-    ...dailyDigestEmail({ to: recipient.email, payload: claim.finalPayload }),
+    ...dailyDigestEmail({ to: recipient.email, payload: finalPayload }),
     // 07:00 MT is before the working window opens. See the module note.
     bypassWorkingHours: true,
   });
@@ -114,7 +165,7 @@ export async function runDigestForRecipient(
   if (!result.delivered) {
     return {
       outcome: "failed",
-      blocks: claim.finalPayload.proposedBlocks.length,
+      blocks: finalPayload.proposedBlocks.length,
       error: result.reason === "error" ? result.error : result.reason,
     };
   }
@@ -126,7 +177,7 @@ export async function runDigestForRecipient(
       .where(eq(eaDigests.id, claim.digestId)),
   );
 
-  return { outcome: "sent", blocks: claim.finalPayload.proposedBlocks.length };
+  return { outcome: "sent", blocks: finalPayload.proposedBlocks.length };
 }
 
 /**

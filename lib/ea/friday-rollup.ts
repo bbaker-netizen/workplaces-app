@@ -21,6 +21,7 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { fridayRollupEmail } from "@/lib/email/templates";
 import { EA_TIMEZONE, gatherDigest } from "./digest-data";
+import { loadEngagementHours } from "./engagement-hours";
 import { loadHeartbeats } from "./job-runs";
 import {
   engagementLabel,
@@ -181,6 +182,12 @@ export async function runFridayRollup(
         gatherDigest(tx, builder, now),
       );
 
+      // Hours and their effective rate. Same recipient scoping as
+      // everything else — a Builder sees only the clients they own.
+      const engagementHours = await withSystemContext((tx) =>
+        loadEngagementHours(tx, builder, weekStart, now),
+      );
+
       // A stale job is itself worth an email even in a week with nothing
       // else to report. Silence is the failure mode the heartbeat exists
       // to break, so it must never be suppressed by a quiet week.
@@ -207,6 +214,7 @@ export async function runFridayRollup(
           deliverablesPastTarget: payload.deliverablesPastTarget,
           clientOverdue: payload.clientOverdue,
           quietEngagements: payload.quietEngagements,
+          engagementHours,
           heartbeats,
         }),
       );

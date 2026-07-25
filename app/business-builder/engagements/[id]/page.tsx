@@ -68,6 +68,7 @@ import { EngagementStatusControl } from "@/components/business-builder/Engagemen
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { EngagementRename } from "@/components/business-builder/EngagementRename";
+import { EngagementFeeControl } from "@/components/business-builder/EngagementFeeControl";
 import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
 
 export default async function EngagementDetailPage({
@@ -346,6 +347,13 @@ export default async function EngagementDetailPage({
             name={data.eng.name ?? "Engagement"}
           />
           <div className="flex items-center gap-3 flex-wrap">
+            {/* Monthly fee. Drives the effective hourly rate in the
+                Friday rollup, so it needs to be correctable here rather
+                than only at engagement creation. */}
+            <EngagementFeeControl
+              engagementId={id}
+              currentCents={data.eng.monthlyFeeCents ?? null}
+            />
             {/* Plain <a> (full-document nav): /portal/e/[id] is a Route
                 Handler that sets a cookie + redirects; Next's <Link>
                 client-side navigation can't follow it, so the click did

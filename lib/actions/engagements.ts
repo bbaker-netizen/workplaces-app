@@ -140,6 +140,51 @@ export async function setEngagementProgram(
 }
 
 /**
+ * Set (or clear) the monthly fee for an engagement.
+ *
+ * The column has existed since migration 0035 but was only ever written
+ * at engagement creation, from the originating lead. That made it
+ * unfixable afterwards: a fee agreed at signing that later changed, or
+ * one entered wrongly, was stuck. It now drives the effective hourly
+ * rate in the Friday rollup, so being able to correct it matters.
+ *
+ * Pass null to clear, which drops that engagement out of the rate
+ * calculation rather than reporting a rate against a fee of zero.
+ * Coach-only.
+ */
+export async function setEngagementMonthlyFee(
+  engagementId: string,
+  monthlyFeeCents: number | null,
+): Promise<Result> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  if (
+    monthlyFeeCents !== null &&
+    (!Number.isInteger(monthlyFeeCents) ||
+      monthlyFeeCents < 0 ||
+      monthlyFeeCents > 100_000_00)
+  ) {
+    return { ok: false, error: "Enter a monthly fee between 0 and 100,000." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(engagements)
+        .set({ monthlyFeeCents })
+        .where(eq(engagements.id, engagementId));
+    });
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
+    revalidatePath("/business-builder/engagements");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
  * Archive (soft-delete) an entire engagement — removes the client from
  * the Engagements list and closes their portal. Reversible via
  * unarchiveEngagement. Coach-only.
