@@ -3450,3 +3450,58 @@ export type SessionRecap = typeof sessionRecaps.$inferSelect;
 export type NewSessionRecap = typeof sessionRecaps.$inferInsert;
 export type EaApprovalToken = typeof eaApprovalTokens.$inferSelect;
 export type NewEaApprovalToken = typeof eaApprovalTokens.$inferInsert;
+
+export const eaJobRunStatusEnum = pgEnum("ea_job_run_status", [
+  "success",
+  "partial",
+  "failed",
+]);
+
+/**
+ * `ea_job_runs` — heartbeat for the EA's background jobs.
+ *
+ * One row per run, written on completion including failures. The failure
+ * this catches is the silent one: an unwatched cron that stops firing or
+ * starts throwing produces no symptom except an email that quietly does
+ * not arrive, and a missing email looks exactly like a quiet week.
+ *
+ * Deliberately NOT tenant-scoped — no `org_id`, and migration 0088
+ * enables RLS with no policy at all, so `workplaces_app` can read
+ * nothing here. Reachable only through `withSystemContext`. This is
+ * telemetry about the practice's own machinery, not client data.
+ */
+export const eaJobRuns = pgTable(
+  "ea_job_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Matches the Inngest function id where there is one. Plain text so
+     *  a new job needs no migration to start reporting. */
+    jobId: text("job_id").notNull(),
+    /** Null for practice-wide runs. */
+    userProfileId: uuid("user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    status: eaJobRunStatusEnum("status").notNull(),
+    /** Digests sent, drafts written, blocks proposed. Zero is a valid and
+     *  healthy answer on a quiet day, which is why it is reported next to
+     *  the status rather than inferred from it. */
+    itemsProcessed: integer("items_processed").notNull().default(0),
+    errorText: text("error_text"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    jobCompletedIdx: index("ea_job_runs_job_completed_idx").on(
+      t.jobId,
+      t.completedAt,
+    ),
+    statusIdx: index("ea_job_runs_status_idx").on(t.status),
+  }),
+);
+
+export type EaJobRun = typeof eaJobRuns.$inferSelect;
+export type NewEaJobRun = typeof eaJobRuns.$inferInsert;

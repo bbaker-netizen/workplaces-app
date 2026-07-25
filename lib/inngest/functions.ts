@@ -196,7 +196,13 @@ export const firefliesSync = inngest.createFunction(
     // the meeting sync above.
     const recaps = await step.run("ea-recap-sweep", async () => {
       const { runRecapSweep } = await import("@/lib/ea/recap-sweep");
-      return runRecapSweep();
+      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
+      return withHeartbeat(
+        "ea-recap-sweep",
+        () => runRecapSweep(),
+        (r) => r.drafted,
+        (r) => gradeSweep({ succeeded: r.drafted + r.skipped, failed: r.failed }),
+      );
     });
 
     return { sync, recaps };
@@ -218,7 +224,13 @@ export const eaDailyDigest = inngest.createFunction(
   async ({ step }) => {
     return step.run("digest", async () => {
       const { runDailyDigest } = await import("@/lib/ea/digest");
-      return runDailyDigest();
+      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
+      return withHeartbeat(
+        "ea-daily-digest",
+        () => runDailyDigest(),
+        (r) => r.sent,
+        (r) => gradeSweep({ succeeded: r.sent + r.skipped, failed: r.failed }),
+      );
     });
   },
 );
@@ -241,7 +253,14 @@ export const eaInboxSweep = inngest.createFunction(
   async ({ step }) => {
     return step.run("sweep", async () => {
       const { runInboxSweep } = await import("@/lib/ea/inbox-triage");
-      return runInboxSweep();
+      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
+      return withHeartbeat(
+        "ea-inbox-sweep",
+        () => runInboxSweep(),
+        (r) => r.drafted,
+        (r) =>
+          gradeSweep({ succeeded: r.drafted + r.skipped, failed: r.failed }),
+      );
     });
   },
 );
@@ -257,7 +276,14 @@ export const eaClientNudge = inngest.createFunction(
   async ({ step }) => {
     return step.run("nudge", async () => {
       const { runClientNudge } = await import("@/lib/ea/client-nudge");
-      return runClientNudge();
+      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
+      return withHeartbeat(
+        "ea-client-nudge",
+        () => runClientNudge(),
+        (r) => r.itemsChased,
+        (r) =>
+          gradeSweep({ succeeded: r.recipientsEmailed, failed: r.failed }),
+      );
     });
   },
 );
@@ -272,7 +298,17 @@ export const eaFridayRollup = inngest.createFunction(
   async ({ step }) => {
     return step.run("rollup", async () => {
       const { runFridayRollup } = await import("@/lib/ea/friday-rollup");
-      return runFridayRollup();
+      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
+      // Records its own heartbeat AFTER rendering, so the rollup it just
+      // sent reports last week's run for itself rather than this one.
+      // That is correct: the section describes what had happened when the
+      // email was written.
+      return withHeartbeat(
+        "ea-friday-rollup",
+        () => runFridayRollup(),
+        (r) => r.sent,
+        (r) => gradeSweep({ succeeded: r.sent, failed: r.failed }),
+      );
     });
   },
 );

@@ -25,6 +25,7 @@ import { resolve } from "node:path";
 import { DateTime } from "luxon";
 import { dailyDigestEmail, fridayRollupEmail } from "../lib/email/templates";
 import type { DigestPayload } from "../lib/ea/digest-data";
+import type { JobHeartbeat } from "../lib/ea/job-runs";
 
 const ZONE = "America/Edmonton";
 process.env.NEXT_PUBLIC_APP_URL ??= "https://workplaces-the-builder.netlify.app";
@@ -319,6 +320,90 @@ const payload: DigestPayload = {
   counts: { engagements: 5, myOpenItems: 5 },
 };
 
+/* ------------------------- heartbeat sample ------------------------- */
+
+/**
+ * `ranDaysAgo` is the last attempt of any outcome; `workedDaysAgo` is
+ * the last attempt that succeeded (null = never). Staleness is derived
+ * the same way the real loader derives it, rather than being asserted,
+ * so the preview cannot drift from production behaviour.
+ */
+const hb = (
+  jobId: string,
+  label: string,
+  cadence: string,
+  opts: {
+    ranDaysAgo?: number | null;
+    workedDaysAgo?: number | null;
+    items?: number;
+    error?: string | null;
+  },
+): JobHeartbeat => {
+  const ran =
+    opts.ranDaysAgo === null || opts.ranDaysAgo === undefined
+      ? null
+      : now.minus({ days: opts.ranDaysAgo }).toJSDate();
+  const worked =
+    opts.workedDaysAgo === null || opts.workedDaysAgo === undefined
+      ? null
+      : now.minus({ days: opts.workedDaysAgo }).toJSDate();
+  const stale =
+    worked === null ||
+    worked.getTime() < now.minus({ days: 8 }).toJSDate().getTime();
+  return {
+    jobId,
+    label,
+    cadence,
+    lastRunAt: ran,
+    lastStatus: ran ? (worked && ran <= worked ? "success" : "failed") : null,
+    lastItems: ran ? (opts.items ?? 0) : null,
+    lastSuccessAt: worked,
+    lastSuccessItems: worked ? (opts.items ?? 0) : null,
+    lastError: stale ? (opts.error ?? null) : null,
+    stale,
+  };
+};
+
+const heartbeatSample: JobHeartbeat[] = [
+  hb("ea-daily-digest", "Morning briefing", "Weekday mornings", {
+    ranDaysAgo: 0,
+    workedDaysAgo: 0,
+    items: 1,
+  }),
+  hb("ea-time-blocks", "Focus time proposals", "Weekday mornings", {
+    ranDaysAgo: 0,
+    workedDaysAgo: 0,
+    items: 3,
+  }),
+  hb("ea-inbox-sweep", "Inbox triage", "Hourly", {
+    ranDaysAgo: 0,
+    workedDaysAgo: 0,
+    items: 2,
+  }),
+  hb("ea-recap-sweep", "Session recaps", "Hourly", {
+    // Healthy but idle: no sessions to recap this week. Zero must read
+    // as a quiet week, not a fault.
+    ranDaysAgo: 0,
+    workedDaysAgo: 0,
+    items: 0,
+  }),
+  hb("ea-client-nudge", "Client chasing", "Monday mornings", {
+    // The realistic failure: worked for weeks, then the token died. Red,
+    // but carrying the date it last worked rather than "never".
+    ranDaysAgo: 0,
+    workedDaysAgo: 11,
+    items: 4,
+    error:
+      "Google not connected. Visit /business-builder/profile/google-calendar.",
+  }),
+  hb("ea-friday-rollup", "Friday rollup", "Friday afternoons", {
+    // Never run at all — the case that writes no rows and would
+    // otherwise be invisible.
+    ranDaysAgo: null,
+    workedDaysAgo: null,
+  }),
+];
+
 /* --------------------------- which email --------------------------- */
 
 const which = (process.argv[2] ?? "digest").toLowerCase();
@@ -377,6 +462,11 @@ const envelope =
         deliverablesPastTarget: payload.deliverablesPastTarget,
         clientOverdue: payload.clientOverdue,
         quietEngagements: payload.quietEngagements,
+        // Heartbeat. Deliberately seeded with one healthy-but-idle job
+        // (zero items, which must NOT read as a fault), one stale job
+        // carrying an error, and one that has never run at all — the
+        // three states the section has to distinguish.
+        heartbeats: heartbeatSample,
       })
     : dailyDigestEmail({ to: "bbaker@4workplaces.com", payload });
 
