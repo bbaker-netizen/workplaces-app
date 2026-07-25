@@ -20,6 +20,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CornerUpLeft, Loader2, Send, X } from "lucide-react";
 import { sendClientMessage } from "@/lib/actions/send-client-message";
+import { EmailAttachmentPicker } from "./EmailAttachmentPicker";
 import {
   RichTextEditor,
   type RichTextEditorHandle,
@@ -95,6 +96,7 @@ function InboxComposerModal({
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState("");
+  const [attachedDocIds, setAttachedDocIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -149,6 +151,7 @@ function InboxComposerModal({
         body: md.trim(),
         inReplyTo: row.externalId ?? undefined,
         references: row.threadKey ?? row.externalId ?? undefined,
+        documentIds: attachedDocIds.length > 0 ? attachedDocIds : undefined,
       });
       if (!r.ok) {
         setError(r.error);
@@ -279,6 +282,14 @@ function InboxComposerModal({
               />
             </div>
           </label>
+          {(row.prospectId || row.engagementId) && (
+            <EmailAttachmentPicker
+              prospectId={row.prospectId}
+              engagementId={row.engagementId}
+              selectedIds={attachedDocIds}
+              onChange={setAttachedDocIds}
+            />
+          )}
           {row.subject && (
             <details className="text-xs text-tbb-ink-3">
               <summary className="cursor-pointer text-tbb-ink-3 hover:text-tbb-navy">
