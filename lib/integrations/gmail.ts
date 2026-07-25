@@ -344,6 +344,48 @@ export async function getMessage(
   );
 }
 
+/**
+ * Like `listMessagesSince`, but keeps the `threadId` Gmail already
+ * returns on the list response instead of discarding it.
+ *
+ * Why it exists: a caller that dedupes or filters by THREAD would
+ * otherwise have to fetch each message body just to learn which thread
+ * it belongs to. Over a long lookback window that is the difference
+ * between one cheap list call and dozens of wasted message fetches per
+ * run — and worse, a per-run work cap gets consumed by threads the
+ * caller was going to discard anyway, starving the new mail it actually
+ * wanted. The EA inbox sweep filters against its ledger with this before
+ * fetching anything.
+ */
+export async function listMessageRefsSince(
+  accessToken: string,
+  sinceEpochMs: number,
+  max = 1000,
+): Promise<{ id: string; threadId: string }[]> {
+  const sinceSeconds = Math.floor(sinceEpochMs / 1000);
+  const q = `after:${sinceSeconds}`;
+  const refs: { id: string; threadId: string }[] = [];
+  let pageToken: string | undefined;
+  while (refs.length < max) {
+    const params = new URLSearchParams({ q, maxResults: "100" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await gmail<{
+      messages?: { id: string; threadId: string }[];
+      nextPageToken?: string;
+    }>(accessToken, `/users/me/messages?${params.toString()}`);
+    for (const m of data.messages ?? []) {
+      refs.push({ id: m.id, threadId: m.threadId });
+    }
+    if (!data.nextPageToken) return refs;
+    pageToken = data.nextPageToken;
+  }
+  console.warn(
+    `[gmail] listMessageRefsSince hit the ${max}-ref cap; older mail in this ` +
+      `window was not examined.`,
+  );
+  return refs.slice(0, max);
+}
+
 /* --------------------------- parsing --------------------------- */
 
 function decodeBase64Url(data: string): string {

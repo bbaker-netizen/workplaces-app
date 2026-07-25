@@ -1266,9 +1266,29 @@ events to clean up.
 
 ### Phase 3 — inbound triage
 
-`eaInboxSweep`, cron `15 * * * 1-5`. Classifies via Haiku, drafts via
+`eaInboxSweep`, cron `15 * * * *`. Classifies via Haiku, drafts via
 `createGmailDraft` into the real thread, logs every thread either way so
 classification never repeats (or bills twice) on the same one.
+
+**Seven days, not weekdays** — the only EA schedule that runs at the
+weekend. It sends nothing; it writes a draft. The weekday restriction
+elsewhere protects outbound mail, and a draft disturbs nobody, whereas a
+prospect asking for time on Friday evening sitting untouched until
+Monday is a real conversion cost.
+
+**Twelve-hour lookback, and the ledger is read before any body is
+fetched.** `listMessageRefsSince` keeps the `threadId` Gmail already
+returns on the list response, so threads already handled are filtered
+out for the cost of a `Set` lookup rather than a message fetch. The
+original cut fetched every message body first and filtered afterwards,
+which was survivable at a 2.5-hour window and would have broken at
+twelve: an hourly sweep re-lists the same mail twelve times, and the
+per-run cap of 40 would have been consumed entirely by already-handled
+threads, starving the new mail queued behind them.
+
+A message sent to yourself carries BOTH `SENT` and `INBOX` in Gmail, so
+self-addressed test mail is skipped twice over — by the label check and
+by the sender check. Test from a different address.
 
 **The Gmail scopes were already there, mostly.** `gmail.readonly` and
 `gmail.send` were in `GOOGLE_CALENDAR_SCOPE` before this build. Only

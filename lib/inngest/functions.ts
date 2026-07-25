@@ -227,9 +227,17 @@ export const eaDailyDigest = inngest.createFunction(
 
 export const eaInboxSweep = inngest.createFunction(
   { id: "ea-inbox-sweep" },
-  // Fifteen past the hour, weekdays. Offset from the other hourly jobs
+  // Fifteen past the hour, EVERY day. Offset from the other hourly jobs
   // so the two are not competing for the same Google rate limit.
-  { cron: "15 * * * 1-5" },
+  //
+  // Seven days, unlike every other EA schedule, because this job does
+  // not send anything — it writes a draft into Gmail. The weekday
+  // restriction elsewhere exists to stop mail going OUT at odd hours,
+  // and a draft disturbs nobody. Meanwhile the cost of waiting is real:
+  // a prospect asking for time on Friday evening would otherwise sit
+  // untouched until Monday morning, which is the one kind of email where
+  // response speed decides whether the meeting happens.
+  { cron: "15 * * * *" },
   async ({ step }) => {
     return step.run("sweep", async () => {
       const { runInboxSweep } = await import("@/lib/ea/inbox-triage");
