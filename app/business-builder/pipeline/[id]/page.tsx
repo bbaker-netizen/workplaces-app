@@ -705,6 +705,7 @@ export default async function ProspectDetailPage({
               prospectId={prospect.id}
               activities={activities}
               embedded
+              canEditLog={profile.role === "master_admin"}
             />
           </CollapsibleSection>
         </aside>

@@ -100,8 +100,10 @@ export async function updateProspectActivity(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
-  if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Business Builders only." };
+  // Editing the activity log is master-admin-only — the log is the factual
+  // record of touchpoints, so only the practice owner amends it.
+  if (profile.role !== "master_admin")
+    return { ok: false, error: "Only a master admin can edit log entries." };
 
   const parsed = editSchema.safeParse(input);
   if (!parsed.success)
@@ -140,8 +142,9 @@ export async function deleteProspectActivity(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
-  if (profile.role !== "master_admin" && profile.role !== "coach")
-    return { ok: false, error: "Business Builders only." };
+  // Deleting log entries is master-admin-only (see updateProspectActivity).
+  if (profile.role !== "master_admin")
+    return { ok: false, error: "Only a master admin can delete log entries." };
 
   const parsed = deleteSchema.safeParse(input);
   if (!parsed.success)

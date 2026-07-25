@@ -58,11 +58,15 @@ export function ProspectActivityTimeline({
   prospectId,
   activities,
   embedded = false,
+  canEditLog = false,
 }: {
   prospectId: string;
   activities: ProspectActivityWithAuthor[];
   /** When inside a CollapsibleSection, drop the card chrome + title. */
   embedded?: boolean;
+  /** Editing/deleting existing log entries is master-admin-only. Everyone
+   *  can still ADD entries; only the owner amends the factual record. */
+  canEditLog?: boolean;
 }) {
   const router = useRouter();
   // A single, general log entry — no type picker. Meetings get logged when
@@ -220,7 +224,7 @@ export function ProspectActivityTimeline({
                         by {a.authorName}
                       </span>
                     )}
-                    {EDITABLE_TYPES.has(a.type) && editingId !== a.id && (
+                    {canEditLog && EDITABLE_TYPES.has(a.type) && editingId !== a.id && (
                       <button
                         type="button"
                         onClick={() => beginEdit(a)}
