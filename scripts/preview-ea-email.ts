@@ -52,6 +52,26 @@ const payload: DigestPayload = {
       type: "in_person",
       whenLabel: when(now.set({ hour: 10, minute: 0 })),
       previousSessionAt: iso(now.minus({ days: 14 })),
+      proposedAgenda: {
+        proposalId: "prop-1",
+        approveUrl:
+          "https://builder.4workplaces.com/api/ea/approve/SAMPLE-AGENDA-TOKEN",
+        items: [
+          {
+            title: "Second shift start date",
+            body: "Left unresolved last session pending the job-costing numbers.",
+          },
+          {
+            title: "Shop-floor org chart sign-off",
+            body: "Six days past its date and blocking the hiring conversation.",
+          },
+          { title: "Q2 job costing, what the numbers say", body: null },
+          {
+            title: "Estimator role, scope before we advertise",
+            body: null,
+          },
+        ],
+      },
       openCommitments: [
         { id: "c1", title: "Finish the shop-floor org chart", assigneeName: "Bruce Baker" },
         { id: "c2", title: "Pull Q2 job-costing numbers", assigneeName: "Dave Mercer" },
@@ -466,6 +486,76 @@ const envelope =
         // (zero items, which must NOT read as a fault), one stale job
         // carrying an error, and one that has never run at all — the
         // three states the section has to distinguish.
+        // Hours. Seeded to show all four states the table distinguishes:
+        // a thin rate (red), two healthy ones, an engagement with hours
+        // but no fee recorded, and a brand new one with no hours yet.
+        engagementHours: [
+          {
+            engagementId: "e1",
+            engagementLabel: "Summit Cabinets",
+            periodSessionHours: 4,
+            periodBlockHours: 3.5,
+            periodTotalHours: 7.5,
+            toDateSessionHours: 28,
+            toDateBlockHours: 19.5,
+            toDateTotalHours: 47.5,
+            monthlyFeeCents: 250000,
+            toDateHourlyRate: 105,
+            monthsElapsed: 2,
+          },
+          {
+            engagementId: "e4",
+            engagementLabel: "North Central Farming",
+            periodSessionHours: 2,
+            periodBlockHours: 1,
+            periodTotalHours: 3,
+            toDateSessionHours: 16,
+            toDateBlockHours: 6,
+            toDateTotalHours: 22,
+            monthlyFeeCents: 300000,
+            toDateHourlyRate: 273,
+            monthsElapsed: 2,
+          },
+          {
+            engagementId: "e2",
+            engagementLabel: "Crown and Ember",
+            periodSessionHours: 2,
+            periodBlockHours: 1.5,
+            periodTotalHours: 3.5,
+            toDateSessionHours: 12,
+            toDateBlockHours: 4.5,
+            toDateTotalHours: 16.5,
+            monthlyFeeCents: 350000,
+            toDateHourlyRate: 424,
+            monthsElapsed: 2,
+          },
+          {
+            engagementId: "e5",
+            engagementLabel: "A&M Abatement",
+            periodSessionHours: 0,
+            periodBlockHours: 0,
+            periodTotalHours: 0,
+            toDateSessionHours: 8,
+            toDateBlockHours: 2,
+            toDateTotalHours: 10,
+            monthlyFeeCents: null,
+            toDateHourlyRate: null,
+            monthsElapsed: 3,
+          },
+          {
+            engagementId: "e3",
+            engagementLabel: "Aiyana Services",
+            periodSessionHours: 0,
+            periodBlockHours: 0,
+            periodTotalHours: 0,
+            toDateSessionHours: 0,
+            toDateBlockHours: 0,
+            toDateTotalHours: 0,
+            monthlyFeeCents: 200000,
+            toDateHourlyRate: null,
+            monthsElapsed: 1,
+          },
+        ],
         heartbeats: heartbeatSample,
       })
     : dailyDigestEmail({ to: "bbaker@4workplaces.com", payload });

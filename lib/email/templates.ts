@@ -22,6 +22,7 @@
 import { DateTime } from "luxon";
 import type { EmailEnvelope } from "./send";
 import type { DigestPayload } from "@/lib/ea/digest-data";
+import type { EngagementHours } from "@/lib/ea/engagement-hours";
 import type { JobHeartbeat } from "@/lib/ea/job-runs";
 
 function appUrl(): string {
@@ -1049,6 +1050,32 @@ export function dailyDigestEmail(input: DailyDigestEmailInput): EmailEnvelope {
     }</div>
     <div style="font-size:12px;color:${MUTED};margin-top:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;">Still open</div>
     ${commitments}
+    ${
+      s.proposedAgenda && s.proposedAgenda.items.length > 0
+        ? `
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid ${RULE};">
+      <div style="font-size:12px;color:${NAVY};font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;">Suggested agenda</div>
+      <ol style="margin:8px 0 12px 0;padding-left:18px;font-family:Arial,sans-serif;font-size:13px;color:${INK};line-height:1.6;">
+        ${s.proposedAgenda.items
+          .map(
+            (a) =>
+              `<li style="margin:0 0 6px 0;">${escapeHtml(a.title)}${
+                a.body
+                  ? `<br><span style="color:${MUTED};font-size:12px;">${escapeHtml(a.body)}</span>`
+                  : ""
+              }</li>`,
+          )
+          .join("")}
+      </ol>
+      ${bulletproofButton({
+        href: s.proposedAgenda.approveUrl,
+        label: "Add to the agenda",
+        width: 210,
+      })}
+      <div style="font-size:11px;color:${MUTED};margin-top:8px;">Nothing is on their agenda until you tap. You can edit or delete any of it afterwards.</div>
+    </div>`
+        : ""
+    }
   </td></tr>
 </table>`;
         })
@@ -1194,6 +1221,13 @@ ${b.items
       t.push(`  ${s.engagementLabel} at ${s.whenLabel} (${humanStatus(s.type)})`);
       for (const c of s.openCommitments) {
         t.push(`    still open: ${c.title}${c.assigneeName ? ` (${c.assigneeName})` : ""}`);
+      }
+      if (s.proposedAgenda && s.proposedAgenda.items.length > 0) {
+        t.push("    Suggested agenda:");
+        for (const a of s.proposedAgenda.items) {
+          t.push(`      - ${a.title}${a.body ? ` (${a.body})` : ""}`);
+        }
+        t.push(`      Add to the agenda: ${s.proposedAgenda.approveUrl}`);
       }
     }
     t.push("");
@@ -1416,10 +1450,84 @@ export type FridayRollupEmailInput = {
   deliverablesPastTarget: DigestPayload["deliverablesPastTarget"];
   clientOverdue: DigestPayload["clientOverdue"];
   quietEngagements: DigestPayload["quietEngagements"];
+  /** Hours spent per engagement, and what they are earning. */
+  engagementHours: EngagementHours[];
   /** Heartbeat for the assistant's own background jobs. Bottom of the
    *  email, because it is the section you should be able to ignore. */
   heartbeats: JobHeartbeat[];
 };
+
+/**
+ * Hours per engagement, worst rate first.
+ *
+ * The number nobody calculates by hand. Sessions are visible and the fee
+ * is visible, but until they are divided the engagement that drifted
+ * from two hours a fortnight to a day a week looks exactly like the one
+ * that did not.
+ *
+ * The rate errs low on purpose: only time the system can actually see is
+ * counted, so email, prep, and thinking in the car are all missing. A
+ * rate that looks thin here is thinner in life.
+ */
+function hoursTable(rows: EngagementHours[]): string {
+  if (rows.length === 0) return "";
+
+  const cell =
+    "padding:7px 8px;font-family:Arial,sans-serif;font-size:12px;vertical-align:top;border-bottom:1px solid " +
+    RULE +
+    ";";
+  const head = `padding:7px 8px;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;color:${MUTED};text-align:left;border-bottom:1px solid ${RULE};`;
+
+  // Anything under this reads as a warning. Not a hard rule, a prompt to
+  // look: an Accelerator running below it is either mispriced or
+  // over-served.
+  const THIN_RATE = 150;
+
+  const body = rows
+    .map((r) => {
+      const thin = r.toDateHourlyRate !== null && r.toDateHourlyRate < THIN_RATE;
+      const colour = thin ? "#C0392B" : INK;
+      const rate =
+        r.toDateHourlyRate === null
+          ? r.monthlyFeeCents === null
+            ? "no fee set"
+            : "no hours yet"
+          : `$${r.toDateHourlyRate.toLocaleString("en-CA")}/hr`;
+      return `
+<tr>
+  <td style="${cell}color:${colour};font-weight:${thin ? "bold" : "normal"};">
+    ${escapeHtml(r.engagementLabel)}
+    <div style="font-size:10px;color:${MUTED};font-weight:normal;">${r.monthsElapsed} month${r.monthsElapsed === 1 ? "" : "s"} in</div>
+  </td>
+  <td style="${cell}text-align:right;color:${INK};">${r.periodTotalHours}</td>
+  <td style="${cell}text-align:right;color:${INK};">${r.toDateTotalHours}</td>
+  <td style="${cell}text-align:right;color:${colour};font-weight:${thin ? "bold" : "normal"};">${escapeHtml(rate)}</td>
+</tr>`;
+    })
+    .join("");
+
+  const anyThin = rows.some(
+    (r) => r.toDateHourlyRate !== null && r.toDateHourlyRate < THIN_RATE,
+  );
+
+  return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${RULE};border-collapse:collapse;">
+  <tr>
+    <th style="${head}">Client</th>
+    <th style="${head}text-align:right;">This week</th>
+    <th style="${head}text-align:right;">To date</th>
+    <th style="${head}text-align:right;">Effective rate</th>
+  </tr>
+  ${body}
+</table>
+<p style="margin:10px 0 0 0;font-family:Arial,sans-serif;font-size:11px;color:${MUTED};line-height:1.6;">
+  Hours count sessions actually held plus focus blocks that have passed. Email, prep, and thinking time are not in here, so the real rate is lower than shown.${
+    anyThin
+      ? ` <span style="color:#C0392B;font-weight:bold;">Anything in red is under $${THIN_RATE}/hr and is either mispriced or over-served.</span>`
+      : ""
+  }
+</p>`;
+}
 
 /**
  * The heartbeat table.
@@ -1596,6 +1704,7 @@ ${
 ${eaSection("Deliverables in flight", delivHtml)}
 ${eaSection("Waiting on the client", clientHtml, { subtitle: "they get their own nudge on Monday, this is so you know" })}
 ${eaSection("Gone quiet", quietHtml, { accent: ORANGE, subtitle: "the earliest signal of a renewal at risk" })}
+${eaSection("Hours and what they earn", hoursTable(input.engagementHours), { subtitle: "worst rate first" })}
 ${eaSection("Your assistant", heartbeatTable(input.heartbeats), { subtitle: "proof it actually ran" })}`;
 
   const html = shell({
@@ -1655,6 +1764,21 @@ ${eaSection("Your assistant", heartbeatTable(input.heartbeats), { subtitle: "pro
           ...input.quietEngagements.map(
             (q) => `  ${q.engagementLabel} - ${q.quietDays} days with no activity`,
           ),
+          "",
+        ]
+      : []),
+    ...(input.engagementHours.length
+      ? [
+          "HOURS AND WHAT THEY EARN (worst rate first)",
+          ...input.engagementHours.map((r) => {
+            const rate =
+              r.toDateHourlyRate === null
+                ? r.monthlyFeeCents === null
+                  ? "no fee set"
+                  : "no hours yet"
+                : `$${r.toDateHourlyRate}/hr`;
+            return `  ${r.engagementLabel} - ${r.periodTotalHours}h this week, ${r.toDateTotalHours}h to date, ${rate}`;
+          }),
           "",
         ]
       : []),

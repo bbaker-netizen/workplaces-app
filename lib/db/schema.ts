@@ -3208,6 +3208,13 @@ export const sessionRecapStatusEnum = pgEnum("session_recap_status", [
 export const eaApprovalSubjectEnum = pgEnum("ea_approval_subject", [
   "time_block",
   "session_recap",
+  "agenda_proposal",
+]);
+
+export const eaAgendaProposalStatusEnum = pgEnum("ea_agenda_proposal_status", [
+  "proposed",
+  "accepted",
+  "declined",
 ]);
 
 /**
@@ -3505,3 +3512,54 @@ export const eaJobRuns = pgTable(
 
 export type EaJobRun = typeof eaJobRuns.$inferSelect;
 export type NewEaJobRun = typeof eaJobRuns.$inferInsert;
+
+/**
+ * `ea_agenda_proposals` — a drafted agenda waiting to be accepted.
+ *
+ * Agenda items are CLIENT-VISIBLE in the portal, so drafted talking
+ * points are held here rather than written straight into `agenda_items`.
+ * Nothing reaches the client until an approve link is tapped — the same
+ * line the recap flow refuses to cross.
+ *
+ * UNIQUE on `bbs_session_id`: one proposal per session ever, so a re-run
+ * proposes nothing new and a declined agenda stays declined instead of
+ * being re-offered every morning until the session happens.
+ */
+export const eaAgendaProposals = pgTable(
+  "ea_agenda_proposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    bbsSessionId: uuid("bbs_session_id")
+      .notNull()
+      .references((): AnyPgColumn => bbsSessions.id, { onDelete: "cascade" }),
+    /** Array of {title, body}. Stored as drafted so accepting is a pure
+     *  copy with no second model call, and the accepted text cannot
+     *  differ from the text that was reviewed. */
+    items: jsonb("items").notNull(),
+    status: eaAgendaProposalStatusEnum("status").notNull().default("proposed"),
+    digestId: uuid("digest_id"),
+    acceptedByUserProfileId: uuid("accepted_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("ea_agenda_proposals_org_idx").on(t.orgId),
+    statusIdx: index("ea_agenda_proposals_status_idx").on(t.status),
+    sessionUniq: uniqueIndex("ea_agenda_proposals_session_uniq").on(
+      t.bbsSessionId,
+    ),
+  }),
+);
+
+export type EaAgendaProposal = typeof eaAgendaProposals.$inferSelect;
+export type NewEaAgendaProposal = typeof eaAgendaProposals.$inferInsert;

@@ -35,7 +35,10 @@ import { withSystemContext, type Tx } from "@/lib/db/tenant";
 /** How long an approve link stays live. */
 export const TOKEN_TTL_HOURS = 72;
 
-export type ApprovalSubjectType = "time_block" | "session_recap";
+export type ApprovalSubjectType =
+  | "time_block"
+  | "session_recap"
+  | "agenda_proposal";
 
 /** SHA-256, hex. Deterministic — the lookup key for a presented token. */
 export function hashToken(token: string): string {

@@ -100,6 +100,14 @@ export type DigestSession = {
 export type DigestSessionPrep = DigestSession & {
   previousSessionAt: string | null;
   openCommitments: { id: string; title: string; assigneeName: string | null }[];
+  /** Filled in after the payload is gathered, by the agenda drafter.
+   *  Empty when there was nothing worth proposing, or when the session
+   *  already has a proposal from a previous morning. */
+  proposedAgenda: {
+    proposalId: string;
+    items: { title: string; body: string | null }[];
+    approveUrl: string;
+  } | null;
 };
 
 export type DigestEscalation = {
@@ -449,6 +457,7 @@ export async function gatherDigest(
       whenLabel: whenLabel(s.scheduledAt),
       previousSessionAt: previous ? previous.scheduledAt.toISOString() : null,
       openCommitments,
+      proposedAgenda: null,
     });
   }
 
