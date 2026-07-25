@@ -17,12 +17,14 @@ import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   clientCommunications,
+  documents,
   engagements,
   prospects,
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
-import { sendGmailMessage } from "@/lib/integrations/gmail";
+import { sendGmailMessage, type EmailAttachment } from "@/lib/integrations/gmail";
+import { downloadDocumentBlob } from "@/lib/storage/blobs";
 import { isSmsConfigured, sendSms } from "@/lib/integrations/twilio";
 import {
   appendSignature,
@@ -50,6 +52,10 @@ const sendSchema = z
     inReplyTo: z.string().max(500).nullable().optional(),
     references: z.string().max(2000).nullable().optional(),
     attachments: z.array(attachmentSchema).max(10).optional(),
+    /** Existing prospect/engagement documents to attach by id (e.g. the
+     *  Climb PDF). Resolved to file bytes server-side so the browser never
+     *  has to shuttle megabytes of base64. */
+    documentIds: z.array(z.string().uuid()).max(10).optional(),
   })
   .refine(
     (v) =>
@@ -58,6 +64,63 @@ const sendSchema = z
   );
 
 export type SendClientMessageInput = z.input<typeof sendSchema>;
+
+/**
+ * Turn selected document ids into email attachments. Each doc is looked up
+ * under system context, checked to actually belong to the target prospect /
+ * engagement (so a coach can't attach a stray doc by guessing an id), then
+ * its bytes are pulled from Blobs and base64-encoded. The caller has already
+ * been authorized for this prospect/engagement.
+ */
+async function resolveDocumentAttachments(
+  documentIds: string[],
+  target: { prospectId?: string | null; engagementId?: string | null },
+): Promise<EmailAttachment[]> {
+  const metas = await withSystemContext(async (tx) => {
+    const out: Array<{
+      blobKey: string;
+      filename: string;
+      fileType: string;
+    }> = [];
+    for (const id of documentIds) {
+      const [row] = await tx
+        .select({
+          blobKey: documents.blobKey,
+          filename: documents.originalFilename,
+          fileType: documents.fileType,
+          prospectId: documents.prospectId,
+          engagementId: documents.engagementId,
+        })
+        .from(documents)
+        .where(eq(documents.id, id))
+        .limit(1);
+      if (!row) continue;
+      // Authorization: the doc must belong to the prospect/engagement this
+      // message is being sent for.
+      if (target.prospectId && row.prospectId !== target.prospectId) continue;
+      if (target.engagementId && row.engagementId !== target.engagementId)
+        continue;
+      out.push({
+        blobKey: row.blobKey,
+        filename: row.filename,
+        fileType: row.fileType,
+      });
+    }
+    return out;
+  });
+
+  const attachments: EmailAttachment[] = [];
+  for (const m of metas) {
+    const blob = await downloadDocumentBlob(m.blobKey);
+    if (!blob) continue;
+    attachments.push({
+      filename: m.filename,
+      contentType: m.fileType || "application/octet-stream",
+      base64: Buffer.from(blob.body).toString("base64"),
+    });
+  }
+  return attachments;
+}
 
 export async function sendClientMessage(
   input: SendClientMessageInput,
@@ -136,6 +199,16 @@ export async function sendClientMessage(
       // Suppress the unused-export warning while keeping the symbol live
       // in case future callers want the bare markdown→HTML path.
       void markdownToEmailHtml;
+      // Inline base64 uploads + any existing documents the coach picked
+      // (e.g. the Climb PDF), resolved to bytes server-side.
+      const emailAttachments: EmailAttachment[] = [...(data.attachments ?? [])];
+      if (data.documentIds && data.documentIds.length > 0) {
+        const docAtts = await resolveDocumentAttachments(data.documentIds, {
+          prospectId: data.prospectId,
+          engagementId: data.engagementId,
+        });
+        emailAttachments.push(...docAtts);
+      }
       const r = await sendGmailMessage(profile.userProfileId, senderEmail, {
         to: data.to,
         cc: data.cc,
@@ -145,7 +218,7 @@ export async function sendClientMessage(
         bodyHtml,
         inReplyTo: data.inReplyTo ?? null,
         references: data.references ?? null,
-        attachments: data.attachments,
+        attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
       });
       externalId = r.messageId;
       threadKey = r.threadId ?? data.references ?? null;

@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { sendClientMessage } from "@/lib/actions/send-client-message";
+import { EmailAttachmentPicker } from "./EmailAttachmentPicker";
 import type { ComposeContact } from "@/lib/db/queries/contact-search";
 import {
   RichTextEditor,
@@ -74,6 +75,12 @@ function ComposeModal({
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [attachedDocIds, setAttachedDocIds] = useState<string[]>([]);
+  // Attachments are specific to the chosen prospect/engagement — clear them
+  // if the recipient changes.
+  useEffect(() => {
+    setAttachedDocIds([]);
+  }, [picked?.prospectId, picked?.engagementId]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -141,6 +148,7 @@ function ComposeModal({
         bcc: bcc.split(/[,;]/).map((s) => s.trim()).filter(Boolean),
         subject: subject.trim() || null,
         body: finalBody,
+        documentIds: attachedDocIds.length > 0 ? attachedDocIds : undefined,
       });
       if (!r.ok) {
         setError(r.error);
@@ -339,6 +347,18 @@ function ComposeModal({
               />
             </div>
           </label>
+
+          {/* Attach existing documents (Climb PDF, etc.) — only once we know
+              which prospect/engagement the message is for. */}
+          {picked && (
+            <EmailAttachmentPicker
+              key={picked.prospectId ?? picked.engagementId ?? "none"}
+              prospectId={picked.prospectId}
+              engagementId={picked.engagementId}
+              selectedIds={attachedDocIds}
+              onChange={setAttachedDocIds}
+            />
+          )}
 
           {error && (
             <p className="text-sm text-tbb-danger bg-tbb-danger/10 px-3 py-2 rounded-md">
