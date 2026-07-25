@@ -92,6 +92,10 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "action_item_due_soon",
   "message",
   "document",
+  // The weekly client chase (migration 0091). Distinct from
+  // `action_item_due_soon`, which fires BEFORE a date as a heads-up;
+  // this fires after, as a chase.
+  "action_item_overdue",
 ]);
 
 export const notificationSentViaEnum = pgEnum("notification_sent_via", [

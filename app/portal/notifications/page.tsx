@@ -9,6 +9,7 @@ const TYPE_LABEL: Record<string, string> = {
   mention: "Mentioned in a message",
   action_item_assigned: "Action item assigned to you",
   action_item_due_soon: "Action item due soon",
+  action_item_overdue: "Action items past their date",
 };
 
 function detailHrefForNotification(

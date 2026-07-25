@@ -22,9 +22,9 @@
  *     somebody for one would be indefensible.
  */
 
-import { and, eq, inArray, isNotNull, lt, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, ne } from "drizzle-orm";
 import { DateTime } from "luxon";
-import { actionItems, userProfiles } from "@/lib/db/schema";
+import { actionItems, notifications, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { clientOverdueNudgeEmail } from "@/lib/email/templates";
@@ -36,6 +36,66 @@ export type NudgeResult = {
   itemsChased: number;
   failed: number;
 };
+
+/**
+ * The in-app half of the nudge.
+ *
+ * Best-effort: a notification that fails to write must not stop the
+ * email going out, because the email is the part that actually reaches
+ * most people.
+ *
+ * Guarded against re-notifying within three days. The job runs weekly,
+ * so a fresh bell each Monday is the intent — but an Inngest retry after
+ * a partial failure would otherwise ring twice in one morning.
+ */
+async function writeNudgeNotification(
+  assigneeId: string,
+  person: {
+    orgId: string;
+    items: { id: string; title: string; dueDate: Date | null }[];
+  },
+  now: Date,
+): Promise<void> {
+  if (person.items.length === 0) return;
+
+  // Most overdue first — no date sorts last, since an item with no date
+  // is not the one to open first.
+  const worst = [...person.items].sort((a, b) => {
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.getTime() - b.dueDate.getTime();
+  })[0];
+
+  const recentCutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+  try {
+    await withSystemContext(async (tx) => {
+      const [already] = await tx
+        .select({ id: notifications.id })
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.userProfileId, assigneeId),
+            eq(notifications.type, "action_item_overdue"),
+            gte(notifications.createdAt, recentCutoff),
+          ),
+        )
+        .limit(1);
+      if (already) return;
+
+      await tx.insert(notifications).values({
+        orgId: person.orgId,
+        userProfileId: assigneeId,
+        type: "action_item_overdue",
+        parentEntityType: "action_item",
+        parentEntityId: worst.id,
+        sentVia: "both",
+      });
+    });
+  } catch (e) {
+    console.error(`[ea] could not write nudge notification for ${assigneeId}:`, e);
+  }
+}
 
 export async function runClientNudge(
   now: Date = new Date(),
@@ -53,7 +113,8 @@ export async function runClientNudge(
     {
       email: string;
       fullName: string;
-      items: { title: string; dueDate: Date | null }[];
+      orgId: string;
+      items: { id: string; title: string; dueDate: Date | null }[];
     }
   >();
 
@@ -65,12 +126,16 @@ export async function runClientNudge(
 
       return tx
         .select({
+          itemId: actionItems.id,
           title: actionItems.title,
           dueDate: actionItems.dueDate,
           assigneeId: userProfiles.id,
           assigneeEmail: userProfiles.email,
           assigneeName: userProfiles.fullName,
           assigneeRole: userProfiles.role,
+          // The CLIENT's org, which is where their notification row
+          // belongs — not the Business Builder's master org.
+          assigneeOrgId: userProfiles.orgId,
         })
         .from(actionItems)
         .innerJoin(
@@ -99,9 +164,14 @@ export async function runClientNudge(
       const bucket = byAssignee.get(r.assigneeId) ?? {
         email: r.assigneeEmail,
         fullName: r.assigneeName,
+        orgId: r.assigneeOrgId,
         items: [],
       };
-      bucket.items.push({ title: r.title, dueDate: r.dueDate });
+      bucket.items.push({
+        id: r.itemId,
+        title: r.title,
+        dueDate: r.dueDate,
+      });
       byAssignee.set(r.assigneeId, bucket);
     }
   }
@@ -111,7 +181,17 @@ export async function runClientNudge(
     "",
   );
 
-  for (const person of Array.from(byAssignee.values())) {
+  for (const [assigneeId, person] of Array.from(byAssignee.entries())) {
+    // In-app notification alongside the email, so a client who works out
+    // of the portal rather than their inbox still sees it. The existing
+    // due-soon reminder does both; this brings the overdue chase in line.
+    //
+    // ONE row per person per nudge, not one per item: five overdue
+    // commitments producing five bells trains someone to ignore the
+    // bell. It points at their most overdue item, which is the one worth
+    // opening first.
+    await writeNudgeNotification(assigneeId, person, now);
+
     const items = person.items.map((i) => ({
       title: i.title,
       dueDate: i.dueDate ? i.dueDate.toISOString() : null,
