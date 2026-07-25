@@ -18,7 +18,7 @@
  * No DB writes from this component — preview only.
  */
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   ClipboardCopy,
   Loader2,
@@ -26,7 +26,10 @@ import {
   X,
   Check,
 } from "lucide-react";
-import { previewSoulFileDraft } from "@/lib/actions/soul-file-preview";
+import {
+  startSoulFileDraft,
+  getSoulFileDraftResult,
+} from "@/lib/actions/soul-file-preview";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 
 type State =
@@ -49,33 +52,65 @@ export function SoulFilePreviewButton({
   const [state, setState] = useState<State>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
   const [, startTransition] = useTransition();
+  // Bumped each run so a stale poll loop (from a previous click) stops writing
+  // state once a new run starts.
+  const runToken = useRef(0);
 
   function run() {
     setOpen(true);
     setCopied(false);
     setState({ kind: "loading" });
+    const token = ++runToken.current;
     startTransition(async () => {
       try {
-        const r = await previewSoulFileDraft({ prospectId });
-        if (r.ok) {
-          setState({
-            kind: "ready",
-            body: r.data.body,
-            transcriptCount: r.data.transcriptCount,
-            transcriptTitles: r.data.transcriptTitles,
-          });
-        } else {
-          setState({ kind: "error", message: r.error });
+        // Kick off the background draft, then poll the store until it's ready.
+        // The heavy Fireflies + Claude work runs in a Netlify Background
+        // Function so it can't time out the request the way it used to.
+        const started = await startSoulFileDraft({ prospectId });
+        if (runToken.current !== token) return;
+        if (!started.ok) {
+          setState({ kind: "error", message: started.error });
+          return;
         }
-      } catch {
-        // A thrown/rejected action (e.g. the serverless function timing
-        // out on a long Fireflies + Claude run, or a dropped connection)
-        // must NOT escape to the page error boundary — keep it in the
-        // modal as a retryable message.
+        const deadline = Date.now() + 3 * 60 * 1000; // give it up to 3 minutes
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 3000));
+          if (runToken.current !== token) return;
+          const poll = await getSoulFileDraftResult({ prospectId });
+          if (runToken.current !== token) return;
+          if (!poll.ok) {
+            setState({ kind: "error", message: poll.error });
+            return;
+          }
+          const s = poll.status;
+          if (s.state === "ready") {
+            setState({
+              kind: "ready",
+              body: s.body,
+              transcriptCount: s.transcriptCount,
+              transcriptTitles: s.transcriptTitles,
+            });
+            return;
+          }
+          if (s.state === "error") {
+            setState({ kind: "error", message: s.error });
+            return;
+          }
+          if (Date.now() > deadline) {
+            setState({
+              kind: "error",
+              message:
+                "This is taking longer than usual. The draft may still finish in the background — close this and reopen in a minute to check.",
+            });
+            return;
+          }
+        }
+      } catch (e) {
+        if (runToken.current !== token) return;
         setState({
           kind: "error",
           message:
-            "That took too long or the connection dropped before the draft finished. Pulling several Fireflies transcripts and drafting can be slow — please try again.",
+            e instanceof Error ? e.message : "Something went wrong.",
         });
       }
     });
