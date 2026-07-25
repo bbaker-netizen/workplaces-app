@@ -31,7 +31,7 @@ import { classify } from "@/lib/ai/anthropic";
 import {
   createGmailDraft,
   getMessage,
-  listMessagesSince,
+  listMessageRefsSince,
   parseGmailMessage,
   type ParsedGmailMessage,
 } from "@/lib/integrations/gmail";
@@ -44,11 +44,17 @@ import { listEaRecipients, type EaRecipient } from "./recipients";
 import { freeWindowsForDay, loadCalendarWindow } from "./time-blocks";
 
 /**
- * How far back each sweep looks. Deliberately longer than the hourly
- * cadence: an overlap means a message arriving as a run starts is not
- * missed, and the UNIQUE thread ledger makes the overlap free.
+ * How far back each sweep looks. Twelve hours, far longer than the
+ * hourly cadence.
+ *
+ * The generous overlap is free rather than wasteful, because the ledger
+ * is consulted before any message body is fetched: a thread already
+ * handled costs one entry in a `Set`, not a Gmail round trip. What the
+ * long window buys is resilience — a run that fails, a deploy, or a
+ * Google outage no longer means the mail that arrived during it is
+ * missed forever, which a tight window would have guaranteed.
  */
-const LOOKBACK_MINUTES = 150;
+const LOOKBACK_MINUTES = 12 * 60;
 
 /** Most threads to classify in one run. A runaway guard, not a target. */
 const MAX_THREADS_PER_RUN = 40;
@@ -268,34 +274,16 @@ async function sweepForRecipient(
   }
 
   const since = now.getTime() - LOOKBACK_MINUTES * 60 * 1000;
-  const ids = await listMessagesSince(token.token, since, 200);
-  if (ids.length === 0) return result;
 
-  // One message per thread is enough to classify it, and the ledger is
-  // keyed by thread, so collapse early.
-  const seenThreads = new Set<string>();
-  const candidates: ParsedGmailMessage[] = [];
-  for (const id of ids) {
-    if (candidates.length >= MAX_THREADS_PER_RUN) break;
-    let parsed: ParsedGmailMessage;
-    try {
-      parsed = parseGmailMessage(await getMessage(token.token, id));
-    } catch {
-      continue;
-    }
-    if (seenThreads.has(parsed.threadId)) continue;
-    // Skip our own outbound and anything already filed as a draft.
-    if (parsed.labelIds.includes("SENT") || parsed.labelIds.includes("DRAFT")) {
-      continue;
-    }
-    if (parsed.from.some((f) => f === fromAddress.toLowerCase())) continue;
-    seenThreads.add(parsed.threadId);
-    candidates.push(parsed);
-  }
-
-  if (candidates.length === 0) return result;
+  // List first — this returns thread ids without fetching message bodies.
+  const refs = await listMessageRefsSince(token.token, since, 500);
+  if (refs.length === 0) return result;
 
   // Threads already in the ledger are done, whichever way they went.
+  // Read this BEFORE fetching anything: over a twelve-hour window an
+  // hourly sweep re-lists the same mail twelve times, and fetching those
+  // bodies only to discard them would burn the per-run work cap on
+  // threads already handled, starving the genuinely new mail behind them.
   const known = new Set(
     (
       await withSystemContext((tx) =>
@@ -307,7 +295,34 @@ async function sweepForRecipient(
     ).map((r) => r.gmailThreadId),
   );
 
-  const fresh = candidates.filter((c) => !known.has(c.threadId));
+  // One message per thread is enough to classify it, and the ledger is
+  // keyed by thread, so collapse to the newest ref per unseen thread.
+  const perThread = new Map<string, string>();
+  for (const ref of refs) {
+    if (known.has(ref.threadId)) continue;
+    if (!perThread.has(ref.threadId)) perThread.set(ref.threadId, ref.id);
+  }
+  if (perThread.size === 0) return result;
+
+  const fresh: ParsedGmailMessage[] = [];
+  for (const messageId of Array.from(perThread.values())) {
+    if (fresh.length >= MAX_THREADS_PER_RUN) break;
+    let parsed: ParsedGmailMessage;
+    try {
+      parsed = parseGmailMessage(await getMessage(token.token, messageId));
+    } catch {
+      continue;
+    }
+    // Skip our own outbound and anything already filed as a draft. A
+    // message sent to yourself carries BOTH the SENT and INBOX labels in
+    // Gmail, so it is caught here as well as by the sender check below.
+    if (parsed.labelIds.includes("SENT") || parsed.labelIds.includes("DRAFT")) {
+      continue;
+    }
+    if (parsed.from.some((f) => f === fromAddress.toLowerCase())) continue;
+    fresh.push(parsed);
+  }
+
   result.threadsSeen = fresh.length;
   if (fresh.length === 0) return result;
 
