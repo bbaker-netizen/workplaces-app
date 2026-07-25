@@ -21,6 +21,7 @@ import { and, asc, eq, gt, isNotNull, lt } from "drizzle-orm";
 import { bbsSessions, engagements, sessionRecaps } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { generateSessionRecap } from "./session-recap";
+import { attachTranscriptsToSessions } from "./transcript-match";
 
 /** How far back a session can be and still earn a recap. */
 const LOOKBACK_DAYS = 7;
@@ -33,6 +34,8 @@ export type RecapSweepResult = {
   drafted: number;
   skipped: number;
   failed: number;
+  /** Transcripts paired to their session by this run. */
+  transcriptsAttached: number;
 };
 
 export async function runRecapSweep(
@@ -43,7 +46,21 @@ export async function runRecapSweep(
     drafted: 0,
     skipped: 0,
     failed: 0,
+    transcriptsAttached: 0,
   };
+
+  // Pair up transcripts FIRST. Until this ran, the only thing that ever
+  // set `fireflies_recording_id` was somebody pasting it in by hand, so
+  // a session nobody remembered to annotate never produced a recap at
+  // all. Runs after the meetings sync in the same cron, so it always
+  // matches against fresh Fireflies data. A failure here must not stop
+  // recaps being drafted for sessions that already have an id.
+  try {
+    const matched = await attachTranscriptsToSessions(now);
+    out.transcriptsAttached = matched.attached;
+  } catch (e) {
+    console.error("[ea] transcript matching failed:", e);
+  }
 
   const cutoff = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
