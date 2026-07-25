@@ -16,7 +16,13 @@ import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { engagements, notifications, orgs, prospects } from "@/lib/db/schema";
+import {
+  coaches,
+  engagements,
+  notifications,
+  orgs,
+  prospects,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
 import {
@@ -377,19 +383,49 @@ export async function updateProspect(
           .select({
             ownerUserProfileId: prospects.ownerUserProfileId,
             orgId: prospects.orgId,
+            convertedEngagementId: prospects.convertedEngagementId,
           })
           .from(prospects)
           .where(eq(prospects.id, data.id))
           .limit(1);
+        const ownerChanged =
+          !!before && before.ownerUserProfileId !== data.ownerUserProfileId;
         if (
-          before &&
-          before.ownerUserProfileId !== data.ownerUserProfileId &&
+          ownerChanged &&
           data.ownerUserProfileId !== profile.userProfileId
         ) {
           newOwnerToNotify = {
             userProfileId: data.ownerUserProfileId,
-            orgId: before.orgId,
+            orgId: before!.orgId,
           };
+        }
+        // If this lead has already become a client, reassigning its Owner
+        // also reassigns the CLIENT to that Business Builder — the
+        // engagement's coach follows the owner, so its deliverables,
+        // notifications, and My Work move to the right person. Without this a
+        // client would stay stuck with whoever first converted it.
+        if (ownerChanged && before!.convertedEngagementId) {
+          // find-or-create the new owner's coach row (coaches live in the
+          // master org, same org the prospect lives in).
+          let [coach] = await tx
+            .select({ id: coaches.id })
+            .from(coaches)
+            .where(eq(coaches.userProfileId, data.ownerUserProfileId))
+            .limit(1);
+          if (!coach) {
+            [coach] = await tx
+              .insert(coaches)
+              .values({
+                orgId: before!.orgId,
+                userProfileId: data.ownerUserProfileId,
+                status: "active",
+              })
+              .returning({ id: coaches.id });
+          }
+          await tx
+            .update(engagements)
+            .set({ coachId: coach.id })
+            .where(eq(engagements.id, before!.convertedEngagementId));
         }
       }
       // .returning() proves the row was actually written. If it comes back

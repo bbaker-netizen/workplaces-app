@@ -97,24 +97,27 @@ function slugify(name: string, id: string): string {
   return base.length > 0 ? `${base}-${id.slice(0, 6)}` : id.slice(0, 12);
 }
 
-/** Find (or lazily create) the caller's coaches row. */
-async function ensureCoachId(
+/**
+ * Transaction-aware "find-or-create the coach row for this user". Same as
+ * ensureCoachId but runs inside a caller's tx so we can resolve the OWNER's
+ * coach per-prospect during conversion without opening a nested transaction.
+ */
+async function ensureCoachIdInTx(
+  tx: Parameters<Parameters<typeof withSystemContext>[0]>[0],
   userProfileId: string,
   orgId: string,
 ): Promise<string> {
-  return withSystemContext(async (tx) => {
-    const [existing] = await tx
-      .select({ id: coaches.id })
-      .from(coaches)
-      .where(eq(coaches.userProfileId, userProfileId))
-      .limit(1);
-    if (existing) return existing.id;
-    const [created] = await tx
-      .insert(coaches)
-      .values({ orgId, userProfileId, status: "active" })
-      .returning({ id: coaches.id });
-    return created.id;
-  });
+  const [existing] = await tx
+    .select({ id: coaches.id })
+    .from(coaches)
+    .where(eq(coaches.userProfileId, userProfileId))
+    .limit(1);
+  if (existing) return existing.id;
+  const [created] = await tx
+    .insert(coaches)
+    .values({ orgId, userProfileId, status: "active" })
+    .returning({ id: coaches.id });
+  return created.id;
 }
 
 /** Build the orgs + engagements row values for a prospect (no Clerk).
@@ -165,7 +168,6 @@ export async function activateProspectAsEngagement(
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     return { ok: false, error: "Business Builders only." };
   }
-  const coachId = await ensureCoachId(profile.userProfileId, profile.orgId);
   try {
     const result = await withSystemContext(async (tx) => {
       const [p] = await tx
@@ -181,6 +183,15 @@ export async function activateProspectAsEngagement(
           isNew: false,
         };
       }
+      // The client is assigned to the prospect's OWNER (the Business Builder
+      // set on the lead), not whoever happens to click Convert. Falls back to
+      // the converter only when the lead was never assigned an owner.
+      const ownerUserProfileId = p.ownerUserProfileId ?? profile.userProfileId;
+      const coachId = await ensureCoachIdInTx(
+        tx,
+        ownerUserProfileId,
+        profile.orgId,
+      );
       const rows = buildRows(p, coachId, program);
       await tx.insert(orgs).values(rows.org);
       await tx.insert(engagements).values(rows.engagement);
@@ -254,7 +265,6 @@ export async function activateAllSignedProspects(): Promise<
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     return { ok: false, error: "Business Builders only." };
   }
-  const coachId = await ensureCoachId(profile.userProfileId, profile.orgId);
   try {
     const { count, rewards } = await withSystemContext(async (tx) => {
       const [master] = await tx
@@ -276,6 +286,13 @@ export async function activateAllSignedProspects(): Promise<
       let count = 0;
       const rewards: ReferralReward[] = [];
       for (const p of signed) {
+        // Assign each new client to that lead's OWNER, not the person who ran
+        // the batch. Falls back to the runner when the lead had no owner.
+        const coachId = await ensureCoachIdInTx(
+          tx,
+          p.ownerUserProfileId ?? profile.userProfileId,
+          profile.orgId,
+        );
         const rows = buildRows(p, coachId);
         await tx.insert(orgs).values(rows.org);
         await tx.insert(engagements).values(rows.engagement);
