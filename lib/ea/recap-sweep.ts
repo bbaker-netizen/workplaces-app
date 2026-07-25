@@ -1,0 +1,101 @@
+/**
+ * Finds sessions that have a transcript but no recap yet, and drafts one.
+ *
+ * Runs off the back of the existing hourly Fireflies sync, which is what
+ * makes "within an hour of the transcript landing" true without a second
+ * schedule to reason about.
+ *
+ * **The lookback window is load-bearing.** Without it, the first run
+ * after deploy would walk every session ever recorded, draft a recap for
+ * each, and send Bruce an approval email per session. A seven-day window
+ * plus a per-run cap means the feature starts quietly: it picks up this
+ * week's sessions and nothing else. Anything older is deliberately never
+ * recapped, because a recap of a session from three months ago is not a
+ * recap, it is archaeology.
+ *
+ * Idempotency is `session_recaps.bbs_session_id` UNIQUE, so a session
+ * already recapped is skipped whether or not this query filters it out.
+ */
+
+import { and, asc, eq, gt, isNotNull, lt } from "drizzle-orm";
+import { bbsSessions, engagements, sessionRecaps } from "@/lib/db/schema";
+import { withSystemContext } from "@/lib/db/tenant";
+import { generateSessionRecap } from "./session-recap";
+
+/** How far back a session can be and still earn a recap. */
+const LOOKBACK_DAYS = 7;
+
+/** Most recaps drafted in one run. A guard against a surprise backlog. */
+const MAX_PER_RUN = 5;
+
+export type RecapSweepResult = {
+  considered: number;
+  drafted: number;
+  skipped: number;
+  failed: number;
+};
+
+export async function runRecapSweep(
+  now: Date = new Date(),
+): Promise<RecapSweepResult> {
+  const out: RecapSweepResult = {
+    considered: 0,
+    drafted: 0,
+    skipped: 0,
+    failed: 0,
+  };
+
+  const cutoff = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+
+  const candidates = await withSystemContext(async (tx) => {
+    const rows = await tx
+      .select({
+        id: bbsSessions.id,
+        scheduledAt: bbsSessions.scheduledAt,
+        isInternal: engagements.isInternal,
+      })
+      .from(bbsSessions)
+      .innerJoin(engagements, eq(engagements.id, bbsSessions.engagementId))
+      .where(
+        and(
+          isNotNull(bbsSessions.firefliesRecordingId),
+          lt(bbsSessions.scheduledAt, now),
+          gt(bbsSessions.scheduledAt, cutoff),
+        ),
+      )
+      .orderBy(asc(bbsSessions.scheduledAt));
+
+    // Filter out anything already recapped in one extra read rather than
+    // a NOT EXISTS, which keeps the query readable and the set is small.
+    const existing = new Set(
+      (
+        await tx
+          .select({ bbsSessionId: sessionRecaps.bbsSessionId })
+          .from(sessionRecaps)
+      ).map((r) => r.bbsSessionId),
+    );
+
+    return rows.filter((r) => !r.isInternal && !existing.has(r.id));
+  });
+
+  out.considered = candidates.length;
+  if (candidates.length > MAX_PER_RUN) {
+    console.warn(
+      `[ea] ${candidates.length} sessions are awaiting a recap; drafting ${MAX_PER_RUN} this run and the rest on the next.`,
+    );
+  }
+
+  for (const session of candidates.slice(0, MAX_PER_RUN)) {
+    try {
+      const result = await generateSessionRecap(session.id);
+      if (!result.ok) out.skipped++;
+      else if (result.created) out.drafted++;
+      else out.skipped++;
+    } catch (e) {
+      out.failed++;
+      console.error(`[ea] recap generation failed for ${session.id}:`, e);
+    }
+  }
+
+  return out;
+}

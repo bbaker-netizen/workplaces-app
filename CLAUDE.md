@@ -1166,6 +1166,250 @@ live database** — migration 0084 applies on next deploy via
 `scripts/migrate-on-deploy.mjs`; first real touch-base is the acceptance
 test.
 
+## What was built — Executive Assistant module (2026-07-25)
+
+Per the "EA module build spec". An EA layer on top of entities that
+already existed, not a new application. Migration `0086_ea_module.sql`.
+
+**Everything outbound is a draft or a proposal.** No email leaves under
+Bruce's name unread, and no calendar event appears without him asking
+for it. That single rule shapes every piece below.
+
+### Schema (0086)
+
+`ea_digests` (one row per send; `payload` is the snapshot the email was
+rendered from), `ea_time_blocks`, `ea_email_threads`, `session_recaps`,
+`ea_approval_tokens`, plus `action_items.estimated_minutes` (default 60,
+so every pre-existing row is usable with no backfill).
+
+Four UNIQUE indexes carry the idempotency, all in the same spirit as
+`(series_id, series_occurrence_at)` on `bbs_sessions`:
+`ea_digests(user_profile_id, sent_for_date)`,
+`ea_time_blocks(action_item_id, proposed_start)`,
+`ea_email_threads(gmail_thread_id)`, `session_recaps(bbs_session_id)`.
+
+### Approval without a login
+
+`ea_approval_tokens` holds a SHA-256 of a 32-byte random token, single
+use, 72-hour expiry. The plaintext exists only in the emailed URL. The
+row is a verifier, not a copy of the secret.
+
+**The approve link is two steps, not one, and this was a deliberate
+departure from the spec.** GET renders "here is what this will do" with
+a POST button; POST consumes the token and acts. Mail security scanners
+(Outlook Safe Links, Gmail's link checker, corporate proxies) fetch the
+URLs in a message before a human sees them. With a one-click GET, a
+scanner would burn the single-use token — and for a session recap it
+would have emailed a client under Bruce's name with nobody having
+clicked. Two taps from a phone buys immunity from that. `lib/ea/tokens.ts`
+`peekApprovalToken` (does not consume) vs `consumeApprovalToken` (atomic
+claim, guarded on `consumed_at IS NULL`, so a double tap loses the race
+rather than acting twice).
+
+### Phase 1 — the 07:00 briefing
+
+`eaDailyDigest`, cron `0 13 * * 1-5`.
+
+**The daily carries only what Bruce acts on today** (his call, after
+reviewing a rendered sample): today's sessions with last session's
+still-open commitments, blocks that elapsed with the work still open,
+time the assistant has found, his commitments (overdue / today / this
+week), the next seven days, and prospects with no next step booked.
+
+Deliverable states, what clients owe, and engagements gone quiet moved
+to the Friday rollup. They are a weekly read, not a 7am one, and nine
+sections was too much scrolling on a phone. A footer line in the daily
+points at Friday so the move does not read as something going missing.
+
+**"No next step booked" stayed in the daily** despite being
+state-of-the-book, because it is usually two lines and it is the one
+item on that list you act on the same morning: a conversation that ended
+without a date decays fast, and Friday afternoon is three days too late
+to ring somebody back.
+
+`gatherDigest` still collects everything and the full set is stored in
+`ea_digests.payload` — the split is a rendering decision, so the daily
+snapshot stays complete and the Friday rollup reuses the same gatherer
+rather than re-deriving the same four queries. The two emails cannot
+disagree about the same facts.
+
+**Sends with `bypassWorkingHours: true`.** This is the one deliberate
+exception to the Mon-Fri 08:30-18:00 rule: the briefing is specified to
+land at 07:00, and a briefing arriving at 08:30 has already missed the
+morning it describes. Everything else the EA sends to clients goes
+through the normal guarded path.
+
+Note the DST asymmetry: `0 13 * * 1-5` is 07:00 MDT and 06:00 MST.
+Inngest crons are UTC and a fixed 07:00 MT would need two schedules;
+arriving an hour early in winter is the harmless side of that trade.
+
+### Phase 2 — calendar blocks
+
+`lib/ea/time-blocks.ts`. Slots inside 08:30-18:00 MT weekdays, nothing
+within 30 minutes of a BBS session (ordinary events get no buffer; BBS
+sessions do, because those are the appointments that cost something to
+be late for), maximum four hours of blocks per day counting
+already-approved ones, overdue items get slots first.
+
+Retirement is the part that had to be right. Completing an item deletes
+any FUTURE event from Google and marks the block completed. Past blocks
+are left alone — they are a record of time actually spent. A block whose
+end passes with the item still open is re-proposed with
+`reschedule_count` incremented and an escalating notice: first miss is a
+note, second a warning, third states plainly that it has slipped three
+times and asks whether to renegotiate or kill it.
+
+Hooked into `updateActionItem` (on status `done`) and `deleteActionItem`
+— the latter runs BEFORE the row is deleted, because `ea_time_blocks`
+cascades and once the item is gone we would no longer know which Google
+events to clean up.
+
+### Phase 3 — inbound triage
+
+`eaInboxSweep`, cron `15 * * * 1-5`. Classifies via Haiku, drafts via
+`createGmailDraft` into the real thread, logs every thread either way so
+classification never repeats (or bills twice) on the same one.
+
+**The Gmail scopes were already there, mostly.** `gmail.readonly` and
+`gmail.send` were in `GOOGLE_CALENDAR_SCOPE` before this build. Only
+`gmail.compose` had to be added, because `gmail.send` permits
+`messages.send` and nothing else — drafts need compose. Anyone connected
+before this change must disconnect and reconnect once; Google does not
+widen an existing grant silently.
+
+The draft never names a price. That is the sales protocol, not a style
+choice, and it is enforced in the prompt AND in the hard-coded fallback
+copy, because the fallback is what ships when the model call fails.
+
+### Phase 4 — post-session recaps
+
+Rides the existing hourly `firefliesSync` cron as a second step, which
+is what makes "within an hour of the transcript landing" true without a
+second schedule. `lib/ea/recap-sweep.ts` has a seven-day lookback and a
+five-per-run cap: without them the first run after deploy would recap
+every session ever recorded and send Bruce an approval email for each.
+
+**Claude writes the prose; the database writes the facts.** The model
+returns JSON (headline, decisions, closing note). Every fact with a
+consequence — who owns what, by when, when the next session is — comes
+from the database, and every string is escaped on the way into the
+markup. A model cannot invent an owner or inject markup into a client's
+inbox. Draft action items are excluded in SQL, not by prompt: an item
+Bruce has not published is a guess, and a guess in a client email reads
+as a commitment.
+
+On approval the recap is filed on the engagement's `engagement_team`
+thread first, in the same transaction that moves it out of `draft`, then
+emailed to `client_lead` / `client_manager` contacts. `sent_at` is
+stamped only after delivery, so a send failure leaves it `approved` and
+retryable rather than silently marked done.
+
+**The recap sends from the Business Builder's own Gmail**, not from
+`notifications@4workplaces.com`. A recap is a coaching artefact, not a
+system receipt: from their address it reads as a note from their coach,
+a client's reply reaches a human rather than a no-reply mailbox, and a
+copy lands in their Sent folder with the rest of the correspondence.
+Their `email_signature` is appended. Falls back to the app's
+transactional sender when Google is not connected — a deliberate
+degradation, because an approved recap that never leaves is worse than
+one sent from the wrong address.
+
+**The portal copy is Markdown** (`session_recaps.body_markdown`, added
+in 0087). The portal renders message bodies through react-markdown with
+raw HTML stripped, so HTML would have shown the client escaped tags and
+plain text an unformatted wall. Markdown is the format that surface
+already speaks: real headings, owners in bold, proper lists.
+
+Agenda carry-forward needed a system-context twin
+(`carryForwardAgendaAsSystem`) because the existing `carryForwardAgenda`
+authorises through `ensureUserProfile()`. Same trap as `topUpAllSeries`.
+
+### The six additions from the spec
+
+All built. Pre-session prep, no-ghost detection, and engagement silence
+detection are digest sections. Phone approval is the token design.
+Client chasing is `eaClientNudge` (Monday `0 16 * * 1`, working hours
+respected, draft items never chased). The Friday rollup is
+`eaFridayRollup` (`0 22 * * 5`) and counts the items that moved neither
+top line nor margin — that count is the number worth looking at. It also
+carries the three state-of-the-book sections that came out of the daily
+briefing.
+
+### Previewing the emails without sending
+
+`npx tsx scripts/preview-ea-email.ts digest|rollup [outputPath]` renders
+either email to an HTML file plus its plain-text alternative, using
+representative sample data that fills every section. It imports the real
+template, so what lands in the file is what Resend would deliver — no
+database, no keys, no network. Use it to review copy and layout before
+changing anything that sends.
+
+### Every Business Builder gets one (migration 0087)
+
+The EA was multi-Builder in shape from the start — `listEaRecipients`
+returns every master admin and coach in the master org, and
+`listEngagementsForRecipient` mirrors each one's own client access
+(all-clients, explicit grants, or assigned-coach). Each Builder's jobs
+run against their OWN Google connection, so the calendar read, the
+blocks, and the Gmail drafts are all theirs.
+
+Three single-user shortcuts had to come out before that was true in
+practice:
+
+1. **`EA_DIGEST_TO_EMAIL` is gone.** One environment variable redirected
+   every Builder's mail to one address — correct for a one-person
+   practice, and wrong the moment a second Builder joined, since they
+   would have received each other's briefings. Replaced by
+   `user_profiles.ea_notify_email`, editable per person at Settings →
+   Profile → Assistant email. NULL falls back to the account email, so
+   nobody has to set anything.
+2. **Recap approval routed to whoever was master admin.** It now
+   resolves the engagement's own coach (`engagements.coach_id` →
+   `coaches.user_profile_id`), so Jen's client produces Jen's approval
+   email and sends from Jen's address. Falls back to the master admin
+   only when the coach record is missing, rather than dropping the recap.
+3. **`EA_BOOKING_URL` took precedence over the Builder's own link.**
+   Reversed: each Builder's own `scheduling_links` row wins, and the env
+   var is now only the fallback for someone who has not made a link yet.
+
+Per-Builder setup is therefore: connect Google, set an assistant email
+if the account address is not the watched one, and create a booking
+link. Nothing else.
+
+### New env vars
+
+- `EA_BOOKING_URL` (optional) — fallback booking page for a Builder with
+  no `scheduling_links` row of their own.
+
+There is deliberately no env var for digest delivery. See point 1 above.
+
+### Traps avoided
+
+Every EA background job resolves its subjects through
+`lib/ea/recipients.ts` under `withSystemContext`. `withEngagementContext`
+and anything built on `ensureUserProfile()` assume a Clerk session; in a
+cron there is none, so those helpers deny every engagement and the job
+silently does nothing while reporting success. This is the same trap
+`topUpAllSeries` hit in 0084.
+
+Calendar reads happen OUTSIDE the transaction (`loadCalendarWindow`) so
+a Google round trip never pins a pooled Postgres connection.
+
+`loadCalendarWindow` returning null (not connected, or unreadable) means
+no blocks are proposed at all. A proposal that double-books is worse
+than no proposal.
+
+### Verified
+
+`tsc --noEmit` and `next lint` both clean. `next build` compiles
+successfully and `/api/ea/approve/[token]` is in the output; the local
+prerender errors are the pre-existing missing Clerk publishable key and
+hit `/_not-found` identically.
+
+**Not yet exercised against a live database or a real send.** Migration
+0086 applies on next deploy via `scripts/migrate-on-deploy.mjs`. The
+per-phase live checks in the build spec are the acceptance tests and all
+of them remain outstanding.
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
@@ -1221,3 +1465,4 @@ This is the manual checklist for onboarding the first real client (Impactica) on
 - **Engagement creation failed after Clerk Org created.** Manually delete the orphan org at https://dashboard.clerk.com/last-active/organizations/<org_id> → Settings → Delete. The form's catch block tries to do this automatically; if it didn't, do it by hand.
 - **Invitation went to wrong email.** Cancel via https://dashboard.clerk.com/last-active/organizations/<org_id>/invitations → three dots → Revoke. Re-issue from the form.
 - **Anything broke during smoke test (step 5).** Don't onboard yet. Re-check env vars (step 2), re-check migrations (step 1). If still broken, redeploy.
+

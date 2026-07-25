@@ -1,0 +1,150 @@
+/**
+ * The endpoint every EA approve link lands on.
+ *
+ * No Clerk session. The token in the URL is the credential, which is the
+ * whole point: an approval that requires sitting at a desk does not
+ * happen, and an unapproved recap ages badly.
+ *
+ * **Two steps, on purpose.** GET peeks at the token and renders "here is
+ * what this will do" with a POST button; POST consumes the token and
+ * acts. Mail security scanners (Outlook Safe Links, Gmail's link
+ * checker, corporate proxies) fetch the URLs in a message before a human
+ * sees them. If GET performed the action, a scanner would burn the
+ * single-use token — and for a session recap it would email a client
+ * under Bruce's name with nobody having clicked. Two taps from a phone
+ * is a small price for that not being possible.
+ *
+ * Both verbs return standalone HTML rather than JSON: this is opened in
+ * a mail app's browser, and it needs to read as a finished page.
+ */
+
+import { NextResponse } from "next/server";
+import {
+  confirmPage,
+  errorPage,
+  successPage,
+  tokenFailureCopy,
+} from "@/lib/ea/approval-page";
+import { approveSessionRecap, describeRecap } from "@/lib/ea/session-recap";
+import { approveTimeBlock, describeTimeBlock } from "@/lib/ea/time-blocks";
+import { consumeApprovalToken, peekApprovalToken } from "@/lib/ea/tokens";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function html(body: string, status = 200): NextResponse {
+  return new NextResponse(body, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      // Never let a proxy or the browser keep an approval page around.
+      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      "x-robots-tag": "noindex, nofollow",
+      // Keep the token out of the Referer header on any onward navigation.
+      "referrer-policy": "no-referrer",
+    },
+  });
+}
+
+export async function GET(
+  _req: Request,
+  { params }: { params: { token: string } },
+) {
+  const peek = await peekApprovalToken(params.token);
+  if (!peek.ok) {
+    const copy = tokenFailureCopy(peek.reason);
+    return html(errorPage(copy.heading, copy.detail), 410);
+  }
+
+  if (peek.token.subjectType === "time_block") {
+    const block = await describeTimeBlock(peek.token.subjectId);
+    if (!block) {
+      return html(
+        errorPage(
+          "That block is gone",
+          "The commitment it belonged to may have been deleted.",
+        ),
+        404,
+      );
+    }
+    if (block.status !== "proposed") {
+      return html(
+        errorPage(
+          "Already actioned",
+          `This block is ${block.status}. Nothing further has changed.`,
+        ),
+        409,
+      );
+    }
+    return html(
+      confirmPage({
+        heading: "Put this on your calendar?",
+        detail: `${block.title}, ${block.whenLabel}. This creates one event in your Google Calendar and nothing else.`,
+        buttonLabel: "Yes, book it",
+      }),
+    );
+  }
+
+  const recap = await describeRecap(peek.token.subjectId);
+  if (!recap) {
+    return html(errorPage("That recap is gone", "It may have been deleted."), 404);
+  }
+  if (recap.status !== "draft") {
+    return html(
+      errorPage(
+        "Already actioned",
+        `This recap is ${recap.status}. It has not been sent twice.`,
+      ),
+      409,
+    );
+  }
+  return html(
+    confirmPage({
+      heading: `Send this recap to ${recap.clientLabel}?`,
+      detail:
+        "This emails the recap to the client contacts and files it on their portal thread as a permanent record. Read it through first.",
+      buttonLabel: "Approve and send",
+      previewHtml: recap.bodyHtml,
+    }),
+  );
+}
+
+export async function POST(
+  _req: Request,
+  { params }: { params: { token: string } },
+) {
+  const consumed = await consumeApprovalToken(params.token);
+  if (!consumed.ok) {
+    const copy = tokenFailureCopy(consumed.reason);
+    return html(errorPage(copy.heading, copy.detail), 410);
+  }
+
+  const { subjectType, subjectId, userProfileId } = consumed.token;
+
+  if (subjectType === "time_block") {
+    const result = await approveTimeBlock(subjectId);
+    if (!result.ok) {
+      return html(errorPage("Could not book it", result.reason), 409);
+    }
+    const block = await describeTimeBlock(subjectId);
+    return html(
+      successPage(
+        "Booked",
+        `${result.title} is on your calendar${block ? `, ${block.whenLabel}` : ""}. Mark the item done and the block clears itself.`,
+      ),
+    );
+  }
+
+  const result = await approveSessionRecap(subjectId, userProfileId);
+  if (!result.ok) {
+    return html(errorPage("Could not send it", result.reason), 409);
+  }
+  return html(
+    successPage(
+      "Sent",
+      result.sentTo > 0
+        ? `The recap has gone to ${result.sentTo} contact${result.sentTo === 1 ? "" : "s"} at ${result.clientLabel} and is filed on their portal thread.`
+        : `The recap is filed on ${result.clientLabel}'s portal thread. No client contact had a usable email address, so nothing was emailed.`,
+    ),
+  );
+}

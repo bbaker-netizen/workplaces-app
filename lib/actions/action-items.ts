@@ -424,6 +424,21 @@ export async function updateActionItem(
       );
     }
 
+    // Completing the item retires any focus block the assistant placed
+    // for it: the future calendar event is deleted and the block stops
+    // being re-proposed. Best-effort — a Google failure must not undo
+    // the completion the user just performed.
+    if (data.status === "done") {
+      try {
+        const { retireBlocksForCompletedItem } = await import(
+          "@/lib/ea/time-blocks"
+        );
+        await retireBlocksForCompletedItem(id);
+      } catch (e) {
+        console.error("[ea] could not retire time blocks for", id, e);
+      }
+    }
+
     revalidateActionItemPaths();
     // Mirror the change out to the EA Command Central sheet (best-effort).
     await syncActionItemToEa(id);
@@ -461,6 +476,19 @@ export async function deleteActionItem(
     if (!engagementId) {
       return { ok: false, error: "Action item not found." };
     }
+    // Delete the calendar events BEFORE the row goes. `ea_time_blocks`
+    // cascades on delete, so once the item is gone we would no longer
+    // know which Google events to clean up and they would sit on the
+    // calendar forever pointing at nothing.
+    try {
+      const { retireBlocksForCompletedItem } = await import(
+        "@/lib/ea/time-blocks"
+      );
+      await retireBlocksForCompletedItem(id);
+    } catch (e) {
+      console.error("[ea] could not retire time blocks for", id, e);
+    }
+
     const externalId = await withEngagementContext(
       profile.orgId,
       profile.role,
