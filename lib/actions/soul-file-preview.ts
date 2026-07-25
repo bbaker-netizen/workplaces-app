@@ -1,17 +1,15 @@
 "use server";
 
 /**
- * Preview-only Soul File draft from Fireflies.
+ * Prospect Soul File draft — async.
  *
- * Lets Bruce see what a Soul File would look like for a prospect
- * WITHOUT formalising the prospect into an engagement first.
- * Useful for the imported Monday clients — he can see the draft
- * Claude would build before deciding whether to give them portal
- * access via /business-builder/engagements/new.
- *
- * Same engine as the engagement-create-time seeder
- * (lib/soul-files/seed-from-fireflies.ts), just returns the body
- * instead of writing it.
+ * Lets a Business Builder see the Soul File Claude would build for a prospect
+ * from their Fireflies recordings, WITHOUT formalising them into an engagement
+ * first. The generation (paginating Fireflies + pulling transcripts + a big
+ * Claude call) is far too slow for a synchronous request — it was timing out
+ * with "took too long or the connection dropped". So `startSoulFileDraft`
+ * fires a Netlify Background Function and returns immediately; the drawer polls
+ * `getSoulFileDraftResult` until the draft (or an error) lands in the store.
  *
  * Authz: master_admin / Coach only.
  */
@@ -19,260 +17,121 @@
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getProspect } from "@/lib/db/queries/prospects";
-import { complete } from "@/lib/ai/anthropic";
 import {
-  fetchTranscript,
-  listRecentTranscripts,
-  searchTranscriptsByAttendee,
-  transcriptToPlainText,
-} from "@/lib/integrations/fireflies";
-import { normalizeName } from "@/lib/sync/match-emails";
+  getSoulFileDraftStatus,
+  setSoulFileDraftStatus,
+  type SoulFileDraftStatus,
+} from "@/lib/soul-files/draft-store";
 
-const TRANSCRIPT_CHAR_CAP = 60_000;
+const schema = z.object({ prospectId: z.string().uuid() });
 
-// Same prompt as the engagement-create seeder so the previews match
-// what'll be saved when the engagement is later formalised.
-const SOUL_FILE_DRAFT_SYSTEM = `You are writing a Business Builder insights brief on a coaching client — the catch-up document a brand-new Business Builder would read to get fully up to speed before walking into a session, as if they were taking over the relationship cold.
+export type StartSoulFileResult =
+  | { ok: true }
+  | { ok: false; error: string; kind?: "missing_key" | "auth" | "not_found" };
 
-Structure it around these sections, in this exact order:
-
-# Why this engagement exists
-The pain that brought the client to coaching. The "if we don't fix this, what breaks" statement in their words.
-
-# Where they are today
-Snapshot of the business: stage, size, what they sell, who's running it, what's working, what's stuck.
-
-# Where they want to be in 12 months
-The picture the founder paints when asked. Top-line revenue target, headcount, hours of personal time, anything specific.
-
-# Who they are & how they like to work
-The people at the helm — names, backgrounds, what they each own. Their communication and working style: how they like to be talked to, what they respond well to, what energises them, and what frustrates or turns them off. Their likes and dislikes.
-
-# What to watch out for
-Sensitivities, hot buttons, sore spots, and risks. Topics to handle carefully, commitments they tend to slip on, internal tensions, anything a new Business Builder could step on without realising. Be candid and specific.
-
-# Where things stand & what's next
-Momentum and status: what's been promised, what's been delivered, what's in progress, and what's outstanding or overdue. Then the concrete next actions — what needs to happen before or in the next session, and who owns it.
-
-# Hard-won learnings
-Things they've already tried that didn't work, things they've learned the hard way, beliefs they hold strongly.
-
-You will receive transcript text from one or more recent meetings between the Business Builder and the client. Synthesize what the transcripts reveal into this structure.
-
-Rules:
-- Markdown output only. Use the section headings shown above (single #), nothing else.
-- Each section is 2-6 sentences of dense, plain-spoken prose (the "what to watch out for" and "where things stand & what's next" sections may use a short bullet list if that's clearer).
-- If a section has no evidence in the transcripts, write "_To be discussed in an upcoming session._" — do not invent.
-- No preamble. No "Here is the brief…". Start with the first heading.
-- No closing remarks. End after the last section.
-- First person from the Business Builder's POV is fine ("we talked about", "they want"). Never quote sentences verbatim — paraphrase.
-- Keep numbers and proper nouns exact as they appear in transcripts.
-- This is a draft to review and edit.`;
-
-const schema = z.object({
-  prospectId: z.string().uuid(),
-});
-
-export type PreviewSoulFileResult =
-  | {
-      ok: true;
-      data: {
-        body: string;
-        transcriptCount: number;
-        transcriptTitles: string[];
-      };
-    }
-  | {
-      ok: false;
-      error: string;
-      kind?: "no_transcripts" | "missing_key" | "api_error" | "auth";
-    };
-
-export async function previewSoulFileDraft(input: {
+export async function startSoulFileDraft(input: {
   prospectId: string;
-}): Promise<PreviewSoulFileResult> {
+}): Promise<StartSoulFileResult> {
   const profile = await ensureUserProfile();
-  if (profile.status !== "ok") {
+  if (profile.status !== "ok")
     return { ok: false, error: "Not signed in.", kind: "auth" };
-  }
-  if (profile.role !== "master_admin" && profile.role !== "coach") {
+  if (profile.role !== "master_admin" && profile.role !== "coach")
     return { ok: false, error: "Business Builders only.", kind: "auth" };
-  }
+
   const parsed = schema.safeParse(input);
-  if (!parsed.success) {
+  if (!parsed.success)
     return {
       ok: false,
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
-  }
-  if (!process.env.FIREFLIES_API_KEY) {
+  const { prospectId } = parsed.data;
+
+  // Fast, clear failures up front — no point spending a background run.
+  if (!process.env.FIREFLIES_API_KEY)
     return {
       ok: false,
-      error:
-        "FIREFLIES_API_KEY isn't set in Netlify. Add it at /sites/workplaces-the-builder/settings/env and redeploy.",
+      error: "FIREFLIES_API_KEY isn't set in Netlify.",
       kind: "missing_key",
     };
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY)
     return {
       ok: false,
       error: "ANTHROPIC_API_KEY isn't set in Netlify.",
       kind: "missing_key",
     };
-  }
-
-  const prospect = await getProspect(parsed.data.prospectId);
-  if (!prospect) {
-    return { ok: false, error: "Prospect not found." };
-  }
-
-  // 1. Fireflies search — match recordings to this prospect two ways, then
-  //    merge:
-  //      a) The prospect's email as a meeting attendee. Works for VIRTUAL
-  //         calls, where Fireflies captures every participant's address.
-  //      b) A title starting "Prospect — <Company>". The IN-PERSON fallback:
-  //         face-to-face recordings usually capture only the coach as an
-  //         attendee, so the title is the only reliable signal (same reason
-  //         the engagement-meetings sync matches BBS recordings by title).
-  const companyNorm = normalizeName(prospect.companyName ?? "");
-  const contactNorm = normalizeName(prospect.contactName ?? "");
-  const titlePrefix = companyNorm ? `prospect ${companyNorm}` : null;
-  // Also catch booking-default titles like "… (Jordon Deagle)" by looking
-  // for the prospect's contact or company name anywhere in the title. Length
-  // guard so a short/common name can't over-match a stranger's call.
-  const nameNeedles = Array.from(
-    new Set([companyNorm, contactNorm].filter((n) => n.length >= 5)),
-  );
-  const wantTitleScan = Boolean(titlePrefix) || nameNeedles.length > 0;
-
-  if (!prospect.contactEmail && !wantTitleScan) {
+  const baseUrl =
+    process.env.URL ??
+    process.env.DEPLOY_PRIME_URL ??
+    process.env.NEXT_PUBLIC_APP_URL;
+  const secret = process.env.CRON_SECRET;
+  if (!baseUrl || !secret)
     return {
       ok: false,
       error:
-        "This prospect has no email and no company name — Fireflies needs one of them to find recordings.",
+        "Background drafting isn't configured on the server (missing URL or CRON_SECRET).",
+      kind: "missing_key",
     };
-  }
 
-  type Summary = Awaited<
-    ReturnType<typeof searchTranscriptsByAttendee>
-  >[number];
-  const byId = new Map<string, Summary>();
+  const prospect = await getProspect(prospectId);
+  if (!prospect) return { ok: false, error: "Prospect not found.", kind: "not_found" };
+
+  // Mark pending BEFORE firing so the first poll never mistakes "no record yet"
+  // for "done", and fire the background function.
+  await setSoulFileDraftStatus(prospectId, {
+    state: "pending",
+    startedAt: Date.now(),
+  });
   try {
-    const [byAttendee, recent] = await Promise.all([
-      prospect.contactEmail
-        ? searchTranscriptsByAttendee(prospect.contactEmail, { limit: 5 })
-        : Promise.resolve([]),
-      wantTitleScan
-        ? listRecentTranscripts({ maxTotal: 400 })
-        : Promise.resolve([]),
-    ]);
-    for (const t of byAttendee) byId.set(t.id, t);
-    if (wantTitleScan) {
-      for (const t of recent) {
-        const tn = normalizeName(t.title ?? "");
-        const hit =
-          (titlePrefix !== null && tn.startsWith(titlePrefix)) ||
-          nameNeedles.some((n) => tn.includes(n));
-        if (hit) byId.set(t.id, t);
-      }
-    }
-  } catch (e) {
-    return {
-      ok: false,
-      error: `Fireflies search failed: ${e instanceof Error ? e.message : String(e)}`,
-      kind: "api_error",
-    };
-  }
-
-  // Newest first, cap at 3 for the draft.
-  const summaries = Array.from(byId.values())
-    .sort((a, b) => (b.date ?? 0) - (a.date ?? 0))
-    .slice(0, 3);
-
-  if (summaries.length === 0) {
-    const emailPart = prospect.contactEmail
-      ? `${prospect.contactEmail} wasn't a captured attendee on any call`
-      : "this prospect has no email on file";
-    return {
-      ok: false,
-      error: `No Fireflies recordings found for ${prospect.companyName}. Either ${emailPart}, or no recording is titled "Prospect — ${prospect.companyName}". For in-person meetings, title the Fireflies recording "Prospect — ${prospect.companyName}" so it gets picked up.`,
-      kind: "no_transcripts",
-    };
-  }
-
-  // 2. Pull each transcript's text.
-  const fetched: string[] = [];
-  const titles: string[] = [];
-  for (const s of summaries) {
-    try {
-      const full = await fetchTranscript(s.id);
-      if (!full) continue;
-      const text = transcriptToPlainText(full, {
-        maxChars: Math.floor(TRANSCRIPT_CHAR_CAP / summaries.length),
+    const resp = await fetch(
+      `${baseUrl}/.netlify/functions/soul-file-draft-background`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prospectId }),
+      },
+    );
+    if (resp.status !== 202 && !resp.ok) {
+      const msg = `Couldn't start the draft (HTTP ${resp.status}).`;
+      await setSoulFileDraftStatus(prospectId, {
+        state: "error",
+        error: msg,
+        finishedAt: Date.now(),
       });
-      if (text.trim().length > 0) {
-        const dateLabel = new Date(s.date).toLocaleDateString("en-CA", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        });
-        fetched.push(`# Meeting — ${dateLabel} — ${s.title}\n\n${text}`);
-        titles.push(`${dateLabel} — ${s.title}`);
-      }
-    } catch (e) {
-      console.warn(
-        `[soul-file-preview] couldn't fetch ${s.id}:`,
-        e instanceof Error ? e.message : e,
-      );
+      return { ok: false, error: msg };
     }
-  }
-  if (fetched.length === 0) {
-    return {
-      ok: false,
-      error:
-        "Found transcript metadata but none of the bodies could be fetched. Try again in a minute.",
-      kind: "api_error",
-    };
-  }
-
-  // 3. Send to Claude.
-  const userPrompt = [
-    `Client: ${prospect.companyName}`,
-    `Contact: ${prospect.contactName ?? "(unknown)"} · ${prospect.contactEmail}`,
-    `Number of recent sessions: ${fetched.length}`,
-    "",
-    "Transcripts (oldest first):",
-    "",
-    ...fetched.reverse(),
-  ].join("\n");
-
-  let body: string;
-  try {
-    const result = await complete({
-      system: SOUL_FILE_DRAFT_SYSTEM,
-      user: userPrompt,
-      model: "claude-sonnet-5",
-      maxTokens: 3500,
-      temperature: 0.5,
-    });
-    body = result.text.trim();
   } catch (e) {
-    return {
-      ok: false,
-      error: `Claude draft failed: ${e instanceof Error ? e.message : String(e)}`,
-      kind: "api_error",
-    };
-  }
-  if (!body || body.length < 100) {
-    return { ok: false, error: "Claude returned an empty draft." };
+    const msg = e instanceof Error ? e.message : String(e);
+    await setSoulFileDraftStatus(prospectId, {
+      state: "error",
+      error: msg,
+      finishedAt: Date.now(),
+    });
+    return { ok: false, error: msg };
   }
 
-  return {
-    ok: true,
-    data: {
-      body,
-      transcriptCount: fetched.length,
-      transcriptTitles: titles,
-    },
-  };
+  return { ok: true };
+}
+
+export type SoulFileDraftPoll =
+  | { ok: true; status: SoulFileDraftStatus | { state: "pending" } }
+  | { ok: false; error: string };
+
+/** Poll target for the drawer. Returns the current draft status. */
+export async function getSoulFileDraftResult(input: {
+  prospectId: string;
+}): Promise<SoulFileDraftPoll> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin" && profile.role !== "coach")
+    return { ok: false, error: "Business Builders only." };
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input." };
+
+  const status = await getSoulFileDraftStatus(parsed.data.prospectId);
+  // No record yet (store write racing the first poll) → treat as pending.
+  return { ok: true, status: status ?? { state: "pending" } };
 }
