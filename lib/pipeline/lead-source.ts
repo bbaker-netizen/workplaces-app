@@ -101,7 +101,17 @@ export function channelFromWebhookPayload(fields: {
   wbraid?: string | null;
   fbclid?: string | null;
 }): LeadSourceChannel {
-  const src = (fields.source ?? fields.utmSource ?? "").trim().toLowerCase();
+  // An explicit utm_source takes precedence over the free-text `source`.
+  // Reason (2026-07-26): the lead-magnet tools use `source` to name the TOOL
+  // ("rework_counter", "month_end_surprise") because Make scenario 4818300
+  // branches the router on it. That is a different question from which
+  // channel the reader came from, so with `source` winning, every pillar-tool
+  // lead resolved to `other` no matter which post sent it. A utm_source we
+  // put on our own link is harder evidence than a free-text label.
+  // Blank counts as absent, so a sender emitting utmSource:"" still falls
+  // back to `source` and nothing that worked before changes.
+  const explicitUtm = (fields.utmSource ?? "").trim();
+  const src = (explicitUtm || (fields.source ?? "")).trim().toLowerCase();
   const medium = (fields.utmMedium ?? "").trim().toLowerCase();
 
   // Click-ids are unambiguous paid-click markers (harder evidence than the
