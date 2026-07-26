@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { HelpCircle } from "lucide-react";
 import { PortalTour } from "./PortalTour";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const STORAGE_KEY = "bbp-tour-seen";
 
@@ -24,14 +25,11 @@ export function TakeTheTourButton({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const storage = useUserStorage();
   const [open, setOpen] = useState(false);
 
   function start() {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    storage.remove(STORAGE_KEY);
     // The tour anchors are on /portal. If user is elsewhere, take
     // them there first; the layout-level PortalTour will pick the
     // flag up automatically.

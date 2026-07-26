@@ -21,6 +21,7 @@ import {
   EVENTS,
   STATUS,
 } from "react-joyride";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const STORAGE_KEY = "bbp-Coach-tour-seen";
 
@@ -110,6 +111,7 @@ export function BusinessBuilderTour({
   suppressAuto?: boolean;
   onClose?: () => void;
 }) {
+  const storage = useUserStorage();
   const [run, setRun] = useState<boolean>(false);
   const [hydrated, setHydrated] = useState<boolean>(false);
 
@@ -120,25 +122,19 @@ export function BusinessBuilderTour({
       return;
     }
     if (suppressAuto) return;
-    if (typeof window === "undefined") return;
-    try {
-      const seen = window.localStorage.getItem(STORAGE_KEY);
-      if (!seen) setRun(true);
-    } catch {
-      // ignore
-    }
-  }, [forceOpen, suppressAuto]);
+    // Wait for Clerk: the seen-flag is per user, so a new Business
+    // Builder gets their own walkthrough even on a browser where
+    // someone else already dismissed it.
+    if (!storage.ready) return;
+    if (!storage.get(STORAGE_KEY)) setRun(true);
+  }, [forceOpen, suppressAuto, storage]);
 
   function handleEvent(data: EventData): void {
     const { status, type } = data;
     const finished: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
     if (finished.includes(status)) {
       setRun(false);
-      try {
-        window.localStorage.setItem(STORAGE_KEY, new Date().toISOString());
-      } catch {
-        // ignore
-      }
+      storage.set(STORAGE_KEY, new Date().toISOString());
       onClose?.();
     }
     if (type === EVENTS.TARGET_NOT_FOUND || type === EVENTS.ERROR) {

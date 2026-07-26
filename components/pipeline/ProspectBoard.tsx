@@ -8,7 +8,7 @@
  * To tame eleven stages, every column is COLLAPSIBLE: click a stage
  * header to fold it to a thin strip (its cards tuck away, the strip
  * still accepts drops), so you narrow the board to just the stages
- * you're working. Collapsed state is remembered per browser.
+ * you're working. Collapsed state is remembered per Business Builder.
  *
  * Native HTML5 drag-and-drop — no extra dependency. Optimistic move with
  * revert on failure. Dropping into "Won" offers one-click onboarding.
@@ -26,6 +26,7 @@ import {
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const COLLAPSE_KEY = "tbb_pipeline_collapsed";
 
@@ -62,6 +63,7 @@ export function ProspectBoard({
   prospects: PipelineProspect[];
 }) {
   const router = useRouter();
+  const storage = useUserStorage();
   const [, startTransition] = useTransition();
   // Local status overrides so a drop reflects instantly (optimistic).
   const [overrides, setOverrides] = useState<Record<string, ProspectStatus>>(
@@ -106,26 +108,19 @@ export function ProspectBoard({
     }
   }
 
-  // Restore collapsed columns from the last visit.
+  // Restore collapsed columns from this user's last visit.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(COLLAPSE_KEY);
-      if (raw) setCollapsed(new Set(JSON.parse(raw) as string[]));
-    } catch {
-      /* ignore */
-    }
-  }, []);
+    if (!storage.ready) return;
+    const saved = storage.getJSON<string[]>(COLLAPSE_KEY);
+    if (saved) setCollapsed(new Set(saved));
+  }, [storage]);
 
   function toggleCollapse(status: ProspectStatus) {
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(status)) next.delete(status);
       else next.add(status);
-      try {
-        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(Array.from(next)));
-      } catch {
-        /* ignore */
-      }
+      storage.setJSON(COLLAPSE_KEY, Array.from(next));
       return next;
     });
   }

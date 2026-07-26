@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { completeOnboarding } from "@/lib/actions/onboarding";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const TOUR_SEEN_KEY = "bbp-tour-seen";
 
@@ -47,17 +48,15 @@ export function PortalOnboarding({
   engagementName: string | null;
 }) {
   const router = useRouter();
+  const storage = useUserStorage();
   const [visible, setVisible] = useState(needsOnboarding);
   const [tourSeen, setTourSeen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    try {
-      setTourSeen(!!window.localStorage.getItem(TOUR_SEEN_KEY));
-    } catch {
-      // ignore
-    }
-  }, []);
+    if (!storage.ready) return;
+    setTourSeen(!!storage.get(TOUR_SEEN_KEY));
+  }, [storage]);
 
   if (!visible) return null;
 

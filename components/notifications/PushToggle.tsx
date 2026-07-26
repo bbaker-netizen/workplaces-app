@@ -13,31 +13,20 @@ import {
   deletePushSubscription,
   savePushSubscription,
 } from "@/lib/actions/push";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
-// Per-browser record of what the user WANTS. Push subscriptions can be
+// Durable record of what the user WANTS. Push subscriptions can be
 // dropped by the browser between visits even while permission stays
 // granted; without a durable intent flag the toggle read the (transiently
 // missing) subscription and flipped itself back to "off". Intent lets us
 // re-establish a dropped subscription on return, while still letting an
 // intentional "off" stick.
+//
+// Scoped per user, not per browser: two Business Builders on one machine
+// each decide for themselves whether they want push.
 const INTENT_KEY = "tbb-push-intent";
-
-function readIntent(): boolean {
-  try {
-    return localStorage.getItem(INTENT_KEY) === "on";
-  } catch {
-    return false;
-  }
-}
-function writeIntent(on: boolean) {
-  try {
-    localStorage.setItem(INTENT_KEY, on ? "on" : "off");
-  } catch {
-    /* private mode / storage disabled — best effort */
-  }
-}
 
 type State =
   | "loading"
@@ -94,10 +83,13 @@ async function ensureSubscribedAndSaved(
 }
 
 export function PushToggle() {
+  const storage = useUserStorage();
   const [state, setState] = useState<State>("loading");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Hold at "loading" until we know whose intent flag to read.
+    if (!storage.ready) return;
     (async () => {
       if (
         typeof window === "undefined" ||
@@ -119,7 +111,7 @@ export function PushToggle() {
       // Drive the toggle from durable intent, not the (possibly dropped)
       // browser subscription. If the user wants push and permission is
       // granted, re-establish the subscription so it survives returns.
-      if (readIntent() && Notification.permission === "granted") {
+      if (storage.get(INTENT_KEY) === "on" && Notification.permission === "granted") {
         try {
           const reg = await getReg();
           await navigator.serviceWorker.ready;
@@ -132,7 +124,7 @@ export function PushToggle() {
       }
       setState("off");
     })();
-  }, []);
+  }, [storage]);
 
   async function enable() {
     setError(null);
@@ -151,7 +143,7 @@ export function PushToggle() {
         setState("off");
         return;
       }
-      writeIntent(true);
+      storage.set(INTENT_KEY, "on");
       setState("on");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't enable notifications.");
@@ -164,7 +156,7 @@ export function PushToggle() {
     setState("working");
     // Record intent first so an intentional off sticks across returns even
     // if the unsubscribe/delete below partly fails.
-    writeIntent(false);
+    storage.set(INTENT_KEY, "off");
     try {
       const reg = await navigator.serviceWorker.getRegistration("/push-sw.js");
       const sub = reg ? await reg.pushManager.getSubscription() : null;

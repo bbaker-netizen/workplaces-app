@@ -2,11 +2,13 @@
 
 /**
  * Table / Board view switch for the Pipeline. Remembers the chosen view in
- * localStorage. Table = the existing sortable grid; Board = the Kanban.
+ * localStorage, per signed-in user. Table = the existing sortable grid;
+ * Board = the Kanban.
  */
 
 import { useEffect, useState } from "react";
 import { LayoutGrid, Table2 } from "lucide-react";
+import { useUserStorage } from "@/lib/client/user-storage";
 import { ProspectTable } from "./ProspectTable";
 import { ProspectBoard } from "./ProspectBoard";
 import type { PipelineProspect } from "@/lib/db/queries/prospects";
@@ -22,24 +24,18 @@ export function PipelineViews({
   prospects: PipelineProspect[];
   initialPrefs: PipelineColumnPrefs | null;
 }) {
+  const storage = useUserStorage();
   const [view, setView] = useState<View>("table");
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(VIEW_KEY);
-      if (saved === "board" || saved === "table") setView(saved);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+    if (!storage.ready) return;
+    const saved = storage.get(VIEW_KEY);
+    if (saved === "board" || saved === "table") setView(saved);
+  }, [storage]);
 
   function choose(v: View) {
     setView(v);
-    try {
-      localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      /* ignore */
-    }
+    storage.set(VIEW_KEY, v);
   }
 
   return (
