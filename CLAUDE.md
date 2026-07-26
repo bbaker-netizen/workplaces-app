@@ -9,7 +9,7 @@ This file is read by Claude Code at the start of every session. Keep it updated 
 ## Project Overview
 
 **Owner:** Bruce Baker — Workplaces (HR All-In Inc), Edmonton, Alberta, Canada
-**Coaches:** Bruce (active). Future hires planned.
+**Coaches:** Bruce Baker (`master_admin`) and Jen Garrison (`coach`), both active. Both currently hold `all_clients_access`. Assume two Business Builders, not one — anything that assumes a single operator (a shared storage key, an env var naming one recipient, a singular "the coach" lookup) is a live bug.
 **Methodology:** Business Building coaching for SMBs (construction & trades focus, all industries supported)
 **Brand:** The Builder — heritage industrial direction
 **Status:** Phase 0 — initial scaffold
@@ -1626,3 +1626,134 @@ This is the manual checklist for onboarding the first real client (Impactica) on
 - **Invitation went to wrong email.** Cancel via https://dashboard.clerk.com/last-active/organizations/<org_id>/invitations → three dots → Revoke. Re-issue from the form.
 - **Anything broke during smoke test (step 5).** Don't onboard yet. Re-check env vars (step 2), re-check migrations (step 1). If still broken, redeploy.
 
+
+---
+
+## What was built — per-user browser state (2026-07-26)
+
+Bruce reported that setting a filter on the Pipeline, then having Jen set
+hers, reset his view to hers. No migration — this is a client-state fix.
+
+**The database was never the problem.** `pipeline_column_prefs` is a
+column on each caller's own `user_profiles` row, written with a WHERE
+pinned to `ensureUserProfile()`'s id, and the page is `force-dynamic`.
+Checked against production: Bruce and Jen have distinct profile rows,
+distinct Clerk users, and distinct saved filters. Nothing shared.
+
+**localStorage was.** Six keys — the pipeline view, table/board choice,
+board column collapse, sidebar sections, the notification "last seen"
+watermark, and the prospect-detail drawers — were stored under bare
+names like `tbb.pipeline.view`. localStorage is per browser profile, not
+per user, so on any machine both Builders sign into, the second one to
+set a view replaced the first one's.
+
+For the pipeline that escaped the browser. `ProspectTable` applies its
+localStorage copy AFTER the server-rendered per-user prefs, so the
+shared value won on load — and the debounced `setPipelineColumnPrefs`
+then wrote it onto whichever Builder was signed in. One person's filter
+choice ended up saved on the other person's row and followed them to
+every other device. That is the "it reset mine to hers" Bruce saw, and
+why it stuck rather than clearing on reload.
+
+`lib/client/user-storage.ts` exports `useUserStorage()`, which suffixes
+every key with the Clerk user id and gates reads/writes behind `ready`
+(Clerk resolves the user asynchronously, so hydration effects now depend
+on it rather than running bare on mount). A `getSessionJSON` /
+`setSessionJSON` pair covers sessionStorage on the same terms.
+
+Converted, beyond the six: the walkthrough and welcome-guide seen-flags
+(both consoles), Buddy's mute, and the push-notification intent flag —
+all the same defect, all of which would have made Jen inherit Bruce's
+dismissals. Buddy's saved conversation moved too: it lives in
+sessionStorage, which survives a sign-out, so an unscoped key handed one
+Builder's thread — client names, figures — to whoever signed in next in
+that tab.
+
+**Legacy keys are deleted, not migrated.** Which Builder last wrote one
+is unknowable, so adopting it would copy the other person's state into
+this person's namespace and reproduce the bug. The pipeline view loses
+nothing (the per-user database copy re-seeds it); the cost is that the
+walkthrough is offered once more and Buddy un-mutes once, per person.
+Guarded by a `tbb.storage.scoped.v1` flag plus a check that the key
+isn't already namespaced, so a second purge can never eat the new keys.
+
+Left deliberately unscoped: nav scroll position and the service-worker
+purge flag. Those are properties of the browser, not the person.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles (the local prerender errors are the pre-existing missing Clerk
+publishable key, hitting `/_not-found` identically — Netlify has the
+key). The two-Builder behaviour itself needs one live check: sign in as
+each on the same browser and confirm the views stay separate.
+
+**Not changed, and Bruce's call:** Jen holds `all_clients_access = true`,
+so her profile currently sees every client exactly as Bruce's does. The
+only functional difference is the `master_admin`-gated surfaces. Whether
+to narrow her access is a who-sees-what decision, not a bug fix.
+
+## What was built — own-book-by-default client scoping (2026-07-26)
+
+Second half of the same session. Bruce's rule, restated: **Jen's clients
+are hers, Bruce's are his, with a toggle to see all.** No migration —
+`prospects.owner_user_profile_id` and `engagements.coach_id` already
+carried ownership; nothing was reading them on the pipeline.
+
+**The gap.** `listProspects` filtered on `eq(prospects.orgId, master.id)`
+and nothing else — every Business Builder saw every prospect in the
+master org. The only "mine" affordance was a client-side owner dropdown
+in `ProspectTable` defaulting to `"all"`, filtering rows that had
+already been shipped to the browser. `listCoachEngagements` gave
+master_admin every active client regardless of coach. And
+`getClientScope()` defaulted the master admin to `"all"`.
+
+**Now:** everyone — master admin included — defaults to `"mine"` and
+opts into the whole practice's book with the existing toggle.
+`coachScopeWhere`, `listProspects` (new `prospectScopeWhere`) and
+`listCoachEngagements` all read the same `getClientScope()`.
+
+**"Mine" means mine OR unclaimed, and that is the load-bearing detail.**
+The lead webhooks (`/api/leads`, `/api/leads/[token]` — website contact
+form, Meta and Google ad forms) never set `owner_user_profile_id`; only
+a hand-created prospect gets one, from `createProspect`. A strict
+`owner = me` would therefore have hidden every inbound lead from BOTH
+Builders until somebody claimed it — and nobody would, because nobody
+could see it. Same reasoning applied to `engagements.coach_id IS NULL`
+in `listCoachEngagements` and `coachScopeWhere`: an engagement created
+without a coach must not fall out of everyone's view at once. Today
+there are 9 unowned prospects and zero coachless engagements, so the
+engagement half is purely defensive.
+
+**Who may flip to "all"** is `canSeeAllClients()`: the master admin
+always, and any Business Builder holding `all_clients_access`. A Builder
+restricted to an explicit `bb_client_access` grant list is never offered
+it — "all" would hand them the clients they were deliberately fenced
+out of. `setClientScope` re-checks server-side; narrowing to "mine" is
+always allowed.
+
+**The scope cookie is now per user** (`bb_client_scope_<userProfileId>`).
+A cookie belongs to the browser profile, not the person, so the single
+shared name had exactly the defect fixed earlier in the session — two
+Builders on one machine flipping each other's scope.
+
+The toggle now renders on the Pipeline page (it never did before, which
+is why the scope was invisible there) alongside a line saying which book
+you're looking at, and is shown to any Builder who may use it rather
+than to master_admin only.
+
+**Effect on today's data:** Bruce's pipeline goes from 88 records to 62
+(54 his + 8 unclaimed); Jen's to 34 (26 hers + 8 unclaimed). Bruce's
+client switcher goes from 19 to 18. Both have `coaches` rows, so neither
+lands on an empty list.
+
+**Scope is a view default, not a permission boundary.** `getProspect`
+and the per-engagement page gates are unchanged — both Builders hold
+`all_clients_access` and can still open anything by id. Tightening that
+would be a different decision.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles. The 76 local prerender failures are all the pre-existing
+missing Clerk publishable key — 152 `Missing publishableKey` errors
+across those 76 pages and zero errors of any other cause; Netlify has
+the key. **Not yet exercised against a live session** — the acceptance
+test is Bruce and Jen each loading the pipeline and seeing their own
+book, then Bruce flipping to "All clients" and seeing 88.

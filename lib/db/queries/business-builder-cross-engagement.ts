@@ -10,7 +10,7 @@
  * caller isn't a Coach, returns empty.
  */
 
-import { and, desc, eq, gte, isNotNull, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
   bbsSessions,
@@ -23,21 +23,58 @@ import {
 } from "../schema";
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
+import { getCurrentBbAccess } from "./bb-access";
 
-/** Cookie the "My clients / All clients" toggle sets (master admin only). */
+/**
+ * Cookie the "My clients / All clients" toggle sets.
+ *
+ * Named per user. A cookie belongs to the browser profile, not the
+ * person, so a single shared name meant two Business Builders on one
+ * machine flipped each other's scope — the same class of bug that let
+ * one Builder's pipeline filters overwrite the other's.
+ */
 export const CLIENT_SCOPE_COOKIE = "bb_client_scope";
+
+export function clientScopeCookieName(userProfileId: string): string {
+  return `${CLIENT_SCOPE_COOKIE}_${userProfileId}`;
+}
 
 export type ClientScope = "mine" | "all";
 
 /**
- * Current client scope for the coach views. Master admin defaults to "all"
- * (oversight) and can flip to "mine"; everyone else is always "mine".
+ * May this Business Builder look at everyone's clients?
+ *
+ * The master admin always can. A standard Business Builder can when they
+ * hold `all_clients_access` — i.e. they haven't been restricted to an
+ * explicit grant list. A restricted Builder never gets an "all" option,
+ * because that would hand them the clients they were deliberately
+ * fenced out of.
+ */
+export async function canSeeAllClients(): Promise<boolean> {
+  const access = await getCurrentBbAccess();
+  if (!access.isBusinessBuilder) return false;
+  return access.isMasterAdmin || access.allClientsAccess;
+}
+
+/**
+ * Current client scope for the Business Builder views.
+ *
+ * EVERYONE defaults to "mine" — your own book is the working view, and
+ * the whole practice's book is the deliberate exception you opt into.
+ * (This used to default the master admin to "all", which is why the
+ * pipeline showed every Builder's prospects to every Builder.)
  */
 export async function getClientScope(): Promise<ClientScope> {
   const profile = await ensureUserProfile();
-  if (profile.status !== "ok" || profile.role !== "master_admin") return "mine";
-  const v = (await cookies()).get(CLIENT_SCOPE_COOKIE)?.value;
-  return v === "mine" ? "mine" : "all";
+  if (profile.status !== "ok") return "mine";
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return "mine";
+  }
+  if (!(await canSeeAllClients())) return "mine";
+  const v = (await cookies()).get(
+    clientScopeCookieName(profile.userProfileId),
+  )?.value;
+  return v === "all" ? "all" : "mine";
 }
 
 async function coachId(userProfileId: string): Promise<string | null> {
@@ -60,23 +97,23 @@ type OkProfile = Extract<
  * The engagements.coachId filter for the calling Business Builder's
  * cross-client views. Returns:
  *   - an `eq(coachId, mine)` condition — scope to my own clients,
- *   - `undefined` — no filter, i.e. ALL clients (master admin, "all" scope),
- *   - `false` — the caller has no coach row and no all-access, so show nothing.
+ *   - `undefined` — no filter, i.e. ALL clients ("all" scope, opted into),
+ *   - `false` — the caller has no coach row, so show nothing.
  *
- * A standard Business Builder is always scoped to their own clients. A master
- * admin defaults to ALL clients (for oversight) and can flip to "just mine"
- * via the toggle, which sets the CLIENT_SCOPE_COOKIE.
+ * Every Business Builder — master admin included — is scoped to their own
+ * clients by default and opts into the whole practice's book with the
+ * toggle. Same rule for everyone; the only difference between people is
+ * whether they're ALLOWED to flip it (see `canSeeAllClients`).
  */
 export async function coachScopeWhere(
   profile: OkProfile,
 ): Promise<SQL | undefined | false> {
+  if ((await getClientScope()) === "all") return undefined;
   const cid = await coachId(profile.userProfileId);
-  if (profile.role === "master_admin") {
-    const scope = (await cookies()).get(CLIENT_SCOPE_COOKIE)?.value;
-    if (scope === "mine") return cid ? eq(engagements.coachId, cid) : false;
-    return undefined; // all clients
-  }
-  return cid ? eq(engagements.coachId, cid) : false;
+  if (!cid) return false;
+  // Mine, plus anything not yet assigned to a Business Builder — so work
+  // on an unclaimed client can't fall out of everyone's view at once.
+  return or(eq(engagements.coachId, cid), isNull(engagements.coachId));
 }
 
 export type CoachProjectRow = {
