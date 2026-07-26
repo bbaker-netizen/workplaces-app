@@ -14,7 +14,7 @@
  * orgs; Coach session is in master org). Uses withSystemContext.
  */
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { coaches, engagements, type Engagement } from "../schema";
 import { withSystemContext, withTenantContext } from "../tenant";
@@ -23,6 +23,7 @@ import {
   canCurrentBbAccessEngagement,
   getCurrentBbAccess,
 } from "./bb-access";
+import { getClientScope } from "./business-builder-cross-engagement";
 
 export const SELECTED_ENGAGEMENT_COOKIE = "selected_engagement_slug";
 
@@ -178,18 +179,16 @@ export async function listCoachEngagements(
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
 
   const access = await getCurrentBbAccess();
+  // Same rule as every other cross-client surface: your own book by
+  // default, the whole practice's only when you flip the toggle.
+  const seeingAll = (await getClientScope()) === "all";
 
   return withSystemContext(async (tx) => {
     let rows: Engagement[];
 
-    if (access.isMasterAdmin) {
-      // master_admin sees every active client, regardless of coach.
-      rows = await tx
-        .select()
-        .from(engagements)
-        .where(isNull(engagements.archivedAt));
-    } else if (!access.allClientsAccess) {
+    if (!access.allClientsAccess) {
       // Restricted Business Builder: only explicitly-granted clients.
+      // The scope toggle isn't offered to them, so it doesn't apply.
       if (access.grantedEngagementIds.length === 0) return [];
       rows = await tx
         .select()
@@ -200,9 +199,18 @@ export async function listCoachEngagements(
             isNull(engagements.archivedAt),
           ),
         );
+    } else if (seeingAll) {
+      // Explicitly looking at the whole practice's book.
+      rows = await tx
+        .select()
+        .from(engagements)
+        .where(isNull(engagements.archivedAt));
     } else {
-      // Default Business Builder: clients they're the assigned coach on
-      // (unchanged from the prior behaviour).
+      // Default for everyone, master admin included: clients they're the
+      // assigned coach on, PLUS any client with no coach assigned yet.
+      // Without that second half an engagement created without a coach
+      // would be invisible to every Business Builder at once — the same
+      // trap unowned leads pose in the pipeline.
       const [Coach] = await tx
         .select({ id: coaches.id })
         .from(coaches)
@@ -214,7 +222,10 @@ export async function listCoachEngagements(
         .from(engagements)
         .where(
           and(
-            eq(engagements.coachId, Coach.id),
+            or(
+              eq(engagements.coachId, Coach.id),
+              isNull(engagements.coachId),
+            ),
             isNull(engagements.archivedAt),
           ),
         );

@@ -13,6 +13,11 @@ import { Plus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listProspects } from "@/lib/db/queries/prospects";
 import { getCurrentUserPrefs } from "@/lib/db/queries/user-prefs";
+import {
+  canSeeAllClients,
+  getClientScope,
+} from "@/lib/db/queries/business-builder-cross-engagement";
+import { ClientScopeToggle } from "@/components/business-builder/ClientScopeToggle";
 import { PipelineViews } from "@/components/pipeline/PipelineViews";
 import { STAGE_ORDER, STAGE_STYLES } from "@/lib/pipeline/stages";
 
@@ -28,9 +33,11 @@ export default async function PipelinePage() {
     redirect("/portal");
   }
 
-  const [prospects, prefs] = await Promise.all([
+  const [prospects, prefs, scope, canToggleScope] = await Promise.all([
     listProspects(),
     getCurrentUserPrefs(),
+    getClientScope(),
+    canSeeAllClients(),
   ]);
 
   // Stage counts for the summary chips above the table.
@@ -49,10 +56,14 @@ export default async function PipelinePage() {
           </h1>
           <p className="text-sm text-tbb-ink-3">
             {prospects.length} record{prospects.length === 1 ? "" : "s"} across
-            all stages.
+            all stages
+            {scope === "mine"
+              ? " — yours, plus any lead nobody has claimed yet."
+              : " — every Business Builder's."}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {canToggleScope && <ClientScopeToggle current={scope} />}
           <Link
             href="/business-builder/pipeline/new"
             className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 transition-colors duration-tbb-base shadow-tbb-cta"

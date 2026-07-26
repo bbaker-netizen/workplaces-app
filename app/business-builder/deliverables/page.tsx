@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   getClientScope,
+  canSeeAllClients,
   listCoachDeliverables,
 } from "@/lib/db/queries/business-builder-cross-engagement";
 import { ClientScopeToggle } from "@/components/business-builder/ClientScopeToggle";
@@ -14,6 +15,7 @@ export default async function CoachDeliverablesCrossPage() {
     redirect("/portal");
 
   const scope = await getClientScope();
+  const canToggleScope = await canSeeAllClients();
   const items = await listCoachDeliverables();
   // Group by status for the tracker view.
   const groups = new Map<string, typeof items>();
@@ -52,9 +54,7 @@ export default async function CoachDeliverablesCrossPage() {
           >
             ← Console
           </Link>
-          {profile.role === "master_admin" && (
-            <ClientScopeToggle current={scope} />
-          )}
+          {canToggleScope && <ClientScopeToggle current={scope} />}
         </div>
       </header>
 

@@ -9,6 +9,11 @@
  * "Already seen" is tracked as a timestamp in localStorage so a page reload
  * doesn't re-pop old notifications, and the first-ever load sets the
  * baseline to "now" rather than dumping a backlog.
+ *
+ * The watermark is scoped to the signed-in user. Shared, it meant one
+ * Business Builder's session advanced the other's "seen" marker on the
+ * same browser, silently swallowing toasts the second person had never
+ * actually been shown.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,6 +23,7 @@ import {
   getToastNotifications,
   type ToastNotification,
 } from "@/lib/actions/notifications";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const SEEN_KEY = "tbb.toast.lastSeenMs";
 const POLL_MS = 45_000;
@@ -26,26 +32,25 @@ const MAX_VISIBLE = 4;
 
 export function NotificationToaster() {
   const router = useRouter();
+  const storage = useUserStorage();
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const lastSeenRef = useRef<number>(0);
   const baselinedRef = useRef(false);
 
-  const persist = useCallback((ms: number) => {
-    try {
-      window.localStorage.setItem(SEEN_KEY, String(ms));
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const persist = useCallback(
+    (ms: number) => {
+      storage.set(SEEN_KEY, String(ms));
+    },
+    [storage],
+  );
 
   useEffect(() => {
-    let stored = 0;
-    try {
-      const raw = window.localStorage.getItem(SEEN_KEY);
-      stored = raw ? parseInt(raw, 10) : 0;
-    } catch {
-      /* ignore */
-    }
+    // Wait for Clerk to resolve the user — polling before then would
+    // baseline against the wrong (or no) watermark.
+    if (!storage.ready) return;
+
+    const raw = storage.get(SEEN_KEY);
+    const stored = raw ? parseInt(raw, 10) : 0;
     lastSeenRef.current = Number.isFinite(stored) ? stored : 0;
 
     let cancelled = false;
@@ -103,7 +108,7 @@ export function NotificationToaster() {
       window.clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [persist]);
+  }, [persist, storage]);
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));

@@ -30,6 +30,7 @@ import {
   Send,
 } from "lucide-react";
 import { askBuddy, type BuddyMessage } from "@/lib/actions/ask-buddy";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const STORAGE_MUTED = "tbb_buddy_muted_v2";
 // Ongoing conversation + draft, kept in sessionStorage so minimizing the
@@ -76,6 +77,7 @@ export function BuilderBuddy({
   subtitle?: string;
 } = {}) {
   const pathname = usePathname() ?? "";
+  const storage = useUserStorage();
   const [muted, setMuted] = useState<boolean>(false);
   const [open, setOpen] = useState(false);
   const [walkedIn, setWalkedIn] = useState(false);
@@ -89,42 +91,36 @@ export function BuilderBuddy({
   // initial empty state doesn't clobber a saved thread on first render.
   const hydratedRef = useRef(false);
 
-  // Load mute pref + any saved conversation once, on mount.
+  // Load mute pref + any saved conversation once Clerk resolves the user.
+  // Both are scoped to that user: the thread can name clients and figures,
+  // and sessionStorage survives a sign-out, so an unscoped key would have
+  // handed one Business Builder's conversation to whoever signed in next
+  // on the same tab.
   useEffect(() => {
-    try {
-      setMuted(localStorage.getItem(STORAGE_MUTED) === "1");
-    } catch {
-      /* SSR / private mode */
-    }
-    try {
-      const raw = sessionStorage.getItem(STORAGE_THREAD);
-      if (raw) {
-        const saved = JSON.parse(raw) as Partial<PersistedThread>;
-        if (Array.isArray(saved.messages)) setMessages(saved.messages);
-        if (typeof saved.draft === "string") setDraft(saved.draft);
-      }
-    } catch {
-      /* SSR / private mode / malformed JSON — start fresh */
+    if (!storage.ready || hydratedRef.current) return;
+    setMuted(storage.get(STORAGE_MUTED) === "1");
+    const saved = storage.getSessionJSON<Partial<PersistedThread>>(
+      STORAGE_THREAD,
+    );
+    if (saved) {
+      if (Array.isArray(saved.messages)) setMessages(saved.messages);
+      if (typeof saved.draft === "string") setDraft(saved.draft);
     }
     hydratedRef.current = true;
-  }, []);
+  }, [storage]);
 
   // Persist the conversation + draft whenever either changes. Skipped
   // until hydration completes (see hydratedRef). This is what makes the
   // minimize button — and a mid-conversation refresh — non-destructive.
   useEffect(() => {
     if (!hydratedRef.current) return;
-    try {
-      if (messages.length === 0 && draft.trim() === "") {
-        sessionStorage.removeItem(STORAGE_THREAD);
-      } else {
-        const payload: PersistedThread = { messages, draft };
-        sessionStorage.setItem(STORAGE_THREAD, JSON.stringify(payload));
-      }
-    } catch {
-      /* storage full / unavailable — non-fatal */
+    if (messages.length === 0 && draft.trim() === "") {
+      storage.removeSession(STORAGE_THREAD);
+    } else {
+      const payload: PersistedThread = { messages, draft };
+      storage.setSessionJSON(STORAGE_THREAD, payload);
     }
-  }, [messages, draft]);
+  }, [messages, draft, storage]);
 
   // Keyboard: "?" or "/" toggles Buddy, "Esc" closes.
   useEffect(() => {
@@ -203,20 +199,12 @@ export function BuilderBuddy({
   function muteForever() {
     setMuted(true);
     setOpen(false);
-    try {
-      localStorage.setItem(STORAGE_MUTED, "1");
-    } catch {
-      /* no-op */
-    }
+    storage.set(STORAGE_MUTED, "1");
   }
 
   function unmute() {
     setMuted(false);
-    try {
-      localStorage.removeItem(STORAGE_MUTED);
-    } catch {
-      /* no-op */
-    }
+    storage.remove(STORAGE_MUTED);
   }
 
   if (muted) {
@@ -365,11 +353,7 @@ export function BuilderBuddy({
                       setMessages([]);
                       setDraft("");
                       setError(null);
-                      try {
-                        sessionStorage.removeItem(STORAGE_THREAD);
-                      } catch {
-                        /* no-op */
-                      }
+                      storage.removeSession(STORAGE_THREAD);
                     }}
                     className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
                   >

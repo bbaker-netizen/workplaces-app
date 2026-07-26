@@ -10,8 +10,9 @@
  *   - `defaultOpen` sets the initial state (used for stage-aware auto-open —
  *     e.g. Quick actions opens for a fresh lead).
  *   - Once the user toggles it, the choice is remembered PER PERSON across
- *     leads (localStorage, keyed by `storageKey`), so each Business Builder
- *     settles into their own layout.
+ *     leads (localStorage, keyed by `storageKey` AND the signed-in user id),
+ *     so each Business Builder settles into their own layout even when two
+ *     of them share a browser.
  *   - The body stays mounted but hidden when closed, so in-progress edits
  *     (an unsent comment, a half-typed note) survive a collapse.
  *
@@ -21,6 +22,7 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 export function CollapsibleSection({
   title,
@@ -40,29 +42,20 @@ export function CollapsibleSection({
   storageKey: string;
   children: React.ReactNode;
 }) {
+  const storage = useUserStorage();
   const [open, setOpen] = useState(defaultOpen);
 
   useEffect(() => {
-    try {
-      const v = window.localStorage.getItem(`tbb.drawer.${storageKey}`);
-      if (v === "1") setOpen(true);
-      else if (v === "0") setOpen(false);
-    } catch {
-      /* localStorage unavailable (private mode) — fall back to defaultOpen */
-    }
-  }, [storageKey]);
+    if (!storage.ready) return;
+    const v = storage.get(`tbb.drawer.${storageKey}`);
+    if (v === "1") setOpen(true);
+    else if (v === "0") setOpen(false);
+  }, [storageKey, storage]);
 
   function toggle() {
     setOpen((prev) => {
       const next = !prev;
-      try {
-        window.localStorage.setItem(
-          `tbb.drawer.${storageKey}`,
-          next ? "1" : "0",
-        );
-      } catch {
-        /* ignore */
-      }
+      storage.set(`tbb.drawer.${storageKey}`, next ? "1" : "0");
       return next;
     });
   }

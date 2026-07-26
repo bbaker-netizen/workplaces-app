@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { HelpCircle } from "lucide-react";
 import { BusinessBuilderTour } from "./BusinessBuilderTour";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const STORAGE_KEY = "bbp-Coach-tour-seen";
 
@@ -20,14 +21,11 @@ export function TakeTheTourButton({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const storage = useUserStorage();
   const [open, setOpen] = useState(false);
 
   function start() {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    storage.remove(STORAGE_KEY);
     if (!pathname.startsWith("/business-builder")) {
       router.push("/business-builder");
       return;

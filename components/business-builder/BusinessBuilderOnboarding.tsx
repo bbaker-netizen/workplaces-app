@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { completeOnboarding } from "@/lib/actions/onboarding";
 import type { BuilderOnboardingState } from "@/lib/db/queries/onboarding";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const TOUR_SEEN_KEY = "bbp-Coach-tour-seen";
 const GUIDE_SEEN_KEY = "bbp-guide-seen";
@@ -45,19 +46,17 @@ export function BusinessBuilderOnboarding({
   state: BuilderOnboardingState;
 }) {
   const router = useRouter();
+  const storage = useUserStorage();
   const [visible, setVisible] = useState(state.needsOnboarding);
   const [tourSeen, setTourSeen] = useState(false);
   const [guideSeen, setGuideSeen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    try {
-      setTourSeen(!!window.localStorage.getItem(TOUR_SEEN_KEY));
-      setGuideSeen(!!window.localStorage.getItem(GUIDE_SEEN_KEY));
-    } catch {
-      // ignore
-    }
-  }, []);
+    if (!storage.ready) return;
+    setTourSeen(!!storage.get(TOUR_SEEN_KEY));
+    setGuideSeen(!!storage.get(GUIDE_SEEN_KEY));
+  }, [storage]);
 
   if (!visible) return null;
 
@@ -65,11 +64,7 @@ export function BusinessBuilderOnboarding({
   // either navigates to the chosen setup step or closes into the console.
   function dismissThen(href?: string, markGuide?: boolean) {
     if (markGuide) {
-      try {
-        window.localStorage.setItem(GUIDE_SEEN_KEY, new Date().toISOString());
-      } catch {
-        // ignore
-      }
+      storage.set(GUIDE_SEEN_KEY, new Date().toISOString());
     }
     startTransition(async () => {
       await completeOnboarding();

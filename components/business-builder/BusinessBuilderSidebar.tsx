@@ -53,6 +53,7 @@ import {
   toggleNavPin,
 } from "@/lib/actions/user-prefs";
 import type { BusinessBuilderPulse } from "@/lib/db/queries/business-builder-pulse";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 // Per-phase open/closed state lives in localStorage so it persists
 // across reloads without a DB round-trip. Closed-by-default keeps
@@ -172,6 +173,7 @@ export function BusinessBuilderSidebar({
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
+  const storage = useUserStorage();
   const [collapsed, setCollapsed] = useState(collapsedInitial);
   const [pins, setPins] = useState<string[]>(pinnedNavItems);
   const [, startTransition] = useTransition();
@@ -212,56 +214,33 @@ export function BusinessBuilderSidebar({
   // is quiet until you click into a section. Persists in localStorage
   // so the choice survives reloads / navigations.
   //
-  // Lazy initializer reads localStorage on the very first render
-  // (client-side only). Server-side renders all-closed, then client
-  // hydration applies the saved state immediately — no flash on
-  // navigation between sub-pages.
-  const [openPhases, setOpenPhases] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const raw = window.localStorage.getItem(PHASES_STORAGE_KEY);
-      const stored: string[] = raw ? JSON.parse(raw) : [];
-      return new Set<string>(stored);
-    } catch {
-      return new Set();
-    }
-  });
+  // Fills in from storage once Clerk resolves who is signed in. The
+  // stored value is per user, so it can't be read in a lazy initializer
+  // the way the old shared key could — and since sections are closed by
+  // default, there's nothing to flash while we wait.
+  const [openPhases, setOpenPhases] = useState<Set<string>>(new Set());
 
-  // Also re-read on mount as a belt-and-suspenders in case the lazy
-  // initializer ran before localStorage was ready (rare).
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(PHASES_STORAGE_KEY);
-      const stored: string[] = raw ? JSON.parse(raw) : [];
-      setOpenPhases((prev) => {
-        const next = new Set<string>(stored);
-        if (
-          prev.size === next.size &&
-          Array.from(prev).every((k) => next.has(k))
-        ) {
-          return prev; // no change, avoid re-render
-        }
-        return next;
-      });
-    } catch {
-      // ignore
-    }
-  }, []);
+    if (!storage.ready) return;
+    const stored = storage.getJSON<string[]>(PHASES_STORAGE_KEY) ?? [];
+    setOpenPhases((prev) => {
+      const next = new Set<string>(stored);
+      if (
+        prev.size === next.size &&
+        Array.from(prev).every((k) => next.has(k))
+      ) {
+        return prev; // no change, avoid re-render
+      }
+      return next;
+    });
+  }, [storage]);
 
   function togglePhase(key: string) {
     setOpenPhases((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      try {
-        window.localStorage.setItem(
-          PHASES_STORAGE_KEY,
-          JSON.stringify(Array.from(next)),
-        );
-      } catch {
-        // silently ignore
-      }
+      storage.setJSON(PHASES_STORAGE_KEY, Array.from(next));
       return next;
     });
   }

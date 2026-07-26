@@ -28,6 +28,7 @@ import { ClientQuickSearch } from "@/components/business-builder/ClientQuickSear
 import { listCoachActionItems } from "@/lib/db/queries/action-items";
 import {
   getClientScope,
+  canSeeAllClients,
   listCoachDeliverables,
   listCoachGoals,
   listCoachProjects,
@@ -629,6 +630,7 @@ export default async function CoachConsole() {
   });
 
   const scope = await getClientScope();
+  const canToggleScope = await canSeeAllClients();
 
   return (
     <main className="min-h-screen bg-background">
@@ -647,9 +649,7 @@ export default async function CoachConsole() {
             <p className="text-sm text-muted-foreground">{encouragements}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {profile.role === "master_admin" && (
-              <ClientScopeToggle current={scope} />
-            )}
+            {canToggleScope && <ClientScopeToggle current={scope} />}
             <Link
               href="/business-builder/engagements/new"
               className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"

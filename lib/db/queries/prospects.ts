@@ -3,7 +3,7 @@
  * Phase 5 — CRM expansion.
  */
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or, type SQL } from "drizzle-orm";
 import {
   engagements,
   orgs,
@@ -14,6 +14,8 @@ import {
   type ProspectActivity,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getClientScope } from "@/lib/db/queries/business-builder-cross-engagement";
 
 export type PipelineProspect = Prospect & {
   ownerName: string | null;
@@ -28,7 +30,35 @@ export type PipelineProspect = Prospect & {
   engagementType: string | null;
 };
 
+/**
+ * Owner predicate for the pipeline list.
+ *
+ * "Mine" means prospects I own OR prospects nobody owns yet. The second
+ * half is load-bearing: the lead webhooks (`/api/leads`, `/api/leads/
+ * [token]` — the website contact form and the Meta / Google ad forms)
+ * never set `owner_user_profile_id`; only a hand-created prospect gets
+ * one. Scoping strictly to `owner = me` would therefore hide every
+ * inbound lead from BOTH Business Builders until somebody claimed it —
+ * and nobody would, because nobody could see it. Unowned leads are up
+ * for grabs and stay visible to everyone.
+ *
+ * Returns `undefined` when the caller is looking at all clients.
+ */
+async function prospectScopeWhere(): Promise<SQL | undefined> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return undefined;
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return undefined;
+  }
+  if ((await getClientScope()) === "all") return undefined;
+  return or(
+    eq(prospects.ownerUserProfileId, profile.userProfileId),
+    isNull(prospects.ownerUserProfileId),
+  );
+}
+
 export async function listProspects(): Promise<PipelineProspect[]> {
+  const ownerWhere = await prospectScopeWhere();
   return withSystemContext(async (tx) => {
     const [master] = await tx
       .select({ id: orgs.id })
@@ -55,7 +85,7 @@ export async function listProspects(): Promise<PipelineProspect[]> {
         engagements,
         eq(engagements.id, prospects.convertedEngagementId),
       )
-      .where(eq(prospects.orgId, master.id))
+      .where(and(eq(prospects.orgId, master.id), ownerWhere))
       .orderBy(desc(prospects.updatedAt));
     return rows.map((r) => ({
       ...r.prospect,

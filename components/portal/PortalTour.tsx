@@ -23,6 +23,7 @@ import {
   EVENTS,
   STATUS,
 } from "react-joyride";
+import { useUserStorage } from "@/lib/client/user-storage";
 
 const STORAGE_KEY = "bbp-tour-seen";
 
@@ -96,6 +97,7 @@ export function PortalTour({
   suppressAuto?: boolean;
   onClose?: () => void;
 }) {
+  const storage = useUserStorage();
   const [run, setRun] = useState<boolean>(false);
   const [hydrated, setHydrated] = useState<boolean>(false);
 
@@ -106,25 +108,18 @@ export function PortalTour({
       return;
     }
     if (suppressAuto) return;
-    if (typeof window === "undefined") return;
-    try {
-      const seen = window.localStorage.getItem(STORAGE_KEY);
-      if (!seen) setRun(true);
-    } catch {
-      // localStorage may be unavailable in private mode.
-    }
-  }, [forceOpen, suppressAuto]);
+    // Per user, so a second person on a shared device still gets the
+    // tour rather than inheriting the first person's dismissal.
+    if (!storage.ready) return;
+    if (!storage.get(STORAGE_KEY)) setRun(true);
+  }, [forceOpen, suppressAuto, storage]);
 
   function handleEvent(data: EventData): void {
     const { status, type } = data;
     const finished: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
     if (finished.includes(status)) {
       setRun(false);
-      try {
-        window.localStorage.setItem(STORAGE_KEY, new Date().toISOString());
-      } catch {
-        // ignore
-      }
+      storage.set(STORAGE_KEY, new Date().toISOString());
       onClose?.();
     }
     // Joyride sometimes can't find a target (e.g. user navigated mid-tour).

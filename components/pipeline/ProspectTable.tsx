@@ -42,6 +42,7 @@ import type { PipelineProspect } from "@/lib/db/queries/prospects";
 import type { PipelineColumnPrefs } from "@/lib/db/queries/user-prefs";
 import { formatCad, formatPhone, normalizeWebsite } from "@/lib/format";
 import { setPipelineColumnPrefs } from "@/lib/actions/user-prefs";
+import { useUserStorage } from "@/lib/client/user-storage";
 import {
   bulkDeleteProspects,
   bulkPermanentlyDeleteProspects,
@@ -182,6 +183,7 @@ export function ProspectTable({
   prospects: PipelineProspect[];
   initialPrefs: PipelineColumnPrefs | null;
 }) {
+  const storage = useUserStorage();
   const savedFilters = initialPrefs?.filters;
   const [query, setQuery] = useState("");
   // Stage filter — now multi-select. `stages` is the set of stage keys to
@@ -388,24 +390,29 @@ export function ProspectTable({
   }, [prospects]);
 
   /* Persist the chosen view (filter + search + sort) across reloads and
-     navigations until the coach resets it. Hydrate from localStorage on
-     mount (after first paint, to avoid an SSR mismatch), then mirror any
-     change back. */
+     navigations until the coach resets it. Hydrate from storage once
+     Clerk has resolved who is signed in (also after first paint, to
+     avoid an SSR mismatch), then mirror any change back.
+
+     Scoped per user. This copy is applied ON TOP of the server-rendered
+     per-user prefs, so an unscoped key let whichever Builder last used
+     this browser override the other's view — and the debounced save
+     below then wrote that view onto the signed-in Builder's own row. */
   const VIEW_KEY = "tbb.pipeline.view";
   const viewHydrated = useRef(false);
   useEffect(() => {
+    if (!storage.ready || viewHydrated.current) return;
     try {
-      const raw = localStorage.getItem(VIEW_KEY);
-      if (raw) {
-        const v = JSON.parse(raw) as {
-          stages?: string[];
-          archived?: boolean;
-          stageFilter?: string; // legacy single-select value
-          sourceFilter?: string;
-          ownerFilter?: string;
-          query?: string;
-          sortBy?: string;
-        };
+      const v = storage.getJSON<{
+        stages?: string[];
+        archived?: boolean;
+        stageFilter?: string; // legacy single-select value
+        sourceFilter?: string;
+        ownerFilter?: string;
+        query?: string;
+        sortBy?: string;
+      }>(VIEW_KEY);
+      if (v) {
         if (
           Array.isArray(v.stages) ||
           typeof v.archived === "boolean" ||
@@ -436,25 +443,18 @@ export function ProspectTable({
       /* ignore malformed/blocked storage */
     }
     viewHydrated.current = true;
-  }, []);
+  }, [storage]);
   useEffect(() => {
-    if (!viewHydrated.current) return;
-    try {
-      localStorage.setItem(
-        VIEW_KEY,
-        JSON.stringify({
-          stages: Array.from(stages),
-          archived,
-          sourceFilter,
-          ownerFilter,
-          query,
-          sortBy,
-        }),
-      );
-    } catch {
-      /* ignore */
-    }
-  }, [stages, archived, sourceFilter, ownerFilter, query, sortBy]);
+    if (!viewHydrated.current || !storage.ready) return;
+    storage.setJSON(VIEW_KEY, {
+      stages: Array.from(stages),
+      archived,
+      sourceFilter,
+      ownerFilter,
+      query,
+      sortBy,
+    });
+  }, [stages, archived, sourceFilter, ownerFilter, query, sortBy, storage]);
 
   const viewIsDefault =
     !archived &&
@@ -470,11 +470,7 @@ export function ProspectTable({
     setOwnerFilter("all");
     setQuery("");
     setSortBy("updated");
-    try {
-      localStorage.removeItem(VIEW_KEY);
-    } catch {
-      /* ignore */
-    }
+    storage.remove(VIEW_KEY);
   }
 
   /* Persist preferences with a small debounce so dragging doesn't hit
