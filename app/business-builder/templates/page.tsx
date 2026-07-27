@@ -122,7 +122,8 @@ export default async function TemplatesPage() {
             The actual <strong>body</strong> of every contract, proposal,
             NDA, and renewal you send for signature. Write it in markdown
             with variable placeholders. When you hit{" "}
-            <strong>Send for signature</strong> on a prospect or engagement,
+            <strong>Prepare Business Building Agreement</strong> on a prospect or
+            engagement,
             pick a template, the variables fill in, you edit anything
             specific to that deal, and we render the result as a
             Workplaces-branded PDF and route it through signing — no

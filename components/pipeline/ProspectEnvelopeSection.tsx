@@ -54,7 +54,8 @@ export function ProspectEnvelopeSection({
             onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
           >
-            <Send className="w-3 h-3" aria-hidden /> Send for signature
+            <Send className="w-3 h-3" aria-hidden /> Prepare Business Building
+            Agreement
           </button>
         )}
       </header>

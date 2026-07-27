@@ -370,16 +370,6 @@ export default async function ProspectDetailPage({
             </div>
           </section>
 
-          {/* Base Camp assessment — what they told us before we spoke. Sits
-              directly under Contact because it is the reason to pick up the
-              phone: it names the weak block and carries their own words. */}
-          {assessment && (
-            <ProspectAssessmentPanel
-              assessment={assessment}
-              takenAt={prospect.assessmentAt ?? null}
-            />
-          )}
-
           {/* Paid-click evidence — when the lead arrived with a Google/Meta
               click id, show it so Bruce knows this came from a paid click (and
               it's what the Google Ads offline-conversion upload keys off). */}
@@ -450,8 +440,19 @@ export default async function ProspectDetailPage({
             title="Prep with The Climb"
             storageKey="climb-prep"
             icon={<Mountain className="w-3.5 h-3.5" aria-hidden />}
+            defaultOpen={Boolean(assessment)}
           >
-            <div className="p-5 space-y-3">
+            <div className="p-5 space-y-4">
+              {/* What they told us before we spoke. This lives inside the prep
+                  drawer rather than as its own block on the page: it IS the
+                  prep for the Climb session, and the page already carries
+                  enough top-level boxes. */}
+              {assessment && (
+                <ProspectAssessmentPanel
+                  assessment={assessment}
+                  takenAt={prospect.assessmentAt ?? null}
+                />
+              )}
               <p className="text-sm text-tbb-ink-2">
                 Open the meeting-prep kit — the Map of the Mountain, the four
                 Building Blocks, and the companion tools.

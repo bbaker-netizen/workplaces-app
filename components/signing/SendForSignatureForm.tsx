@@ -4,29 +4,24 @@
  * Coach-side form for sending a document for native e-signing.
  *
  * Two modes:
- *   - "upload" — the source PDF doesn't exist yet (prospect contracts).
- *     Coach uploads a file, fills signers, sends.
+ *   - "upload" — no source document exists yet (prospect agreements). The
+ *     agreement is built from a saved document template; there is no
+ *     upload-a-PDF path, because an agreement should carry the practice's
+ *     own wording and signature rather than whatever file is to hand.
  *   - "existing-doc" — pass `sourceDocumentId` for an already-stored
  *     engagement document.
  *
- * Calls `createEnvelopeFromUpload` (upload mode) or
+ * Calls `createEnvelopeFromComposed` (upload mode) or
  * `createSignatureEnvelope` (existing-doc mode). Both end with a
  * redirect to the new envelope's detail page.
  */
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  FileSignature,
-  FileUp,
-  Loader2,
-  Plus,
-  Send,
-  Trash2,
-} from "lucide-react";
+import { Loader2, Plus, Send, Trash2 } from "lucide-react";
 import {
   createEnvelopeFromComposed,
-  createEnvelopeFromUpload,
   createSignatureEnvelope,
 } from "@/lib/actions/signatures";
 import {
@@ -86,19 +81,16 @@ export function SendForSignatureForm(props: Props) {
       ? props.defaultSigners
       : [{ name: "", email: "", roleLabel: "" }],
   );
-  const [autoSignAsMe, setAutoSignAsMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [pickedFileName, setPickedFileName] = useState<string | null>(null);
 
-  // Compose-mode state — only meaningful when props.mode === "upload"
-  // (existing-doc already has a source document picked). Defaults to
-  // "upload" so the file picker is the first thing the user sees, with
-  // the compose path available as a tab.
-  const [sourceMode, setSourceMode] = useState<"upload" | "compose">(
-    "upload",
-  );
+  // Templates are the only way to build an agreement now. The upload-a-PDF
+  // path and the tab pair that chose between them are gone: an agreement
+  // should come off a controlled template with the practice's own wording
+  // and signature already in it, not off whatever file happens to be on
+  // someone's desktop. Kept as a constant rather than deleted outright so
+  // the compose branches below stay readable.
+  const sourceMode = "compose" as const;
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [composedBody, setComposedBody] = useState<string>("");
   // Compose-time fee override. The variable context's engagement may
@@ -234,7 +226,7 @@ export function SendForSignatureForm(props: Props) {
           subject: subject.trim(),
           message: message.trim() || null,
           signers: cleanSigners,
-          autoSignAsMe,
+          autoSignAsMe: false,
           documentTitle: subject.trim(),
           bodyMarkdown: liveBody,
         });
@@ -246,25 +238,11 @@ export function SendForSignatureForm(props: Props) {
         return;
       }
       if (props.mode === "upload") {
-        const file = fileInputRef.current?.files?.[0];
-        if (!file) {
-          setError("Pick the document file.");
-          return;
-        }
-        const fd = new FormData();
-        fd.set("file", file);
-        fd.set("subject", subject.trim());
-        fd.set("message", message.trim());
-        fd.set("signersJson", JSON.stringify(cleanSigners));
-        if (props.prospectId) fd.set("prospectId", props.prospectId);
-        if (props.engagementId) fd.set("engagementId", props.engagementId);
-        fd.set("autoSignAsMe", autoSignAsMe ? "true" : "false");
-        const result = await createEnvelopeFromUpload(fd);
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
-        router.push(`/business-builder/envelopes/${result.data.envelopeId}`);
+        // Unreachable: upload mode always composes from a template now, and
+        // the branch above returns. Kept as a guard so a future source mode
+        // can't fall silently through to the existing-doc path.
+        setError("Choose a template to build the agreement from.");
+        return;
       } else {
         const result = await createSignatureEnvelope({
           sourceDocumentId: props.sourceDocumentId,
@@ -272,7 +250,7 @@ export function SendForSignatureForm(props: Props) {
           subject: subject.trim(),
           message: message.trim() || null,
           signers: cleanSigners,
-          autoSignAsMe,
+          autoSignAsMe: false,
         });
         if (!result.ok) {
           setError(result.error);
@@ -306,49 +284,40 @@ export function SendForSignatureForm(props: Props) {
         />
       </div>
 
-      {props.mode === "upload" && composeAvailable && (
-        <div
-          role="tablist"
-          aria-label="Document source"
-          className="inline-flex bg-tbb-cream-50 border border-tbb-line rounded-pill p-1 gap-1"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceMode === "upload"}
-            onClick={() => setSourceMode("upload")}
-            className={
-              "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill transition-colors " +
-              (sourceMode === "upload"
-                ? "bg-white text-tbb-navy shadow-tbb-sm"
-                : "text-tbb-ink-3 hover:text-tbb-navy")
-            }
+      {/* No templates yet. The picker still shows, with every other field
+          intact, so the shape of the job is visible before anything has been
+          set up — and it says plainly what's missing rather than rendering an
+          empty dropdown. */}
+      {props.mode === "upload" && !composeAvailable && (
+        <div className="space-y-2 border border-tbb-line rounded-md bg-white p-4">
+          <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+            Choose from template
+          </span>
+          <select
+            disabled
+            className="mt-1 w-full bg-tbb-cream-50 border border-tbb-line rounded-md px-3 py-2 text-sm text-tbb-ink-3"
           >
-            <FileUp className="w-3.5 h-3.5" aria-hidden /> Upload PDF
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceMode === "compose"}
-            onClick={() => setSourceMode("compose")}
-            className={
-              "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill transition-colors " +
-              (sourceMode === "compose"
-                ? "bg-white text-tbb-navy shadow-tbb-sm"
-                : "text-tbb-ink-3 hover:text-tbb-navy")
-            }
-          >
-            <FileSignature className="w-3.5 h-3.5" aria-hidden /> Compose
-            from template
-          </button>
+            <option>— No templates added yet —</option>
+          </select>
+          <p className="text-xs text-tbb-ink-3">
+            Agreements are built from a saved template so the wording and
+            your signature are already in place.{" "}
+            <Link
+              href="/business-builder/templates"
+              className="font-bold text-tbb-blue hover:underline"
+            >
+              Add a document template
+            </Link>{" "}
+            to get started.
+          </p>
         </div>
       )}
 
-      {props.mode === "upload" && sourceMode === "compose" && composeAvailable && (
+      {props.mode === "upload" && composeAvailable && (
         <div className="space-y-3 border border-tbb-line rounded-md bg-white p-4">
           <label className="block">
             <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-              Pick a template
+              Choose from template
             </span>
             <select
               value={selectedTemplateId}
@@ -453,30 +422,6 @@ export function SendForSignatureForm(props: Props) {
         </div>
       )}
 
-      {props.mode === "upload" && sourceMode === "upload" && (
-        <div className="space-y-1">
-          <label className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-            Document <span className="text-tbb-danger">*</span>
-          </label>
-          <input
-            ref={fileInputRef}
-            required={sourceMode === "upload"}
-            type="file"
-            accept="application/pdf,image/*"
-            onChange={(e) =>
-              setPickedFileName(e.target.files?.[0]?.name ?? null)
-            }
-            disabled={isPending}
-            className="block w-full font-sans text-sm"
-          />
-          {pickedFileName && (
-            <p className="font-mono text-[10px] text-muted-foreground">
-              {pickedFileName}
-            </p>
-          )}
-        </div>
-      )}
-
       {props.mode === "existing-doc" && (
         <p className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Sending the document already stored for this engagement.
@@ -565,23 +510,10 @@ export function SendForSignatureForm(props: Props) {
         />
       </div>
 
-      <label className="flex items-start gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={autoSignAsMe}
-          onChange={(e) => setAutoSignAsMe(e.target.checked)}
-          disabled={isPending || !props.hasStoredSignature}
-          className="mt-1"
-        />
-        <span className="font-sans text-sm text-foreground">
-          Auto-sign as me first
-          {!props.hasStoredSignature && (
-            <span className="block font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground mt-0.5">
-              Upload a signature image at /business-builder/profile/signature to enable.
-            </span>
-          )}
-        </span>
-      </label>
+      {/* "Auto-sign as me first" is gone. The agreement is built from a
+          template that already carries the practice's signature, so adding
+          the sender as an extra order-0 signer signed the same document
+          twice and put a redundant name on the certificate of completion. */}
 
       {error && (
         <p
@@ -603,7 +535,7 @@ export function SendForSignatureForm(props: Props) {
           ) : (
             <Send className="w-4 h-4" aria-hidden />
           )}
-          {isPending ? "Sending…" : "Send for signature"}
+          {isPending ? "Sending…" : "Prepare Business Building Agreement"}
         </button>
         {props.onCancel && (
           <button

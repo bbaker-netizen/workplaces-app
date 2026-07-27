@@ -603,7 +603,7 @@ export function DocumentTemplatesManager({
               Pick a document to edit, or create a new one.
             </p>
             <p className="text-sm text-tbb-ink-3">
-              Document templates show up on the &quot;Send for signature&quot;
+              Document templates show up on the &quot;Prepare Business Building Agreement&quot;
               panel for any prospect or engagement.
             </p>
           </div>

@@ -325,16 +325,16 @@ export default async function CoachWelcomePage() {
       <Phase number="02" label="Sign" caption="Lock the engagement in writing">
         <Step
           icon={<FileSignature className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Send for signature"
+          title="Prepare the agreement"
           href="/business-builder/templates"
           hrefLabel="Set up your signature"
         >
           <p>
             Open any prospect, scroll to the Signing section, click{" "}
-            <strong>Send for signature</strong>. Upload your contract
-            PDF, add up to four signers (their contact email + name +
-            role), optional message, optional &quot;auto-sign as me&quot;
-            (only enabled if you&apos;ve uploaded your e-signature image at{" "}
+            <strong>Prepare Business Building Agreement</strong>. Choose
+            one of your saved templates, add up to four signers (their
+            contact email + name + role) and an optional message. Your
+            signature comes from the template itself, which you set up at{" "}
             <Link href="/business-builder/templates" className="text-tbb-blue underline">
               Templates &amp; signatures
             </Link>
