@@ -247,7 +247,12 @@ export function BuilderBuddy({
               />
             </div>
             <div className="flex-1 min-w-0 leading-tight">
-              <p className="text-base font-bold">Builder Buddy</p>
+              {/* text-white is explicit, not inherited. globals.css sets a
+                  base `p { color: var(--tbb-ink-2) }`, and a direct element
+                  rule beats the parent's inherited `text-white` — so a bare
+                  <p> on this dark header renders in dark grey. The subtitle
+                  below only looked right because it names its own colour. */}
+              <p className="text-base font-bold text-white">Builder Buddy</p>
               <p className="text-[11px] text-white/70 mt-0.5">{subtitle}</p>
             </div>
             <button
