@@ -1750,6 +1750,12 @@ and the per-engagement page gates are unchanged — both Builders hold
 `all_clients_access` and can still open anything by id. Tightening that
 would be a different decision.
 
+> **Superseded 2026-07-27 — see "Coach access becomes a real boundary"
+> below.** Leaving a view default in place and recording the permission
+> side as "a different decision" was wrong: the ask was that Jen's
+> clients are hers, and a toggle she can flip does not deliver that.
+> Bruce checked her access and found she still saw everything.
+
 **Verified:** `tsc --noEmit` and `next lint` clean; `next build`
 compiles. The 76 local prerender failures are all the pre-existing
 missing Clerk publishable key — 152 `Missing publishableKey` errors
@@ -1757,3 +1763,93 @@ across those 76 pages and zero errors of any other cause; Netlify has
 the key. **Not yet exercised against a live session** — the acceptance
 test is Bruce and Jen each loading the pipeline and seeing their own
 book, then Bruce flipping to "All clients" and seeing 88.
+
+## What was built — coach access becomes a real boundary (2026-07-27)
+
+Bruce checked Jen's access and found she could still see everything he
+could. He was right, and the previous entry recorded the reason as a
+decision he had made rather than work left undone. Migration `0093`.
+
+**Why the earlier pass didn't bite.** It changed which list a Business
+Builder LANDS on. `user_profiles.all_clients_access` defaulted TRUE, and
+`canCurrentBbAccessEngagement` short-circuits on that flag — so Jen was
+offered the All-clients toggle (one click, the whole book) and every
+client also opened by direct URL regardless of the toggle. The
+enforcement machinery from 0065 existed; it was simply switched off for
+everyone. **A scoped list is not a boundary. Never report one as if it
+were.**
+
+**Access now derives from ownership.** `canCurrentBbAccessEngagement`
+grants a coach an engagement when they are its assigned coach
+(`engagements.coach_id` → `coaches.user_profile_id`), when it is
+explicitly granted in `bb_client_access`, when it is the internal
+workspace, or when it has no coach at all. Ownership is already
+maintained on assignment (see the lead-Owner sync), so there is no
+second list to keep in step — which is why this was chosen over the
+manual grant list.
+
+The unclaimed arm is deliberate, same reasoning as `coachScopeWhere`: an
+engagement with no coach must not fall out of EVERY Builder's view at
+once, leaving work nobody can see or claim.
+
+**0093 does three things:** flips `all_clients_access` to false for
+existing coaches (the line that actually changes what Jen sees), makes
+false the column default, and moves the default on `bb_invite_access`
+too — a pending invite carries its own copy, and would otherwise hand
+the next Builder the whole book on first sign-in. master_admin rows are
+forced true.
+
+**Two holes closed at the same time:**
+
+- `getCurrentBbAccess`'s error fallback returned FULL access on any DB
+  failure, on the grounds that the read sits on the hot path and must
+  not take the app down. It returns own-book now. The app still loads;
+  a transient error can no longer hand one Builder the practice.
+- `getProspect` had no access check whatsoever — every lead opened by
+  pasting its id. Now owner-or-unclaimed, or reachable via the
+  engagement it converted into. Unowned leads stay visible to everyone
+  because the lead webhooks never set an owner.
+
+**Not yet exercised against a live session.** The acceptance test is Jen
+signing in and seeing only her clients, with no All-clients toggle.
+
+## What was built — deliverable drafting moved to the background (2026-07-27)
+
+"Draft from this meeting" errored out for both Builders.
+
+**It was never a drafting bug — there was no time to draft.** The action
+ran Opus inline in a server action. Netlify kills a synchronous function
+at ~26s on this plan; reading an hour-plus transcript and writing a
+long-form document takes minutes. The function died mid-run and the
+browser got a dead action back. The action-item extractor hit this
+exact wall and was moved to a Background Function, with a header comment
+explaining why — deliverables never got the same treatment. **Any Claude
+call over a transcript in this repo belongs in a background function.**
+
+`lib/deliverables/fireflies-draft.ts` (Clerk-free core) +
+`netlify/functions/draft-deliverable-background.mts` (15-minute budget).
+The server action authorizes — role gate AND
+`canCurrentBbAccessEngagement` — then enqueues. The core runs under
+`withSystemContext`: `withEngagementContext` authorizes through
+`ensureUserProfile()`, and a background run has no Clerk session, so it
+would deny every engagement and silently write nothing. Same trap as
+`topUpAllSeries` and the EA crons.
+
+**"It missed things from the meeting" was the output cap.** 8000 tokens
+is about 25 pages — enough for a short SOP, not for a business plan off
+a two-hour session. The draft stopped; it hadn't skipped anything, it
+never reached it. Raised to 32000 now the wall-clock exists, and
+`complete()` returns `stopReason` so truncation is CHECKED rather than
+assumed: a cut-off draft says so in its own header instead of reading as
+a thin meeting. Transcript truncation is surfaced the same way. The
+prompt now also asks for coverage over brevity explicitly.
+
+**`MeetingDeliverableButton` was written but never mounted on any page**
+— the Meetings library could only draft action items. It is on the page
+now.
+
+**The saved-documents attachment picker existed only in the two Inbox
+composers.** Writing from a prospect's own profile left uploading from
+disk as the only route to a document the app was already holding — the
+Climb PDF included. `ClientCommunicationsPanel` now carries the picker,
+sending by document id rather than shuttling bytes through the browser.
