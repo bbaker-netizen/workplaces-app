@@ -23,6 +23,7 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { sendGmailMessage, type EmailAttachment } from "@/lib/integrations/gmail";
 import { downloadDocumentBlob } from "@/lib/storage/blobs";
 import { isSmsConfigured, sendSms } from "@/lib/integrations/twilio";
@@ -141,6 +142,18 @@ export async function sendClientMessage(
     };
   }
   const data = parsed.data;
+
+  // Same tenant is not the same thing as yours to write to. Without this a
+  // Business Builder could send mail to another Builder's lead, under their
+  // own name, on a client they can no longer even open. Engagement-addressed
+  // messages are covered further down by withEngagementContext, which
+  // enforces the same grant at the foundation.
+  if (
+    data.prospectId &&
+    !(await canCurrentBbWriteProspect(data.prospectId))
+  ) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
 
   // Verify the target record is in our tenant.
   await withTenantContext(profile.orgId, async (tx) => {

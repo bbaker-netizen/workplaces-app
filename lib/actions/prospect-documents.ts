@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { documents, prospectActivities, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import {
   deleteDocumentBlob,
   uploadDocumentBlob,
@@ -35,6 +36,9 @@ export async function uploadProspectDocument(
   const prospectId = String(formData.get("prospectId") ?? "");
   const file = formData.get("file");
   if (!prospectId) return { ok: false, error: "Missing prospect." };
+  if (!(await canCurrentBbWriteProspect(prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
   if (!(file instanceof File) || file.size === 0)
     return { ok: false, error: "Choose a file to upload." };
   if (file.size > MAX_BYTES)
@@ -99,7 +103,10 @@ export async function deleteProspectDocument(
     return { ok: false, error: "Business Builders only." };
 
   try {
-    const removed = await withSystemContext(async (tx) => {
+    // Look the document up BEFORE deleting it, so the lead it hangs off can
+    // be access-checked. Resolving and deleting in one pass would delete
+    // another Builder's file and only then tell us whose it was.
+    const found = await withSystemContext(async (tx) => {
       const [doc] = await tx
         .select({
           prospectId: documents.prospectId,
@@ -108,11 +115,16 @@ export async function deleteProspectDocument(
         .from(documents)
         .where(eq(documents.id, id))
         .limit(1);
-      if (!doc || !doc.prospectId) return null;
-      await tx.delete(documents).where(eq(documents.id, id));
-      return doc;
+      return doc && doc.prospectId ? doc : null;
     });
-    if (!removed) return { ok: false, error: "Document not found." };
+    if (!found) return { ok: false, error: "Document not found." };
+    if (!(await canCurrentBbWriteProspect(found.prospectId!))) {
+      return { ok: false, error: "You don't have access to that lead." };
+    }
+    const removed = await withSystemContext(async (tx) => {
+      await tx.delete(documents).where(eq(documents.id, id));
+      return found;
+    });
     await deleteDocumentBlob(removed.blobKey).catch(() => {});
     revalidatePath(`/business-builder/pipeline/${removed.prospectId}`);
     return { ok: true, data: undefined };

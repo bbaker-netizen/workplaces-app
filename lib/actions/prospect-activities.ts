@@ -12,6 +12,7 @@ import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { prospectActivities, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { touchLastContact } from "./prospects";
 
 export type ActionResult<T = void> =
@@ -45,6 +46,8 @@ export async function logProspectActivity(
   if (profile.role !== "master_admin" && profile.role !== "coach")
     return { ok: false, error: "Business Builders only." };
 
+  // A lead you can't see is a lead you can't log against. Reads are gated by
+  // owner; every write path has to agree or the boundary is decorative.
   const parsed = logSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -52,6 +55,9 @@ export async function logProspectActivity(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   const data = parsed.data;
+  if (!(await canCurrentBbWriteProspect(data.prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
 
   const inserted = await withSystemContext(async (tx) => {
     const [p] = await tx

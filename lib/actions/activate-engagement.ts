@@ -27,6 +27,7 @@ import {
   type Prospect,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { createManagedDriveFolder } from "@/lib/actions/engagement-drive";
 import { referralRewardEmail } from "@/lib/email/templates";
@@ -167,6 +168,9 @@ export async function activateProspectAsEngagement(
   if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     return { ok: false, error: "Business Builders only." };
+  }
+  if (!(await canCurrentBbWriteProspect(prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
   }
   try {
     const result = await withSystemContext(async (tx) => {
@@ -353,6 +357,9 @@ export async function resetProspectEngagement(
   if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     return { ok: false, error: "Business Builders only." };
+  }
+  if (!(await canCurrentBbWriteProspect(prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
   }
   try {
     await withSystemContext(async (tx) => {

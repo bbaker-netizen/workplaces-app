@@ -25,6 +25,7 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { mentionEmail } from "@/lib/email/templates";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -55,6 +56,9 @@ export async function createProspectComment(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   const data = parsed.data;
+  if (!(await canCurrentBbWriteProspect(data.prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
 
   // Don't notify yourself even if the picker somehow included you.
   const notifyIds = Array.from(

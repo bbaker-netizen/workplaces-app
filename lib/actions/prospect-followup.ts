@@ -11,6 +11,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { prospectActivities, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 
 const schema = z.object({
@@ -57,6 +58,9 @@ export async function scheduleProspectFollowup(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." };
   }
   const { prospectId, date, time, note, location } = parsed.data;
+  if (!(await canCurrentBbWriteProspect(prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
   const loc = location?.trim() || null;
 
   try {
@@ -138,8 +142,13 @@ export async function clearProspectFollowup(
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     return { ok: false, error: "Business Builders only." };
   }
+  // Shape first — the access check queries by id, and a malformed one would
+  // error in the driver rather than returning a clean "no access".
   if (!z.string().uuid().safeParse(prospectId).success) {
     return { ok: false, error: "Invalid id." };
+  }
+  if (!(await canCurrentBbWriteProspect(prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
   }
   try {
     await withSystemContext(async (tx) => {

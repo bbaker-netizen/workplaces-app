@@ -25,6 +25,7 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import {
   createMeetingWithInvite,
   type CalendarAttachment,
@@ -97,6 +98,9 @@ export async function scheduleProspectMeeting(
     };
   }
   const data = parsed.data;
+  if (!(await canCurrentBbWriteProspect(data.prospectId))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
   const startAt = new Date(data.startAt);
   if (Number.isNaN(startAt.getTime())) {
     return { ok: false, error: "That date and time isn't valid." };
