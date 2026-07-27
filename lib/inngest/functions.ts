@@ -1,6 +1,22 @@
 /**
- * Inngest functions registered against `inngest`. Each one is a
- * background job; the /api/inngest mount serves them to Inngest cloud.
+ * Inngest functions registered against `inngest`.
+ *
+ * ⚠️ THIS IS NOT WHAT RUNS SCHEDULED WORK IN THIS APP. ⚠️
+ *
+ * Production scheduling is Netlify Scheduled Functions: a thin trigger
+ * in `netlify/functions/*.mts` calling a bearer-guarded route under
+ * `app/api/cron/*`. Several jobs below (calendar-sync, fireflies-sync)
+ * exist in BOTH places, and it is the Netlify pair that fires.
+ *
+ * This cost a full working day once: the entire Executive Assistant
+ * module was built as Inngest functions, deployed green, and never ran
+ * a single time. Nothing surfaced the failure, because a job that is
+ * never invoked throws no error — the first symptom was an email that
+ * did not arrive.
+ *
+ * **Adding a scheduled job? Add a `netlify/functions/*.mts` trigger and
+ * an `app/api/cron/*` route. Do not add it here.** Anything below is
+ * either legacy or an event handler kept for reference.
  *
  * Phase 4 + 4.5. Functions:
  *   - dueSoonFlush      — Mon–Fri 09:00 MT email reminder for action
@@ -209,109 +225,6 @@ export const firefliesSync = inngest.createFunction(
   },
 );
 
-/* ------------------------ EA: morning digest ------------------------ */
-
-export const eaDailyDigest = inngest.createFunction(
-  { id: "ea-daily-digest" },
-  // 13:00 UTC Mon–Fri = 07:00 MDT / 06:00 MST.
-  //
-  // Note the DST asymmetry: this lands at 06:00 through the winter. It
-  // is pinned to UTC because Inngest crons are, and a fixed 07:00 MT
-  // would need two schedules. Arriving an hour early in winter is the
-  // harmless side of the trade; arriving an hour late would mean the
-  // briefing lands after the day has started.
-  { cron: "0 13 * * 1-5" },
-  async ({ step }) => {
-    return step.run("digest", async () => {
-      const { runDailyDigest } = await import("@/lib/ea/digest");
-      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
-      return withHeartbeat(
-        "ea-daily-digest",
-        () => runDailyDigest(),
-        (r) => r.sent,
-        (r) => gradeSweep({ succeeded: r.sent + r.skipped, failed: r.failed }),
-      );
-    });
-  },
-);
-
-/* -------------------------- EA: inbox sweep -------------------------- */
-
-export const eaInboxSweep = inngest.createFunction(
-  { id: "ea-inbox-sweep" },
-  // Fifteen past the hour, EVERY day. Offset from the other hourly jobs
-  // so the two are not competing for the same Google rate limit.
-  //
-  // Seven days, unlike every other EA schedule, because this job does
-  // not send anything — it writes a draft into Gmail. The weekday
-  // restriction elsewhere exists to stop mail going OUT at odd hours,
-  // and a draft disturbs nobody. Meanwhile the cost of waiting is real:
-  // a prospect asking for time on Friday evening would otherwise sit
-  // untouched until Monday morning, which is the one kind of email where
-  // response speed decides whether the meeting happens.
-  { cron: "15 * * * *" },
-  async ({ step }) => {
-    return step.run("sweep", async () => {
-      const { runInboxSweep } = await import("@/lib/ea/inbox-triage");
-      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
-      return withHeartbeat(
-        "ea-inbox-sweep",
-        () => runInboxSweep(),
-        (r) => r.drafted,
-        (r) =>
-          gradeSweep({ succeeded: r.drafted + r.skipped, failed: r.failed }),
-      );
-    });
-  },
-);
-
-/* ------------------------ EA: client chasing ------------------------ */
-
-export const eaClientNudge = inngest.createFunction(
-  { id: "ea-client-nudge" },
-  // Monday 16:00 UTC = 10:00 MDT / 09:00 MST. Inside the working window
-  // year-round, and Monday morning is when a week's commitments are
-  // still salvageable.
-  { cron: "0 16 * * 1" },
-  async ({ step }) => {
-    return step.run("nudge", async () => {
-      const { runClientNudge } = await import("@/lib/ea/client-nudge");
-      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
-      return withHeartbeat(
-        "ea-client-nudge",
-        () => runClientNudge(),
-        (r) => r.itemsChased,
-        (r) =>
-          gradeSweep({ succeeded: r.recipientsEmailed, failed: r.failed }),
-      );
-    });
-  },
-);
-
-/* ------------------------ EA: Friday rollup ------------------------ */
-
-export const eaFridayRollup = inngest.createFunction(
-  { id: "ea-friday-rollup" },
-  // Friday 22:00 UTC = 16:00 MDT / 15:00 MST. Late enough that the week
-  // is done, early enough that it is still Friday.
-  { cron: "0 22 * * 5" },
-  async ({ step }) => {
-    return step.run("rollup", async () => {
-      const { runFridayRollup } = await import("@/lib/ea/friday-rollup");
-      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
-      // Records its own heartbeat AFTER rendering, so the rollup it just
-      // sent reports last week's run for itself rather than this one.
-      // That is correct: the section describes what had happened when the
-      // email was written.
-      return withHeartbeat(
-        "ea-friday-rollup",
-        () => runFridayRollup(),
-        (r) => r.sent,
-        (r) => gradeSweep({ succeeded: r.sent, failed: r.failed }),
-      );
-    });
-  },
-);
 
 /* --------------------- Session series horizon --------------------- */
 
@@ -340,8 +253,4 @@ export const allFunctions = [
   calendarSync,
   firefliesSync,
   sessionSeriesTopUp,
-  eaDailyDigest,
-  eaInboxSweep,
-  eaClientNudge,
-  eaFridayRollup,
 ];

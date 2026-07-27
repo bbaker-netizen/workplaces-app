@@ -62,12 +62,15 @@ const MATCH_WINDOW_MINUTES = 120;
 const LOOKBACK_DAYS = 7;
 
 /**
- * Most attachments per run. Attaching emits `bbs.fireflies.attached`,
- * which drafts action items, so an unbounded first run could produce a
- * week of drafts in one burst. Capped for the same reason the recap
- * sweep is.
+ * Most attachments per run.
+ *
+ * Each attachment drafts action items from the transcript, and the recap
+ * sweep that follows drafts a recap — two Claude calls per session. The
+ * cron route has 300 seconds, so this is kept low deliberately: three
+ * sessions an hour drains any realistic backlog within a day without
+ * risking a timeout that would leave the run half-finished.
  */
-const MAX_ATTACH_PER_RUN = 5;
+const MAX_ATTACH_PER_RUN = 3;
 
 export type TranscriptMatchResult = {
   considered: number;
@@ -192,13 +195,29 @@ export async function attachTranscriptsToSessions(
           ),
       );
 
-      // Same event the manual paste emits, so action-item drafting fires
-      // exactly as it always has. This is what makes drafting automatic
-      // rather than a "remember to press the button" step.
-      const { emitInngestEvent } = await import("@/lib/inngest");
-      await emitInngestEvent("bbs.fireflies.attached", {
-        sessionId: m.sessionId,
-      });
+      // Draft the action items directly rather than emitting the
+      // `bbs.fireflies.attached` Inngest event the manual paste uses.
+      //
+      // That event is consumed by an Inngest function, and Inngest is
+      // NOT what runs scheduled work in this app — every live job is a
+      // Netlify Scheduled Function calling a cron route. Emitting it
+      // here would have looked correct and done nothing, which is the
+      // same mistake that stopped the whole EA module firing.
+      //
+      // Best-effort: a failed extraction must not undo the attachment,
+      // because the transcript link is useful on its own and the recap
+      // sweep runs off it moments later.
+      try {
+        const { extractFromFirefliesAsSystem } = await import(
+          "@/lib/actions/fireflies-extract"
+        );
+        await extractFromFirefliesAsSystem(m.sessionId);
+      } catch (e) {
+        console.error(
+          `[ea] action-item extraction failed for ${m.sessionId}:`,
+          e,
+        );
+      }
 
       out.attached++;
     } catch (e) {
