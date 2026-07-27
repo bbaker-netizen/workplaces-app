@@ -267,7 +267,12 @@ function InboxComposerModal({
               className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
             />
           </label>
-          <label className="block">
+          {/* NOT a <label>. A label with no `for` forwards clicks to its
+              first labelable descendant, and inside the editor that's the
+              Bold button — so clicking into the text to type silently
+              switched Bold on, and every click back after switching it off
+              switched it on again. The editor carries its own ariaLabel. */}
+          <div className="block">
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Message
             </span>
@@ -281,7 +286,7 @@ function InboxComposerModal({
                 autoFocus
               />
             </div>
-          </label>
+          </div>
           {(row.prospectId || row.engagementId) && (
             <EmailAttachmentPicker
               prospectId={row.prospectId}

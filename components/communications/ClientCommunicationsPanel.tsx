@@ -96,6 +96,23 @@ export function ClientCommunicationsPanel({
     replyTo?: CommunicationRow;
     attachments: Attachment[];
   }>(null);
+  // Which template (if any) is currently loaded into the composer, plus
+  // what the subject/body were immediately before it was applied.
+  //
+  // Picking a template overwrites BOTH the subject and the body in one
+  // go. Rewriting the body afterwards is the natural thing to do, and
+  // the subject then silently rides along — that's how a hand-written
+  // note went out under the booking sequence's subject line. Tracking
+  // the applied template lets us show it, undo it, and catch the
+  // subject/body mismatch at send time.
+  const [appliedTemplate, setAppliedTemplate] = useState<null | {
+    id: string;
+    name: string;
+    subject: string;
+    body: string;
+    prevSubject: string;
+    prevBody: string;
+  }>(null);
   const [error, setError] = useState<string | null>(null);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -159,6 +176,7 @@ export function ClientCommunicationsPanel({
 
   function openEmailCompose(replyTo?: CommunicationRow) {
     setError(null);
+    setAppliedTemplate(null);
     setComposing({
       channel: "email",
       to: replyTo?.fromAddress ?? contactEmail ?? "",
@@ -221,6 +239,24 @@ export function ClientCommunicationsPanel({
     if (!composedBody.trim()) {
       setError("Write a message before sending.");
       return;
+    }
+    // A template was loaded, the message has since been rewritten, but the
+    // subject is still the template's. That combination is almost always a
+    // mistake — it's how "Your ninety minutes, and the paperwork first"
+    // ended up on top of a hand-written note. Ask before it leaves.
+    if (composing.channel === "email" && appliedTemplate) {
+      const bodyRewritten =
+        composedBody.trim() !== appliedTemplate.body.trim();
+      const subjectStillTemplate =
+        composing.subject.trim() === appliedTemplate.subject.trim();
+      if (bodyRewritten && subjectStillTemplate) {
+        const proceed = window.confirm(
+          `The subject line is still "${appliedTemplate.subject}" from the ` +
+            `"${appliedTemplate.name}" template, but you've rewritten the ` +
+            `message underneath it.\n\nSend it with that subject anyway?`,
+        );
+        if (!proceed) return;
+      }
     }
     setError(null);
     startTransition(async () => {
@@ -476,6 +512,15 @@ export function ClientCommunicationsPanel({
                       // Reset selection so picking the same template
                       // again re-applies it.
                       e.target.value = "";
+                      const picked = emailTemplates.find(
+                        (t) => t.id === tmplId,
+                      );
+                      // Snapshot what's in the composer BEFORE the
+                      // overwrite so "Remove" can put it back. The body
+                      // lives in the editor, not in `composing.body`.
+                      const prevBody =
+                        editorRef.current?.getMarkdown() ?? composing.body;
+                      const prevSubject = composing.subject;
                       const r = await resolveTemplateForProspect({
                         templateId: tmplId,
                         prospectId,
@@ -488,6 +533,14 @@ export function ClientCommunicationsPanel({
                         });
                         // Load the template into the rich-text editor.
                         editorRef.current?.setMarkdown(r.body);
+                        setAppliedTemplate({
+                          id: tmplId,
+                          name: picked?.name ?? "template",
+                          subject: r.subject,
+                          body: r.body,
+                          prevSubject,
+                          prevBody,
+                        });
                       } else {
                         setError(r.error);
                       }
@@ -496,12 +549,45 @@ export function ClientCommunicationsPanel({
                     className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                   >
                     <option value="">— Pick a template —</option>
-                    {emailTemplates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}{t.category !== "other" ? ` · ${t.category}` : ""}
-                      </option>
+                    {groupTemplates(emailTemplates).map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.items.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
+                  {appliedTemplate && (
+                    <span className="mt-1.5 inline-flex items-center gap-2 text-[11px] bg-white border border-tbb-line rounded-pill px-2.5 py-1">
+                      <span className="text-tbb-ink-3">
+                        Subject and message loaded from
+                      </span>
+                      <span className="font-bold text-tbb-navy normal-case tracking-normal">
+                        {appliedTemplate.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(ev) => {
+                          ev.preventDefault();
+                          setComposing({
+                            ...composing,
+                            subject: appliedTemplate.prevSubject,
+                            body: appliedTemplate.prevBody,
+                          });
+                          editorRef.current?.setMarkdown(
+                            appliedTemplate.prevBody,
+                          );
+                          setAppliedTemplate(null);
+                        }}
+                        disabled={isPending}
+                        className="text-tbb-blue hover:underline font-bold"
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  )}
                 </label>
               )}
               <label className="block">
@@ -520,11 +606,19 @@ export function ClientCommunicationsPanel({
               </label>
             </>
           )}
-          <label className="block">
-            <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-              Message
-            </span>
-            {composing.channel === "email" ? (
+          {/* The email branch is a <div>, NOT a <label>. A label with no
+              `for` forwards clicks to its first labelable descendant, and
+              inside the rich-text editor that's the Bold button — so
+              clicking into the message to type silently switched Bold on,
+              and every click back after switching it off switched it on
+              again. The editor carries its own ariaLabel instead. The SMS
+              branch keeps a real <label>: a textarea is labelable, so the
+              association is correct there. */}
+          {composing.channel === "email" ? (
+            <div className="block">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Message
+              </span>
               <div className="mt-1">
                 <RichTextEditor
                   key={`${composing.channel}:${composing.replyTo?.id ?? "new"}`}
@@ -536,7 +630,12 @@ export function ClientCommunicationsPanel({
                   ariaLabel="Email body"
                 />
               </div>
-            ) : (
+            </div>
+          ) : (
+            <label className="block">
+              <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                Message
+              </span>
               <textarea
                 rows={3}
                 value={composing.body}
@@ -551,8 +650,8 @@ export function ClientCommunicationsPanel({
                     : "WhatsApp message text."
                 }
               />
-            )}
-          </label>
+            </label>
+          )}
           {composing.channel === "email" && (
             <div className="space-y-2">
               {composing.attachments.length > 0 && (
@@ -738,6 +837,65 @@ function fileToBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Group the template picker by category so a longer list stays
+ * navigable, and — more to the point — so the automation-driven
+ * templates read as what they are.
+ *
+ * The booking follow-through three are written for the NDA sequence the
+ * cron fires around a booked session. Their subject lines only make
+ * sense in that context ("Your ninety minutes, and the paperwork
+ * first"), and sitting unlabelled in the same flat list as the ordinary
+ * outreach templates they look like any other choice. They stay
+ * pickable — sending one by hand is legitimate — but they sort last
+ * under a heading that says where they belong.
+ */
+const TEMPLATE_GROUP_LABELS: Record<string, string> = {
+  intro: "Intro",
+  follow_up: "Follow up",
+  proposal: "Proposal",
+  contract: "Contract",
+  onboarding: "Onboarding",
+  other: "Other",
+  booking_follow_through: "Booking sequence (normally sent automatically)",
+};
+
+// Display order. Anything unrecognised falls in just before the
+// automation group.
+const TEMPLATE_GROUP_ORDER = [
+  "intro",
+  "follow_up",
+  "proposal",
+  "contract",
+  "onboarding",
+  "other",
+  "booking_follow_through",
+];
+
+function groupTemplates(
+  templates: EmailTemplateOption[],
+): { label: string; items: EmailTemplateOption[] }[] {
+  const byCategory = new Map<string, EmailTemplateOption[]>();
+  for (const t of templates) {
+    const key = t.category || "other";
+    const bucket = byCategory.get(key);
+    if (bucket) bucket.push(t);
+    else byCategory.set(key, [t]);
+  }
+  const rank = (key: string) => {
+    const i = TEMPLATE_GROUP_ORDER.indexOf(key);
+    // Unknown categories sort after the known ones but before the
+    // automation group, which must stay last.
+    return i === -1 ? TEMPLATE_GROUP_ORDER.length - 1.5 : i;
+  };
+  return Array.from(byCategory.entries())
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([key, items]) => ({
+      label: TEMPLATE_GROUP_LABELS[key] ?? key.replace(/_/g, " "),
+      items: items.slice().sort((a, b) => a.name.localeCompare(b.name)),
+    }));
 }
 
 function formatBytes(n: number): string {

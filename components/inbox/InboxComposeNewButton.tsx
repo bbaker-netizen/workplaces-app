@@ -333,8 +333,11 @@ function ComposeModal({
             />
           </label>
 
-          {/* Body */}
-          <label className="block">
+          {/* Body. NOT a <label>: a label with no `for` forwards clicks to
+              its first labelable descendant, which inside the editor is the
+              Bold button — clicking into the text to type switched Bold on,
+              and clicking back after switching it off switched it on again. */}
+          <div className="block">
             <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
               Message
             </span>
@@ -344,9 +347,10 @@ function ComposeModal({
                 initialMarkdown={body}
                 onChange={setBody}
                 placeholder="Write your message…"
+                ariaLabel="Message body"
               />
             </div>
-          </label>
+          </div>
 
           {/* Attach existing documents (Climb PDF, etc.) — only once we know
               which prospect/engagement the message is for. */}
