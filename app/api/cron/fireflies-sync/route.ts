@@ -41,7 +41,32 @@ export async function GET(req: Request) {
 
   try {
     const result = await syncAllEngagementMeetings();
-    return NextResponse.json({ ok: true, ...result });
+
+    // EA: pair transcripts to their sessions and draft any missing
+    // recaps. Rides this job because it must run AFTER the meetings sync
+    // above has refreshed the data it matches against, which is what
+    // makes "within an hour of the transcript landing" true without a
+    // second schedule.
+    //
+    // A separate try/catch: a recap failure must not fail the meetings
+    // sync, which is the part clients see in their portal.
+    let recaps: unknown = null;
+    try {
+      const { runRecapSweep } = await import("@/lib/ea/recap-sweep");
+      const { gradeSweep, withHeartbeat } = await import("@/lib/ea/job-runs");
+      recaps = await withHeartbeat(
+        "ea-recap-sweep",
+        () => runRecapSweep(),
+        (r) => r.drafted,
+        (r) =>
+          gradeSweep({ succeeded: r.drafted + r.skipped, failed: r.failed }),
+      );
+    } catch (e) {
+      console.error("[cron/fireflies-sync] EA recap sweep failed:", e);
+      recaps = { error: e instanceof Error ? e.message : String(e) };
+    }
+
+    return NextResponse.json({ ok: true, ...result, recaps });
   } catch (e) {
     console.error("[cron/fireflies-sync] failed:", e);
     return NextResponse.json(
