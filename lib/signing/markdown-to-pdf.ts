@@ -71,10 +71,43 @@ export type MarkdownPdfHeader = {
   date?: string;
 };
 
+/**
+ * The execution ("Signatures") block appended to the end of an agreement.
+ *
+ * An agreement that ends mid-sentence with no place to sign doesn't read as a
+ * contract, and the practice's own signature has to appear ON the document —
+ * not only on the certificate page that gets appended after everyone signs.
+ * Relying on each template to carry its own signature block put that on
+ * whoever wrote the template, and it was silently missing.
+ */
+export type MarkdownPdfExecution = {
+  /** The practice's side, pre-signed from the sender's stored signature. */
+  practice: {
+    /** Legal/entity name shown above the rule, e.g. "HR All-In Inc." */
+    entityName?: string | null;
+    /** Person signing for the practice. */
+    signerName: string;
+    roleLabel?: string | null;
+    /** data:image/png|jpeg;base64,… — drawn onto the rule when present. */
+    signatureImageData?: string | null;
+    /** Defaults to today. */
+    dateString?: string | null;
+  };
+  /** One ruled block per counter-signer; filled in when they sign. */
+  signers: Array<{
+    name: string;
+    roleLabel?: string | null;
+    /** Company/entity the signer represents, when known. */
+    entityName?: string | null;
+  }>;
+};
+
 export type MarkdownPdfOptions = {
   title: string;
   bodyMarkdown: string;
   header?: MarkdownPdfHeader;
+  /** Omit to render the body alone (previous behaviour). */
+  execution?: MarkdownPdfExecution;
 };
 
 export async function renderMarkdownToPdf(
@@ -122,6 +155,10 @@ export async function renderMarkdownToPdf(
     renderHtml(ctx, body);
   } else {
     renderMarkdown(ctx, body);
+  }
+
+  if (options.execution) {
+    await drawExecutionSection(ctx, options.execution);
   }
 
   // Stamp page numbers on every page now that we know the total.
@@ -851,5 +888,189 @@ function drawRuns(
 function ensureSpace(ctx: RenderCtx, needed: number): void {
   if (ctx.cursorY - needed < CONTENT_BOTTOM) {
     startNewPage(ctx);
+  }
+}
+
+/* ----------------------- execution / signatures ----------------------- */
+
+/** Height one signature block occupies, including its trailing gap. */
+const SIG_BLOCK_HEIGHT = 96;
+/** Width of the ruled signing line. */
+const SIG_RULE_WIDTH = 260;
+/** Cap on the drawn signature image so a large upload can't tower over the
+ *  rule it sits on. */
+const SIG_IMAGE_MAX_H = 34;
+
+/**
+ * Append the "Signatures" section: a short execution sentence, the practice's
+ * pre-signed block, then a ruled block per counter-signer.
+ *
+ * Kept whole where it fits — the heading and the first block are placed
+ * together, so a page break can't strand "Signatures" alone at the foot of a
+ * page with the actual signing overleaf.
+ */
+async function drawExecutionSection(
+  ctx: RenderCtx,
+  ex: MarkdownPdfExecution,
+): Promise<void> {
+  ensureSpace(ctx, HEADING_SPACING_BEFORE + FONT_H2 * LINE_HEIGHT_HEADING + 28 + SIG_BLOCK_HEIGHT);
+  ctx.cursorY -= HEADING_SPACING_BEFORE;
+
+  drawTextRun(ctx, "Signatures", {
+    font: ctx.fonts.bold,
+    size: FONT_H2,
+    color: STEEL_BLUE,
+    lineHeight: LINE_HEIGHT_HEADING,
+  });
+  ctx.cursorY -= HEADING_SPACING_AFTER;
+
+  drawTextRun(
+    ctx,
+    "By signing below, the parties agree to the terms set out in this agreement.",
+    {
+      font: ctx.fonts.regular,
+      size: FONT_BODY,
+      color: INK,
+      lineHeight: LINE_HEIGHT_BODY,
+    },
+  );
+  ctx.cursorY -= PARAGRAPH_SPACING * 1.5;
+
+  // The practice, already signed.
+  await drawSignatureBlock(ctx, {
+    entityName: ex.practice.entityName ?? null,
+    name: ex.practice.signerName,
+    roleLabel: ex.practice.roleLabel ?? null,
+    signatureImageData: ex.practice.signatureImageData ?? null,
+    dateString: ex.practice.dateString ?? defaultDateString(),
+  });
+
+  // Counter-signers — ruled, dated on signing.
+  for (const s of ex.signers) {
+    await drawSignatureBlock(ctx, {
+      entityName: s.entityName ?? null,
+      name: s.name,
+      roleLabel: s.roleLabel ?? null,
+      signatureImageData: null,
+      dateString: null,
+    });
+  }
+}
+
+async function drawSignatureBlock(
+  ctx: RenderCtx,
+  b: {
+    entityName: string | null;
+    name: string;
+    roleLabel: string | null;
+    signatureImageData: string | null;
+    dateString: string | null;
+  },
+): Promise<void> {
+  ensureSpace(ctx, SIG_BLOCK_HEIGHT);
+
+  if (b.entityName) {
+    ctx.page.drawText(b.entityName, {
+      x: MARGIN,
+      y: ctx.cursorY - FONT_BODY,
+      size: FONT_BODY,
+      font: ctx.fonts.bold,
+      color: INK,
+    });
+    ctx.cursorY -= FONT_BODY * LINE_HEIGHT_BODY + 4;
+  }
+
+  // Signature image sits ON the rule, so it reads as a signature rather than
+  // a picture pasted nearby. Drawn before the rule so the rule under it stays
+  // visible either way.
+  if (b.signatureImageData) {
+    const embedded = await embedSignature(ctx.pdf, b.signatureImageData);
+    if (embedded) {
+      const scale = Math.min(
+        SIG_IMAGE_MAX_H / embedded.height,
+        SIG_RULE_WIDTH / embedded.width,
+        1,
+      );
+      const w = embedded.width * scale;
+      const h = embedded.height * scale;
+      ctx.page.drawImage(embedded.image, {
+        x: MARGIN + 4,
+        y: ctx.cursorY - h + 4,
+        width: w,
+        height: h,
+      });
+    }
+  }
+
+  // The rule itself.
+  const ruleY = ctx.cursorY - SIG_IMAGE_MAX_H;
+  ctx.page.drawLine({
+    start: { x: MARGIN, y: ruleY },
+    end: { x: MARGIN + SIG_RULE_WIDTH, y: ruleY },
+    thickness: 0.75,
+    color: MUTED,
+  });
+
+  // Date rule, to the right of the signature.
+  const dateX = MARGIN + SIG_RULE_WIDTH + 32;
+  const dateRuleWidth = Math.min(140, CONTENT_WIDTH - SIG_RULE_WIDTH - 32);
+  ctx.page.drawLine({
+    start: { x: dateX, y: ruleY },
+    end: { x: dateX + dateRuleWidth, y: ruleY },
+    thickness: 0.75,
+    color: MUTED,
+  });
+  if (b.dateString) {
+    ctx.page.drawText(b.dateString, {
+      x: dateX + 4,
+      y: ruleY + 5,
+      size: FONT_BODY - 1,
+      font: ctx.fonts.regular,
+      color: INK,
+    });
+  }
+
+  // Captions under both rules.
+  const captionY = ruleY - 12;
+  const caption = b.roleLabel ? `${b.name} — ${b.roleLabel}` : b.name;
+  ctx.page.drawText(caption, {
+    x: MARGIN,
+    y: captionY,
+    size: 9,
+    font: ctx.fonts.regular,
+    color: MUTED,
+  });
+  ctx.page.drawText("Date", {
+    x: dateX,
+    y: captionY,
+    size: 9,
+    font: ctx.fonts.regular,
+    color: MUTED,
+  });
+
+  ctx.cursorY = captionY - 24;
+}
+
+/** Decode a data URL and embed it. Returns null for anything unparseable —
+ *  a bad stored signature must not take the whole agreement down. */
+async function embedSignature(
+  pdf: PDFDocument,
+  dataUrl: string,
+): Promise<{
+  image: Awaited<ReturnType<PDFDocument["embedPng"]>>;
+  width: number;
+  height: number;
+} | null> {
+  try {
+    const m = /^data:image\/(png|jpe?g);base64,(.+)$/i.exec(dataUrl.trim());
+    if (!m) return null;
+    const bytes = Buffer.from(m[2], "base64");
+    const image =
+      m[1].toLowerCase() === "png"
+        ? await pdf.embedPng(bytes)
+        : await pdf.embedJpg(bytes);
+    return { image, width: image.width, height: image.height };
+  } catch {
+    return null;
   }
 }

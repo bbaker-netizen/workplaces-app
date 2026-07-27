@@ -26,6 +26,7 @@ import {
   coaches,
   documents,
   engagements,
+  orgs,
   prospectActivities,
   prospects,
   signatureEnvelopes,
@@ -480,6 +481,30 @@ export async function createEnvelopeFromComposed(input: {
     };
   }
 
+  // The sender's own details for the execution block. The agreement carries
+  // the practice's signature ON the document — previously it appeared only on
+  // the certificate page appended after everyone had signed, so the contract
+  // itself ended with no place to sign and nothing from our side.
+  const sender = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({
+        fullName: userProfiles.fullName,
+        signatureImageData: userProfiles.signatureImageData,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, profile.userProfileId))
+      .limit(1);
+    return row ?? null;
+  });
+  const orgName = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({ name: orgs.name })
+      .from(orgs)
+      .where(eq(orgs.type, "master"))
+      .limit(1);
+    return row?.name ?? null;
+  });
+
   // Render markdown → PDF bytes.
   let pdfBytes: Uint8Array;
   try {
@@ -490,6 +515,19 @@ export async function createEnvelopeFromComposed(input: {
       title: input.documentTitle,
       bodyMarkdown: input.bodyMarkdown,
       header: { title: headerTitle },
+      execution: {
+        practice: {
+          entityName: orgName,
+          signerName: sender?.fullName ?? profile.email,
+          roleLabel: "Business Builder",
+          signatureImageData: sender?.signatureImageData ?? null,
+        },
+        signers: input.signers.map((s) => ({
+          name: s.name,
+          roleLabel: s.roleLabel ?? null,
+          entityName: headerTitle || null,
+        })),
+      },
     });
   } catch (e) {
     console.error("[createEnvelopeFromComposed] PDF render failed:", e);
