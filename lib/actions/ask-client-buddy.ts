@@ -10,20 +10,9 @@
  * assessment numbers, coach-side tooling).
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@/lib/ai/anthropic";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import type { BuddyMessage } from "@/lib/actions/ask-buddy";
-
-let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
-  if (cachedClient) return cachedClient;
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    throw new Error("ANTHROPIC_API_KEY is not set in Netlify env vars.");
-  }
-  cachedClient = new Anthropic({ apiKey: key });
-  return cachedClient;
-}
 
 const SYSTEM_PROMPT = `You are Builder Buddy — the friendly assistant inside the client portal of The Builder, the application a Workplaces Business Builder (business coach) uses to run their engagement with this client.
 
@@ -79,24 +68,18 @@ export async function askClientBuddy(
     const ctx = `Current page: ${currentPath}\nClient name: ${profile.fullName}`;
     const system = SYSTEM_PROMPT + "\n\n--- Live context ---\n" + ctx;
 
-    const response = await client().messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 1024,
-      temperature: 0.4,
-      system: [
-        {
-          type: "text",
-          text: system,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
+    // Shared wrapper, not a client built here — see the note in ask-buddy.
+    // A locally built client skips the sampling guard, and sonnet-5 rejects
+    // `temperature` with a 400.
+    const result = await complete({
+      system,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      model: "claude-sonnet-5",
+      maxTokens: 1024,
+      temperature: 0.4,
     });
 
-    const reply = response.content
-      .map((b) => (b.type === "text" ? b.text : ""))
-      .join("")
-      .trim();
+    const reply = result.text.trim();
 
     if (!reply) {
       return { ok: false, error: "Buddy didn't say anything back. Try again?" };

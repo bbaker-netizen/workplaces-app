@@ -12,7 +12,7 @@
  * follow-up turns stay cheap.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@/lib/ai/anthropic";
 import { eq } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { userProfiles } from "@/lib/db/schema";
@@ -176,33 +176,24 @@ export async function askBuddy(
         "Add your Anthropic API key in Settings \u2192 Profile to use Ask Buddy.",
     };
   }
-  const anthropic = new Anthropic({ apiKey });
-
   try {
     const ctx = `Current page: ${currentPath}\nBusiness Builder name: ${profile.fullName}`;
     const system = SYSTEM_PROMPT + "\n\n--- Live context ---\n" + ctx;
 
-    const response = await anthropic.messages.create({
+    // Through the shared wrapper, not a client built here. Building one
+    // locally is what broke Buddy: it meant this call never saw the
+    // `modelAcceptsSampling` guard, so `temperature: 0.4` went to
+    // claude-sonnet-5, which rejects sampling parameters outright with a 400.
+    const result = await complete({
+      system,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
       model: "claude-sonnet-5",
-      max_tokens: 1024,
+      maxTokens: 1024,
       temperature: 0.4,
-      system: [
-        {
-          type: "text",
-          text: system,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      apiKey,
     });
 
-    const reply = response.content
-      .map((b) => (b.type === "text" ? b.text : ""))
-      .join("")
-      .trim();
+    const reply = result.text.trim();
 
     if (!reply) {
       return {

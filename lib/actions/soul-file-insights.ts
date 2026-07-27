@@ -15,7 +15,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@/lib/ai/anthropic";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   bbsSessions,
@@ -24,16 +24,6 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 
-let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
-  if (cachedClient) return cachedClient;
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    throw new Error("ANTHROPIC_API_KEY missing — needed for insight extraction.");
-  }
-  cachedClient = new Anthropic({ apiKey: key });
-  return cachedClient;
-}
 
 const SYSTEM_PROMPT = `You are reading a Coach coaching session transcript or notes between Bruce (the Coach) and a client. Your job: pull out 3-6 observations worth adding to the client's long-term Soul File — the document Bruce keeps about who this business is and where it's going.
 
@@ -122,30 +112,18 @@ export async function extractSoulFileInsights(
   // Ask Claude for insights.
   let bulletText = "";
   try {
-    const r = await client().messages.create({
+    // Shared wrapper — a locally built client skips the sampling guard, and
+    // sonnet-5 rejects `temperature` with a 400.
+    const r = await complete({
+      system: SYSTEM_PROMPT,
+      user:
+        "Session transcript / notes to extract Soul File insights from:\n\n" +
+        ctx.sourceText,
       model: "claude-sonnet-5",
-      max_tokens: 1500,
+      maxTokens: 1500,
       temperature: 0.4,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content:
-            "Session transcript / notes to extract Soul File insights from:\n\n" +
-            ctx.sourceText,
-        },
-      ],
     });
-    bulletText = r.content
-      .map((b) => (b.type === "text" ? b.text : ""))
-      .join("")
-      .trim();
+    bulletText = r.text.trim();
   } catch (e) {
     return {
       ok: false,

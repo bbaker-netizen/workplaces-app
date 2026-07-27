@@ -29,7 +29,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 let cachedClient: Anthropic | null = null;
-function client(): Anthropic {
+function client(apiKey?: string): Anthropic {
+  // A caller-supplied key (Ask Buddy uses each Business Builder's own) gets a
+  // fresh client and is deliberately NOT cached — caching it would leak one
+  // user's key into the next request on the same warm instance.
+  if (apiKey) return new Anthropic({ apiKey });
   if (cachedClient) return cachedClient;
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) {
@@ -60,11 +64,38 @@ function modelAcceptsSampling(model: ClaudeModel): boolean {
   return model.startsWith("claude-haiku-4-5");
 }
 
+/** Normalise `user` / `messages` into the SDK's message array. */
+function toMessages(input: {
+  user?: string;
+  messages?: ChatTurn[];
+}): ChatTurn[] {
+  if (input.messages && input.messages.length > 0) return input.messages;
+  if (typeof input.user === "string" && input.user.length > 0) {
+    return [{ role: "user", content: input.user }];
+  }
+  throw new Error("complete() needs either `user` or a non-empty `messages`.");
+}
+
+/** One turn of a conversation, for multi-turn callers like Ask Buddy. */
+export type ChatTurn = { role: "user" | "assistant"; content: string };
+
 export type CompletionInput = {
   /** System prompt — pinned to the prompt cache by default. */
   system: string;
-  /** User prompt — the one-off content being processed. */
-  user: string;
+  /** User prompt — the one-off content being processed. Supply this OR
+   *  `messages`. */
+  user?: string;
+  /** Full conversation, when the caller is a chat rather than a one-shot.
+   *  Wins over `user` when both are given. */
+  messages?: ChatTurn[];
+  /**
+   * Per-call API key. Ask Buddy runs on each Business Builder's own key
+   * (stored on their profile), falling back to the app key. Passing it here
+   * rather than building a client at the call site is what keeps every
+   * request inside this module's guards — bypassing it is how four features
+   * ended up sending `temperature` to a model that rejects it.
+   */
+  apiKey?: string;
   /** Optional override; defaults to claude-sonnet-5. */
   model?: ClaudeModel;
   /** Default 4096. Hard cap by Anthropic per model. */
@@ -112,13 +143,13 @@ export async function complete(
         },
       ] satisfies Anthropic.Messages.TextBlockParam[]);
 
-  const response = await client().messages.create({
+  const response = await client(input.apiKey).messages.create({
     model,
     max_tokens: maxTokens,
     // Only send temperature to models that accept it (see note above).
     ...(modelAcceptsSampling(model) ? { temperature } : {}),
     system: systemBlocks,
-    messages: [{ role: "user", content: input.user }],
+    messages: toMessages(input),
   });
 
   // Concatenate every text block in the response. Tool use isn't
@@ -226,12 +257,12 @@ export async function streamComplete(
         },
       ] satisfies Anthropic.Messages.TextBlockParam[]);
 
-  const stream = client().messages.stream({
+  const stream = client(input.apiKey).messages.stream({
     model,
     max_tokens: maxTokens,
     ...(modelAcceptsSampling(model) ? { temperature } : {}),
     system: systemBlocks,
-    messages: [{ role: "user", content: input.user }],
+    messages: toMessages(input),
   });
 
   let text = "";

@@ -11,7 +11,7 @@
  * unlike the coach-only Builder Buddy.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@/lib/ai/anthropic";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementMeetings } from "@/lib/db/queries/meetings";
@@ -72,23 +72,16 @@ export async function searchClientMeetings(
   }
 
   try {
-    const client = new Anthropic({ apiKey: key });
-    const response = await client.messages.create({
+    // Shared wrapper — a locally built client skips the sampling guard, and
+    // sonnet-5 rejects `temperature` with a 400.
+    const result = await complete({
+      system: SYSTEM,
+      user: `Here are my meeting notes:\n\n${context}\n\n---\n\nMy question: ${q}`,
       model: "claude-sonnet-5",
-      max_tokens: 1024,
+      maxTokens: 1024,
       temperature: 0.2,
-      system: [{ type: "text", text: SYSTEM }],
-      messages: [
-        {
-          role: "user",
-          content: `Here are my meeting notes:\n\n${context}\n\n---\n\nMy question: ${q}`,
-        },
-      ],
     });
-    const reply = response.content
-      .map((b) => (b.type === "text" ? b.text : ""))
-      .join("")
-      .trim();
+    const reply = result.text.trim();
     if (!reply) return { ok: false, error: "No answer came back. Try again?" };
     return { ok: true, reply };
   } catch (e) {
