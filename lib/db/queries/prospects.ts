@@ -119,6 +119,36 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
   if (!isBb) return null;
   const access = await getCurrentBbAccess();
   const unrestricted = access.isMasterAdmin || access.allClientsAccess;
+  return loadProspect(id, { profile, unrestricted });
+}
+
+/**
+ * Fetch one prospect by id with NO access check. System contexts only.
+ *
+ * Background functions and cron jobs have no Clerk session, so the checked
+ * `getProspect` above returns null for them — it can't identify a caller, so
+ * it correctly refuses. That is right for a request and wrong for a job that
+ * was already authorised when it was enqueued. The Soul File draft core
+ * (`lib/soul-files/preview-core.ts`) runs in exactly that position and broke
+ * when the check was added to the shared function.
+ *
+ * Do not call this from anything reachable by a request. If there is a signed
+ * in user, use `getProspect`.
+ */
+export async function getProspectUnchecked(
+  id: string,
+): Promise<PipelineProspect | null> {
+  return loadProspect(id, null);
+}
+
+async function loadProspect(
+  id: string,
+  caller:
+    | { profile: { userProfileId: string }; unrestricted: boolean }
+    | null,
+): Promise<PipelineProspect | null> {
+  const unrestricted = caller === null || caller.unrestricted;
+  const profile = caller?.profile ?? null;
 
   return withSystemContext(async (tx) => {
     const [row] = await tx
@@ -142,7 +172,7 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
       .limit(1);
     if (!row) return null;
 
-    if (!unrestricted) {
+    if (!unrestricted && profile) {
       const owner = row.prospect.ownerUserProfileId;
       const mineOrUnclaimed =
         owner === null || owner === profile.userProfileId;

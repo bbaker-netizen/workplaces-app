@@ -8,12 +8,13 @@
  * what produced the "took too long or the connection dropped" error on the
  * prospect's Soul File draft button.
  *
- * `getProspect` already runs under withSystemContext (no signed-in user), so
- * this is safe to call from the background function. Throws on hard failure;
+ * `getProspectUnchecked` skips the access check, which the request-facing
+ * `getProspect` applies — correct here, since a background run has no Clerk
+ * session to check. Throws on hard failure;
  * the caller records the message.
  */
 
-import { getProspect } from "@/lib/db/queries/prospects";
+import { getProspectUnchecked } from "@/lib/db/queries/prospects";
 import { complete } from "@/lib/ai/anthropic";
 import {
   fetchTranscript,
@@ -78,7 +79,7 @@ export class SoulFileDraftError extends Error {}
 export async function runSoulFileDraftForProspect(
   prospectId: string,
 ): Promise<SoulFileDraftData> {
-  const prospect = await getProspect(prospectId);
+  const prospect = await getProspectUnchecked(prospectId);
   if (!prospect) throw new SoulFileDraftError("Prospect not found.");
 
   // Match recordings to the prospect two ways (attendee email + title scan),

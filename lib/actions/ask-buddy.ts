@@ -39,8 +39,17 @@ async function resolveAnthropicKey(
   if (row?.key) {
     try {
       return decryptSecret(row.key);
-    } catch {
-      return null;
+    } catch (e) {
+      // A stored key that won't decrypt used to return null outright, which
+      // skipped the shared-key fallback below and killed Buddy for that user
+      // with a message telling them to add a key they already had. Decryption
+      // fails for reasons that have nothing to do with the user — a rotated
+      // or missing encryption secret takes out every stored key at once. Log
+      // it and fall through to the app key.
+      console.error(
+        `[ask-buddy] stored Anthropic key for ${userProfileId} failed to decrypt; falling back to the app key.`,
+        e,
+      );
     }
   }
   return process.env.ANTHROPIC_API_KEY ?? null;

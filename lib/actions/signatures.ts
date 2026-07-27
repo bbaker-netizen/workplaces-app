@@ -37,6 +37,7 @@ import {
   resolveEngagementIdFromRecord,
   withSystemContext,
 } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { sendEmailQuietly } from "@/lib/email/send";
 import {
   signatureCompletedEmail,
@@ -126,6 +127,13 @@ export async function createSignatureEnvelope(
     });
     if (!prospectOrgId)
       return { ok: false, error: "Prospect not found." };
+    // Sending a contract is about as consequential as a write gets — it puts
+    // a signable document in someone's inbox under this practice's name. It
+    // gets the same owner check as every other prospect write. Both envelope
+    // builders funnel through here, so this is the single choke point.
+    if (!(await canCurrentBbWriteProspect(data.prospectId))) {
+      return { ok: false, error: "You don't have access to that lead." };
+    }
   }
 
   const orgId = data.engagementId ? docCtx.orgId : prospectOrgId ?? docCtx.orgId;
@@ -338,22 +346,41 @@ export async function createEnvelopeFromUpload(
     };
   }
 
-  const sourceDocumentId = await withSystemContext(async (tx) => {
-    const [doc] = await tx
-      .insert(documents)
-      .values({
-        id: upload.documentId,
-        orgId,
-        engagementId: resolvedEngagementId,
-        blobKey: upload.blobKey,
-        originalFilename: upload.filename,
-        fileType: upload.fileType,
-        sizeBytes: upload.sizeBytes,
-        uploaderUserProfileId: profile.userProfileId,
-      })
-      .returning({ id: documents.id });
-    return doc.id;
-  });
+  // Wrapped so a failure here reports itself. Unhandled, it threw out of the
+  // server action and the browser showed the generic "we hit a snag" page,
+  // which names neither the step nor the reason and is indistinguishable
+  // from every other fault in the flow.
+  let sourceDocumentId: string;
+  try {
+    sourceDocumentId = await withSystemContext(async (tx) => {
+      const [doc] = await tx
+        .insert(documents)
+        .values({
+          id: upload.documentId,
+          orgId,
+          engagementId: resolvedEngagementId,
+          // Keep the contract on the lead's own document list when it isn't
+          // tied to an engagement yet, so it stays findable from the profile
+          // the coach sent it from.
+          prospectId: prospectId ?? null,
+          blobKey: upload.blobKey,
+          originalFilename: upload.filename,
+          fileType: upload.fileType,
+          sizeBytes: upload.sizeBytes,
+          uploaderUserProfileId: profile.userProfileId,
+        })
+        .returning({ id: documents.id });
+      return doc.id;
+    });
+  } catch (e) {
+    console.error("[signatures] source document insert failed:", e);
+    return {
+      ok: false,
+      error: `Couldn't file the contract document: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    };
+  }
 
   return createSignatureEnvelope({
     sourceDocumentId,
@@ -488,22 +515,41 @@ export async function createEnvelopeFromComposed(input: {
     };
   }
 
-  const sourceDocumentId = await withSystemContext(async (tx) => {
-    const [doc] = await tx
-      .insert(documents)
-      .values({
-        id: upload.documentId,
-        orgId,
-        engagementId: resolvedEngagementId,
-        blobKey: upload.blobKey,
-        originalFilename: upload.filename,
-        fileType: upload.fileType,
-        sizeBytes: upload.sizeBytes,
-        uploaderUserProfileId: profile.userProfileId,
-      })
-      .returning({ id: documents.id });
-    return doc.id;
-  });
+  // Wrapped so a failure here reports itself. Unhandled, it threw out of the
+  // server action and the browser showed the generic "we hit a snag" page,
+  // which names neither the step nor the reason and is indistinguishable
+  // from every other fault in the flow.
+  let sourceDocumentId: string;
+  try {
+    sourceDocumentId = await withSystemContext(async (tx) => {
+      const [doc] = await tx
+        .insert(documents)
+        .values({
+          id: upload.documentId,
+          orgId,
+          engagementId: resolvedEngagementId,
+          // Keep the contract on the lead's own document list when it isn't
+          // tied to an engagement yet, so it stays findable from the profile
+          // the coach sent it from.
+          prospectId: input.prospectId ?? null,
+          blobKey: upload.blobKey,
+          originalFilename: upload.filename,
+          fileType: upload.fileType,
+          sizeBytes: upload.sizeBytes,
+          uploaderUserProfileId: profile.userProfileId,
+        })
+        .returning({ id: documents.id });
+      return doc.id;
+    });
+  } catch (e) {
+    console.error("[signatures] source document insert failed:", e);
+    return {
+      ok: false,
+      error: `Couldn't file the contract document: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    };
+  }
 
   return createSignatureEnvelope({
     sourceDocumentId,
