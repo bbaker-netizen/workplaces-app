@@ -6,6 +6,7 @@ import { Send } from "lucide-react";
 import {
   SendForSignatureForm,
   type SendForSignatureDocumentTemplate,
+  type SendForSignaturePricingTier,
 } from "@/components/signing/SendForSignatureForm";
 import type { DocumentVariableContext } from "@/lib/signing/document-variables";
 
@@ -30,6 +31,7 @@ export function ProspectEnvelopeSection({
   envelopes,
   hasStoredSignature,
   documentTemplates,
+  pricingTiers,
   variableContext,
 }: {
   prospectId: string;
@@ -38,6 +40,7 @@ export function ProspectEnvelopeSection({
   envelopes: EnvelopeRow[];
   hasStoredSignature: boolean;
   documentTemplates?: SendForSignatureDocumentTemplate[];
+  pricingTiers?: SendForSignaturePricingTier[];
   variableContext?: DocumentVariableContext;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -79,6 +82,7 @@ export function ProspectEnvelopeSection({
             }
             hasStoredSignature={hasStoredSignature}
             documentTemplates={documentTemplates}
+            pricingTiers={pricingTiers}
             variableContext={variableContext}
             onCancel={() => setShowForm(false)}
           />

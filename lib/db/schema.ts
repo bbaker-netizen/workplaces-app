@@ -629,6 +629,12 @@ export const pricingTiers = pgTable(
     tierKey: text("tier_key").notNull(),
     label: text("label").notNull(),
     monthlyFeeCents: bigint("monthly_fee_cents", { mode: "number" }).notNull(),
+    /** What this tier includes, dropped into the agreement's Schedule A when
+     *  the tier is picked. Per tier, not per programme — tiers of the same
+     *  programme buy different amounts of work. Null = not written up yet;
+     *  the contract shows a visible placeholder rather than an empty
+     *  Schedule A. */
+    scheduleADetail: text("schedule_a_detail"),
     sortOrder: bigint("sort_order", { mode: "number" }).notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

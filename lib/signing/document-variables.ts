@@ -36,6 +36,15 @@ export type DocumentVariableContext = {
      *  immediately that he needs to fill it in. */
     monthlyFeeCents?: number | null;
   } | null;
+  /** The programme tier picked when preparing the agreement. Drives the
+   *  fee AND the Schedule A wording, so the price and what it buys always
+   *  come from the same row in Settings > Pricing tiers. */
+  pricingTier?: {
+    program: "accelerator" | "implementer" | string;
+    label: string;
+    monthlyFeeCents: number;
+    scheduleADetail?: string | null;
+  } | null;
   sender: {
     fullName: string;
     email: string;
@@ -114,7 +123,24 @@ export const DOCUMENT_VARIABLES = [
     name: "monthly_fee",
     label: "Monthly fee",
     description:
-      "Engagement's monthly fee, formatted as $2,500/month. Pulls from the engagement record.",
+      "Monthly fee, formatted as $2,500/month. Comes from the programme tier picked when preparing the agreement, falling back to the engagement record.",
+  },
+  {
+    name: "program_name",
+    label: "Programme",
+    description: "Accelerator or Implementer, from the tier picked.",
+  },
+  {
+    name: "program_tier",
+    label: "Programme tier",
+    description:
+      "The tier's label, e.g. \"Accelerator — Growth\". From Settings > Pricing tiers.",
+  },
+  {
+    name: "schedule_a",
+    label: "Schedule A detail",
+    description:
+      "What the picked tier includes. Written per tier in Settings > Pricing tiers, so the price and the deliverables stay together.",
   },
   {
     name: "today",
@@ -257,10 +283,21 @@ export function buildVariableMap(
 
   // Prefer prospect-level values for program + fee + start date,
   // fall back to engagement-level for back-compat.
+  // The picked tier wins for BOTH the programme and the fee. It is the most
+  // deliberate signal there is — someone chose this tier for this deal on the
+  // way to sending the contract — where the prospect/engagement values may be
+  // months stale.
+  const tier = ctx.pricingTier ?? null;
   const programType =
-    ctx.prospect?.programType ?? ctx.engagement?.type ?? null;
+    (tier?.program as "accelerator" | "implementer" | undefined) ??
+    ctx.prospect?.programType ??
+    ctx.engagement?.type ??
+    null;
   const monthlyFeeCents =
-    ctx.prospect?.monthlyFeeCents ?? ctx.engagement?.monthlyFeeCents ?? null;
+    tier?.monthlyFeeCents ??
+    ctx.prospect?.monthlyFeeCents ??
+    ctx.engagement?.monthlyFeeCents ??
+    null;
   const startDate =
     ctx.prospect?.expectedStartDate ?? ctx.engagement?.startDate ?? null;
 
@@ -287,6 +324,18 @@ export function buildVariableMap(
     implementer_checkbox: programType === "implementer" ? "[X]" : "[ ]",
     start_date: formatDate(startDate),
     monthly_fee: formatCents(monthlyFeeCents),
+    program_name: programType
+      ? programType === "accelerator"
+        ? "Accelerator"
+        : "Implementer"
+      : "[programme]",
+    program_tier: tier?.label ?? "[programme tier]",
+    // A tier with no Schedule A written up yet says so in the draft rather
+    // than rendering an empty schedule that nobody notices until the client
+    // asks what they are actually buying.
+    schedule_a:
+      tier?.scheduleADetail?.trim() ||
+      "[Schedule A detail — add it to this tier in Settings > Pricing tiers]",
     today,
     sender_name: senderFirstName,
     sender_full_name: ctx.sender.fullName,

@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import {
   ArrowLeft,
   Mail,
@@ -51,6 +51,7 @@ import { listForProspect } from "@/lib/db/queries/client-communications";
 import { listBusinessBuilders } from "@/lib/db/queries/user-profiles";
 import {
   documentTemplates,
+  pricingTiers,
   emailTemplates,
   orgs as orgsTable,
   userProfiles,
@@ -115,6 +116,7 @@ export default async function ProspectDetailPage({
     communications,
     templates,
     docTemplates,
+    tiers,
     me,
     org,
     businessBuilders,
@@ -153,6 +155,22 @@ export default async function ProspectDetailPage({
         })
         .from(documentTemplates)
         .where(eq(documentTemplates.orgId, profile.orgId)),
+    ),
+    // Programme tiers drive both the fee and the Schedule A wording on the
+    // agreement, so they're fetched alongside the templates rather than
+    // looked up later.
+    withSystemContext(async (tx) =>
+      tx
+        .select({
+          id: pricingTiers.id,
+          program: pricingTiers.program,
+          label: pricingTiers.label,
+          monthlyFeeCents: pricingTiers.monthlyFeeCents,
+          scheduleADetail: pricingTiers.scheduleADetail,
+        })
+        .from(pricingTiers)
+        .where(eq(pricingTiers.orgId, profile.orgId))
+        .orderBy(asc(pricingTiers.program), asc(pricingTiers.sortOrder)),
     ),
     withSystemContext(async (tx) => {
       const [u] = await tx
@@ -619,6 +637,7 @@ export default async function ProspectDetailPage({
             }))}
             hasStoredSignature={hasStoredSig}
             documentTemplates={docTemplates}
+            pricingTiers={tiers}
             variableContext={{
               prospect: {
                 contactName: prospect.contactName,

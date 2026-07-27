@@ -34,6 +34,9 @@ const upsertSchema = z.object({
     .int()
     .min(0)
     .max(100_000_00), // $100k upper sanity cap
+  /** What this tier includes — dropped into the agreement's Schedule A.
+   *  Blank is allowed; the contract then shows a visible placeholder. */
+  scheduleADetail: z.string().max(20_000).nullable().optional(),
   sortOrder: z.number().int().optional(),
 });
 
@@ -49,6 +52,7 @@ export async function listPricingTiers(): Promise<
       tierKey: string;
       label: string;
       monthlyFeeCents: number;
+      scheduleADetail: string | null;
       sortOrder: number;
     }[]
   >
@@ -74,6 +78,7 @@ export async function listPricingTiers(): Promise<
         tierKey: r.tierKey,
         label: r.label,
         monthlyFeeCents: r.monthlyFeeCents,
+        scheduleADetail: r.scheduleADetail ?? null,
         sortOrder: r.sortOrder,
       })),
     };
@@ -106,6 +111,7 @@ export async function createPricingTier(
           tierKey: parsed.data.tierKey,
           label: parsed.data.label,
           monthlyFeeCents: parsed.data.monthlyFeeCents,
+          scheduleADetail: parsed.data.scheduleADetail?.trim() || null,
           sortOrder: parsed.data.sortOrder ?? 0,
         })
         .returning({ id: pricingTiers.id }),

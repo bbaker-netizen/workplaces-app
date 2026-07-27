@@ -1,0 +1,21 @@
+-- Schedule A detail on each pricing tier.
+--
+-- Picking a programme tier when preparing a Business Building Agreement now
+-- sets the monthly fee AND drops that tier's own wording into Schedule A.
+-- Until now `pricing_tiers` carried only (program, tier_key, label,
+-- monthly_fee_cents) — a price with nothing describing what it buys — so the
+-- agreement's Schedule A had to be written by hand every time, or left
+-- generic.
+--
+-- Held per TIER rather than per programme on purpose: a $1,500 tier and a
+-- $5,000 tier of the same programme do not include the same work, and a
+-- single shared block would quietly promise the cheaper client the expensive
+-- deliverables. Same reason it lives beside the fee: the price and what it
+-- buys are edited in one place, so they cannot drift apart.
+--
+-- Nullable. An empty detail renders a visible bracket placeholder in the
+-- contract rather than an empty Schedule A, so a tier that hasn't been
+-- written up yet announces itself in the draft instead of going out silently
+-- blank.
+ALTER TABLE pricing_tiers
+  ADD COLUMN IF NOT EXISTS schedule_a_detail text;

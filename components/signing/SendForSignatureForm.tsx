@@ -42,6 +42,14 @@ type SignerDraft = {
   roleLabel: string;
 };
 
+export type SendForSignaturePricingTier = {
+  id: string;
+  program: string;
+  label: string;
+  monthlyFeeCents: number;
+  scheduleADetail: string | null;
+};
+
 export type SendForSignatureDocumentTemplate = Pick<
   DocumentTemplate,
   "id" | "name" | "category" | "bodyMarkdown" | "defaultSubject"
@@ -58,6 +66,9 @@ type Props =
       onCancel?: () => void;
       /** Document templates available for "compose" source mode. */
       documentTemplates?: SendForSignatureDocumentTemplate[];
+      /** Programme tiers from Settings > Pricing tiers. Picking one sets the
+       *  fee and supplies the Schedule A wording. */
+      pricingTiers?: SendForSignaturePricingTier[];
       /** Context for resolving {{variable}} placeholders when a
        *  template is picked. */
       variableContext?: DocumentVariableContext;
@@ -92,6 +103,7 @@ export function SendForSignatureForm(props: Props) {
   // the compose branches below stay readable.
   const sourceMode = "compose" as const;
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [selectedTierId, setSelectedTierId] = useState<string>("");
   const [composedBody, setComposedBody] = useState<string>("");
   // Compose-time fee override. The variable context's engagement may
   // not have a fee set yet (sending the BBA from a prospect, before
@@ -106,6 +118,8 @@ export function SendForSignatureForm(props: Props) {
       ? (initialFeeCents / 100).toFixed(initialFeeCents % 100 === 0 ? 0 : 2)
       : "",
   );
+  const tiers = props.mode === "upload" ? (props.pricingTiers ?? []) : [];
+  const selectedTier = tiers.find((t) => t.id === selectedTierId) ?? null;
   const bodyEditorRef = useRef<RichTextEditorHandle | null>(null);
   const composeAvailable =
     props.mode === "upload" &&
@@ -128,9 +142,23 @@ export function SendForSignatureForm(props: Props) {
     // if the user has typed one. Lets the BBA render the right fee
     // even before an engagement record exists.
     const feeCentsOverride = parseFeeInputToCents(feeOverrideInput);
+    const tier = (props.pricingTiers ?? []).find(
+      (t) => t.id === selectedTierId,
+    );
     const ctx = props.variableContext
       ? {
           ...props.variableContext,
+          // The picked tier drives {{program_name}}, {{program_tier}},
+          // {{schedule_a}} and the fee. A typed override still wins over the
+          // tier's list price, for a deal priced off-list.
+          pricingTier: tier
+            ? {
+                program: tier.program,
+                label: tier.label,
+                monthlyFeeCents: feeCentsOverride ?? tier.monthlyFeeCents,
+                scheduleADetail: tier.scheduleADetail,
+              }
+            : null,
           engagement: {
             ...(props.variableContext.engagement ?? {
               name: null,
@@ -156,7 +184,7 @@ export function SendForSignatureForm(props: Props) {
       setSubject(tpl.defaultSubject);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTemplateId, feeOverrideInput]);
+  }, [selectedTemplateId, feeOverrideInput, selectedTierId]);
 
   /** Parse the dollar-formatted fee input ("2500" / "2500.00") into
    *  cents. Empty / invalid → null. */
@@ -336,9 +364,65 @@ export function SendForSignatureForm(props: Props) {
 
           {selectedTemplateId && (
             <>
+              {/* Programme tier drives the fee AND Schedule A. One choice
+                  rather than typing a number and separately remembering what
+                  that number is supposed to include. */}
+              {tiers.length > 0 && (
+                <label className="block">
+                  <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                    Programme
+                  </span>
+                  <select
+                    value={selectedTierId}
+                    onChange={(e) => setSelectedTierId(e.target.value)}
+                    disabled={isPending}
+                    className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                  >
+                    <option value="">— Choose a programme tier —</option>
+                    {(["accelerator", "implementer"] as const).map((prog) => {
+                      const group = tiers.filter((t) => t.program === prog);
+                      if (group.length === 0) return null;
+                      return (
+                        <optgroup
+                          key={prog}
+                          label={
+                            prog === "accelerator"
+                              ? "Accelerator"
+                              : "Implementer"
+                          }
+                        >
+                          {group.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.label} — ${(t.monthlyFeeCents / 100).toLocaleString("en-CA")}/month
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                  {selectedTier && (
+                    <p className="mt-1 text-[11px] text-tbb-ink-3">
+                      Sets <code className="font-mono">{`{{monthly_fee}}`}</code>,{" "}
+                      <code className="font-mono">{`{{program_name}}`}</code>{" "}
+                      and{" "}
+                      <code className="font-mono">{`{{schedule_a}}`}</code>.
+                      {!selectedTier.scheduleADetail?.trim() && (
+                        <span className="block text-tbb-danger mt-0.5">
+                          This tier has no Schedule A detail yet — the contract
+                          will show a placeholder. Add it under Settings →
+                          Pricing tiers.
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </label>
+              )}
+
               <label className="block">
                 <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-                  Monthly fee for this deal
+                  {tiers.length > 0
+                    ? "Override the monthly fee (optional)"
+                    : "Monthly fee for this deal"}
                 </span>
                 <div className="relative mt-1">
                   <span
@@ -355,14 +439,18 @@ export function SendForSignatureForm(props: Props) {
                     value={feeOverrideInput}
                     onChange={(e) => setFeeOverrideInput(e.target.value)}
                     disabled={isPending}
-                    placeholder="2500"
+                    placeholder={
+                      selectedTier
+                        ? String(selectedTier.monthlyFeeCents / 100)
+                        : "2500"
+                    }
                     className="w-full bg-white border border-tbb-line rounded-md pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
                   />
                 </div>
                 <p className="mt-1 text-[11px] text-tbb-ink-3">
-                  Fills in{" "}
-                  <code className="font-mono">{`{{monthly_fee}}`}</code>{" "}
-                  in the doc as &quot;${(parseFeeInputToCents(feeOverrideInput) ?? 0) / 100}/month&quot;. Leave blank to keep the placeholder.
+                  {tiers.length > 0
+                    ? "Leave blank to use the tier's price. Type a figure only when this deal is priced off-list."
+                    : "Fills in {{monthly_fee}} in the doc. Leave blank to keep the placeholder."}
                 </p>
               </label>
 

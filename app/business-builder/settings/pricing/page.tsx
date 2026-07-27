@@ -103,6 +103,7 @@ export default async function PricingSettingsPage() {
             tierKey: t.tierKey,
             label: t.label,
             monthlyFeeCents: t.monthlyFeeCents,
+            scheduleADetail: t.scheduleADetail ?? null,
             sortOrder: t.sortOrder,
           }))}
         />

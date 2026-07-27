@@ -24,6 +24,7 @@ type Tier = {
   tierKey: string;
   label: string;
   monthlyFeeCents: number;
+  scheduleADetail: string | null;
   sortOrder: number;
 };
 
@@ -33,6 +34,7 @@ type Draft = {
   tierKey: string;
   label: string;
   monthlyFeeDollars: string;
+  scheduleADetail: string;
   sortOrder: number;
 };
 
@@ -75,6 +77,7 @@ export function PricingTiersManager({
       tierKey: "",
       label: "",
       monthlyFeeDollars: "",
+      scheduleADetail: "",
       sortOrder:
         Math.max(0, ...grouped[program].map((t) => t.sortOrder)) + 10,
     });
@@ -88,6 +91,7 @@ export function PricingTiersManager({
       tierKey: t.tierKey,
       label: t.label,
       monthlyFeeDollars: centsToInput(t.monthlyFeeCents),
+      scheduleADetail: t.scheduleADetail ?? "",
       sortOrder: t.sortOrder,
     });
   }
@@ -114,6 +118,7 @@ export function PricingTiersManager({
         tierKey: draft.tierKey.trim().toLowerCase(),
         label: draft.label.trim(),
         monthlyFeeCents: cents,
+        scheduleADetail: draft.scheduleADetail.trim() || null,
         sortOrder: draft.sortOrder,
       };
       const r = draft.id
@@ -269,6 +274,7 @@ function DraftRow({
   isPending: boolean;
 }) {
   return (
+    <div className="space-y-3">
     <div className="grid sm:grid-cols-[1fr_120px_140px_auto] gap-3 items-end">
       <label className="block">
         <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
@@ -353,6 +359,39 @@ function DraftRow({
           </button>
         )}
       </div>
+    </div>
+
+      {/* Schedule A. Lives beside the price on purpose — the fee and what it
+          buys are edited together, so they can't drift apart. Picking this
+          tier when preparing an agreement drops this text straight into the
+          contract via {{schedule_a}}. */}
+      <label className="block">
+        <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+          Schedule A — what this tier includes
+        </span>
+        <textarea
+          rows={6}
+          value={draft.scheduleADetail}
+          onChange={(e) =>
+            setDraft({ ...draft, scheduleADetail: e.target.value })
+          }
+          disabled={isPending}
+          placeholder={
+            "Twice-monthly Business Building Sessions (one in person, one virtual)\n" +
+            "Quarterly Stages of Growth review\n" +
+            "Up to two deliverables per quarter\n" +
+            "Unlimited email and phone support during business hours"
+          }
+          className="mt-1 w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue resize-y"
+        />
+        <span className="mt-1 block text-[11px] text-tbb-ink-3">
+          Goes into the agreement wherever the template has{" "}
+          <code className="font-mono">{`{{schedule_a}}`}</code>. Leave blank
+          and the contract shows a visible placeholder instead — so a tier
+          that hasn&apos;t been written up announces itself in the draft
+          rather than going out with an empty schedule.
+        </span>
+      </label>
     </div>
   );
 }
