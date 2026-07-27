@@ -2,7 +2,7 @@
  * Prospect detail — Phase 5 CRM.
  *
  * Two-column layout:
- *   - Left: full contact card, deal info, notes, signing section
+ *   - Left: full contact card, deal info, signing, communications, archive
  *   - Right: activity log timeline
  *
  * Edits land via inline forms; activity logging via a quick form
@@ -22,7 +22,6 @@ import {
   Clock,
   Mountain,
   Zap,
-  StickyNote,
   FileText,
   MessageCircle,
   MessageSquare,
@@ -56,7 +55,6 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
-import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect";
 import { ProspectLeadEssentials } from "@/components/pipeline/ProspectLeadEssentials";
 import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
@@ -587,30 +585,6 @@ export default async function ProspectDetailPage({
             />
           )}
 
-          {/* Notes — collapsible. */}
-          <CollapsibleSection
-            title="Notes"
-            storageKey="notes"
-            defaultOpen={Boolean(prospect.notes)}
-            icon={<StickyNote className="w-3.5 h-3.5" aria-hidden />}
-            badge={prospect.notes ? undefined : "empty"}
-          >
-            <div className="p-5 space-y-3">
-              <div className="flex justify-end">
-                <ProspectInlineEdit
-                  prospectId={prospect.id}
-                  field="notes"
-                  initial={{ notes: prospect.notes }}
-                />
-              </div>
-              {prospect.notes ? (
-                <MarkdownBody body={prospect.notes} />
-              ) : (
-                <p className="text-sm text-tbb-ink-4 italic">No notes yet.</p>
-              )}
-            </div>
-          </CollapsibleSection>
-
           {/* Signing — proposals/contracts. Hidden for early leads. */}
           {showSigning && (
           <ProspectEnvelopeSection
@@ -661,6 +635,50 @@ export default async function ProspectDetailPage({
             }}
           />
           )}
+
+          {/* Communications timeline — every email / SMS / WhatsApp / call
+              note attached to this prospect. Lives in the left column so it
+              lines up with the sections above it. Collapsed by default. */}
+          <CollapsibleSection
+            title="Communications"
+            storageKey="communications"
+            icon={<MessageSquare className="w-3.5 h-3.5" aria-hidden />}
+            badge={communications.length || undefined}
+          >
+            <ClientCommunicationsPanel
+              prospectId={prospect.id}
+              contactName={prospect.contactName}
+              contactEmail={prospect.contactEmail}
+              contactPhone={prospect.phone}
+              rows={communications}
+              smsEnabled={isSmsConfigured()}
+              emailTemplates={templates}
+              embedded
+            />
+          </CollapsibleSection>
+
+          {/* Archive this prospect (soft-delete) — collapsed by default; it's
+              rarely used and destructive, so it stays out of the way until
+              asked for. Recoverable from the Archived view. */}
+          <CollapsibleSection
+            title={prospect.archivedAt ? "Archived" : "Archive"}
+            storageKey="archive"
+            icon={<Archive className="w-3.5 h-3.5" aria-hidden />}
+          >
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-tbb-ink-2">
+                {prospect.archivedAt
+                  ? "This prospect is archived and hidden from the pipeline. Restore it to bring it back, or — for a lead you’re sure about — delete it permanently. Converted clients are archive-only."
+                  : "Archive removes this prospect from the pipeline but keeps the record, activity log, and communications — restore it anytime. For deals that didn't close, set Stage = Lost instead so they stay in the funnel history."}
+              </p>
+              <DeleteProspectButton
+                prospectId={prospect.id}
+                prospectLabel={prospect.companyName}
+                archived={Boolean(prospect.archivedAt)}
+                isClient={Boolean(prospect.convertedEngagementId)}
+              />
+            </div>
+          </CollapsibleSection>
         </div>
 
         {/* Right column — documents on file + team discussion + activity,
@@ -710,49 +728,6 @@ export default async function ProspectDetailPage({
           </CollapsibleSection>
         </aside>
       </div>
-
-      {/* Full-width communications timeline — every email / SMS / WhatsApp /
-          call note attached to this prospect. Collapsible, closed by default. */}
-      <CollapsibleSection
-        title="Communications"
-        storageKey="communications"
-        icon={<MessageSquare className="w-3.5 h-3.5" aria-hidden />}
-        badge={communications.length || undefined}
-      >
-        <ClientCommunicationsPanel
-          prospectId={prospect.id}
-          contactName={prospect.contactName}
-          contactEmail={prospect.contactEmail}
-          contactPhone={prospect.phone}
-          rows={communications}
-          smsEnabled={isSmsConfigured()}
-          emailTemplates={templates}
-          embedded
-        />
-      </CollapsibleSection>
-
-      {/* Archive this prospect (soft-delete) — collapsed by default; it's
-          rarely used and destructive, so it stays out of the way until
-          asked for. Recoverable from the Archived view. */}
-      <CollapsibleSection
-        title={prospect.archivedAt ? "Archived" : "Archive"}
-        storageKey="archive"
-        icon={<Archive className="w-3.5 h-3.5" aria-hidden />}
-      >
-        <div className="p-5 space-y-3">
-          <p className="text-sm text-tbb-ink-2">
-            {prospect.archivedAt
-              ? "This prospect is archived and hidden from the pipeline. Restore it to bring it back, or — for a lead you\u2019re sure about — delete it permanently. Converted clients are archive-only."
-              : "Archive removes this prospect from the pipeline but keeps the record, activity log, and communications — restore it anytime. For deals that didn't close, set Stage = Lost instead so they stay in the funnel history."}
-          </p>
-          <DeleteProspectButton
-            prospectId={prospect.id}
-            prospectLabel={prospect.companyName}
-            archived={Boolean(prospect.archivedAt)}
-            isClient={Boolean(prospect.convertedEngagementId)}
-          />
-        </div>
-      </CollapsibleSection>
     </main>
   );
 }
