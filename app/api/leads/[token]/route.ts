@@ -28,6 +28,7 @@ import {
   parseHearAboutAnswer,
 } from "@/lib/pipeline/lead-source";
 import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
+import { assessmentSummary, parseAssessment } from "@/lib/pipeline/assessment";
 import { notifyNewLead } from "@/lib/pipeline/notify-new-lead";
 import { parseWebhookBody } from "@/lib/pipeline/parse-webhook-body";
 
@@ -112,6 +113,12 @@ export async function POST(
   // extra website-form fields), so nothing a lead types is dropped just
   // because the platform named the field something we didn't expect.
   const leadNote = extractLeadNote(body);
+  // Structured result of a public assessment the lead completed before we
+  // ever spoke: today Base Camp, forwarded by the Make quiz scenario as a
+  // nested `assessment` object. Null on every other intake route, which is
+  // most of them. Nested deliberately — extractLeadNote skips objects, so the
+  // scores ride along without also being smeared into the free-text Notes.
+  const assessment = parseAssessment(body.assessment);
   const source =
     pick(body, ["source", "lead_source", "channel", "utm_source", "platform"]) ??
     "Webhook";
@@ -363,6 +370,13 @@ export async function POST(
             // First-touch: fill any click id we didn't already have, never
             // overwrite one. First click id wins.
             ...clickIdFirstTouch,
+            // Assessment is the opposite of first-touch: latest wins. Someone
+            // retaking it has told us their answers changed, and the newer
+            // read is the one to walk into the room holding. A submission
+            // carrying no assessment leaves an existing one untouched.
+            ...(assessment
+              ? { assessment, assessmentAt: new Date() }
+              : {}),
             // Fold this submission's note into the profile Notes,
             // non-destructively — a returning lead's new words reach the
             // profile without clobbering earlier notes.
@@ -387,6 +401,8 @@ export async function POST(
             sourceDetail: sourceDetail ?? undefined,
             ...clickIdInsert,
             firstSeenAt: new Date(),
+            assessment: assessment ?? undefined,
+            assessmentAt: assessment ? new Date() : undefined,
             status: "new_lead",
             notes: leadNote ?? undefined,
             // NOT setting lastContactAt — see the matching note in
@@ -403,7 +419,12 @@ export async function POST(
         orgId: org.id,
         prospectId,
         type: "lead",
-        subject: `New lead from ${source}`,
+        // When they took an assessment, lead with its verdict: the timeline
+        // is where Bruce scans before a call, and "Base Camp: People
+        // (Cracked)" is worth more there than "New lead from Base Camp".
+        subject: assessment
+          ? `${source}. ${assessmentSummary(assessment)}`
+          : `New lead from ${source}`,
         body: leadNote ?? message ?? null,
       });
 

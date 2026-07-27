@@ -16,6 +16,7 @@
 import type { Context } from "@netlify/functions";
 import {
   runDeliverableDraft,
+  recordDeliverableDraftFailure,
   resolveMeetingDraftTarget,
   resolveSessionDraftTarget,
 } from "../../lib/deliverables/fireflies-draft";
@@ -51,12 +52,27 @@ export default async (req: Request, _context: Context) => {
 
   // Background functions return 202 immediately; the work continues here and
   // the platform ignores its result, so log outcomes for observability.
+  //
+  // Target resolution is deliberately separate from the drafting run. Once we
+  // know the engagement, ANY later failure can be written back somewhere the
+  // person who asked will see it — the browser has long since been told to go
+  // and look under Deliverables, so a silent death there is the worst outcome.
+  let target: Awaited<ReturnType<typeof resolveMeetingDraftTarget>>;
   try {
-    const target =
+    target =
       source === "meeting"
         ? await resolveMeetingDraftTarget(sourceId)
         : await resolveSessionDraftTarget(sourceId);
+  } catch (e) {
+    // Nothing to attach a failure row to. Log and give up.
+    console.error(
+      `draft-deliverable: could not resolve ${source} ${sourceId}:`,
+      e instanceof Error ? e.message : e,
+    );
+    return;
+  }
 
+  try {
     const result = await runDeliverableDraft({
       ...target,
       type,
@@ -70,9 +86,21 @@ export default async (req: Request, _context: Context) => {
         (result.outputTruncated ? " [output hit token cap]" : ""),
     );
   } catch (e) {
-    console.error(
-      `draft-deliverable: failed for ${source} ${sourceId}:`,
-      e instanceof Error ? e.message : e,
-    );
+    const reason = e instanceof Error ? e.message : String(e);
+    console.error(`draft-deliverable: failed for ${source} ${sourceId}:`, reason);
+    try {
+      await recordDeliverableDraftFailure({
+        engagementId: target.engagementId,
+        orgId: target.orgId,
+        type,
+        meetingLabel: body.title ?? `this ${source}`,
+        reason,
+      });
+    } catch (e2) {
+      console.error(
+        "draft-deliverable: could not record the failure either:",
+        e2 instanceof Error ? e2.message : e2,
+      );
+    }
   }
 };

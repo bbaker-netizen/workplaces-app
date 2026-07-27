@@ -34,8 +34,18 @@ type AccessValue = {
   grantedEngagementIds: string[];
 };
 
-const FULL_ACCESS: AccessValue = {
-  allClientsAccess: true,
+/**
+ * What a new invite starts on: own book, not the whole practice.
+ *
+ * Migration 0093 moved the column default on `bb_invite_access` to false, but
+ * a column default only applies when no value is sent — and this form always
+ * sends one. So the database said own-book while the UI kept pre-selecting
+ * "All clients", and every coach invited through the screen would have landed
+ * with full access unless someone remembered to change the radio button. The
+ * default has to be right in both places or it isn't a default at all.
+ */
+const OWN_BOOK_ACCESS: AccessValue = {
+  allClientsAccess: false,
   allowedConsoleModules: null,
   grantedEngagementIds: [],
 };
@@ -248,7 +258,7 @@ function PendingInviteRow({
           allowedConsoleModules: invite.access.allowedConsoleModules,
           grantedEngagementIds: invite.access.grantedEngagementIds,
         }
-      : FULL_ACCESS,
+      : OWN_BOOK_ACCESS,
   );
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -359,7 +369,7 @@ function InviteForm({ clients }: { clients: Client[] }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InternalUser["role"]>("coach");
-  const [access, setAccess] = useState<AccessValue>(FULL_ACCESS);
+  const [access, setAccess] = useState<AccessValue>(OWN_BOOK_ACCESS);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -382,7 +392,7 @@ function InviteForm({ clients }: { clients: Client[] }) {
       setFullName("");
       setEmail("");
       setRole("coach");
-      setAccess(FULL_ACCESS);
+      setAccess(OWN_BOOK_ACCESS);
       router.refresh();
     });
   }

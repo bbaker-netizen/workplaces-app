@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { CollapsibleSection } from "@/components/pipeline/CollapsibleSection";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
+import { parseAssessment } from "@/lib/pipeline/assessment";
 import { isValidEmail } from "@/lib/pipeline/email";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { formatPhone, normalizeWebsite } from "@/lib/format";
@@ -57,6 +58,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect";
 import { ProspectLeadEssentials } from "@/components/pipeline/ProspectLeadEssentials";
+import { ProspectAssessmentPanel } from "@/components/pipeline/ProspectAssessmentPanel";
 import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
 import { ProspectComments } from "@/components/pipeline/ProspectComments";
@@ -182,6 +184,12 @@ export default async function ProspectDetailPage({
   // Booking follow-through row, if this prospect came in via a booked
   // session. Drives the three-email NDA/paperwork panel.
   const bookingFt = await getBookingFollowThroughForProspect(prospect.id);
+
+  // Public assessment they completed before we spoke (Base Camp today). Run
+  // the stored JSON back through the parser rather than trusting the column
+  // shape: it was written by a webhook, and a payload shape that changed
+  // since should degrade to "no panel" instead of crashing the page.
+  const assessment = parseAssessment(prospect.assessment);
 
   const stage = STAGE_STYLES[prospect.status as ProspectStatus] ?? STAGE_STYLES.new_lead;
 
@@ -361,6 +369,16 @@ export default async function ProspectDetailPage({
               )}
             </div>
           </section>
+
+          {/* Base Camp assessment — what they told us before we spoke. Sits
+              directly under Contact because it is the reason to pick up the
+              phone: it names the weak block and carries their own words. */}
+          {assessment && (
+            <ProspectAssessmentPanel
+              assessment={assessment}
+              takenAt={prospect.assessmentAt ?? null}
+            />
+          )}
 
           {/* Paid-click evidence — when the lead arrived with a Google/Meta
               click id, show it so Bruce knows this came from a paid click (and

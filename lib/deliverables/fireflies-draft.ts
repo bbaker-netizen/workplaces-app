@@ -32,7 +32,7 @@ import {
   soulFiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
-import { complete } from "@/lib/ai/anthropic";
+import { streamComplete } from "@/lib/ai/anthropic";
 import {
   deliverableSystemPrompt,
   deliverableUserPrompt,
@@ -130,7 +130,14 @@ export async function runDeliverableDraft(
     args.titleOverride ??
     `${DELIVERABLE_TYPE_LABEL[type]} — from ${transcript.title}`;
 
-  const result = await complete({
+  // MUST stream. The SDK rejects a non-streaming request whose max_tokens
+  // could push the call past ten minutes, and DRAFT_MAX_TOKENS is well over
+  // that line — it throws "Streaming is required for operations that may take
+  // longer than 10 minutes" in about two seconds, before reaching the model.
+  // Raising the cap to fix truncated drafts is what crossed the threshold, so
+  // the two changes cancelled out until this switched over. Nothing consumes
+  // the deltas here; we stream purely to satisfy the transport.
+  const result = await streamComplete({
     system: deliverableSystemPrompt(type),
     user: deliverableUserPrompt({
       title,
@@ -206,6 +213,41 @@ export async function runDeliverableDraft(
     transcriptTruncated,
     outputTruncated,
   };
+}
+
+/**
+ * Record a failed drafting run where the person who asked for it will look.
+ *
+ * A background job that dies is invisible by construction: the browser was
+ * already told "this is running, check Deliverables in a minute", the request
+ * is long gone, and the only trace is a line in a Netlify function log nobody
+ * reads. That is strictly worse than the inline version it replaced, which at
+ * least errored in front of you. So a failure writes a deliverable row of its
+ * own, carrying the reason, in the exact place the UI promised something would
+ * appear. Delete it once the cause is fixed.
+ */
+export async function recordDeliverableDraftFailure(args: {
+  engagementId: string;
+  orgId: string;
+  type: DeliverableType;
+  meetingLabel: string;
+  reason: string;
+}): Promise<void> {
+  const stamp = new Date().toLocaleString();
+  await withSystemContext(async (tx) => {
+    await tx.insert(deliverables).values({
+      orgId: args.orgId,
+      engagementId: args.engagementId,
+      type: args.type,
+      title: `Draft failed — ${DELIVERABLE_TYPE_LABEL[args.type]} from ${args.meetingLabel}`,
+      description:
+        `> _Drafting this deliverable from **${args.meetingLabel}** failed on ${stamp}. ` +
+        `Nothing was generated. This row exists so the run didn't disappear silently — ` +
+        `delete it once the cause below is sorted, and draft again._\n\n---\n\n` +
+        `**Reason reported:**\n\n\`\`\`\n${args.reason}\n\`\`\`\n`,
+      status: "in_progress",
+    });
+  });
 }
 
 /** Resolve a Meetings-library row to the args the drafter needs. */

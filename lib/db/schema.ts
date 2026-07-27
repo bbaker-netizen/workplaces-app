@@ -2385,6 +2385,25 @@ export const prospects = pgTable(
     /** Anything else the snippet sent in its click_ids object (future-proofing
      *  — new params land here without a migration). */
     clickIds: jsonb("click_ids"),
+    /** Structured result of the public assessment this lead took before we
+     *  ever spoke (today: Base Camp at /base-camp/). The tool already scores
+     *  the four Business Building Blocks and names the weakest one; without
+     *  this column all of that arrived as free text in `notes` and could not
+     *  be read, filtered or rendered.
+     *
+     *  Shape (see lib/pipeline/assessment.ts):
+     *    { tool, goal, goalCode, teamSize, revenueBand, weakestBlock,
+     *      weakestScore, secondBlock, blocks: {money,time,systems,people},
+     *      answers: { <question key>: <their answer> } }
+     *
+     *  JSONB rather than columns because the question set will change and a
+     *  second assessment should not need a migration. Latest submission wins;
+     *  earlier ones stay in the activity timeline. */
+    assessment: jsonb("assessment"),
+    /** When the assessment above was submitted. Separate from created_at so a
+     *  prospect who took the assessment months after first contact still
+     *  shows the right date on the panel. */
+    assessmentAt: timestamp("assessment_at", { withTimezone: true }),
     /** Google Ads offline-conversion upload watermarks — one per conversion
      *  action. Idempotency: a non-null timestamp means that (gclid, action)
      *  pair was already uploaded and must never be uploaded again. */

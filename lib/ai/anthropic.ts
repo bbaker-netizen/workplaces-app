@@ -197,11 +197,20 @@ export async function completeWithImage(input: {
 }
 
 /**
- * Streaming completion. Calls `onToken` with each text delta. Returns
- * the same result shape as `complete` once the stream finishes.
+ * Streaming completion. Calls `onToken` with each text delta, if given.
+ * Returns the same result shape as `complete` once the stream finishes.
+ *
+ * `onToken` is OPTIONAL because streaming isn't only for UIs that want
+ * partial text. The SDK REFUSES a non-streaming request whose `max_tokens`
+ * is large enough that the call could exceed ten minutes — it throws
+ * "Streaming is required for operations that may take longer than 10
+ * minutes" before it ever reaches the model. So any long-form generation
+ * (a full deliverable, a business plan) has to come through here even when
+ * nothing is watching the tokens go by. Use `complete` for short work and
+ * this for anything with a big output budget.
  */
 export async function streamComplete(
-  input: CompletionInput & { onToken: (delta: string) => void },
+  input: CompletionInput & { onToken?: (delta: string) => void },
 ): Promise<CompletionResult> {
   const model = input.model ?? "claude-sonnet-5";
   const maxTokens = input.maxTokens ?? 4096;
@@ -232,7 +241,7 @@ export async function streamComplete(
       event.delta.type === "text_delta"
     ) {
       text += event.delta.text;
-      input.onToken(event.delta.text);
+      input.onToken?.(event.delta.text);
     }
   }
 
