@@ -32,7 +32,7 @@ export function MeetingDeliverableButton({ meetingId }: { meetingId: string }) {
           setError(r.error);
         } else {
           setMessage(
-            `Drafted “${r.data.title}”. Find it under Deliverables (In progress) to review and edit before delivering.`,
+            `Reading the full transcript now — this runs in the background and usually takes a minute or two. The draft will appear under Deliverables as “In progress”; refresh that page to pick it up, then review and edit before delivering.`,
           );
         }
       } catch (e) {

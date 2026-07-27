@@ -34,6 +34,7 @@ import {
 import { resolveTemplateForProspect } from "@/lib/actions/email-templates";
 import { syncContactEmails } from "@/lib/actions/gmail-backfill";
 import type { CommunicationRow } from "@/lib/db/queries/client-communications";
+import { EmailAttachmentPicker } from "@/components/inbox/EmailAttachmentPicker";
 
 export type EmailTemplateOption = {
   id: string;
@@ -113,6 +114,10 @@ export function ClientCommunicationsPanel({
     prevSubject: string;
     prevBody: string;
   }>(null);
+  /** Ids of the client's existing documents picked for this email. Kept apart
+   *  from `composing.attachments` (freshly uploaded bytes) because these are
+   *  sent by reference. */
+  const [attachedDocIds, setAttachedDocIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -191,6 +196,7 @@ export function ClientCommunicationsPanel({
       replyTo,
       attachments: [],
     });
+    setAttachedDocIds([]);
   }
   function openSmsCompose() {
     setError(null);
@@ -201,6 +207,7 @@ export function ClientCommunicationsPanel({
       body: "",
       attachments: [],
     });
+    setAttachedDocIds([]);
   }
 
   async function addAttachments(files: FileList | null) {
@@ -294,6 +301,12 @@ export function ClientCommunicationsPanel({
                 base64: a.base64,
               }))
             : undefined,
+        // Documents picked off the client's existing file list. Sent as ids;
+        // the server pulls the bytes from Blobs.
+        documentIds:
+          composing.channel === "email" && attachedDocIds.length > 0
+            ? attachedDocIds
+            : undefined,
       });
       if (!r.ok) {
         setError(r.error);
@@ -313,6 +326,7 @@ export function ClientCommunicationsPanel({
       );
       setTimeout(() => setSentNotice(null), 12_000);
       setComposing(null);
+      setAttachedDocIds([]);
       router.refresh();
     });
   }
@@ -654,6 +668,21 @@ export function ClientCommunicationsPanel({
           )}
           {composing.channel === "email" && (
             <div className="space-y-2">
+              {/* Attach something already on file — the Climb PDF, a signed
+                  agreement, anything in this client's documents. Previously
+                  only the two Inbox composers offered this, so writing from
+                  the prospect's own profile left "Attach file" (upload from
+                  disk) as the only route to a document the app was already
+                  holding. Sends by document id, so the browser never shuttles
+                  the bytes. */}
+              {(prospectId || engagementId) && (
+                <EmailAttachmentPicker
+                  prospectId={prospectId ?? null}
+                  engagementId={engagementId ?? null}
+                  selectedIds={attachedDocIds}
+                  onChange={setAttachedDocIds}
+                />
+              )}
               {composing.attachments.length > 0 && (
                 <ul className="flex flex-wrap gap-1.5">
                   {composing.attachments.map((a, i) => (

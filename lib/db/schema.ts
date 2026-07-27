@@ -410,12 +410,13 @@ export const userProfiles = pgTable(
     pipelineColumnPrefs: jsonb("pipeline_column_prefs"),
     homeDashboardLayout: jsonb("home_dashboard_layout"),
     // Business Builder access control. master_admin configures other
-    // Business Builders' reach. `allClientsAccess` true (default) = sees
-    // every client, preserving prior behaviour; false = limited to the
-    // explicit grants in `bb_client_access`. `allowedConsoleModules` lists
-    // the console nav hrefs the user may use; null = all of them.
-    // master_admin always bypasses both checks in app logic.
-    allClientsAccess: boolean("all_clients_access").notNull().default(true),
+    // Business Builders' reach. `allClientsAccess` false (the default since
+    // migration 0093) = own book: the engagements they're the assigned coach
+    // on, plus any explicit grants in `bb_client_access`. True = sees every
+    // client, an opt-in the master admin turns on from Team access.
+    // `allowedConsoleModules` lists the console nav hrefs the user may use;
+    // null = all of them. master_admin always bypasses both checks.
+    allClientsAccess: boolean("all_clients_access").notNull().default(false),
     allowedConsoleModules: jsonb("allowed_console_modules").$type<string[] | null>(),
     // First-login onboarding (migration 0066). NULL = show the welcome +
     // setup checklist on next console visit; set = already welcomed.
@@ -501,7 +502,9 @@ export const bbInviteAccess = pgTable(
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
-    allClientsAccess: boolean("all_clients_access").notNull().default(true),
+    // Same own-book default as `user_profiles` — an invite must not be the
+    // back door that re-opens practice-wide access for the next Builder.
+    allClientsAccess: boolean("all_clients_access").notNull().default(false),
     allowedConsoleModules: jsonb("allowed_console_modules").$type<string[] | null>(),
     grantedEngagementIds: jsonb("granted_engagement_ids")
       .$type<string[]>()
