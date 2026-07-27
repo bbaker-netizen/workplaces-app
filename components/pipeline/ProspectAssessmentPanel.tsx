@@ -27,6 +27,14 @@ import {
   type StoredAssessment,
 } from "@/lib/pipeline/assessment";
 
+/** Panel title by producing tool. Base Camp was the first; "Before we meet"
+ *  is the pre-meeting Stages assessment. An unknown tool falls back to a
+ *  neutral label rather than mislabelling itself as one of the others. */
+const TOOL_TITLES: Record<string, string> = {
+  base_camp: "Base Camp assessment",
+  pre_meeting: "Before we meet: pre-meeting assessment",
+};
+
 /** Full literal class strings — see the note in the file header. */
 const BAND_STYLES: Record<AssessmentBand, { text: string; bar: string }> = {
   solid: { text: "text-tbb-success", bar: "bg-tbb-success" },
@@ -52,7 +60,7 @@ export function ProspectAssessmentPanel({
       <header className="flex items-baseline justify-between gap-3 border-b border-tbb-line-soft px-5 py-3">
         <h2 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
           <ClipboardCheck className="w-3.5 h-3.5" aria-hidden />
-          Base Camp assessment
+          {TOOL_TITLES[assessment.tool] ?? "Assessment"}
         </h2>
         {takenAt && (
           <span className="text-[11px] text-tbb-ink-3">

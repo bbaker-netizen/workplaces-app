@@ -463,6 +463,63 @@ export function ProspectTable({
     ownerFilter === "all" &&
     query === "" &&
     sortBy === "updated";
+  /**
+   * Every filter currently narrowing the list, each with its own clear.
+   *
+   * Only the ones that actually exclude rows are listed — the stage
+   * selection is included only when it isn't the default set, so the normal
+   * view doesn't accuse itself of filtering. Each clear touches ONE control,
+   * which is the point: Reset view also restores the default stages, so it
+   * was destroying the selection the user was in the middle of making.
+   */
+  const activeFilters = useMemo(() => {
+    const out: { key: string; label: string; clear: () => void }[] = [];
+    if (query.trim()) {
+      out.push({
+        key: "q",
+        label: `Search “${query.trim()}”`,
+        clear: () => setQuery(""),
+      });
+    }
+    if (!archived && !sameStages(stages, FUNNEL_STAGES)) {
+      out.push({
+        key: "stages",
+        label:
+          stages.size === 0
+            ? "No stages selected"
+            : `${stages.size} stage${stages.size === 1 ? "" : "s"}`,
+        clear: () => setStages(new Set(FUNNEL_STAGES)),
+      });
+    }
+    if (sourceFilter !== "all") {
+      out.push({
+        key: "source",
+        label: `Source: ${sourceFilter}`,
+        clear: () => setSourceFilter("all"),
+      });
+    }
+    if (ownerFilter !== "all") {
+      const name =
+        ownerFilter === OWNER_UNASSIGNED
+          ? "Unassigned"
+          : (ownerOptions.owners.find((o) => o.id === ownerFilter)?.name ??
+            "a Business Builder");
+      out.push({
+        key: "owner",
+        label: `Owner: ${name}`,
+        clear: () => setOwnerFilter("all"),
+      });
+    }
+    if (archived) {
+      out.push({
+        key: "archived",
+        label: "Archived only",
+        clear: () => setArchived(false),
+      });
+    }
+    return out;
+  }, [query, stages, archived, sourceFilter, ownerFilter, ownerOptions]);
+
   function resetView() {
     setStages(new Set(FUNNEL_STAGES));
     setArchived(false);
@@ -1191,9 +1248,35 @@ export function ProspectTable({
                 <tr>
                   <td
                     colSpan={visibleColumns.length + 1}
-                    className="px-4 py-8 text-center text-sm text-tbb-ink-3 italic"
+                    className="px-4 py-8 text-center text-sm text-tbb-ink-3"
                   >
-                    No prospects match your filters.
+                    {/* Naming the active filters, with a clear on each.
+                        "No prospects match your filters" was true but
+                        useless: with four independent controls (stages,
+                        source, owner, search) it never said WHICH one
+                        emptied the list, so the only way out was Reset
+                        view — which also throws away the stage selection
+                        you were deliberately making. */}
+                    <p className="italic">No prospects match your filters.</p>
+                    {activeFilters.length > 0 && (
+                      <div className="mt-3 flex items-center justify-center gap-2 flex-wrap not-italic">
+                        <span className="text-xs text-tbb-ink-4">
+                          Narrowed by:
+                        </span>
+                        {activeFilters.map((f) => (
+                          <button
+                            key={f.key}
+                            type="button"
+                            onClick={f.clear}
+                            title={`Clear this filter — ${f.label}`}
+                            className="inline-flex items-center gap-1 rounded-pill border border-tbb-line bg-white px-2.5 py-1 text-xs text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"
+                          >
+                            {f.label}
+                            <X className="w-3 h-3" aria-hidden />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </td>
                 </tr>
               )}
