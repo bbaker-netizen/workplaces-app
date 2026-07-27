@@ -385,7 +385,7 @@ Bruce's working hours are Monday–Friday, 8:30 AM–6:00 PM Mountain Time. Do n
 
 ## What was built in Phase 0
 
-Tagged `v0.1.0` on 2026-05-02. Live at <https://workplaces-the-builder.netlify.app>.
+Tagged `v0.1.0` on 2026-05-02. Live at <https://builder.4workplaces.com>.
 
 Foundation scaffold proving every layer end-to-end: Next.js 14 + Neon Postgres 17 + Clerk auth + Netlify deploy. Brand locked to The Builder. Multi-tenancy via Postgres RLS + dual-role pattern (`neondb_owner` for DDL, `workplaces_app` for runtime queries). Three tenant helpers in `lib/db/tenant.ts` — `withTenantContext`, `withBootstrapContext`, `withSystemContext` — make the right RLS pattern the easy pattern. Verified by `scripts/verify-rls.mjs` (14 assertions across two synthetic tenants).
 
@@ -651,7 +651,7 @@ All five run as one `Promise.all` in the page handler — five batched round-tri
 
 **Greeting** ("Good morning / afternoon / evening") and first-name address. Brand palette intact (Drafting Cream cards, Foreman Black ink, Steel Blue links).
 
-**Acceptance:** Land on https://workplaces-the-builder.netlify.app/portal (or http://localhost:3000/portal in dev). See the five cards populated with real data from your engagement. Each card links into its full module page.
+**Acceptance:** Land on https://builder.4workplaces.com/portal (or http://localhost:3000/portal in dev). See the five cards populated with real data from your engagement. Each card links into its full module page.
 
 ---
 
@@ -1591,28 +1591,28 @@ This is the manual checklist for onboarding the first real client (Impactica) on
 2. **Add the four Phase 1.4 env vars to Netlify.** Open https://app.netlify.com/sites/workplaces-the-builder/settings/env and add:
    - `RESEND_API_KEY` — value from https://resend.com/api-keys (the rotated key, not the original).
    - `RESEND_FROM_EMAIL` — `The Builder <notifications@4workplaces.com>`
-   - `NEXT_PUBLIC_APP_URL` — `https://workplaces-the-builder.netlify.app`
+   - `NEXT_PUBLIC_APP_URL` — `https://builder.4workplaces.com`
    - `CRON_SECRET` — same value as `.env.local`. (If it doesn't exist there, generate a new random 32-byte string and put it in both places.)
 
 3. **Confirm Netlify Blobs is enabled.** Open https://app.netlify.com/sites/workplaces-the-builder/configuration/blobs — should be on by default for paid plans. If off, click Enable.
 
 4. **Trigger a fresh deploy.** Push or click Deploy in the Netlify dashboard. Verify build green, all 23 routes listed.
 
-5. **Smoke-test as Bruce (master_admin).** Visit https://workplaces-the-builder.netlify.app/portal — see the dashboard. Visit each tab in the nav — Action items, Sessions, Communication, Documents, Soul File. Each should render without error. Upload a small PDF to Documents. Schedule a session. Post a message in the Leadership thread.
+5. **Smoke-test as Bruce (master_admin).** Visit https://builder.4workplaces.com/portal — see the dashboard. Visit each tab in the nav — Action items, Sessions, Communication, Documents, Soul File. Each should render without error. Upload a small PDF to Documents. Schedule a session. Post a message in the Leadership thread.
 
 **Per-client handoff (once per real client):**
 
-6. **Create the engagement.** Go to https://workplaces-the-builder.netlify.app/coach/engagements/new. Fill in: engagement name (e.g. "Impactica"), type (Accelerator or Implementer), client lead's full name and email, planned start date. Submit. The form creates a Clerk Organization, an `orgs` row, an `engagements` row, sends the invitation email, then strips Bruce as auto-admin of the new Clerk Org.
+6. **Create the engagement.** Go to https://builder.4workplaces.com/coach/engagements/new. Fill in: engagement name (e.g. "Impactica"), type (Accelerator or Implementer), client lead's full name and email, planned start date. Submit. The form creates a Clerk Organization, an `orgs` row, an `engagements` row, sends the invitation email, then strips Bruce as auto-admin of the new Clerk Org.
 
 7. **Verify the invitation.** Open https://dashboard.clerk.com/last-active/organizations/<org_id> (the URL shows up after the form succeeds). The invitation should appear under Pending. Optionally, ask the client lead to forward you the invitation email's subject line so you know it landed.
 
-8. **Client lead accepts.** They click the email link, sign up at https://workplaces-the-builder.netlify.app/sign-up, complete Clerk's sign-up flow, land at /portal. First-visit provisioning auto-creates their `user_profiles` row with `role=client_lead` from the invitation's `publicMetadata.app_role`.
+8. **Client lead accepts.** They click the email link, sign up at https://builder.4workplaces.com/sign-up, complete Clerk's sign-up flow, land at /portal. First-visit provisioning auto-creates their `user_profiles` row with `role=client_lead` from the invitation's `publicMetadata.app_role`.
 
-9. **Populate the Soul File.** As Bruce, open https://workplaces-the-builder.netlify.app/coach/soul-file/<engagement_id> (the engagement id is in the URL after step 6). Hit Start writing. Drop in the deep context for this client — the methodology IP that drives every BBS.
+9. **Populate the Soul File.** As Bruce, open https://builder.4workplaces.com/coach/soul-file/<engagement_id> (the engagement id is in the URL after step 6). Hit Start writing. Drop in the deep context for this client — the methodology IP that drives every BBS.
 
-10. **Schedule the first BBS.** https://workplaces-the-builder.netlify.app/coach/sessions/<engagement_id> → Schedule a session form. Date/time in MT, format (in-person or virtual), agenda in notes.
+10. **Schedule the first BBS.** https://builder.4workplaces.com/coach/sessions/<engagement_id> → Schedule a session form. Date/time in MT, format (in-person or virtual), agenda in notes.
 
-11. **Send a welcome message.** https://workplaces-the-builder.netlify.app/coach/communication/<engagement_id> → Leadership tab. Welcome them, point them at the Sessions tab.
+11. **Send a welcome message.** https://builder.4workplaces.com/coach/communication/<engagement_id> → Leadership tab. Welcome them, point them at the Sessions tab.
 
 **Known gaps (deferred to Phase 2+):**
 
