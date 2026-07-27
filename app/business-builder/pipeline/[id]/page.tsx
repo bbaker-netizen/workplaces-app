@@ -458,7 +458,6 @@ export default async function ProspectDetailPage({
             title="Prep with The Climb"
             storageKey="climb-prep"
             icon={<Mountain className="w-3.5 h-3.5" aria-hidden />}
-            defaultOpen={Boolean(assessment)}
           >
             <div className="p-5 space-y-4">
               {/* What they told us before we spoke. This lives inside the prep
@@ -509,7 +508,6 @@ export default async function ProspectDetailPage({
           <CollapsibleSection
             title="Schedule a meeting"
             storageKey="schedule-meeting"
-            defaultOpen
             icon={<Video className="w-3.5 h-3.5" aria-hidden />}
           >
             <div className="p-5">
