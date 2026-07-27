@@ -24,7 +24,18 @@ import {
   prospects,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
+
+/**
+ * True only when the caller may write to EVERY id in the batch. Not exported
+ * — "use server" requires every export to be an async server action, and this
+ * is an internal helper.
+ */
+async function allProspectsWritable(ids: string[]): Promise<boolean> {
+  const checks = await Promise.all(ids.map((id) => canCurrentBbWriteProspect(id)));
+  return checks.every(Boolean);
+}
 import {
   LEAD_SOURCE_CHANNELS,
   LEAD_SOURCE_LABELS,
@@ -266,6 +277,13 @@ export async function updateProspect(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   const data = parsed.data;
+
+  // Gating the READ without gating the write leaves the boundary decorative:
+  // a Builder who can no longer see another's lead could still change its
+  // stage, reassign its owner, or archive it by posting the id.
+  if (!(await canCurrentBbWriteProspect(data.id))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
 
   // NOTE: updates deliberately do NOT re-run the identity validator.
   // Editing one field (e.g. a phone) used to send the whole
@@ -558,6 +576,9 @@ export async function deleteProspect(
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
     return { ok: false, error: "Business Builders only." };
+  if (!(await canCurrentBbWriteProspect(id))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
   try {
     await withSystemContext(async (tx) => {
       // Soft-delete: archive instead of hard-delete so a mis-click is
@@ -597,6 +618,9 @@ export async function unarchiveProspect(
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
     return { ok: false, error: "Business Builders only." };
+  if (!(await canCurrentBbWriteProspect(id))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
   try {
     await withSystemContext(async (tx) => {
       const [row] = await tx
@@ -649,6 +673,13 @@ export async function bulkDeleteProspects(
       ok: false,
       error: "Delete in smaller batches — 200 max at a time.",
     };
+  // Refuse the whole batch if any id is out of the caller's reach, rather
+  // than quietly deleting the subset they own. A partial result reported as
+  // success is how you end up believing something was archived when it
+  // wasn't. In normal use every id came from a list they can already see.
+  if (!(await allProspectsWritable(ids))) {
+    return { ok: false, error: "That selection includes a lead you don't have access to." };
+  }
   // Basic shape check; UUIDs are 36 chars.
   for (const id of ids) {
     if (typeof id !== "string" || id.length > 100) {
@@ -728,6 +759,9 @@ export async function permanentlyDeleteProspect(
     return { ok: false, error: "Not authenticated." };
   if (profile.role !== "master_admin" && profile.role !== "coach")
     return { ok: false, error: "Business Builders only." };
+  if (!(await canCurrentBbWriteProspect(id))) {
+    return { ok: false, error: "You don't have access to that lead." };
+  }
   try {
     const result = await withSystemContext(async (tx) => {
       return await tx
@@ -779,6 +813,9 @@ export async function bulkPermanentlyDeleteProspects(
       ok: false,
       error: "Delete in smaller batches — 200 max at a time.",
     };
+  if (!(await allProspectsWritable(ids))) {
+    return { ok: false, error: "That selection includes a lead you don't have access to." };
+  }
   for (const id of ids) {
     if (typeof id !== "string" || id.length > 100)
       return { ok: false, error: "Invalid prospect id in selection." };

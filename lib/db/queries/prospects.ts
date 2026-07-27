@@ -192,3 +192,22 @@ export async function listProspectActivities(
     return rows.map((r) => ({ ...r.activity, authorName: r.authorName }));
   });
 }
+
+/**
+ * May the calling Business Builder WRITE to this prospect?
+ *
+ * Same rule as `getProspect`, expressed as a boolean for the server actions.
+ * It exists because gating reads alone leaves the door open: `updateProspect`
+ * and the delete paths took a prospect id and checked only that the caller was
+ * a Business Builder, so a coach who could no longer SEE another Builder's
+ * lead could still change its stage, its owner, or archive it by id. Read and
+ * write have to agree, or the boundary is decorative.
+ *
+ * Returns true for the master admin, for a Builder holding practice-wide
+ * access, for the prospect's owner, for an unclaimed prospect (nobody owns
+ * inbound leads until someone takes them), and for a converted prospect whose
+ * engagement the caller can already work.
+ */
+export async function canCurrentBbWriteProspect(id: string): Promise<boolean> {
+  return (await getProspect(id)) !== null;
+}
