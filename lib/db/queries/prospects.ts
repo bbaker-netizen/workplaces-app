@@ -16,6 +16,10 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getClientScope } from "@/lib/db/queries/business-builder-cross-engagement";
+import {
+  canCurrentBbAccessEngagement,
+  getCurrentBbAccess,
+} from "@/lib/db/queries/bb-access";
 
 export type PipelineProspect = Prospect & {
   ownerName: string | null;
@@ -96,7 +100,26 @@ export async function listProspects(): Promise<PipelineProspect[]> {
   });
 }
 
+/**
+ * Fetch one prospect by id — access-checked.
+ *
+ * The list is scoped by `prospectScopeWhere`, but a scoped LIST is not a
+ * boundary on its own: without this check a Business Builder reaches any
+ * lead in the practice by pasting its id into the URL. A coach may open a
+ * prospect they own, one nobody has claimed (same rule as the list — unowned
+ * inbound leads are up for grabs, and the lead webhooks never set an owner),
+ * or one whose converted engagement they can already access. The master
+ * admin, and any Builder explicitly granted practice-wide reach, sees all.
+ */
 export async function getProspect(id: string): Promise<PipelineProspect | null> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return null;
+  const isBb =
+    profile.role === "master_admin" || profile.role === "coach";
+  if (!isBb) return null;
+  const access = await getCurrentBbAccess();
+  const unrestricted = access.isMasterAdmin || access.allClientsAccess;
+
   return withSystemContext(async (tx) => {
     const [row] = await tx
       .select({
@@ -118,6 +141,24 @@ export async function getProspect(id: string): Promise<PipelineProspect | null> 
       .where(eq(prospects.id, id))
       .limit(1);
     if (!row) return null;
+
+    if (!unrestricted) {
+      const owner = row.prospect.ownerUserProfileId;
+      const mineOrUnclaimed =
+        owner === null || owner === profile.userProfileId;
+      if (!mineOrUnclaimed) {
+        // Converted prospects follow their engagement: if this Builder can
+        // work the client, they can see the lead it came from.
+        const converted = row.prospect.convertedEngagementId;
+        if (
+          !converted ||
+          !(await canCurrentBbAccessEngagement(converted))
+        ) {
+          return null;
+        }
+      }
+    }
+
     return {
       ...row.prospect,
       ownerName: row.ownerName,

@@ -150,10 +150,14 @@ export function DeliverablesBoard({
       ) : (
         <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
           {items.map((d) => (
-            <li key={d.id} className="py-3 flex items-start gap-3 flex-wrap">
+            <li key={d.id} className="py-2.5 flex items-start gap-3 flex-wrap">
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                  <span className="font-bold text-foreground text-base tracking-tight">
+                  {/* Deliverable titles run long (type label + source meeting
+                      name), so the row reads as a heading rather than a list
+                      entry at text-base. Dropped to text-sm to match the
+                      other console list rows. */}
+                  <span className="font-bold text-foreground text-sm tracking-tight">
                     {d.title}
                   </span>
                   <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
@@ -161,7 +165,7 @@ export function DeliverablesBoard({
                   </span>
                 </div>
                 {d.description && (
-                  <p className="mt-0.5 font-sans text-sm text-muted-foreground line-clamp-2">
+                  <p className="mt-0.5 font-sans text-xs text-muted-foreground line-clamp-2">
                     {d.description}
                   </p>
                 )}

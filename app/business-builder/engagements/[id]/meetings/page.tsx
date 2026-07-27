@@ -32,6 +32,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
 import { MeetingActionItemsButton } from "@/components/meetings/MeetingActionItemsButton";
+import { MeetingDeliverableButton } from "@/components/meetings/MeetingDeliverableButton";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { formatMeetingSummary } from "@/lib/meetings/format";
 
@@ -179,6 +180,7 @@ function MeetingCard({
             </a>
           )}
           <MeetingActionItemsButton meetingId={meeting.id} />
+          <MeetingDeliverableButton meetingId={meeting.id} />
           {meeting.summaryOverview && (
             <section>
               <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">

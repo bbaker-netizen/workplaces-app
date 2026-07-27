@@ -13,7 +13,7 @@
  */
 
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { bbClientAccess, engagements, userProfiles } from "../schema";
+import { bbClientAccess, coaches, engagements, userProfiles } from "../schema";
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
@@ -57,12 +57,17 @@ export async function getCurrentBbAccess(): Promise<BbAccess> {
   // Fail-safe: this read sits on the hot path for EVERY authenticated page
   // (console layout + getCurrentEngagement). If it ever throws — a migration
   // still landing, a transient DB error — we must not take the whole app
-  // down. Fall back to full access (the pre-feature default) so the app
-  // always loads; restrictions simply don't apply until the read recovers.
-  const coachFullAccess: BbAccess = {
+  // down, so the app still loads.
+  //
+  // It falls back to own-book, NOT to full access. A transient error must
+  // never hand one Business Builder the whole practice's client list; the
+  // ownership check in `canCurrentBbAccessEngagement` still grants them
+  // everything they actually own, so the degraded state is "your own
+  // clients", which is both safe and usable.
+  const coachOwnBook: BbAccess = {
     isMasterAdmin: false,
     isBusinessBuilder: true,
-    allClientsAccess: true,
+    allClientsAccess: false,
     allowedConsoleModules: null,
     grantedEngagementIds: [],
   };
@@ -78,7 +83,8 @@ export async function getCurrentBbAccess(): Promise<BbAccess> {
         .where(eq(userProfiles.id, profile.userProfileId))
         .limit(1);
 
-      const allClientsAccess = row?.allClientsAccess ?? true;
+      // Absent row => own-book, matching the column's new default.
+      const allClientsAccess = row?.allClientsAccess ?? false;
       const allowedConsoleModules =
         (row?.allowedConsoleModules as string[] | null) ?? null;
 
@@ -102,8 +108,11 @@ export async function getCurrentBbAccess(): Promise<BbAccess> {
       };
     });
   } catch (e) {
-    console.error("[bb-access] getCurrentBbAccess read failed; defaulting to full access", e);
-    return coachFullAccess;
+    console.error(
+      "[bb-access] getCurrentBbAccess read failed; falling back to own-book access",
+      e,
+    );
+    return coachOwnBook;
   }
 }
 
@@ -120,12 +129,57 @@ export async function canCurrentBbAccessEngagement(
   if (access.isMasterAdmin || access.allClientsAccess) return true;
   if (access.grantedEngagementIds.includes(engagementId)) return true;
 
+  // Your own book. This is the primary route for a standard Business
+  // Builder and the reason `all_clients_access` no longer needs to be on
+  // for them to work: access follows `engagements.coach_id`, which is
+  // already maintained when a client is assigned, so there is no second
+  // list to keep in sync. Explicit `bb_client_access` grants above stay
+  // available for clients shared between Builders.
+  if (await ownsOrIsUnclaimed(engagementId)) return true;
+
   // The practice's internal workspace is not a client — per-client
   // grants don't govern it. Every Business Builder is a participant in
   // the team's own touch-bases and can be tasked by a teammate, even
   // one restricted to a subset of clients. Checked last so the common
   // path costs no extra query.
   return isInternalEngagement(engagementId);
+}
+
+/**
+ * True when the calling Business Builder is the engagement's assigned coach,
+ * OR when the engagement has no coach at all.
+ *
+ * The unclaimed half is deliberate and matches `coachScopeWhere`: an
+ * engagement created without a coach must not fall out of EVERY Builder's
+ * view at once, leaving work nobody can see or claim. Today there are no
+ * coachless engagements, so this is defensive.
+ *
+ * Errors deny rather than grant — this sits behind the flag check, so a
+ * failure here can only ever withhold access, never widen it.
+ */
+async function ownsOrIsUnclaimed(engagementId: string): Promise<boolean> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return false;
+  try {
+    return await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({ coachId: engagements.coachId })
+        .from(engagements)
+        .where(eq(engagements.id, engagementId))
+        .limit(1);
+      if (!row) return false;
+      if (row.coachId === null) return true;
+      const [mine] = await tx
+        .select({ id: coaches.id })
+        .from(coaches)
+        .where(eq(coaches.userProfileId, profile.userProfileId))
+        .limit(1);
+      return Boolean(mine && mine.id === row.coachId);
+    });
+  } catch (e) {
+    console.error("[bb-access] ownsOrIsUnclaimed read failed", e);
+    return false;
+  }
 }
 
 /** True when this engagement is the practice's own team workspace. */

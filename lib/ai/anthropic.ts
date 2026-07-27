@@ -81,6 +81,14 @@ export type CompletionResult = {
   outputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  /**
+   * Why generation stopped. `"max_tokens"` means the response was CUT OFF at
+   * the output cap — the text is incomplete, not a finished short answer.
+   * Callers producing long-form documents must check this: silently treating
+   * a truncated draft as complete is what makes a deliverable look like it
+   * "missed things" that were actually never reached.
+   */
+  stopReason: string | null;
 };
 
 /**
@@ -125,6 +133,7 @@ export async function complete(
     outputTokens: response.usage.output_tokens,
     cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
     cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+    stopReason: response.stop_reason ?? null,
   };
 }
 
@@ -183,6 +192,7 @@ export async function completeWithImage(input: {
     outputTokens: response.usage.output_tokens,
     cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
     cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+    stopReason: response.stop_reason ?? null,
   };
 }
 
@@ -233,6 +243,7 @@ export async function streamComplete(
     outputTokens: final.usage.output_tokens,
     cacheReadTokens: final.usage.cache_read_input_tokens ?? 0,
     cacheCreationTokens: final.usage.cache_creation_input_tokens ?? 0,
+    stopReason: final.stop_reason ?? null,
   };
 }
 

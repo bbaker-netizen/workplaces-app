@@ -1,68 +1,43 @@
 "use server";
 
 /**
- * Fireflies transcript → drafted deliverable.
+ * Fireflies transcript → drafted deliverable (enqueue side).
  *
  * The deliverable sibling of the action-item extractor
- * (`lib/actions/fireflies-extract.ts`). Where that pulls a meeting's
- * to-dos into draft action items, this pulls a meeting into a first
- * draft of one of the nine methodology deliverables — the Business
- * Builder picks WHICH type, Claude drafts it from the transcript plus
- * the engagement's Soul File, and the result lands as a new
- * `in_progress` deliverable the Builder edits and reviews before
- * delivering to the client.
+ * (`lib/actions/fireflies-extract.ts`). Where that pulls a meeting's to-dos
+ * into draft action items, this pulls a meeting into a first draft of one of
+ * the nine methodology deliverables — the Business Builder picks WHICH type,
+ * Claude drafts it from the transcript plus the engagement's Soul File, and
+ * the result lands as a new `in_progress` deliverable the Builder edits and
+ * reviews before delivering to the client.
  *
- * Flow per CLAUDE.md "generated in-app, reviewed in the Deliverables
- * module, delivered to the portal":
+ * These actions only AUTHORIZE and ENQUEUE. The drafting itself runs in
+ * `netlify/functions/draft-deliverable-background.mts` (core logic in
+ * `lib/deliverables/fireflies-draft.ts`), because reading a long transcript
+ * and generating a long-form document takes minutes and Netlify kills a
+ * synchronous function at ~26 seconds. It used to run inline here, which is
+ * why "Draft from this meeting" returned a dead action instead of a
+ * deliverable. Same move the action-item extractor already made.
  *
- *   1. Coach opens a BBS session that has a Fireflies recording id.
- *   2. Picks a deliverable type + (optional) title, clicks "Draft
- *      from this meeting".
- *   3. This action fetches the transcript, runs it through Claude with
- *      the type-specific deliverable prompt, and inserts a new
- *      deliverable in `in_progress` — NOT delivered. The draft body
- *      carries a header naming the source meeting.
- *   4. Coach edits/reviews in the Deliverables module, then sets it to
- *      Delivered when it's ready for the client.
- *
- * Authorization: Business Builders only — deliverables are outputs of
- * the methodology, produced by the coach for the client.
+ * Authorization stays HERE, on the signed-in request: role gate plus an
+ * engagement-access check. The background function runs under system context
+ * and trusts that this ran first — so nothing below may be skipped.
  */
 
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { type UserProfile } from "@/lib/db/schema";
+import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import {
-  bbsSessions,
-  deliverables,
-  engagementMeetings,
-  soulFiles,
-  type UserProfile,
-} from "@/lib/db/schema";
-import {
-  resolveEngagementIdFromRecord,
-  withEngagementContext,
-  withSystemContext,
-} from "@/lib/db/tenant";
-import { complete } from "@/lib/ai/anthropic";
-import {
-  deliverableSystemPrompt,
-  deliverableUserPrompt,
-} from "@/lib/ai/prompts/deliverables";
-import {
-  fetchTranscript,
-  transcriptToPlainText,
-} from "@/lib/integrations/fireflies";
-import {
-  DELIVERABLE_TYPES,
-  DELIVERABLE_TYPE_LABEL,
-} from "@/lib/deliverables/types";
+  resolveMeetingDraftTarget,
+  resolveSessionDraftTarget,
+} from "@/lib/deliverables/fireflies-draft";
+import { DELIVERABLE_TYPES } from "@/lib/deliverables/types";
 
 type Role = UserProfile["role"];
 function canEdit(role: Role): boolean {
-  // Same gate as the action-item extractor: the coach controls what
-  // gets drafted from a meeting. Clients can't pull deliverables.
+  // Same gate as the action-item extractor: the coach controls what gets
+  // drafted from a meeting. Clients can't pull deliverables.
   return role === "master_admin" || role === "coach";
 }
 
@@ -71,155 +46,61 @@ export type ActionResult<T = void> =
   | { ok: false; error: string };
 
 const typeEnum = z.enum(DELIVERABLE_TYPES);
-type DType = z.infer<typeof typeEnum>;
 
 /**
- * Shared drafting core. Given an engagement, a Fireflies recording id,
- * and a deliverable type, fetches the transcript + Soul File, drafts the
- * deliverable with Claude, and inserts it as `in_progress`. Both entry
- * points (a BBS session, or a meeting from the library) resolve down to
- * this. Not exported — "use server" requires every export to be an async
- * action, and this is an internal helper.
+ * Hand off to the background function. Returns an error string on failure,
+ * null on success. Not exported — "use server" requires every export to be an
+ * async server action.
  */
-async function draftFromRecording(args: {
-  profile: Extract<
-    Awaited<ReturnType<typeof ensureUserProfile>>,
-    { status: "ok" }
-  >;
-  engagementId: string;
-  firefliesRecordingId: string;
-  type: DType;
-  titleOverride?: string;
-}): Promise<ActionResult<{ id: string; type: string; title: string }>> {
-  const { profile, engagementId, firefliesRecordingId, type } = args;
-
-  // Soul File for grounding context (access-checked via the bound context)
-  // + the Fireflies transcript. Both are wrapped so a thrown error (a
-  // Fireflies API failure, or a missing FIREFLIES_API_KEY) surfaces as a
-  // real inline message instead of throwing out of the server action —
-  // an uncaught throw here is what renders the generic "we hit a snag"
-  // error page with no detail.
-  let soulFileBody: string;
-  let transcript: Awaited<ReturnType<typeof fetchTranscript>>;
+async function enqueueDraft(payload: {
+  source: "meeting" | "session";
+  sourceId: string;
+  type: string;
+  title?: string;
+}): Promise<string | null> {
+  const baseUrl =
+    process.env.URL ??
+    process.env.DEPLOY_PRIME_URL ??
+    process.env.NEXT_PUBLIC_APP_URL;
+  const secret = process.env.CRON_SECRET;
+  if (!baseUrl || !secret) {
+    return "Background drafting isn't configured on the server (missing URL or CRON_SECRET).";
+  }
   try {
-    soulFileBody = await withEngagementContext(
-      profile.orgId,
-      profile.role,
-      engagementId,
-      async (tx) => {
-        const [sf] = await tx
-          .select({ body: soulFiles.body })
-          .from(soulFiles)
-          .where(eq(soulFiles.engagementId, engagementId))
-          .limit(1);
-        return sf?.body ?? "";
+    const resp = await fetch(
+      `${baseUrl}/.netlify/functions/draft-deliverable-background`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
     );
-    transcript = await fetchTranscript(firefliesRecordingId);
+    // Background functions answer 202 Accepted. Anything else means the job
+    // never started — surface it rather than pretending it's running.
+    if (resp.status !== 202 && !resp.ok) {
+      return `Couldn't start the drafting job (HTTP ${resp.status}). Try again in a moment.`;
+    }
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    return {
-      ok: false,
-      error: `Couldn't pull the transcript from Fireflies: ${detail}`,
-    };
+    return e instanceof Error ? e.message : String(e);
   }
-  if (!transcript) {
-    return {
-      ok: false,
-      error: "Fireflies didn't return a transcript for that meeting.",
-    };
-  }
-  const meetingDate = new Date(transcript.date).toISOString().slice(0, 10);
-  const transcriptText = transcriptToPlainText(transcript);
-
-  const title =
-    args.titleOverride ??
-    `${DELIVERABLE_TYPE_LABEL[type]} — from ${transcript.title}`;
-
-  // Draft the deliverable. The transcript rides in as extra context on
-  // top of the Soul File; the type-specific system prompt shapes the
-  // output.
-  let draftText: string;
-  try {
-    const result = await complete({
-      system: deliverableSystemPrompt(type),
-      user: deliverableUserPrompt({
-        title,
-        type,
-        soulFileBody,
-        extraContext:
-          `This deliverable should be drafted from the following Business ` +
-          `Building Session transcript. Pull concrete facts, decisions, ` +
-          `numbers, names, and commitments straight from what was said — ` +
-          `don't invent details the meeting didn't cover.\n\n` +
-          `**Meeting:** ${transcript.title} (${meetingDate})\n\n` +
-          `**Transcript:**\n\n${transcriptText}`,
-      }),
-      model: "claude-opus-4-8",
-      maxTokens: 8000,
-    });
-    draftText = result.text;
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    };
-  }
-
-  // Header so the reviewer knows this is an AI first draft and where it
-  // came from — mirrors the "Draft generated" stamp on the in-place
-  // generator. The deliverable stays in_progress until the Builder
-  // reviews, edits, and marks it Delivered.
-  const stamp = new Date().toLocaleString();
-  const description =
-    `> _Drafted by Claude from **${transcript.title}** (${meetingDate}) on ${stamp}. ` +
-    `Review and edit before delivering to the client._\n\n---\n\n${draftText}`;
-
-  let createdId: string;
-  try {
-    createdId = await withEngagementContext(
-      profile.orgId,
-      profile.role,
-      engagementId,
-      async (tx, boundOrgId) => {
-        const [row] = await tx
-          .insert(deliverables)
-          .values({
-            orgId: boundOrgId,
-            engagementId,
-            type,
-            title,
-            description,
-            status: "in_progress",
-          })
-          .returning({ id: deliverables.id });
-        return row.id;
-      },
-    );
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    };
-  }
-
-  revalidatePath("/portal/deliverables");
-  revalidatePath("/business-builder/deliverables");
-  return { ok: true, data: { id: createdId, type, title } };
+  return null;
 }
 
 const sessionInputSchema = z.object({
   sessionId: z.string().uuid(),
   type: typeEnum,
-  /** Optional override for the deliverable title. When omitted we build
-   *  one from the type label + the meeting title. */
+  /** Optional override for the deliverable title. When omitted the background
+   *  job builds one from the type label + the meeting title. */
   title: z.string().min(1).max(500).optional(),
 });
 
 /** Draft a deliverable from a BBS session that has a Fireflies recording id. */
 export async function draftDeliverableFromFireflies(
   input: z.input<typeof sessionInputSchema>,
-): Promise<ActionResult<{ id: string; type: string; title: string }>> {
+): Promise<ActionResult<{ queued: true }>> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
@@ -233,40 +114,27 @@ export async function draftDeliverableFromFireflies(
     };
   const { sessionId, type } = parsed.data;
 
-  const engagementId = await resolveEngagementIdFromRecord(
-    "bbs_sessions",
-    sessionId,
-  );
-  if (!engagementId) return { ok: false, error: "Session not found." };
-
-  const recordingId = await withEngagementContext(
-    profile.orgId,
-    profile.role,
-    engagementId,
-    async (tx) => {
-      const [session] = await tx
-        .select({ rec: bbsSessions.firefliesRecordingId })
-        .from(bbsSessions)
-        .where(eq(bbsSessions.id, sessionId))
-        .limit(1);
-      return session?.rec ?? null;
-    },
-  );
-  if (!recordingId) {
-    return {
-      ok: false,
-      error:
-        "This session has no Fireflies recording id. Add one before drafting.",
-    };
+  // Fast pre-flight: confirm the session exists and has a recording id before
+  // spending a background invocation, and confirm this Builder may touch the
+  // engagement it belongs to.
+  let engagementId: string;
+  try {
+    ({ engagementId } = await resolveSessionDraftTarget(sessionId));
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  if (!(await canCurrentBbAccessEngagement(engagementId))) {
+    return { ok: false, error: "You don't have access to that client." };
   }
 
-  return draftFromRecording({
-    profile,
-    engagementId,
-    firefliesRecordingId: recordingId,
+  const failure = await enqueueDraft({
+    source: "session",
+    sourceId: sessionId,
     type,
-    titleOverride: parsed.data.title,
+    title: parsed.data.title,
   });
+  if (failure) return { ok: false, error: failure };
+  return { ok: true, data: { queued: true } };
 }
 
 const meetingInputSchema = z.object({
@@ -276,14 +144,14 @@ const meetingInputSchema = z.object({
 });
 
 /**
- * Draft a deliverable from a meeting in the engagement's Meetings library
- * (a Fireflies-synced `engagement_meetings` row). Lets the Builder pull a
+ * Draft a deliverable from a meeting in the engagement's Meetings library (a
+ * Fireflies-synced `engagement_meetings` row). Lets the Builder pull a
  * deliverable straight from any recent meeting without wiring it to a BBS
  * session first.
  */
 export async function draftDeliverableFromMeeting(
   input: z.input<typeof meetingInputSchema>,
-): Promise<ActionResult<{ id: string; type: string; title: string }>> {
+): Promise<ActionResult<{ queued: true }>> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
@@ -297,40 +165,22 @@ export async function draftDeliverableFromMeeting(
     };
   const { meetingId, type } = parsed.data;
 
-  // Look up the meeting to get its engagement + transcript id. System
-  // context reads across the client org (meetings live in the client
-  // org); withEngagementContext below enforces the caller's access when
-  // we actually write the deliverable. Wrapped so a DB error returns a
-  // real message rather than throwing out of the action.
-  let meeting: {
-    engagementId: string;
-    firefliesTranscriptId: string;
-  } | null;
+  let engagementId: string;
   try {
-    meeting = await withSystemContext(async (tx) => {
-      const [m] = await tx
-        .select({
-          engagementId: engagementMeetings.engagementId,
-          firefliesTranscriptId: engagementMeetings.firefliesTranscriptId,
-        })
-        .from(engagementMeetings)
-        .where(eq(engagementMeetings.id, meetingId))
-        .limit(1);
-      return m ?? null;
-    });
+    ({ engagementId } = await resolveMeetingDraftTarget(meetingId));
   } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    };
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!meeting) return { ok: false, error: "Meeting not found." };
+  if (!(await canCurrentBbAccessEngagement(engagementId))) {
+    return { ok: false, error: "You don't have access to that client." };
+  }
 
-  return draftFromRecording({
-    profile,
-    engagementId: meeting.engagementId,
-    firefliesRecordingId: meeting.firefliesTranscriptId,
+  const failure = await enqueueDraft({
+    source: "meeting",
+    sourceId: meetingId,
     type,
-    titleOverride: parsed.data.title,
+    title: parsed.data.title,
   });
+  if (failure) return { ok: false, error: failure };
+  return { ok: true, data: { queued: true } };
 }
