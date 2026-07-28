@@ -41,6 +41,15 @@ export const EA_JOBS: { id: string; label: string; cadence: string }[] = [
   { id: "ea-recap-sweep", label: "Session recaps", cadence: "Hourly" },
   { id: "ea-client-nudge", label: "Client chasing", cadence: "Monday mornings" },
   { id: "ea-friday-rollup", label: "Friday rollup", cadence: "Friday afternoons" },
+  // Not an EA job, but it belongs on the same watch list: it is a
+  // scheduled job whose only failure mode is silence. It had never fired
+  // at all until 2026-07-28, and nothing surfaced that — a series quietly
+  // running out of dates looks identical to a series nobody uses.
+  {
+    id: "session-series-top-up",
+    label: "Recurring meeting horizon",
+    cadence: "Nightly",
+  },
 ];
 
 /** A job is stale once nothing has succeeded for this long. */

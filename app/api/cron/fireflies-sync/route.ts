@@ -5,7 +5,7 @@
  * summaries, recording links) into engagement_meetings so each client's
  * "Meeting notes" portal module stays current automatically — including
  * their recurring Business Building sessions (see
- * lib/actions/sync-engagement-meetings.ts → syncAllEngagementMeetings).
+ * lib/integrations/fireflies-sync.ts → syncAllEngagementMeetingsAsSystem).
  * Idempotent (UNIQUE on engagement_id + transcript_id), so it's safe to
  * run as often as the schedule fires.
  *
@@ -18,7 +18,11 @@
  */
 
 import { NextResponse } from "next/server";
-import { syncAllEngagementMeetings } from "@/lib/actions/sync-engagement-meetings";
+// The AsSystem variant, NOT the `lib/actions` one. That one guards on
+// `ensureUserProfile()`, which reads the Clerk session — a cron has none,
+// so it returned "0 engagements" in milliseconds every hour and recaps
+// never arrived. See the header of lib/integrations/fireflies-sync.ts.
+import { syncAllEngagementMeetingsAsSystem } from "@/lib/integrations/fireflies-sync";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,7 +44,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const result = await syncAllEngagementMeetings();
+    const result = await syncAllEngagementMeetingsAsSystem();
 
     // EA: pair transcripts to their sessions and draft any missing
     // recaps. Rides this job because it must run AFTER the meetings sync

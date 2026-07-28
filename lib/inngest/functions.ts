@@ -189,68 +189,36 @@ export const calendarSync = inngest.createFunction(
   },
 );
 
-/* ------------------------- Fireflies sync ------------------------- */
+/* ------------------------- Fireflies sync -------------------------
+ *
+ * REMOVED 2026-07-28. This was a dead duplicate of the live Netlify pair
+ * (`netlify/functions/fireflies-sync.mts` → `app/api/cron/fireflies-sync`),
+ * and it is the duplication itself that caused the outage: the copy here
+ * called `syncAllEngagementMeetings` from `lib/actions`, which guards on
+ * the Clerk session. When the real Netlify route was written it copied
+ * that same import, so the hourly job returned "0 engagements" in
+ * milliseconds and no session recap was ever drafted.
+ *
+ * Deleted rather than repaired, so there is exactly one Fireflies sync
+ * and no broken pattern left to copy. The recap sweep it used to carry
+ * now lives in the cron route.
+ */
 
-export const firefliesSync = inngest.createFunction(
-  { id: "fireflies-sync" },
-  // Hourly — pulls every active engagement's Fireflies meeting notes
-  // (recaps + recording links) into engagement_meetings so each client's
-  // "Meeting notes" module stays current, including recurring BBS calls.
-  { cron: "0 * * * *" },
-  async ({ step }) => {
-    const sync = await step.run("sync", async () => {
-      const { syncAllEngagementMeetings } = await import(
-        "@/lib/actions/sync-engagement-meetings"
-      );
-      return syncAllEngagementMeetings();
-    });
-
-    // EA: draft a recap for any session whose transcript has landed and
-    // that has not been recapped yet. Riding this cron rather than
-    // adding another is what makes "within an hour of the transcript
-    // landing" true. A separate step so a recap failure never rolls back
-    // the meeting sync above.
-    const recaps = await step.run("ea-recap-sweep", async () => {
-      const { runRecapSweep } = await import("@/lib/ea/recap-sweep");
-      const { withHeartbeat, gradeSweep } = await import("@/lib/ea/job-runs");
-      return withHeartbeat(
-        "ea-recap-sweep",
-        () => runRecapSweep(),
-        (r) => r.drafted,
-        (r) => gradeSweep({ succeeded: r.drafted + r.skipped, failed: r.failed }),
-      );
-    });
-
-    return { sync, recaps };
-  },
-);
-
-
-/* --------------------- Session series horizon --------------------- */
-
-export const sessionSeriesTopUp = inngest.createFunction(
-  { id: "session-series-top-up" },
-  // Nightly at 08:00 UTC (01:00/02:00 MT — outside Bruce's working
-  // window, so a long sweep never competes with real traffic). Keeps
-  // every active recurring meeting materialized ~90 days out, so a
-  // touch-base defined once keeps producing instances indefinitely.
-  //
-  // Idempotent: instance creation is guarded by a UNIQUE index on
-  // (series_id, series_occurrence_at), so a retry or an overlapping run
-  // inserts nothing rather than duplicating meetings.
-  { cron: "0 8 * * *" },
-  async ({ step }) => {
-    return step.run("top-up", async () => {
-      const { topUpAllSeries } = await import("@/lib/actions/session-series");
-      return topUpAllSeries();
-    });
-  },
-);
+/* --------------------- Session series horizon ---------------------
+ *
+ * REMOVED 2026-07-28. Same fault as the Fireflies sync above, found in
+ * the same sweep: this was the ONLY registration for the nightly
+ * recurring-meeting top-up, and Inngest does not fire in this app. So it
+ * had never run once, and every recurring series was drifting toward the
+ * end of its materialized horizon with nothing to say so.
+ *
+ * Now a real Netlify pair: `netlify/functions/session-series.mts` →
+ * `app/api/cron/session-series`, with a heartbeat so a second silent
+ * death is visible in the Friday rollup.
+ */
 
 export const allFunctions = [
   dueSoonFlush,
   firefliesExtract,
   calendarSync,
-  firefliesSync,
-  sessionSeriesTopUp,
 ];
