@@ -1303,7 +1303,16 @@ void and;
  */
 export async function deleteSignatureEnvelope(
   envelopeId: string,
-): Promise<ActionResult<{ deletedDocuments: number }>> {
+): Promise<
+  ActionResult<{
+    deletedDocuments: number;
+    /** Where to send the user afterwards — the record the agreement
+     *  belonged to, so they land back on the list they came from rather
+     *  than the top-level pipeline. */
+    prospectId: string | null;
+    engagementId: string | null;
+  }>
+> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
@@ -1325,6 +1334,8 @@ export async function deleteSignatureEnvelope(
       .select({
         id: signatureEnvelopes.id,
         subject: signatureEnvelopes.subject,
+        prospectId: signatureEnvelopes.prospectId,
+        engagementId: signatureEnvelopes.engagementId,
         sourceDocumentId: signatureEnvelopes.sourceDocumentId,
         signedDocumentId: signatureEnvelopes.signedDocumentId,
       })
@@ -1377,5 +1388,15 @@ export async function deleteSignatureEnvelope(
     `[deleteSignatureEnvelope] ${profile.email} deleted "${target.subject}" (${envelopeId}), ${deletedDocuments} file(s).`,
   );
   revalidatePath("/business-builder/pipeline");
-  return { ok: true, data: { deletedDocuments } };
+  if (target.prospectId) {
+    revalidatePath(`/business-builder/pipeline/${target.prospectId}`);
+  }
+  return {
+    ok: true,
+    data: {
+      deletedDocuments,
+      prospectId: target.prospectId,
+      engagementId: target.engagementId,
+    },
+  };
 }

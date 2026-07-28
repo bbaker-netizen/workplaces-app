@@ -22,6 +22,7 @@ import { updateProspect } from "@/lib/actions/prospects";
 import { activateProspectAsEngagement } from "@/lib/actions/activate-engagement";
 import {
   STAGE_ORDER,
+  canonicalStatus,
   STAGE_STYLES,
   type ProspectStatus,
 } from "@/lib/pipeline/stages";
@@ -32,15 +33,12 @@ const COLLAPSE_KEY = "tbb_pipeline_collapsed";
 
 // Retired / off-board statuses map onto the nearest working column so every
 // prospect lands somewhere. Dropping a card sets the column's real status.
-const STATUS_TO_COLUMN: Record<string, ProspectStatus> = {
-  diagnostic_pending: "contact_attempted",
-  diagnostic_complete: "first_contact",
-  negotiation: "proposal_sent",
-};
-
+// The mapping now lives in lib/pipeline/stages.ts and is shared with the
+// table filter, which used to ignore it — so a lead in a retired status
+// showed on the board but was invisible in the table.
 function columnFor(status: ProspectStatus): ProspectStatus {
-  if (STAGE_ORDER.includes(status)) return status;
-  return STATUS_TO_COLUMN[status] ?? "new_lead";
+  const canonical = canonicalStatus(status);
+  return STAGE_ORDER.includes(canonical) ? canonical : "new_lead";
 }
 
 function money(cents: number | null | undefined): string | null {

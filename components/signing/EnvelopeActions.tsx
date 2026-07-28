@@ -68,7 +68,16 @@ export function EnvelopeActions({
         setError(result.error);
         return;
       }
-      router.push("/business-builder/pipeline");
+      // Back to the record the agreement belonged to — where its list of
+      // agreements lives — not the top of the pipeline. Deleting one item
+      // shouldn't cost you your place.
+      router.push(
+        result.data.prospectId
+          ? `/business-builder/pipeline/${result.data.prospectId}`
+          : result.data.engagementId
+            ? `/business-builder/engagements/${result.data.engagementId}`
+            : "/business-builder/pipeline",
+      );
     });
   }
 

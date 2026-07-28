@@ -166,6 +166,42 @@ export const STAGE_ORDER: ProspectStatus[] = [
 ];
 
 /**
+ * Legacy statuses folded onto the stage that replaced them.
+ *
+ * `prospect_status_enum` carries three values STAGE_ORDER never listed:
+ * `diagnostic_pending` and `diagnostic_complete` (superseded by
+ * `contact_attempted` / `first_contact` when the stages were renamed), and
+ * `negotiation`, which was simply missed.
+ *
+ * That mattered far more than a naming tidy. The pipeline table filters rows
+ * with `selectedStages.has(status)`, and the selectable set is built from
+ * STAGE_ORDER — so a lead sitting in any of the three could not be selected,
+ * did not appear under "Select all", and was invisible in the table while
+ * still being counted in the summary chips. Leads silently vanished, and the
+ * counts disagreed with the rows.
+ *
+ * The board view already had exactly this mapping and has always been
+ * correct; the table filtered on the raw status and was not. This is that
+ * same mapping lifted to one shared place, so the two views can no longer
+ * disagree about which column a lead belongs in.
+ */
+export const CANONICAL_STATUS: Partial<
+  Record<ProspectStatus, ProspectStatus>
+> = {
+  diagnostic_pending: "contact_attempted",
+  diagnostic_complete: "first_contact",
+  negotiation: "proposal_sent",
+};
+
+/**
+ * The stage a row should be filtered and counted under. Always returns a
+ * value present in STAGE_ORDER, so no status can fall outside the picker.
+ */
+export function canonicalStatus(status: ProspectStatus): ProspectStatus {
+  return CANONICAL_STATUS[status] ?? status;
+}
+
+/**
  * Coarse pipeline phase, used to drive what the prospect detail page shows.
  * Early leads stay lean; QuickBooks / Convert / Signing only surface once
  * the deal is far enough along to need them.

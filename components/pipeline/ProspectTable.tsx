@@ -34,6 +34,7 @@ import { ProspectStatusSelect } from "./ProspectStatusSelect";
 import {
   LEAD_SOURCES,
   STAGE_ORDER,
+  canonicalStatus,
   STAGE_STYLES,
   type ProspectStatus,
   type DisqualificationReason,
@@ -272,7 +273,12 @@ export function ProspectTable({
         if (!isArchived) return false;
       } else {
         if (isArchived) return false;
-        if (!stages.has(p.status as ProspectStatus)) return false;
+        // Canonical, so a lead in a legacy status (diagnostic_pending /
+        // diagnostic_complete) is still reachable. Filtering on the raw
+        // status made those rows unselectable and therefore invisible —
+        // they weren't in the picker at all, not even under "Select all".
+        if (!stages.has(canonicalStatus(p.status as ProspectStatus)))
+          return false;
       }
       if (sourceFilter !== "all" && (p.leadSource ?? "") !== sourceFilter) {
         return false;
@@ -331,7 +337,7 @@ export function ProspectTable({
     const m = new Map<ProspectStatus, number>();
     for (const p of prospects) {
       if (p.archivedAt) continue;
-      const s = p.status as ProspectStatus;
+      const s = canonicalStatus(p.status as ProspectStatus);
       m.set(s, (m.get(s) ?? 0) + 1);
     }
     return m;
