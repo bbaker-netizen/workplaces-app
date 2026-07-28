@@ -70,6 +70,65 @@ const DRAFT_MAX_TOKENS = 32_000;
  */
 const TRANSCRIPT_MAX_CHARS = 400_000;
 
+/**
+ * Create the deliverable row BEFORE the background work starts, so the user
+ * has something to look at immediately.
+ *
+ * A Netlify Background Function answers 202 the moment it is invoked —
+ * before the handler runs — so the enqueueing action cannot tell whether the
+ * work actually started. If the function then rejects (a CRON_SECRET
+ * mismatch) or dies early, nothing was ever written and the screen just said
+ * "running in the background" forever. Silence was indistinguishable from
+ * success.
+ *
+ * With the row created up front, the outcome is always visible: it either
+ * fills in with the draft, or it says why it didn't, or it sits there
+ * plainly unfinished — which is itself the diagnosis.
+ */
+export async function createDraftPlaceholder(args: {
+  engagementId: string;
+  orgId: string;
+  type: DeliverableType;
+  title: string;
+}): Promise<string> {
+  return withSystemContext(async (tx) => {
+    const [row] = await tx
+      .insert(deliverables)
+      .values({
+        orgId: args.orgId,
+        engagementId: args.engagementId,
+        type: args.type,
+        title: args.title,
+        description:
+          "> _Reading the meeting transcript and drafting… this usually takes " +
+          "a minute or two. If this message is still here after five minutes, " +
+          "the drafting job didn't run — tell Bruce._",
+        status: "in_progress",
+      })
+      .returning({ id: deliverables.id });
+    return row.id;
+  });
+}
+
+/** Replace a placeholder's body with the finished draft, or with the reason
+ *  it failed. Either way the row stops saying "drafting…". */
+export async function finishDraftPlaceholder(args: {
+  deliverableId: string;
+  title?: string;
+  description: string;
+}): Promise<void> {
+  await withSystemContext(async (tx) => {
+    await tx
+      .update(deliverables)
+      .set({
+        ...(args.title ? { title: args.title } : {}),
+        description: args.description,
+        updatedAt: new Date(),
+      })
+      .where(eq(deliverables.id, args.deliverableId));
+  });
+}
+
 export type DeliverableDraftResult = {
   deliverableId: string;
   title: string;
@@ -86,6 +145,8 @@ type CoreArgs = {
   recordingId: string;
   type: DeliverableType;
   titleOverride?: string | null;
+  /** The row created up front by the enqueueing action. Filled in here. */
+  deliverableId: string;
 };
 
 /**
@@ -96,7 +157,7 @@ type CoreArgs = {
 export async function runDeliverableDraft(
   args: CoreArgs,
 ): Promise<DeliverableDraftResult> {
-  const { engagementId, orgId, recordingId, type } = args;
+  const { engagementId, recordingId, type } = args;
 
   const soulFileBody = await withSystemContext(async (tx) => {
     const [sf] = await tx
@@ -191,23 +252,14 @@ export async function runDeliverableDraft(
     (caveats.length ? `\n>\n> _⚠ ${caveats.join(" ")}_` : "") +
     `\n\n---\n\n${result.text}`;
 
-  const deliverableId = await withSystemContext(async (tx) => {
-    const [row] = await tx
-      .insert(deliverables)
-      .values({
-        orgId,
-        engagementId,
-        type,
-        title,
-        description,
-        status: "in_progress",
-      })
-      .returning({ id: deliverables.id });
-    return row.id;
+  await finishDraftPlaceholder({
+    deliverableId: args.deliverableId,
+    title,
+    description,
   });
 
   return {
-    deliverableId,
+    deliverableId: args.deliverableId,
     title,
     meetingTitle: transcript.title,
     transcriptTruncated,

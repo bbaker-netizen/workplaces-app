@@ -29,10 +29,14 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { type UserProfile } from "@/lib/db/schema";
 import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import {
+  createDraftPlaceholder,
   resolveMeetingDraftTarget,
   resolveSessionDraftTarget,
 } from "@/lib/deliverables/fireflies-draft";
-import { DELIVERABLE_TYPES } from "@/lib/deliverables/types";
+import {
+  DELIVERABLE_TYPES,
+  DELIVERABLE_TYPE_LABEL,
+} from "@/lib/deliverables/types";
 
 type Role = UserProfile["role"];
 function canEdit(role: Role): boolean {
@@ -57,6 +61,7 @@ async function enqueueDraft(payload: {
   sourceId: string;
   type: string;
   title?: string;
+  deliverableId: string;
 }): Promise<string | null> {
   const baseUrl =
     process.env.URL ??
@@ -117,14 +122,32 @@ export async function draftDeliverableFromFireflies(
   // Fast pre-flight: confirm the session exists and has a recording id before
   // spending a background invocation, and confirm this Builder may touch the
   // engagement it belongs to.
-  let engagementId: string;
+  let target: Awaited<ReturnType<typeof resolveSessionDraftTarget>>;
   try {
-    ({ engagementId } = await resolveSessionDraftTarget(sessionId));
+    target = await resolveSessionDraftTarget(sessionId);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!(await canCurrentBbAccessEngagement(engagementId))) {
+  if (!(await canCurrentBbAccessEngagement(target.engagementId))) {
     return { ok: false, error: "You don't have access to that client." };
+  }
+
+  // Create the row FIRST. A background function answers 202 before its
+  // handler runs, so this action cannot tell whether the work started — and
+  // when it didn't, nothing was written and the screen said "drafting" for
+  // ever. The row makes every outcome visible.
+  let deliverableId: string;
+  try {
+    deliverableId = await createDraftPlaceholder({
+      engagementId: target.engagementId,
+      orgId: target.orgId,
+      type,
+      title:
+        parsed.data.title ??
+        `${DELIVERABLE_TYPE_LABEL[type]} — drafting…`,
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
   const failure = await enqueueDraft({
@@ -132,6 +155,7 @@ export async function draftDeliverableFromFireflies(
     sourceId: sessionId,
     type,
     title: parsed.data.title,
+    deliverableId,
   });
   if (failure) return { ok: false, error: failure };
   return { ok: true, data: { queued: true } };
@@ -165,14 +189,32 @@ export async function draftDeliverableFromMeeting(
     };
   const { meetingId, type } = parsed.data;
 
-  let engagementId: string;
+  let target: Awaited<ReturnType<typeof resolveMeetingDraftTarget>>;
   try {
-    ({ engagementId } = await resolveMeetingDraftTarget(meetingId));
+    target = await resolveMeetingDraftTarget(meetingId);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!(await canCurrentBbAccessEngagement(engagementId))) {
+  if (!(await canCurrentBbAccessEngagement(target.engagementId))) {
     return { ok: false, error: "You don't have access to that client." };
+  }
+
+  // Create the row FIRST. A background function answers 202 before its
+  // handler runs, so this action cannot tell whether the work started — and
+  // when it didn't, nothing was written and the screen said "drafting" for
+  // ever. The row makes every outcome visible.
+  let deliverableId: string;
+  try {
+    deliverableId = await createDraftPlaceholder({
+      engagementId: target.engagementId,
+      orgId: target.orgId,
+      type,
+      title:
+        parsed.data.title ??
+        `${DELIVERABLE_TYPE_LABEL[type]} — drafting…`,
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
   const failure = await enqueueDraft({
@@ -180,6 +222,7 @@ export async function draftDeliverableFromMeeting(
     sourceId: meetingId,
     type,
     title: parsed.data.title,
+    deliverableId,
   });
   if (failure) return { ok: false, error: failure };
   return { ok: true, data: { queued: true } };

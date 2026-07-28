@@ -16,7 +16,7 @@
 import type { Context } from "@netlify/functions";
 import {
   runDeliverableDraft,
-  recordDeliverableDraftFailure,
+  finishDraftPlaceholder,
   resolveMeetingDraftTarget,
   resolveSessionDraftTarget,
 } from "../../lib/deliverables/fireflies-draft";
@@ -27,6 +27,9 @@ type Payload = {
   sourceId?: string;
   type?: DeliverableType;
   title?: string | null;
+  /** Row created by the server action before invoking us. Every exit path
+   *  writes to it, so the outcome is always visible. */
+  deliverableId?: string;
 };
 
 export default async (req: Request, _context: Context) => {
@@ -45,10 +48,35 @@ export default async (req: Request, _context: Context) => {
   } catch {
     return new Response("Bad request", { status: 400 });
   }
-  const { source, sourceId, type } = body;
-  if (!source || !sourceId || !type) {
-    return new Response("Missing source, sourceId or type", { status: 400 });
+  const { source, sourceId, type, deliverableId } = body;
+  if (!source || !sourceId || !type || !deliverableId) {
+    return new Response("Missing source, sourceId, type or deliverableId", {
+      status: 400,
+    });
   }
+
+  const explain = async (reason: string) => {
+    try {
+      await finishDraftPlaceholder({
+        deliverableId,
+        description:
+          `> _Drafting didn't finish. Nothing was generated — delete this and ` +
+          `try again once the cause below is sorted._
+
+---
+
+` +
+          `**Reason:**
+
+\`\`\`
+${reason}
+\`\`\`
+`,
+      });
+    } catch (e) {
+      console.error("draft-deliverable: couldn't write the failure:", e);
+    }
+  };
 
   // Background functions return 202 immediately; the work continues here and
   // the platform ignores its result, so log outcomes for observability.
@@ -64,11 +92,14 @@ export default async (req: Request, _context: Context) => {
         ? await resolveMeetingDraftTarget(sourceId)
         : await resolveSessionDraftTarget(sourceId);
   } catch (e) {
-    // Nothing to attach a failure row to. Log and give up.
+    const reason = e instanceof Error ? e.message : String(e);
     console.error(
       `draft-deliverable: could not resolve ${source} ${sourceId}:`,
-      e instanceof Error ? e.message : e,
+      reason,
     );
+    // Used to return here silently, which meant a meeting with no transcript
+    // id produced no draft AND no explanation.
+    await explain(reason);
     return;
   }
 
@@ -77,6 +108,7 @@ export default async (req: Request, _context: Context) => {
       ...target,
       type,
       titleOverride: body.title ?? null,
+      deliverableId,
     });
 
     console.log(
@@ -88,19 +120,6 @@ export default async (req: Request, _context: Context) => {
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     console.error(`draft-deliverable: failed for ${source} ${sourceId}:`, reason);
-    try {
-      await recordDeliverableDraftFailure({
-        engagementId: target.engagementId,
-        orgId: target.orgId,
-        type,
-        meetingLabel: body.title ?? `this ${source}`,
-        reason,
-      });
-    } catch (e2) {
-      console.error(
-        "draft-deliverable: could not record the failure either:",
-        e2 instanceof Error ? e2.message : e2,
-      );
-    }
+    await explain(reason);
   }
 };
