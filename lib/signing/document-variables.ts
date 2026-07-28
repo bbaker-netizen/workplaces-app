@@ -131,12 +131,6 @@ export const DOCUMENT_VARIABLES = [
     description: "Accelerator or Implementer, from the tier picked.",
   },
   {
-    name: "program_tier",
-    label: "Programme tier",
-    description:
-      "The tier's label, e.g. \"Accelerator — Growth\". From Settings > Pricing tiers.",
-  },
-  {
     name: "schedule_a",
     label: "Schedule A detail",
     description:
@@ -329,7 +323,13 @@ export function buildVariableMap(
         ? "Accelerator"
         : "Implementer"
       : "[programme]",
-    program_tier: tier?.label ?? "[programme tier]",
+    // Deliberately empty, and no longer offered in the variable picker.
+    // Tier labels are internal pricing segmentation — "> 3 Million Annual
+    // Revenue" is how the practice bands its own book, not something a
+    // client should read in their own agreement. Resolving to "" rather
+    // than removing the key means templates that already reference it stop
+    // printing the label immediately, without anyone having to edit them.
+    program_tier: "",
     // A tier with no Schedule A written up yet says so in the draft rather
     // than rendering an empty schedule that nobody notices until the client
     // asks what they are actually buying.
