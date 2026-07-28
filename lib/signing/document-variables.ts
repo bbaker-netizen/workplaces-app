@@ -11,6 +11,10 @@
 export type DocumentVariableContext = {
   prospect?: {
     contactName: string | null;
+    /** Stored parts. Preferred over splitting `contactName`, which guesses
+     *  wrong for compound given names and for anyone with a title. */
+    contactFirstName?: string | null;
+    contactLastName?: string | null;
     companyName: string;
     contactEmail: string;
     /** Phone is now required on every prospect (see
@@ -73,6 +77,11 @@ export const DOCUMENT_VARIABLES = [
     name: "client_name",
     label: "Client first name",
     description: "Their first name (from contactName / lead full name)",
+  },
+  {
+    name: "client_last_name",
+    label: "Client last name",
+    description: "Their surname, from the Last name field on the lead",
   },
   {
     name: "client_full_name",
@@ -267,10 +276,22 @@ function formatDate(d: Date | string | null | undefined): string {
 export function buildVariableMap(
   ctx: DocumentVariableContext,
 ): Record<string, string> {
+  // Stored first name wins. Splitting the display name on the first space is
+  // the fallback for rows written before the columns existed — it is a guess,
+  // and it is wrong for "Mary Anne Fletcher".
   const firstName =
-    ctx.prospect?.contactName?.split(" ")[0] ??
-    ctx.prospect?.contactName ??
+    ctx.prospect?.contactFirstName?.trim() ||
+    ctx.prospect?.contactName?.split(" ")[0] ||
+    ctx.prospect?.contactName ||
     "[client]";
+  const lastName =
+    ctx.prospect?.contactLastName?.trim() ||
+    (ctx.prospect?.contactName?.trim().includes(" ")
+      ? ctx.prospect.contactName.trim().slice(
+          ctx.prospect.contactName.trim().indexOf(" ") + 1,
+        )
+      : "") ||
+    "[client surname]";
   const senderFirstName =
     ctx.sender.fullName.split(" ")[0] ?? ctx.sender.fullName;
   const today = formatDate(new Date());
@@ -297,6 +318,7 @@ export function buildVariableMap(
 
   return {
     client_name: firstName,
+    client_last_name: lastName,
     client_full_name: ctx.prospect?.contactName ?? "[client name]",
     company_name:
       ctx.prospect?.companyName ?? ctx.engagement?.name ?? "[company]",

@@ -26,6 +26,10 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
+import {
+  composeContactName,
+  splitContactName,
+} from "@/lib/pipeline/contact-name";
 
 /**
  * True only when the caller may write to EVERY id in the batch. Not exported
@@ -96,6 +100,8 @@ const createSchema = z.object({
   // every prospect needs a real human contact so follow-up isn't
   // pointing at thin air.
   contactName: z.string().min(2).max(200),
+  contactFirstName: z.string().max(120).optional(),
+  contactLastName: z.string().max(120).optional(),
   contactEmail: z.string().email().max(254),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -183,7 +189,20 @@ export async function createProspect(
       .values({
         orgId: master.id,
         companyName: data.companyName.trim(),
-        contactName: data.contactName.trim(),
+        ...(() => {
+          // The two parts are the source of truth when given; otherwise split
+          // the single field so a lead arriving from a webhook still gets
+          // usable first/last values.
+          const split = splitContactName(data.contactName);
+          const first = data.contactFirstName?.trim() || split.first;
+          const last = data.contactLastName?.trim() || split.last;
+          return {
+            contactFirstName: first,
+            contactLastName: last,
+            contactName:
+              composeContactName(first, last) ?? data.contactName.trim(),
+          };
+        })(),
         contactEmail: data.contactEmail,
         phone: data.phone ? formatPhone(data.phone) : null,
         companyWebsite: normalizeWebsite(data.companyWebsite),
@@ -220,6 +239,8 @@ const updateSchema = z.object({
   id: z.string().uuid(),
   companyName: z.string().min(2).max(200).optional(),
   contactName: z.string().min(2).max(200).optional(),
+  contactFirstName: z.string().max(120).nullable().optional(),
+  contactLastName: z.string().max(120).nullable().optional(),
   contactEmail: z.string().email().max(254).optional(),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -322,7 +343,41 @@ export async function updateProspect(
     await withSystemContext(async (tx) => {
       const updates: Partial<typeof prospects.$inferInsert> = {};
       if (data.companyName !== undefined) updates.companyName = data.companyName;
-      if (data.contactName !== undefined) updates.contactName = data.contactName;
+      if (data.contactFirstName !== undefined)
+        updates.contactFirstName = data.contactFirstName?.trim() || null;
+      if (data.contactLastName !== undefined)
+        updates.contactLastName = data.contactLastName?.trim() || null;
+      // Whenever either part moves, recompose the display name so the two
+      // never disagree. Editing the single field directly still works for
+      // callers that don't know about the split.
+      if (
+        data.contactFirstName !== undefined ||
+        data.contactLastName !== undefined
+      ) {
+        const [existing] = await tx
+          .select({
+            first: prospects.contactFirstName,
+            last: prospects.contactLastName,
+          })
+          .from(prospects)
+          .where(eq(prospects.id, data.id))
+          .limit(1);
+        const first =
+          data.contactFirstName !== undefined
+            ? data.contactFirstName?.trim() || null
+            : (existing?.first ?? null);
+        const last =
+          data.contactLastName !== undefined
+            ? data.contactLastName?.trim() || null
+            : (existing?.last ?? null);
+        const composed = composeContactName(first, last);
+        if (composed) updates.contactName = composed;
+      } else if (data.contactName !== undefined) {
+        updates.contactName = data.contactName;
+        const split = splitContactName(data.contactName);
+        updates.contactFirstName = split.first;
+        updates.contactLastName = split.last;
+      }
       if (data.contactEmail !== undefined) updates.contactEmail = data.contactEmail;
       if (data.phone !== undefined)
         updates.phone = data.phone ? formatPhone(data.phone) : null;

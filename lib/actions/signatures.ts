@@ -501,10 +501,40 @@ export async function createEnvelopeFromComposed(input: {
     };
   }
 
-  // The sender's own details for the execution block. The agreement carries
-  // the practice's signature ON the document — previously it appeared only on
-  // the certificate page appended after everyone had signed, so the contract
-  // itself ended with no place to sign and nothing from our side.
+  // WHO SIGNS FOR THE PRACTICE — the Business Builder who owns the client,
+  // not whoever happened to press Send.
+  //
+  // Bruce's call. The signature on an agreement should match the person who
+  // holds the relationship: a client's own Builder signs their contract even
+  // if a colleague prepared it. Using the sender meant the same client could
+  // receive contracts signed by different people depending on who was at the
+  // keyboard that day.
+  //
+  // Owner is the engagement's assigned coach, or for a lead — which is the
+  // normal case for a Business Building Agreement — the prospect's Owner.
+  // Falls back to the sender when nothing is assigned, so an unclaimed lead
+  // still produces a signed agreement rather than a blank practice block.
+  const signingUserProfileId = await withSystemContext(async (tx) => {
+    if (resolvedEngagementId) {
+      const [row] = await tx
+        .select({ userProfileId: coaches.userProfileId })
+        .from(engagements)
+        .innerJoin(coaches, eq(coaches.id, engagements.coachId))
+        .where(eq(engagements.id, resolvedEngagementId))
+        .limit(1);
+      if (row?.userProfileId) return row.userProfileId;
+    }
+    if (input.prospectId) {
+      const [row] = await tx
+        .select({ ownerUserProfileId: prospects.ownerUserProfileId })
+        .from(prospects)
+        .where(eq(prospects.id, input.prospectId))
+        .limit(1);
+      if (row?.ownerUserProfileId) return row.ownerUserProfileId;
+    }
+    return profile.userProfileId;
+  });
+
   const sender = await withSystemContext(async (tx) => {
     const [row] = await tx
       .select({
@@ -512,7 +542,7 @@ export async function createEnvelopeFromComposed(input: {
         signatureImageData: userProfiles.signatureImageData,
       })
       .from(userProfiles)
-      .where(eq(userProfiles.id, profile.userProfileId))
+      .where(eq(userProfiles.id, signingUserProfileId))
       .limit(1);
     return row ?? null;
   });

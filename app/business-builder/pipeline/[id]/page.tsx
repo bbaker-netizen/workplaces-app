@@ -639,6 +639,8 @@ export default async function ProspectDetailPage({
             variableContext={{
               prospect: {
                 contactName: prospect.contactName,
+                contactFirstName: prospect.contactFirstName,
+                contactLastName: prospect.contactLastName,
                 companyName: prospect.companyName,
                 contactEmail: prospect.contactEmail,
                 phone: prospect.phone,

@@ -2275,7 +2275,12 @@ export const prospects = pgTable(
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
     companyName: text("company_name").notNull(),
+    /** Display name. DERIVED from the two parts below on write — see
+     *  `composeContactName` — so every screen, webhook, template and report
+     *  that already reads it keeps working. Don't set it directly. */
     contactName: text("contact_name"),
+    contactFirstName: text("contact_first_name"),
+    contactLastName: text("contact_last_name"),
     contactEmail: text("contact_email").notNull(),
     phone: text("phone"),
     companyWebsite: text("company_website"),
