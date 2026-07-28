@@ -196,7 +196,16 @@ export default async function EnvelopeDetailPage({
         )}
       </section>
 
-      {env.status === "in_progress" && <EnvelopeActions envelopeId={env.id} />}
+      {/* Rendered for EVERY status, not just in-progress. Gating the whole
+          component on in_progress is why a completed agreement had no actions
+          at all — no way to remove a finished test short of editing the
+          database. The component decides internally which buttons apply. */}
+      <EnvelopeActions
+        envelopeId={env.id}
+        subject={env.subject}
+        status={env.status}
+        canDelete={profile.role === "master_admin"}
+      />
     </main>
   );
 }

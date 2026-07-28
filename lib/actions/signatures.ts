@@ -18,7 +18,7 @@
  * a Clerk session — token IS the auth.
  */
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -51,6 +51,7 @@ import {
 import { makeAuditEntry, type AuditEntry } from "@/lib/signing/audit";
 import { newSigningToken } from "@/lib/signing/token";
 import {
+  deleteDocumentBlob,
   downloadDocumentBlob,
   uploadDocumentBlob,
 } from "@/lib/storage/blobs";
@@ -1277,3 +1278,104 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
 void resolveEngagementIdFromRecord;
 void engagements;
 void and;
+
+/* ------------------------- delete an envelope ------------------------- */
+
+/**
+ * Permanently delete an envelope and the files it owns. Master admin only.
+ *
+ * Exists because there was no way to remove a test agreement. `void` only
+ * applies while an envelope is in progress, so a COMPLETED test could not be
+ * voided, and its source document is referenced ON DELETE RESTRICT so that
+ * could not be deleted either. Test data was unremovable without going into
+ * the database by hand.
+ *
+ * Deliberately hard delete, and deliberately master-admin only. Everything
+ * else in this module treats a signed agreement as a permanent record —
+ * `void` leaves the row, the audit log is append-only, the certificate is
+ * immutable — because that is what makes it enforceable. This is the one
+ * escape hatch, so it is narrow: the practice owner, one envelope at a time,
+ * with the caller having confirmed.
+ *
+ * Order matters. The envelope goes first: signers cascade from it, and its
+ * RESTRICT reference to the source document has to be gone before that
+ * document can be removed.
+ */
+export async function deleteSignatureEnvelope(
+  envelopeId: string,
+): Promise<ActionResult<{ deletedDocuments: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  // Not `coach`. Removing a signed agreement is a practice-owner decision.
+  if (profile.role !== "master_admin") {
+    return {
+      ok: false,
+      error: "Only the practice owner can delete an agreement.",
+    };
+  }
+  if (!z.string().uuid().safeParse(envelopeId).success) {
+    return { ok: false, error: "Invalid id." };
+  }
+
+  // Collect the blob keys BEFORE the rows go — once deleted we'd have no way
+  // to find the files, and they'd sit in storage forever.
+  const target = await withSystemContext(async (tx) => {
+    const [env] = await tx
+      .select({
+        id: signatureEnvelopes.id,
+        subject: signatureEnvelopes.subject,
+        sourceDocumentId: signatureEnvelopes.sourceDocumentId,
+        signedDocumentId: signatureEnvelopes.signedDocumentId,
+      })
+      .from(signatureEnvelopes)
+      .where(eq(signatureEnvelopes.id, envelopeId))
+      .limit(1);
+    if (!env) return null;
+    const docIds = [env.sourceDocumentId, env.signedDocumentId].filter(
+      (v): v is string => Boolean(v),
+    );
+    const docs = docIds.length
+      ? await tx
+          .select({ id: documents.id, blobKey: documents.blobKey })
+          .from(documents)
+          .where(inArray(documents.id, docIds))
+      : [];
+    return { ...env, docs };
+  });
+  if (!target) return { ok: false, error: "Agreement not found." };
+
+  let deletedDocuments = 0;
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .delete(signatureEnvelopes)
+        .where(eq(signatureEnvelopes.id, envelopeId));
+    });
+
+    // Each document separately: one that's still referenced elsewhere (a
+    // message attachment, say) must not stop the others being removed.
+    for (const doc of target.docs) {
+      try {
+        await withSystemContext(async (tx) => {
+          await tx.delete(documents).where(eq(documents.id, doc.id));
+        });
+        deletedDocuments += 1;
+        await deleteDocumentBlob(doc.blobKey).catch(() => {});
+      } catch (e) {
+        console.error(
+          `[deleteSignatureEnvelope] document ${doc.id} kept (still referenced):`,
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  console.log(
+    `[deleteSignatureEnvelope] ${profile.email} deleted "${target.subject}" (${envelopeId}), ${deletedDocuments} file(s).`,
+  );
+  revalidatePath("/business-builder/pipeline");
+  return { ok: true, data: { deletedDocuments } };
+}
