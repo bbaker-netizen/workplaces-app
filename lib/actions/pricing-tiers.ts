@@ -147,23 +147,37 @@ export async function updatePricingTier(
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   try {
-    await withTenantContext(profile.orgId, async (tx) => {
-      await tx
+    const updated = await withTenantContext(profile.orgId, async (tx) =>
+      tx
         .update(pricingTiers)
         .set({
           program: parsed.data.program,
           tierKey: parsed.data.tierKey,
           label: parsed.data.label,
           monthlyFeeCents: parsed.data.monthlyFeeCents,
+          scheduleADetail: parsed.data.scheduleADetail?.trim() || null,
           sortOrder: parsed.data.sortOrder ?? 0,
+          updatedAt: new Date(),
         })
         .where(
           and(
             eq(pricingTiers.id, id),
             eq(pricingTiers.orgId, profile.orgId),
           ),
-        );
-    });
+        )
+        .returning({ id: pricingTiers.id }),
+    );
+    // An UPDATE that matches no rows is not an error in SQL — it just does
+    // nothing. Reported as success, that is the worst kind of failure: the
+    // form closes, the page refreshes, and the edit is simply gone with
+    // nothing to explain it. Say so instead.
+    if (updated.length === 0) {
+      return {
+        ok: false,
+        error:
+          "That tier couldn't be found to update — reload the page and try again.",
+      };
+    }
     revalidatePath("/business-builder/settings/pricing");
     return { ok: true, data: undefined };
   } catch (e) {
