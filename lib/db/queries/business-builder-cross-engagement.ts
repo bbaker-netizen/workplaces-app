@@ -187,6 +187,10 @@ export type CoachDeliverableRow = {
   status: string;
   engagementId: string;
   engagementName: string | null;
+  /** When it's due. Selected so the tracker can say what needs attention —
+   *  without it the list was title + type + client and gave no reason to
+   *  act on any particular row. */
+  targetDate: Date | null;
 };
 
 export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
@@ -204,6 +208,7 @@ export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
         status: deliverables.status,
         engagementId: deliverables.engagementId,
         engagementName: engagements.name,
+        targetDate: deliverables.targetDate,
       })
       .from(deliverables)
       .innerJoin(engagements, eq(engagements.id, deliverables.engagementId))

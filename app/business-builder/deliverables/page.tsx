@@ -8,6 +8,16 @@ import {
 } from "@/lib/db/queries/business-builder-cross-engagement";
 import { ClientScopeToggle } from "@/components/business-builder/ClientScopeToggle";
 
+/** Readable status names. `s.replace("_", " ")` only ever replaced the FIRST
+ *  underscore, and "not started" reads better than "not_started" anyway. */
+const STATUS_LABEL: Record<string, string> = {
+  in_progress: "In progress",
+  review: "In review",
+  not_started: "Not started",
+  delivered: "Delivered",
+  archived: "Archived",
+};
+
 export default async function CoachDeliverablesCrossPage() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
@@ -66,26 +76,64 @@ export default async function CoachDeliverablesCrossPage() {
         <div className="space-y-6">
           {sortedKeys.map((s) => (
             <section key={s} className="space-y-2">
-              <h2 className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-                {s.replace("_", " ")} · {groups.get(s)!.length}
+              {/* Count leads, at a size you can actually read. It was set in
+                  11px muted mono alongside the label — the one number on the
+                  page telling you how much work is in each state, rendered
+                  smaller than everything around it. */}
+              <h2 className="flex items-baseline gap-2">
+                <span className="font-bold text-foreground text-2xl tabular-nums leading-none">
+                  {groups.get(s)!.length}
+                </span>
+                <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                  {STATUS_LABEL[s] ?? s.replace(/_/g, " ")}
+                </span>
               </h2>
               <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
-                {groups.get(s)!.map((d) => (
-                  <li
-                    key={d.id}
-                    className="py-3 flex items-baseline gap-3 flex-wrap"
-                  >
-                    <span className="font-bold text-foreground text-base tracking-tight">
-                      {d.title}
-                    </span>
-                    <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                      {d.type.replace(/_/g, " ")}
-                    </span>
-                    <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-                      {d.engagementName}
-                    </span>
-                  </li>
-                ))}
+                {groups.get(s)!.map((d) => {
+                  const due = d.targetDate ? new Date(d.targetDate) : null;
+                  const overdue =
+                    due !== null && due < new Date() && d.status !== "delivered";
+                  return (
+                    <li key={d.id}>
+                      {/* The whole row is a link. Previously nothing here was
+                          clickable, so the tracker told you work existed and
+                          gave you no way to act on it. */}
+                      <Link
+                        href={`/business-builder/engagements/${d.engagementId}`}
+                        className="py-2.5 px-1 -mx-1 flex items-baseline gap-x-3 gap-y-1 flex-wrap rounded hover:bg-tbb-cream-50"
+                      >
+                        <span className="font-bold text-foreground text-sm tracking-tight">
+                          {d.title}
+                        </span>
+                        <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+                          {d.type.replace(/_/g, " ")}
+                        </span>
+                        {due && (
+                          // Overdue in Safety Vest Orange — the brand reserves
+                          // it for high-attention moments, and a deliverable
+                          // past its date is one.
+                          <span
+                            className={
+                              "font-mono text-[10px] uppercase tracking-tbb-caps " +
+                              (overdue
+                                ? "font-bold text-tbb-blue"
+                                : "text-muted-foreground")
+                            }
+                          >
+                            {overdue ? "Overdue · " : "Due "}
+                            {due.toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        )}
+                        <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-navy">
+                          {d.engagementName}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}
