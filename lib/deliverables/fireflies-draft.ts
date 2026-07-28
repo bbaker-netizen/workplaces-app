@@ -179,9 +179,32 @@ export async function runDeliverableDraft(
   const transcriptText = transcriptToPlainText(transcript, {
     maxChars: TRANSCRIPT_MAX_CHARS,
   });
+
+  // A transcript with no words in it must NOT be drafted from.
+  //
+  // Fireflies returns the meeting's metadata — id, title, date — even when it
+  // has no `sentences`: still processing, never recorded, or a bot that
+  // joined and captured nothing. Handed that, the model gets a title and an
+  // empty transcript, falls back on the Soul File and the type prompt, and
+  // writes a fluent, generic document that has nothing to do with the
+  // meeting. It then arrives titled "— from <meeting>", which is the one
+  // thing guaranteeing nobody questions where the content came from.
+  //
+  // A plausible document that isn't grounded in anything is worse than a
+  // failure, because a failure gets fixed and this gets delivered.
+  const sentenceCount = transcript.sentences?.length ?? 0;
+  if (sentenceCount === 0 || transcriptText.trim().length < 200) {
+    throw new Error(
+      `Fireflies has no transcript text for "${transcript.title}" ` +
+        `(${sentenceCount} sentences). The recording may still be processing, ` +
+        `or the meeting wasn't captured. Nothing was drafted — a deliverable ` +
+        `written without the transcript would just be generic filler.`,
+    );
+  }
+
   // `transcriptToPlainText` stops appending once it passes the cap, so a
   // shorter result than the raw sentence total means we lost the tail.
-  const rawLength = transcript.sentences.reduce(
+  const rawLength = (transcript.sentences ?? []).reduce(
     (n, s) => n + (s.speaker_name ?? "Unknown").length + 2 + s.text.length + 1,
     0,
   );
@@ -247,7 +270,11 @@ export async function runDeliverableDraft(
     );
   }
   const description =
-    `> _Drafted by Claude from **${transcript.title}** (${meetingDate}) on ${stamp}. ` +
+    `> _Drafted by Claude from **${transcript.title}** (${meetingDate}) on ${stamp}, ` +
+    // The size of what it read, stated on the draft. If this ever says a
+    // suspiciously small number, the draft is thin because the transcript
+    // was — not because the meeting was.
+    `using ${sentenceCount.toLocaleString()} lines of transcript. ` +
     `Review and edit before delivering to the client._` +
     (caveats.length ? `\n>\n> _⚠ ${caveats.join(" ")}_` : "") +
     `\n\n---\n\n${result.text}`;
