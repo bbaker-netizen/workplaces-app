@@ -20,6 +20,7 @@ import {
   goals,
   hires,
   projects,
+  userProfiles,
 } from "../schema";
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
@@ -191,6 +192,11 @@ export type CoachDeliverableRow = {
    *  without it the list was title + type + client and gave no reason to
    *  act on any particular row. */
   targetDate: Date | null;
+  /** Whose deliverable it is. Derived from the client's assigned Business
+   *  Builder rather than stored per-deliverable — the owner of the work IS
+   *  whoever owns the client, so a second field would be a copy that could
+   *  drift out of step with the assignment. */
+  ownerName: string | null;
 };
 
 export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
@@ -209,9 +215,14 @@ export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
         engagementId: deliverables.engagementId,
         engagementName: engagements.name,
         targetDate: deliverables.targetDate,
+        ownerName: userProfiles.fullName,
       })
       .from(deliverables)
       .innerJoin(engagements, eq(engagements.id, deliverables.engagementId))
+      // Left joins: a client with no assigned Builder still lists its
+      // deliverables, just without a name against them.
+      .leftJoin(coaches, eq(coaches.id, engagements.coachId))
+      .leftJoin(userProfiles, eq(userProfiles.id, coaches.userProfileId))
       .where(where)
       .orderBy(desc(deliverables.updatedAt)),
   );

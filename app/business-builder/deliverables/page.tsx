@@ -129,6 +129,15 @@ export default async function CoachDeliverablesCrossPage() {
                         )}
                         <span className="ml-auto font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-navy">
                           {d.engagementName}
+                          {/* Whose it is — the client's assigned Business
+                              Builder. Matters most on the All-clients view,
+                              where the list spans both books. */}
+                          {d.ownerName && (
+                            <span className="text-muted-foreground">
+                              {" · "}
+                              {d.ownerName.split(" ")[0]}
+                            </span>
+                          )}
                         </span>
                       </Link>
                     </li>
