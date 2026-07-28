@@ -1111,6 +1111,13 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
         id: upload.documentId,
         orgId: ctx.env.orgId,
         engagementId: ctx.env.engagementId ?? ctx.doc.engagementId,
+        // The signed copy has to inherit the envelope's PROSPECT too.
+        // /api/documents/[id]/download resolves an engagement document via
+        // RLS, and otherwise falls back to a prospect-document lookup gated
+        // on `prospect_id IS NOT NULL`. A signed agreement for a prospect had
+        // neither id set, so it matched neither branch and the download 404'd
+        // — the executed contract was the one file nobody could open.
+        prospectId: ctx.env.prospectId ?? ctx.doc.prospectId ?? null,
         blobKey: upload.blobKey,
         originalFilename: upload.filename,
         fileType: upload.fileType,

@@ -9,7 +9,12 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { documents, prospectActivities, prospects } from "@/lib/db/schema";
+import {
+  documents,
+  prospectActivities,
+  prospects,
+  signatureEnvelopes,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import {
@@ -121,6 +126,35 @@ export async function deleteProspectDocument(
     if (!(await canCurrentBbWriteProspect(found.prospectId!))) {
       return { ok: false, error: "You don't have access to that lead." };
     }
+
+    // A document that an agreement was built from can't be deleted —
+    // `signature_envelopes.source_document_id` is ON DELETE RESTRICT, so the
+    // database refuses and Postgres' foreign-key error text ends up in front
+    // of the user. That restriction is right: deleting the file an executed
+    // contract points at would gut the audit trail. But it has to be
+    // explained rather than thrown.
+    const usedBy = await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          id: signatureEnvelopes.id,
+          subject: signatureEnvelopes.subject,
+          status: signatureEnvelopes.status,
+        })
+        .from(signatureEnvelopes)
+        .where(eq(signatureEnvelopes.sourceDocumentId, id))
+        .limit(1);
+      return row ?? null;
+    });
+    if (usedBy) {
+      return {
+        ok: false,
+        error:
+          usedBy.status === "completed"
+            ? `This is the document behind a completed agreement (“${usedBy.subject}”), so it can't be deleted — it's part of that signed record.`
+            : `This document was sent for signature as “${usedBy.subject}”. Void that agreement first, then delete the file.`,
+      };
+    }
+
     const removed = await withSystemContext(async (tx) => {
       await tx.delete(documents).where(eq(documents.id, id));
       return found;
