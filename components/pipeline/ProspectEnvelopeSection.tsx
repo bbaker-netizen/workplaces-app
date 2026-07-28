@@ -91,8 +91,14 @@ export function ProspectEnvelopeSection({
 
       {envelopes.length > 0 && (
         <div className="space-y-1">
+          {/* "Past envelopes" read as read-only history, so nobody clicked
+              through — and cancelling or deleting an agreement lives on the
+              other side of that click. */}
           <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
-            Past envelopes
+            Agreements
+            <span className="ml-2 normal-case tracking-normal text-tbb-ink-3">
+              — open one to cancel, delete, or download it
+            </span>
           </p>
           <ul className="divide-y divide-tbb-line border-t border-b border-tbb-line">
             {envelopes.map((e) => (
