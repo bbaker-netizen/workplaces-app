@@ -102,6 +102,36 @@ export type MarkdownPdfExecution = {
   }>;
 };
 
+/**
+ * Where a signature belongs on the finished page.
+ *
+ * Recorded as the execution block is drawn, so the signed-PDF builder can
+ * stamp each captured signature ON the rule it belongs to. Without this the
+ * signature only ever appears on the appended Certificate of Completion, and
+ * the contract itself goes to the client with an empty signing line — legally
+ * fine, but it doesn't look signed.
+ *
+ * Coordinates are PDF user space (origin bottom-left), which is what pdf-lib
+ * draws in, so they can be replayed directly against the same page later.
+ */
+export type SignatureAnchor = {
+  /** "practice" = the sender's pre-signed block. "signer" = a counter-signer,
+   *  identified by its index in `execution.signers`. */
+  role: "practice" | "signer";
+  signerIndex: number | null;
+  pageIndex: number;
+  /** Left end of the rule, and the rule's baseline. */
+  x: number;
+  y: number;
+  width: number;
+  maxHeight: number;
+};
+
+export type MarkdownPdfResult = {
+  bytes: Uint8Array;
+  anchors: SignatureAnchor[];
+};
+
 export type MarkdownPdfOptions = {
   title: string;
   bodyMarkdown: string;
@@ -112,7 +142,7 @@ export type MarkdownPdfOptions = {
 
 export async function renderMarkdownToPdf(
   options: MarkdownPdfOptions,
-): Promise<Uint8Array> {
+): Promise<MarkdownPdfResult> {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -157,8 +187,9 @@ export async function renderMarkdownToPdf(
     renderMarkdown(ctx, body);
   }
 
+  const anchors: SignatureAnchor[] = [];
   if (options.execution) {
-    await drawExecutionSection(ctx, options.execution);
+    await drawExecutionSection(ctx, options.execution, anchors);
   }
 
   // Stamp page numbers on every page now that we know the total.
@@ -167,7 +198,7 @@ export async function renderMarkdownToPdf(
     drawFooter(ctx, pdf.getPage(i), i + 1);
   }
 
-  return pdf.save();
+  return { bytes: await pdf.save(), anchors };
 }
 
 /* --------------------------- internals --------------------------- */
@@ -912,6 +943,7 @@ const SIG_IMAGE_MAX_H = 34;
 async function drawExecutionSection(
   ctx: RenderCtx,
   ex: MarkdownPdfExecution,
+  anchors: SignatureAnchor[],
 ): Promise<void> {
   ensureSpace(ctx, HEADING_SPACING_BEFORE + FONT_H2 * LINE_HEIGHT_HEADING + 28 + SIG_BLOCK_HEIGHT);
   ctx.cursorY -= HEADING_SPACING_BEFORE;
@@ -937,22 +969,31 @@ async function drawExecutionSection(
   ctx.cursorY -= PARAGRAPH_SPACING * 1.5;
 
   // The practice, already signed.
-  await drawSignatureBlock(ctx, {
-    entityName: ex.practice.entityName ?? null,
-    name: ex.practice.signerName,
-    roleLabel: ex.practice.roleLabel ?? null,
-    signatureImageData: ex.practice.signatureImageData ?? null,
-    dateString: ex.practice.dateString ?? defaultDateString(),
+  anchors.push({
+    role: "practice",
+    signerIndex: null,
+    ...(await drawSignatureBlock(ctx, {
+      entityName: ex.practice.entityName ?? null,
+      name: ex.practice.signerName,
+      roleLabel: ex.practice.roleLabel ?? null,
+      signatureImageData: ex.practice.signatureImageData ?? null,
+      dateString: ex.practice.dateString ?? defaultDateString(),
+    })),
   });
 
   // Counter-signers — ruled, dated on signing.
-  for (const s of ex.signers) {
-    await drawSignatureBlock(ctx, {
-      entityName: s.entityName ?? null,
-      name: s.name,
-      roleLabel: s.roleLabel ?? null,
-      signatureImageData: null,
-      dateString: null,
+  for (let i = 0; i < ex.signers.length; i++) {
+    const s = ex.signers[i];
+    anchors.push({
+      role: "signer",
+      signerIndex: i,
+      ...(await drawSignatureBlock(ctx, {
+        entityName: s.entityName ?? null,
+        name: s.name,
+        roleLabel: s.roleLabel ?? null,
+        signatureImageData: null,
+        dateString: null,
+      })),
     });
   }
 }
@@ -966,7 +1007,7 @@ async function drawSignatureBlock(
     signatureImageData: string | null;
     dateString: string | null;
   },
-): Promise<void> {
+): Promise<Omit<SignatureAnchor, "role" | "signerIndex">> {
   ensureSpace(ctx, SIG_BLOCK_HEIGHT);
 
   if (b.entityName) {
@@ -1049,6 +1090,15 @@ async function drawSignatureBlock(
   });
 
   ctx.cursorY = captionY - 24;
+
+  return {
+    // The page index is resolved now, while we know which page we're on.
+    pageIndex: ctx.pdf.getPages().indexOf(ctx.page),
+    x: MARGIN,
+    y: ruleY,
+    width: SIG_RULE_WIDTH,
+    maxHeight: SIG_IMAGE_MAX_H,
+  };
 }
 
 /** Decode a data URL and embed it. Returns null for anything unparseable —

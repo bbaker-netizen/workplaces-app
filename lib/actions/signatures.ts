@@ -44,7 +44,10 @@ import {
   signatureCompletedEmail,
   signatureRequestEmail,
 } from "@/lib/email/templates";
-import { buildSignedPdf } from "@/lib/signing/pdf";
+import {
+  buildSignedPdf,
+  type SignatureAnchorRecord,
+} from "@/lib/signing/pdf";
 import { makeAuditEntry, type AuditEntry } from "@/lib/signing/audit";
 import { newSigningToken } from "@/lib/signing/token";
 import {
@@ -75,6 +78,22 @@ const createSchema = z.object({
    *  pre-signed signer. When true, the Coach is added at order 0
    *  with status=signed using their `signature_image_data`. */
   autoSignAsMe: z.boolean().default(false),
+  /** Where the signing rules landed on the composed PDF, so a captured
+   *  signature can be stamped onto the line rather than only appearing on
+   *  the certificate page. Absent for uploaded source documents. */
+  signatureAnchors: z
+    .array(
+      z.object({
+        role: z.enum(["practice", "signer"]),
+        signerIndex: z.number().int().nullable(),
+        pageIndex: z.number().int().min(0),
+        x: z.number(),
+        y: z.number(),
+        width: z.number(),
+        maxHeight: z.number(),
+      }),
+    )
+    .optional(),
 });
 
 export type CreateEnvelopeInput = z.input<typeof createSchema>;
@@ -184,6 +203,7 @@ export async function createSignatureEnvelope(
         status: "in_progress",
         createdByUserProfileId: profile.userProfileId,
         auditLog: audit,
+        signatureAnchors: data.signatureAnchors ?? null,
       })
       .returning({ id: signatureEnvelopes.id });
 
@@ -505,13 +525,15 @@ export async function createEnvelopeFromComposed(input: {
     return row?.name ?? null;
   });
 
-  // Render markdown → PDF bytes.
+  // Render markdown → PDF bytes, plus where the signing rules ended up so a
+  // captured signature can later be stamped onto the line itself.
   let pdfBytes: Uint8Array;
+  let renderedAnchors: unknown[] = [];
   try {
     const { renderMarkdownToPdf } = await import(
       "@/lib/signing/markdown-to-pdf"
     );
-    pdfBytes = await renderMarkdownToPdf({
+    const rendered = await renderMarkdownToPdf({
       title: input.documentTitle,
       bodyMarkdown: input.bodyMarkdown,
       header: { title: headerTitle },
@@ -529,6 +551,8 @@ export async function createEnvelopeFromComposed(input: {
         })),
       },
     });
+    pdfBytes = rendered.bytes;
+    renderedAnchors = rendered.anchors;
   } catch (e) {
     console.error("[createEnvelopeFromComposed] PDF render failed:", e);
     return {
@@ -591,6 +615,7 @@ export async function createEnvelopeFromComposed(input: {
 
   return createSignatureEnvelope({
     sourceDocumentId,
+    signatureAnchors: renderedAnchors as never,
     prospectId: input.prospectId ?? null,
     engagementId: resolvedEngagementId ?? null,
     subject: input.subject,
@@ -1035,6 +1060,11 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
       envelopeId: ctx.env.id,
       documentName: ctx.doc.originalFilename,
       sourceDocumentHash,
+      // Recorded when the agreement was composed. Null for uploaded source
+      // documents and for anything created before migration 0097 — those
+      // still get the certificate page, just no signature on the line.
+      signatureAnchors:
+        (ctx.env.signatureAnchors as SignatureAnchorRecord[] | null) ?? null,
       envelopeCreatedAt: ctx.env.createdAt ?? null,
       envelopeCompletedAt: completedAt,
       senderName: ctx.createdByName,

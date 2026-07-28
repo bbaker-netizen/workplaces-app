@@ -623,7 +623,11 @@ export function SendForSignatureForm(props: Props) {
           ) : (
             <Send className="w-4 h-4" aria-hidden />
           )}
-          {isPending ? "Sending…" : "Prepare Business Building Agreement"}
+          {/* "Prepare…" is the CTA that OPENS this form. The button that ends
+              it does the opposite thing — it sends the agreement to the
+              signers — so repeating the same words here read as though it
+              hadn't done anything yet. */}
+          {isPending ? "Sending…" : "Send agreement"}
         </button>
         {props.onCancel && (
           <button

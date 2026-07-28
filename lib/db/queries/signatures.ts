@@ -238,3 +238,44 @@ export async function listEnvelopesForEngagement(
       .orderBy(desc(signatureEnvelopes.createdAt)),
   );
 }
+
+/**
+ * The signed document behind the completion-email link, plus the envelope's
+ * subject for context. Public — no session; the id is only ever emailed to
+ * that envelope's signers.
+ *
+ * Returns null unless the document is genuinely the SIGNED output of a
+ * COMPLETED envelope. That check is the access control: it stops the id of
+ * any other document in the system being pasted in to fetch it.
+ */
+export async function getSignedDocumentForCompletionPage(
+  documentId: string,
+): Promise<{ envelopeSubject: string; filename: string } | null> {
+  if (!documentId) return null;
+  try {
+    return await withSystemContext(async (tx) => {
+      const [env] = await tx
+        .select({
+          subject: signatureEnvelopes.subject,
+          status: signatureEnvelopes.status,
+        })
+        .from(signatureEnvelopes)
+        .where(eq(signatureEnvelopes.signedDocumentId, documentId))
+        .limit(1);
+      if (!env || env.status !== "completed") return null;
+      const [doc] = await tx
+        .select({ originalFilename: documents.originalFilename })
+        .from(documents)
+        .where(eq(documents.id, documentId))
+        .limit(1);
+      if (!doc) return null;
+      return {
+        envelopeSubject: env.subject,
+        filename: doc.originalFilename,
+      };
+    });
+  } catch (e) {
+    console.error("[getSignedDocumentForCompletionPage] failed", e);
+    return null;
+  }
+}

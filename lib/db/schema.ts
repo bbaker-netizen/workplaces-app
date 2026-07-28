@@ -2761,6 +2761,12 @@ export const signatureEnvelopes = pgTable(
       { onDelete: "set null" },
     ),
     auditLog: jsonb("audit_log").notNull().default([]),
+    /** Where each signature belongs on the agreement's own pages, recorded
+     *  by the renderer as it drew the signing rules. Lets the signed PDF
+     *  stamp signatures ON the line instead of only on the certificate page.
+     *  Null for envelopes built from an uploaded document, or created before
+     *  migration 0097 — those fall back to the certificate alone. */
+    signatureAnchors: jsonb("signature_anchors"),
     /** SHA-256 hex digest of the final signed PDF. Written when the
      *  envelope completes. Lets anyone re-hash the file and verify it
      *  hasn't been altered since signing — the cornerstone of an

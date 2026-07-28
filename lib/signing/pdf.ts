@@ -41,6 +41,21 @@ export type CertificateInput = {
   senderEmail: string | null;
   signers: SignerForCertificate[];
   auditTimeline: Array<{ at: Date; event: string }>;
+  /** Where the agreement's own signing rules are, recorded by the renderer
+   *  when the document was composed. When present, each captured signature is
+   *  stamped ON its line as well as appearing on the certificate. Absent for
+   *  uploaded source documents, which we didn't draw and can't place into. */
+  signatureAnchors?: SignatureAnchorRecord[] | null;
+};
+
+export type SignatureAnchorRecord = {
+  role: "practice" | "signer";
+  signerIndex: number | null;
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  maxHeight: number;
 };
 
 /**
@@ -72,9 +87,79 @@ export async function buildSignedPdf(
     );
   }
 
+  // Stamp signatures onto the contract's own lines before the certificate is
+  // appended, so anchor page indexes still refer to the original pages.
+  await stampSignaturesOnAnchors(pdf, cert);
+
   await appendCertificatePage(pdf, cert);
   await stampPageFooters(pdf, cert.envelopeId);
   return pdf.save();
+}
+
+/**
+ * Draw each signer's captured signature onto the ruled line it belongs to.
+ *
+ * Anchors are positional: role "practice" is the sender's block, and role
+ * "signer" carries the index of the counter-signer in the order they were
+ * added to the envelope. `cert.signers` is in that same order, so index N
+ * matches anchor signerIndex N.
+ *
+ * Every failure here is swallowed. A signature that won't place is a
+ * cosmetic loss — the certificate of completion still carries the image, the
+ * timestamp, the IP and the method, which is the part that has legal weight.
+ * Losing the signed PDF entirely over a drawing error would not be.
+ */
+async function stampSignaturesOnAnchors(
+  pdf: PDFDocument,
+  cert: CertificateInput,
+): Promise<void> {
+  const anchors = cert.signatureAnchors;
+  if (!anchors || anchors.length === 0) return;
+
+  const pages = pdf.getPages();
+  for (const anchor of anchors) {
+    try {
+      if (anchor.role !== "signer" || anchor.signerIndex === null) continue;
+      const signer = cert.signers[anchor.signerIndex];
+      if (!signer?.signatureImageData) continue;
+      const page = pages[anchor.pageIndex];
+      if (!page) continue;
+
+      const embedded = await embedSignaturePng(pdf, signer.signatureImageData);
+      if (!embedded) continue;
+
+      const scale = Math.min(
+        anchor.maxHeight / embedded.height,
+        anchor.width / embedded.width,
+        1,
+      );
+      page.drawImage(embedded.image, {
+        x: anchor.x + 4,
+        y: anchor.y + 4,
+        width: embedded.width * scale,
+        height: embedded.height * scale,
+      });
+
+      // Date beside it, matching the practice block's format.
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      page.drawText(
+        signer.signedAt.toLocaleDateString("en-CA", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        {
+          x: anchor.x + anchor.width + 36,
+          y: anchor.y + 5,
+          size: 10,
+          font,
+          color: rgb(0.1, 0.1, 0.1),
+        },
+      );
+    } catch (e) {
+      console.error("[buildSignedPdf] could not stamp a signature:", e);
+    }
+  }
 }
 
 async function appendCertificatePage(

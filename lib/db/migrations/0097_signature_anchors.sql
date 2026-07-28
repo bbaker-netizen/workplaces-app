@@ -1,0 +1,23 @@
+-- Where each signature belongs on the agreement's own pages.
+--
+-- Until now a completed signature only ever appeared on the Certificate of
+-- Completion appended to the back of the signed PDF. The contract itself went
+-- out with an empty ruled signing line. That is legally sound — the
+-- certificate is the audit record — but a contract whose signature line is
+-- blank does not read as signed, which is the wrong impression to leave with
+-- a client who has just committed to twelve months of work.
+--
+-- The renderer draws those rules, so it knows exactly where they are. It now
+-- records their coordinates (page, x, y, width, max height) as it draws, and
+-- they are kept here so the signed-PDF builder can stamp each captured
+-- signature onto the correct line later, when the signer actually signs.
+--
+-- JSONB rather than a table: the anchors are meaningless outside the envelope
+-- that owns them, are written once, read once, and are never queried by
+-- field.
+--
+-- Nullable. Envelopes created before this, and any built from an uploaded
+-- source document rather than a composed template, simply have no anchors —
+-- those fall back to the certificate page exactly as before.
+ALTER TABLE signature_envelopes
+  ADD COLUMN IF NOT EXISTS signature_anchors jsonb;
