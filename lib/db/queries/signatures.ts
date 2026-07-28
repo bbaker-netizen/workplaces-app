@@ -19,6 +19,7 @@ import {
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 import { canCurrentBbAccessEngagement } from "./bb-access";
+import { canCurrentBbWriteProspect } from "./prospects";
 
 export type EnvelopeWithSigners = SignatureEnvelope & {
   signers: SignatureSigner[];
@@ -145,18 +146,35 @@ export async function getEnvelopeForCoach(
   if (profile.role !== "master_admin" && profile.role !== "coach")
     return null;
 
-  // A coach restricted to specific clients may only read envelopes for
-  // engagements they were granted (master_admin / all-clients pass).
-  const envEngagementId = await withSystemContext(async (tx) => {
+  // A Business Builder restricted to specific clients may only read envelopes
+  // for work they can reach.
+  //
+  // An envelope hangs off EITHER an engagement or a prospect. This used to
+  // check the engagement and return null when there wasn't one — which is
+  // every agreement sent to a prospect, i.e. every Business Building
+  // Agreement, since the whole point is to send it BEFORE the engagement
+  // exists. The result was a 404 on the envelope page the sender is
+  // redirected to the instant they hit Send.
+  const owner = await withSystemContext(async (tx) => {
     const [row] = await tx
-      .select({ engagementId: signatureEnvelopes.engagementId })
+      .select({
+        engagementId: signatureEnvelopes.engagementId,
+        prospectId: signatureEnvelopes.prospectId,
+      })
       .from(signatureEnvelopes)
       .where(eq(signatureEnvelopes.id, envelopeId))
       .limit(1);
-    return row?.engagementId ?? null;
+    return row ?? null;
   });
-  if (!envEngagementId) return null;
-  if (!(await canCurrentBbAccessEngagement(envEngagementId))) return null;
+  if (!owner) return null;
+  if (owner.engagementId) {
+    if (!(await canCurrentBbAccessEngagement(owner.engagementId))) return null;
+  } else if (owner.prospectId) {
+    if (!(await canCurrentBbWriteProspect(owner.prospectId))) return null;
+  } else {
+    // Attached to neither — nothing to authorise against. Master admin only.
+    if (profile.role !== "master_admin") return null;
+  }
 
   return withSystemContext(async (tx) => {
     const [env] = await tx
