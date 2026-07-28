@@ -92,6 +92,13 @@ export const STAGE_STYLES: Record<ProspectStatus, StageStyle> = {
     textClass: "text-tbb-blue-light",
     dotHex: "#E59568",
   },
+  contract_prep: {
+    label: "Contract prep",
+    caption: "Agreement being drawn up",
+    chipClass: "bg-tbb-blue-100 text-tbb-navy",
+    textClass: "text-tbb-navy",
+    dotHex: "#CC6A20",
+  },
   proposal_sent: {
     label: "Proposal sent",
     caption: "Now we wait. Briefly.",
@@ -157,6 +164,7 @@ export const STAGE_ORDER: ProspectStatus[] = [
   "first_contact", // "First contact made"
   "meeting_scheduled", // "Appt booked"
   "appt_completed_followup",
+  "contract_prep",
   "proposal_sent",
   "contract_sent",
   "contract_signed",
@@ -221,6 +229,10 @@ export function prospectPhase(status: ProspectStatus): ProspectPhase {
     case "meeting_scheduled":
     case "appt_completed_followup":
       return "lead";
+    // Contract prep is the reason this stage exists: `qualifying` is the
+    // phase that opens the Deal card and the Signing panel, so an agreement
+    // can be prepared without pretending a proposal went out.
+    case "contract_prep":
     case "proposal_sent":
     case "negotiation":
       return "qualifying";

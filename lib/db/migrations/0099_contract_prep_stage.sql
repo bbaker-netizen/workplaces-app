@@ -1,0 +1,17 @@
+-- New pipeline stage: "Contract prep", sitting just before Proposal sent.
+--
+-- Jen's ask. The Signing section on a prospect only appears from
+-- `proposal_sent` onward, so there was nowhere to prepare and send an
+-- agreement for a deal that has been verbally agreed but has no proposal
+-- out — which is most of them. The choice was to mark a lead as
+-- "Proposal sent" when no proposal had been sent, just to unlock signing.
+--
+-- ALTER TYPE ... ADD VALUE is ALONE in this file on purpose. The deploy
+-- runner sends each migration as one implicit transaction, and a newly added
+-- enum value cannot be USED in the same transaction that added it. Anything
+-- referencing 'contract_prep' has to wait for the next file. Same reason
+-- 0089 and 0090 were split.
+--
+-- BEFORE 'proposal_sent' places it correctly in the enum's own ordering, so
+-- anything sorting by the raw enum gets the right sequence for free.
+ALTER TYPE prospect_status ADD VALUE IF NOT EXISTS 'contract_prep' BEFORE 'proposal_sent';

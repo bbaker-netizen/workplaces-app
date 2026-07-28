@@ -180,6 +180,7 @@ export const prospectStatusEnum = pgEnum("prospect_status", [
   "meeting_scheduled",   // "Appt booked"
   "appt_completed_followup", // Appt completed — follow-up required
   "diagnostic_complete", // Legacy (retired) — remapped to first_contact
+  "contract_prep",       // Agreement being prepared — opens the Signing panel
   "proposal_sent",
   "negotiation",         // Legacy (retired) — remapped to proposal_sent
   "contract_sent",

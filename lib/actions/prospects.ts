@@ -70,6 +70,7 @@ const statusEnum = z.enum([
   "meeting_scheduled",
   "appt_completed_followup",
   "diagnostic_complete",
+  "contract_prep",
   "proposal_sent",
   "negotiation",
   "contract_sent",

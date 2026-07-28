@@ -41,6 +41,7 @@ export type ConversionKind = "booked" | "signed";
 const BOOKED_STATUSES: ProspectStatus[] = [
   "meeting_scheduled",
   "appt_completed_followup",
+  "contract_prep",
   "proposal_sent",
   "contract_sent",
   "contract_signed",

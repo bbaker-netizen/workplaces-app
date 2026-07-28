@@ -80,6 +80,7 @@ const TIER_NEW_LEAD: ProspectStatus[] = [
 const TIER_PROSPECTS: ProspectStatus[] = [
   "meeting_scheduled",
   "appt_completed_followup",
+  "contract_prep",
   "proposal_sent",
   "negotiation",
   "contract_sent",
