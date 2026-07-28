@@ -361,10 +361,34 @@ export function applyDocumentVariables(
   body: string,
   vars: Record<string, string>,
 ): string {
+  // Template bodies come out of the Tiptap editor as HTML. Substitution is a
+  // raw string replace, so a MULTI-LINE value dropped into HTML loses every
+  // line break — the Schedule A detail written as four separate inclusions
+  // would render as one run-on paragraph — and a stray "&" or "<" in the text
+  // would be read as markup. Escape and convert line breaks for multi-line
+  // values when the body is HTML.
+  //
+  // <br /> rather than <p>: the placeholder usually sits INSIDE a paragraph,
+  // and nesting a <p> there is invalid and renders unpredictably.
+  const isHtml = body.trim().startsWith("<");
+
+  const forBody = (value: string): string => {
+    if (!isHtml || !value.includes("\n")) return value;
+    return value
+      .split(/\r?\n/)
+      .map((line) =>
+        line
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;"),
+      )
+      .join("<br />");
+  };
+
   return body.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_match, name) => {
     const key = String(name).toLowerCase();
     if (Object.prototype.hasOwnProperty.call(vars, key)) {
-      return vars[key];
+      return forBody(vars[key]);
     }
     return `[${name}]`;
   });
