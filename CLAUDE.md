@@ -1853,3 +1853,95 @@ composers.** Writing from a prospect's own profile left uploading from
 disk as the only route to a document the app was already holding — the
 Climb PDF included. `ClientCommunicationsPanel` now carries the picker,
 sending by document id rather than shuttling bytes through the browser.
+
+## What was built — the scheduled jobs that never ran (2026-07-28)
+
+Bruce: "I am not receiving Business Notes and agendas — is this legit or
+because nothing has been recorded yet?" It was not legit. No migration;
+this is wiring.
+
+**The hourly Fireflies sync had never done anything.** The cron route
+called `syncAllEngagementMeetings` from `lib/actions`, which opens with
+`ensureUserProfile()`. That reads the Clerk session. A cron run has no
+session, so the guard failed and the function returned `{engagements: 0,
+inserted: 0, updated: 0}` in a few milliseconds — every hour since 24
+July, with a clean success and no error anywhere.
+
+Nothing surfaced it because nothing could. The symptom was an email that
+never arrived, and a recap that never arrives is indistinguishable from
+a fortnight with nothing worth saying. The tell was in the Netlify
+timings: 650–800 ms, hour after hour, never varying. A job that actually
+pulled and persisted transcripts would take longer and vary. **A cron
+whose duration never varies is not finding nothing; it is never
+looking.**
+
+Downstream, that killed both features Bruce was missing. Transcripts
+reach the app through `engagement_meetings`, and this job is the only
+thing meant to keep it current. With it dead, `fireflies_recording_id`
+was never set, so no recap was ever drafted — hard blocked. Agendas
+degraded rather than stopped: their strongest input is the previous
+session's transcript, so without one the drafter fell back to open
+commitments alone and produced nothing when there were none.
+
+The manual "Sync meetings" button always worked — there *is* a signed-in
+user there. Only the automatic feed was dead.
+
+**Third instance of this trap** (`topUpAllSeries`,
+`carryForwardAgendaAsSystem`, now this). It is written up twice already
+as "the trap for any future cron work in this repo," and it still landed
+a fourth time. The warning is not enough on its own; see the structural
+change below.
+
+**Why the work moved to `lib/integrations/fireflies-sync.ts`, with no
+`"use server"` directive.** Every export of a `"use server"` module
+becomes a server action — a POST endpoint reachable from a browser. An
+unguarded, cross-tenant sync that bills Fireflies on every call must not
+be one. So the work lives in a plain module, session-free and callable
+by the cron, and `lib/actions/` keeps only the Clerk-guarded wrapper for
+the in-app button. Same shape as `lib/integrations/gmail-sync.ts` and
+`lib/calendar/sync.ts`, which is the established pattern here.
+
+**The dead Inngest `firefliesSync` was deleted, not repaired**, and this
+is the part that actually prevents a repeat. It was a duplicate of the
+live Netlify pair, and *it held the original bad import* — the real
+route was written by copying that line out of it. A broken pattern left
+lying around gets copied. One sync now, and nothing to copy.
+
+**Second job, same fault, found in the same sweep.**
+`sessionSeriesTopUp` existed ONLY as an Inngest function, so the nightly
+recurring-meeting top-up had never fired either, and every active series
+was drifting toward the end of its materialized horizon with nothing to
+say so. Added the missing pair (`netlify/functions/session-series.mts` →
+`app/api/cron/session-series`, `0 8 * * *`). The work itself was already
+cron-safe — `topUpAllSeries` runs on `withSystemContext` — so only the
+schedule was missing.
+
+It goes on the `EA_JOBS` heartbeat list despite not being an EA job,
+because it shares the property that matters: **its only failure mode is
+silence.** A series quietly running out of dates looks exactly like a
+series nobody uses. Anything on that list turns red in the Friday rollup
+after 8 days without a successful run.
+
+**How to check this whole class of thing in future.**
+`scripts/diagnose-ea-recaps.mjs` (read-only, writes nothing) walks the
+chain link by link — job heartbeats, sessions, transcripts, whether
+unmatched sessions had a transcript in range, recaps, agenda proposals,
+digests — and reports which link is empty. Needs `DATABASE_URL` in
+`.env.local`. Run it before theorising.
+
+**Left deliberately undone.** `topUpAllSeries` is exported from a
+`"use server"` file with no auth guard, so it is a browser-reachable
+endpoint. Idempotent, so the blast radius is small. Fixing it properly
+means extracting the recurrence engine out of an 1,100-line file — the
+DST and phase-stability logic documented under 2026-07-19, which is easy
+to break and has no live test. Worth doing as its own job, not as a
+rider on an outage fix.
+
+**Verified:** `tsc --noEmit` and `next lint` clean. `next build`
+compiles; the 76 local prerender failures are 152 `Missing
+publishableKey` errors and zero of any other cause, matching the
+recorded baseline exactly. Deployed as `9d60a00` — Netlify reports 19
+functions (was 18) and `{"cron":"0 8 * * *","name":"session-series"}` in
+the live schedule table. **Not yet confirmed end-to-end:** the
+acceptance test is a recap approval email actually landing, which needs
+the next `fireflies-sync` run against a session with a transcript.
