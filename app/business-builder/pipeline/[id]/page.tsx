@@ -334,6 +334,9 @@ export default async function ProspectDetailPage({
                 companyName={prospect.companyName}
                 initial={{
                   contactName: prospect.contactName,
+                  contactFirstName: prospect.contactFirstName,
+                  contactLastName: prospect.contactLastName,
+                  contactPreferredName: prospect.contactPreferredName,
                   contactEmail: prospect.contactEmail,
                   phone: prospect.phone,
                   companyWebsite: prospect.companyWebsite,
@@ -641,6 +644,7 @@ export default async function ProspectDetailPage({
                 contactName: prospect.contactName,
                 contactFirstName: prospect.contactFirstName,
                 contactLastName: prospect.contactLastName,
+                contactPreferredName: prospect.contactPreferredName,
                 companyName: prospect.companyName,
                 contactEmail: prospect.contactEmail,
                 phone: prospect.phone,

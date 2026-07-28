@@ -103,6 +103,7 @@ const createSchema = z.object({
   contactName: z.string().min(2).max(200),
   contactFirstName: z.string().max(120).optional(),
   contactLastName: z.string().max(120).optional(),
+  contactPreferredName: z.string().max(120).optional(),
   contactEmail: z.string().email().max(254),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -200,6 +201,7 @@ export async function createProspect(
           return {
             contactFirstName: first,
             contactLastName: last,
+            contactPreferredName: data.contactPreferredName?.trim() || null,
             contactName:
               composeContactName(first, last) ?? data.contactName.trim(),
           };
@@ -242,6 +244,7 @@ const updateSchema = z.object({
   contactName: z.string().min(2).max(200).optional(),
   contactFirstName: z.string().max(120).nullable().optional(),
   contactLastName: z.string().max(120).nullable().optional(),
+  contactPreferredName: z.string().max(120).nullable().optional(),
   contactEmail: z.string().email().max(254).optional(),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -348,6 +351,9 @@ export async function updateProspect(
         updates.contactFirstName = data.contactFirstName?.trim() || null;
       if (data.contactLastName !== undefined)
         updates.contactLastName = data.contactLastName?.trim() || null;
+      if (data.contactPreferredName !== undefined)
+        updates.contactPreferredName =
+          data.contactPreferredName?.trim() || null;
       // Whenever either part moves, recompose the display name so the two
       // never disagree. Editing the single field directly still works for
       // callers that don't know about the split.

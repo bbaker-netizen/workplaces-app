@@ -15,6 +15,8 @@ export type DocumentVariableContext = {
      *  wrong for compound given names and for anyone with a title. */
     contactFirstName?: string | null;
     contactLastName?: string | null;
+    /** What they go by, when it differs from their first name. */
+    contactPreferredName?: string | null;
     companyName: string;
     contactEmail: string;
     /** Phone is now required on every prospect (see
@@ -75,8 +77,15 @@ export type DocumentVariableContext = {
 export const DOCUMENT_VARIABLES = [
   {
     name: "client_name",
-    label: "Client first name",
-    description: "Their first name (from contactName / lead full name)",
+    label: "What to call them",
+    description:
+      "Their preferred name if one is set, otherwise their first name. Use this for greetings.",
+  },
+  {
+    name: "client_first_name",
+    label: "Client first name (given)",
+    description:
+      "Their given first name, exactly as recorded — use this where the legal name matters.",
   },
   {
     name: "client_last_name",
@@ -279,11 +288,16 @@ export function buildVariableMap(
   // Stored first name wins. Splitting the display name on the first space is
   // the fallback for rows written before the columns existed — it is a guess,
   // and it is wrong for "Mary Anne Fletcher".
-  const firstName =
+  const givenName =
     ctx.prospect?.contactFirstName?.trim() ||
     ctx.prospect?.contactName?.split(" ")[0] ||
     ctx.prospect?.contactName ||
     "[client]";
+  // What to call them. A preferred name is the whole point of the field: a
+  // Robert who introduces himself as Bob should not be greeted as Robert in
+  // his own agreement. Falls back to the given name when none is recorded.
+  const firstName =
+    ctx.prospect?.contactPreferredName?.trim() || givenName;
   const lastName =
     ctx.prospect?.contactLastName?.trim() ||
     (ctx.prospect?.contactName?.trim().includes(" ")
@@ -318,6 +332,7 @@ export function buildVariableMap(
 
   return {
     client_name: firstName,
+    client_first_name: givenName,
     client_last_name: lastName,
     client_full_name: ctx.prospect?.contactName ?? "[client name]",
     company_name:

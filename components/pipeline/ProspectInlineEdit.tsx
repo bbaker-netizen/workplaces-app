@@ -40,6 +40,9 @@ export function ProspectInlineEdit({
   initial:
     | {
         contactName: string | null;
+        contactFirstName?: string | null;
+        contactLastName?: string | null;
+        contactPreferredName?: string | null;
         contactEmail: string;
         phone: string | null;
         companyWebsite: string | null;
@@ -90,6 +93,9 @@ function ContactEdit({
   prospectId: string;
   initial: {
     contactName: string | null;
+    contactFirstName?: string | null;
+    contactLastName?: string | null;
+    contactPreferredName?: string | null;
     contactEmail: string;
     phone: string | null;
     companyWebsite: string | null;
@@ -100,7 +106,18 @@ function ContactEdit({
 }) {
   const router = useRouter();
   const [company, setCompany] = useState(companyName);
-  const [contactName, setContactName] = useState(initial.contactName ?? "");
+  // Three separate fields. `contactName` is still what the rest of the app
+  // displays, but it is now COMPOSED from first + last on save rather than
+  // typed — so a template can address someone by their given name without
+  // guessing where the first word ends.
+  const [firstName, setFirstName] = useState(initial.contactFirstName ?? "");
+  const [lastName, setLastName] = useState(initial.contactLastName ?? "");
+  const [preferredName, setPreferredName] = useState(
+    initial.contactPreferredName ?? "",
+  );
+  const contactName = [firstName.trim(), lastName.trim()]
+    .filter(Boolean)
+    .join(" ");
   const [contactEmail, setContactEmail] = useState(initial.contactEmail);
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [companyWebsite, setCompanyWebsite] = useState(
@@ -145,8 +162,12 @@ function ContactEdit({
     // left untouched is never sent, so it can't be clobbered.
     const patch: Parameters<typeof updateProspect>[0] = { id: prospectId };
     if (company.trim() !== companyName) patch.companyName = company.trim();
-    if (contactName.trim() !== (initial.contactName ?? ""))
-      patch.contactName = contactName.trim();
+    if (firstName.trim() !== (initial.contactFirstName ?? ""))
+      patch.contactFirstName = firstName.trim() || null;
+    if (lastName.trim() !== (initial.contactLastName ?? ""))
+      patch.contactLastName = lastName.trim() || null;
+    if (preferredName.trim() !== (initial.contactPreferredName ?? ""))
+      patch.contactPreferredName = preferredName.trim() || null;
     if (contactEmail.trim() !== initial.contactEmail)
       patch.contactEmail = contactEmail.trim();
     if ((phone.trim() || null) !== (initial.phone ?? null))
@@ -170,7 +191,9 @@ function ContactEdit({
 
   const dirty =
     company !== companyName ||
-    contactName !== (initial.contactName ?? "") ||
+    firstName !== (initial.contactFirstName ?? "") ||
+    lastName !== (initial.contactLastName ?? "") ||
+    preferredName !== (initial.contactPreferredName ?? "") ||
     contactEmail !== initial.contactEmail ||
     phone !== (initial.phone ?? "") ||
     companyWebsite !== (initial.companyWebsite ?? "") ||
@@ -194,15 +217,42 @@ function ContactEdit({
         />
       </label>
       {companyIssue && <InlineIssue message={companyIssue.message} />}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="block space-y-1">
+          <span className={labelCls}>First name</span>
+          <input
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="Jane"
+            disabled={isPending}
+            className={inputCls}
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className={labelCls}>Last name</span>
+          <input
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="Smith"
+            disabled={isPending}
+            className={inputCls}
+          />
+        </label>
+      </div>
       <label className="block space-y-1">
-        <span className={labelCls}>Contact name</span>
+        <span className={labelCls}>Preferred name</span>
         <input
-          value={contactName}
-          onChange={(e) => setContactName(e.target.value)}
-          placeholder="Jane Smith"
+          value={preferredName}
+          onChange={(e) => setPreferredName(e.target.value)}
+          placeholder={firstName.trim() || "What they go by"}
           disabled={isPending}
           className={inputCls}
         />
+        <span className="block text-[11px] text-tbb-ink-3">
+          What they actually go by, if it isn&apos;t their first name — a
+          Robert who introduces himself as Bob. Greetings in templates use
+          this; leave it blank to use the first name.
+        </span>
       </label>
       {contactIssue && <InlineIssue message={contactIssue.message} />}
       <label className="block space-y-1">

@@ -2282,6 +2282,9 @@ export const prospects = pgTable(
     contactName: text("contact_name"),
     contactFirstName: text("contact_first_name"),
     contactLastName: text("contact_last_name"),
+    /** What they actually go by, when it differs from their first name.
+     *  Null = no preference recorded; templates fall back to first name. */
+    contactPreferredName: text("contact_preferred_name"),
     contactEmail: text("contact_email").notNull(),
     phone: text("phone"),
     companyWebsite: text("company_website"),
