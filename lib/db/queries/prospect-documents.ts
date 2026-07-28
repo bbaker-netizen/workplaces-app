@@ -8,6 +8,7 @@ import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { documents, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 
 export type ProspectDocument = {
   id: string;
@@ -21,6 +22,11 @@ export type ProspectDocument = {
 export async function listProspectDocuments(
   prospectId: string,
 ): Promise<ProspectDocument[]> {
+  // Ungated until now — not even a role check. It runs under
+  // withSystemContext, which bypasses RLS by design, so anything holding a
+  // prospect id could list that lead's files. The prospect page happens to
+  // gate before calling it; the email attachment picker did not.
+  if (!(await canCurrentBbWriteProspect(prospectId))) return [];
   return withSystemContext(async (tx) => {
     const rows = await tx
       .select({

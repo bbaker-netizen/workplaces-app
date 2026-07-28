@@ -232,6 +232,10 @@ export async function listEnvelopesForProspect(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
   if (profile.role !== "master_admin" && profile.role !== "coach") return [];
+  // Matches the engagement variant below, which has always checked. A lead's
+  // agreements are as sensitive as a client's — more so, since a prospect
+  // envelope holds the fee being offered before it's been agreed.
+  if (!(await canCurrentBbWriteProspect(prospectId))) return [];
   return withSystemContext(async (tx) =>
     tx
       .select()
