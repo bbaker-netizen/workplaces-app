@@ -204,7 +204,9 @@ export default async function EnvelopeDetailPage({
         envelopeId={env.id}
         subject={env.subject}
         status={env.status}
-        canDelete={profile.role === "master_admin"}
+        canDelete={
+          profile.role === "master_admin" || profile.role === "coach"
+        }
       />
     </main>
   );

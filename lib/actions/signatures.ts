@@ -39,6 +39,7 @@ import {
   withSystemContext,
 } from "@/lib/db/tenant";
 import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
+import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import { sendEmailQuietly } from "@/lib/email/send";
 import {
   signatureCompletedEmail,
@@ -545,7 +546,29 @@ export async function createEnvelopeFromComposed(input: {
       .from(userProfiles)
       .where(eq(userProfiles.id, signingUserProfileId))
       .limit(1);
-    return row ?? null;
+    if (row?.signatureImageData) return row;
+
+    // The owning Builder has no signature on file, so the practice block
+    // would render an empty rule. Fall back to the practice owner — the
+    // master admin — who signs on the practice's behalf.
+    //
+    // BOTH name and image, never one person's name over another's
+    // signature. Borrowing just the image would put Bruce's handwriting
+    // under Jen's name, which is a forgery, not a fallback.
+    const [admin] = await tx
+      .select({
+        fullName: userProfiles.fullName,
+        signatureImageData: userProfiles.signatureImageData,
+      })
+      .from(userProfiles)
+      .where(
+        and(
+          eq(userProfiles.orgId, profile.orgId),
+          eq(userProfiles.role, "master_admin"),
+        ),
+      )
+      .limit(1);
+    return admin?.signatureImageData ? admin : (row ?? null);
   });
   const orgName = await withSystemContext(async (tx) => {
     const [row] = await tx
@@ -1316,12 +1339,8 @@ export async function deleteSignatureEnvelope(
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
     return { ok: false, error: "Not authenticated." };
-  // Not `coach`. Removing a signed agreement is a practice-owner decision.
-  if (profile.role !== "master_admin") {
-    return {
-      ok: false,
-      error: "Only the practice owner can delete an agreement.",
-    };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
   }
   if (!z.string().uuid().safeParse(envelopeId).success) {
     return { ok: false, error: "Invalid id." };
@@ -1355,6 +1374,22 @@ export async function deleteSignatureEnvelope(
     return { ...env, docs };
   });
   if (!target) return { ok: false, error: "Agreement not found." };
+
+  // Any Business Builder may clear up an agreement on a client they can
+  // reach — same rule as reading it. Previously master-admin only, which
+  // meant Jen couldn't remove her own test data.
+  if (target.engagementId) {
+    if (!(await canCurrentBbAccessEngagement(target.engagementId))) {
+      return { ok: false, error: "You don't have access to that client." };
+    }
+  } else if (target.prospectId) {
+    if (!(await canCurrentBbWriteProspect(target.prospectId))) {
+      return { ok: false, error: "You don't have access to that lead." };
+    }
+  } else if (profile.role !== "master_admin") {
+    // Attached to neither, so there's nothing to authorise against.
+    return { ok: false, error: "Only the practice owner can delete this." };
+  }
 
   let deletedDocuments = 0;
   try {
