@@ -207,6 +207,12 @@ export type BbUserAdminRow = {
   allClientsAccess: boolean;
   allowedConsoleModules: string[] | null;
   grantedEngagementIds: string[];
+  /** Clients this Builder reaches by being the ASSIGNED COACH, not by an
+   *  explicit grant. Read-only here — it follows `engagements.coach_id`, so
+   *  it changes by reassigning the client, not by ticking a box. Shown
+   *  because the grant list alone made a Builder's access look empty when it
+   *  wasn't: ownership is the main route now, and it was invisible. */
+  ownedEngagementIds: string[];
 };
 
 /**
@@ -256,6 +262,28 @@ export async function listBusinessBuildersForAdmin(): Promise<{
       byCoach.set(g.coachUserProfileId, list);
     }
 
+    // Ownership-derived access: engagement -> the coach's user profile.
+    const owned = await tx
+      .select({
+        userProfileId: coaches.userProfileId,
+        engagementId: engagements.id,
+      })
+      .from(engagements)
+      .innerJoin(coaches, eq(coaches.id, engagements.coachId))
+      .where(
+        and(
+          isNull(engagements.archivedAt),
+          eq(engagements.isInternal, false),
+        ),
+      );
+    const ownedByUser = new Map<string, string[]>();
+    for (const o of owned) {
+      if (!o.userProfileId) continue;
+      const list = ownedByUser.get(o.userProfileId) ?? [];
+      list.push(o.engagementId);
+      ownedByUser.set(o.userProfileId, list);
+    }
+
     // Internal workspace excluded — it isn't a client, and access to it
     // is never granted per-person (see canCurrentBbAccessEngagement).
     const clients = (
@@ -284,6 +312,7 @@ export async function listBusinessBuildersForAdmin(): Promise<{
         allowedConsoleModules:
           (u.allowedConsoleModules as string[] | null) ?? null,
         grantedEngagementIds: byCoach.get(u.userProfileId) ?? [],
+        ownedEngagementIds: ownedByUser.get(u.userProfileId) ?? [],
       })),
       clients,
     };

@@ -39,6 +39,7 @@ export default async function BusinessBuildersSettingsPage() {
         allClientsAccess: u.allClientsAccess,
         allowedConsoleModules: u.allowedConsoleModules,
         grantedEngagementIds: u.grantedEngagementIds,
+        ownedEngagementIds: u.ownedEngagementIds,
       },
     ]),
   );

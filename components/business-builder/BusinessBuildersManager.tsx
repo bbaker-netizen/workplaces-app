@@ -182,6 +182,9 @@ export type BbUserAccess = {
   allClientsAccess: boolean;
   allowedConsoleModules: string[] | null;
   grantedEngagementIds: string[];
+  /** Clients reached by being the assigned coach. Not editable here — it
+   *  follows who the client is assigned to. */
+  ownedEngagementIds?: string[];
 };
 
 type Client = { id: string; name: string };
@@ -519,9 +522,10 @@ function TeamList({
             clients={clients}
             access={
               accessByUser[u.id] ?? {
-                allClientsAccess: true,
+                allClientsAccess: false,
                 allowedConsoleModules: null,
                 grantedEngagementIds: [],
+                ownedEngagementIds: [],
               }
             }
           />
@@ -671,12 +675,50 @@ function AccessEditor({
     });
   }
 
+  const ownedIds = new Set(access.ownedEngagementIds ?? []);
+  const ownedClients = clients.filter((c) => ownedIds.has(c.id));
+
   return (
     <div className="border-t border-tbb-line px-4 py-4 space-y-5 bg-tbb-cream/40">
+      {/* Clients they already reach by OWNING them. Read-only, and shown
+          first, because this is the main route now — a Builder is assigned
+          clients and sees those. Without it the panel showed an empty tick
+          list and read as "this person has access to nothing", which is
+          why the difference between two Builders was invisible. */}
+      {!allClients && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
+            Their own clients
+          </p>
+          {ownedClients.length > 0 ? (
+            <>
+              <ul className="pl-1 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5">
+                {ownedClients.map((c) => (
+                  <li key={c.id} className="text-sm text-tbb-navy">
+                    {c.name}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-tbb-ink-3">
+                Already visible to them because they&apos;re the assigned
+                Business Builder. Change this by reassigning the client, not
+                here.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-tbb-ink-3 italic">
+              No clients assigned to them yet — so they currently see only
+              leads nobody has claimed. Assign clients on the client&apos;s own
+              page, or tick extras below.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Clients */}
       <div className="space-y-2">
         <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
-          Clients
+          {allClients ? "Clients" : "Extra clients to share with them"}
         </p>
         <label className="flex items-center gap-2 text-sm">
           <input
