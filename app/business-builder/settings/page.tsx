@@ -12,6 +12,7 @@ import {
   DollarSign,
   FileText,
   Plug,
+  Receipt,
   User,
   Users,
 } from "lucide-react";
@@ -42,6 +43,15 @@ const CARDS: SettingsCard[] = [
     description:
       "Default monthly-fee suggestions per program + client size. Drives the {{monthly_fee}} placeholder in your contracts.",
     icon: CreditCard,
+    status: "ready",
+    masterAdminOnly: true,
+  },
+  {
+    href: "/business-builder/settings/quickbooks-billing",
+    title: "QuickBooks billing",
+    description:
+      "Which QuickBooks item and tax code a monthly retainer is billed against. Set once, used for every client's recurring invoice.",
+    icon: Receipt,
     status: "ready",
     masterAdminOnly: true,
   },

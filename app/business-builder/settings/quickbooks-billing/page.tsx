@@ -38,10 +38,10 @@ export default async function QuickBooksBillingSettingsPage() {
           QuickBooks billing
         </h1>
         <Link
-          href="/business-builder"
+          href="/business-builder/settings"
           className="inline-block font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground hover:text-foreground"
         >
-          &larr; Console
+          &larr; Settings
         </Link>
       </header>
 

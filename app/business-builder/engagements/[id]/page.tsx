@@ -69,6 +69,7 @@ import { EngagementArchiveButton } from "@/components/business-builder/Engagemen
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { EngagementRename } from "@/components/business-builder/EngagementRename";
 import { EngagementFeeControl } from "@/components/business-builder/EngagementFeeControl";
+import { QboRecurringInvoiceButton } from "@/components/business-builder/QboRecurringInvoiceButton";
 import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
 
 export default async function EngagementDetailPage({
@@ -353,6 +354,12 @@ export default async function EngagementDetailPage({
             <EngagementFeeControl
               engagementId={id}
               currentCents={data.eng.monthlyFeeCents ?? null}
+            />
+            {/* Sits beside the fee because it bills exactly that number —
+                seeing them together is what makes the amount checkable. */}
+            <QboRecurringInvoiceButton
+              engagementId={id}
+              monthlyFeeCents={data.eng.monthlyFeeCents ?? null}
             />
             {/* Plain <a> (full-document nav): /portal/e/[id] is a Route
                 Handler that sets a cookie + redirects; Next's <Link>
