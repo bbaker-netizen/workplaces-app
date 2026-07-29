@@ -22,8 +22,13 @@ import {
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 import {
   applyTemplate,
+  templateUsesVariable,
   TEMPLATE_CATEGORIES as CATEGORY_VALUES,
 } from "@/lib/templates/variables";
+import {
+  availabilityUrl,
+  ensureAvailabilityToken,
+} from "@/lib/scheduling/availability-token";
 
 const upsertSchema = z.object({
   name: z.string().min(1).max(200),
@@ -259,6 +264,25 @@ export async function resolveTemplateForProspect(args: {
         ? "We need these completed"
         : "We need it completed",
     };
+
+    // Minted only when the template asks for it. Resolving this variable
+    // CREATES a request row, so drafting an unrelated template must not
+    // leave one behind — and a client would then hold a live link nobody
+    // meant to issue. The helper reuses an unanswered request, so drafting
+    // the same email twice yields the same link rather than orphaning the
+    // one already sent.
+    const wantsAvailability =
+      templateUsesVariable(data.tmpl.body, "availability_link") ||
+      templateUsesVariable(data.tmpl.subject, "availability_link");
+    if (wantsAvailability) {
+      const token = await withSystemContext((tx) =>
+        ensureAvailabilityToken(tx, args.prospectId, profile.userProfileId),
+      );
+      // Left unresolved on failure rather than silently dropped: the sender
+      // sees `{{availability_link}}` sitting in the draft and knows to fix
+      // it, instead of mailing a paragraph with no link in it.
+      if (token) vars.availability_link = availabilityUrl(token);
+    }
     return {
       ok: true,
       subject: applyTemplate(data.tmpl.subject, vars),

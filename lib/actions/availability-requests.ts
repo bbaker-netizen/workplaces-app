@@ -12,11 +12,14 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import { availabilityRequests, prospects, userProfiles } from "@/lib/db/schema";
+import { availabilityRequests, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
-import { newSigningToken } from "@/lib/signing/token";
 import { sendEmailQuietly } from "@/lib/email/send";
+import {
+  availabilityUrl,
+  ensureAvailabilityToken,
+} from "@/lib/scheduling/availability-token";
 import { describeSlots, sanitizeSlots } from "@/lib/scheduling/availability-grid";
 
 export type ActionResult<T = void> =
@@ -44,45 +47,15 @@ export async function createAvailabilityRequest(
     return { ok: false, error: "You don't have access to that lead." };
 
   try {
-    const token = await withSystemContext(async (tx) => {
-      const [p] = await tx
-        .select({
-          orgId: prospects.orgId,
-          contactName: prospects.contactName,
-          contactEmail: prospects.contactEmail,
-        })
-        .from(prospects)
-        .where(eq(prospects.id, prospectId))
-        .limit(1);
-      if (!p) throw new Error("Prospect not found.");
+    const token = await withSystemContext((tx) =>
+      ensureAvailabilityToken(tx, prospectId, profile.userProfileId),
+    );
+    if (!token) return { ok: false, error: "Prospect not found." };
 
-      const existing = await tx
-        .select({
-          publicToken: availabilityRequests.publicToken,
-          submittedAt: availabilityRequests.submittedAt,
-        })
-        .from(availabilityRequests)
-        .where(eq(availabilityRequests.prospectId, prospectId));
-      const open = existing.find((r) => r.submittedAt === null);
-      if (open) return open.publicToken;
-
-      const fresh = newSigningToken();
-      await tx.insert(availabilityRequests).values({
-        orgId: p.orgId,
-        prospectId,
-        publicToken: fresh,
-        contactName: p.contactName,
-        contactEmail: p.contactEmail,
-        createdByUserProfileId: profile.userProfileId,
-      });
-      return fresh;
-    });
-
-    const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
     revalidatePath(`/business-builder/pipeline/${prospectId}`);
     return {
       ok: true,
-      data: { token, url: `${base}/availability/${token}` },
+      data: { token, url: availabilityUrl(token) },
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

@@ -41,7 +41,23 @@ export const TEMPLATE_VARIABLES = [
     name: "assessment_completed_sentence",
     label: "\"We need it completed\" / \"We need these completed\"",
   },
+  {
+    name: "availability_link",
+    label: "Link to this client's availability grid",
+  },
 ] as const;
+
+/**
+ * Variables whose value has a side effect — resolving them creates
+ * something. Only minted when the template actually references one, so
+ * previewing an unrelated template can't leave stray rows behind.
+ */
+export const SIDE_EFFECT_VARIABLES = ["availability_link"] as const;
+
+/** Does this template text reference `{{name}}`? */
+export function templateUsesVariable(text: string, name: string): boolean {
+  return new RegExp(`\\{\\{\\s*${name}(_url)?\\s*\\}\\}`).test(text);
+}
 
 export const TEMPLATE_CATEGORIES = [
   "onboarding",
