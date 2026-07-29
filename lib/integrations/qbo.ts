@@ -410,3 +410,135 @@ function requireEnv(key: string): string {
   }
   return v;
 }
+
+/* ------------------- billing setup: items + tax codes ------------------- */
+
+export type QboItem = { Id: string; Name: string; Type?: string };
+export type QboTaxCode = { Id: string; Name: string };
+
+/**
+ * Service items the retainer can be billed against.
+ *
+ * Restricted to Type='Service' because a Business Building retainer is a
+ * service, and offering inventory parts in the picker would invite billing a
+ * coaching fee against a stock item — which posts to the wrong account and is
+ * a bookkeeping problem, not a display one.
+ */
+export async function listServiceItems(
+  accessToken: string,
+  realmId: string,
+): Promise<QboItem[]> {
+  const query =
+    "select Id, Name, Type from Item where Type = 'Service' maxresults 200";
+  const resp = await qboFetch(
+    accessToken,
+    realmId,
+    `/query?query=${encodeURIComponent(query)}`,
+  );
+  if (!resp.ok) {
+    throw new Error(`QuickBooks wouldn't list items (${resp.status}).`);
+  }
+  const json = (await resp.json()) as {
+    QueryResponse?: { Item?: QboItem[] };
+  };
+  return json.QueryResponse?.Item ?? [];
+}
+
+/** Tax codes, so an Alberta GST line isn't hardcoded. */
+export async function listTaxCodes(
+  accessToken: string,
+  realmId: string,
+): Promise<QboTaxCode[]> {
+  const query = "select Id, Name from TaxCode maxresults 200";
+  const resp = await qboFetch(
+    accessToken,
+    realmId,
+    `/query?query=${encodeURIComponent(query)}`,
+  );
+  if (!resp.ok) {
+    throw new Error(`QuickBooks wouldn't list tax codes (${resp.status}).`);
+  }
+  const json = (await resp.json()) as {
+    QueryResponse?: { TaxCode?: QboTaxCode[] };
+  };
+  return json.QueryResponse?.TaxCode ?? [];
+}
+
+/**
+ * Create a MONTHLY RECURRING invoice template in QuickBooks.
+ *
+ * Bruce's call, and it matches Model C: the retainer bills itself every
+ * month once set up at onboarding, rather than someone remembering to raise
+ * an invoice twelve times a year.
+ *
+ * Created UNSCHEDULED and unsent. `Active: false` means QuickBooks holds it
+ * as a template that does not fire until a human activates it, and no email
+ * goes to the client. This is the deliberate safety line: a bug in our code
+ * must not be able to invoice a client, or invoice them twice, before anyone
+ * has looked. Bruce reviews and activates it in QBO.
+ */
+export async function createMonthlyRecurringInvoice(
+  accessToken: string,
+  realmId: string,
+  args: {
+    customerId: string;
+    /** Dollars, not cents — QBO money is decimal. */
+    amount: number;
+    itemId: string;
+    taxCodeId?: string | null;
+    description?: string | null;
+    /** Shown in QuickBooks' recurring-transaction list. */
+    templateName: string;
+    /** Day of the month to bill on, 1–28. Kept off 29–31 so February
+     *  doesn't silently shift the billing date. */
+    dayOfMonth?: number;
+  },
+): Promise<{ id: string }> {
+  const day = Math.min(Math.max(args.dayOfMonth ?? 1, 1), 28);
+  const body = {
+    Invoice: {
+      CustomerRef: { value: args.customerId },
+      Line: [
+        {
+          DetailType: "SalesItemLineDetail",
+          Amount: args.amount,
+          Description: args.description ?? undefined,
+          SalesItemLineDetail: {
+            ItemRef: { value: args.itemId },
+            ...(args.taxCodeId
+              ? { TaxCodeRef: { value: args.taxCodeId } }
+              : {}),
+          },
+        },
+      ],
+    },
+    RecurringInfo: {
+      Name: args.templateName,
+      RecurType: "Scheduled",
+      // Held, not live. A human turns it on in QuickBooks.
+      Active: false,
+      ScheduleInfo: {
+        IntervalType: "Monthly",
+        NumInterval: 1,
+        DayOfMonth: day,
+      },
+    },
+  };
+
+  const resp = await qboFetch(accessToken, realmId, "/recurringtransaction", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(
+      `QuickBooks refused the recurring invoice (${resp.status}): ${detail.slice(0, 300)}`,
+    );
+  }
+  const json = (await resp.json()) as {
+    RecurringTransaction?: { Invoice?: { Id?: string } };
+  };
+  const id = json.RecurringTransaction?.Invoice?.Id;
+  if (!id) throw new Error("QuickBooks didn't return a recurring invoice id.");
+  return { id };
+}

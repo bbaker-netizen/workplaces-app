@@ -349,6 +349,14 @@ export const orgs = pgTable("orgs", {
   /** Government tax ID — GST/HST in Canada, EIN in the US, VAT in
    *  the EU. Used on invoices. */
   taxId: text("tax_id"),
+  /** Which QuickBooks service item and tax code the monthly retainer bills
+   *  against. A QBO invoice line requires an ItemRef, and the id is specific
+   *  to this QuickBooks file — so it's chosen once here rather than guessed
+   *  per invoice. Names cached only for display. */
+  qboServiceItemId: text("qbo_service_item_id"),
+  qboServiceItemName: text("qbo_service_item_name"),
+  qboTaxCodeId: text("qbo_tax_code_id"),
+  qboTaxCodeName: text("qbo_tax_code_name"),
   type: orgTypeEnum("type").notNull().default("client"),
   // Lead-capture webhook secret (migration 0068). Secures the public
   // /api/leads/<token> endpoint that external channels POST leads to.
