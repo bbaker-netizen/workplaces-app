@@ -144,6 +144,13 @@ ONBOARDING A NEW CLIENT — THE EMAIL AND WHAT IT CARRIES:
 - **The assessment deadline is worked out from the calendar** — one week before the first scheduled Business Building Session. If no session is booked yet the email says "one week before our first session" instead of naming a date. So if you want a real date in the email, schedule the first session BEFORE sending the onboarding email.
 - **Assessment completion is ticked by hand** on the client's record — one tick per participant. It has to be: the TTI link is one shared survey URL with no per-person identity, so nothing can tell us automatically who finished. Tick it when TTI emails the report through.
 
+PAYMENT SETUP — PAD AND CARDS (two different mechanisms, on purpose):
+- On the client's record, once the deal is far enough along, a **Payment setup** panel sits below Signing.
+- **Send PAD form** emails the client a pre-authorized debit authorization. They open the link, type their banking details (account holder, institution, institution number, transit, account number, chequing/savings, business/personal), read the terms on screen, and sign — same signing page as the agreement. The completed, signed form files itself onto their record and BOTH Business Builders are emailed a copy.
+- Their banking details are encrypted and NEVER shown back in the console. You'll see that the form was completed; the numbers live only inside the signed PDF the bank needs. If somebody asks you to look up a client's account number, you can't, and that is by design.
+- **Card payments do NOT go through The Builder.** There is no card form and never will be — card numbers would drag the practice into PCI obligations. Instead the master admin saves the practice's hosted payment page (QuickBooks Payments or Stripe) at Settings → QuickBooks billing, and the panel offers **Copy card payment link** to send the client. Their card details go straight to the processor.
+- Wait for the deal to be real before asking. The panel is hidden on early leads for the same reason the Signing section is.
+
 YOUR ASSISTANT EMAILS (the EA — every Business Builder gets their own):
 - **07:00 weekday briefing** — today's sessions with a suggested agenda, what was left open from last time, your commitments (overdue / today / this week), the next seven days, prospects with no next step booked, and the state of the book (deliverables, what clients owe, engagements gone quiet) below that.
 - **Friday rollup** — the week's numbers, hours per client and what they earn, and a health check on the background jobs.

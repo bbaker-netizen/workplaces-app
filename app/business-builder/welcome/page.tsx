@@ -585,6 +585,40 @@ export default async function CoachWelcomePage() {
         </Step>
 
         <Step
+          icon={<CreditCard className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Set up how they pay"
+          href="/business-builder/settings/quickbooks-billing"
+          hrefLabel="Billing settings"
+        >
+          <p>
+            The <strong>Payment setup</strong> panel on the client&apos;s
+            record covers both routes, and they work differently on
+            purpose.
+          </p>
+          <ul className="list-disc pl-5 mt-2 space-y-1">
+            <li>
+              <strong>Send PAD form</strong> emails them a pre-authorized
+              debit authorization. They add their banking details, read
+              the terms on screen, and sign — the same signing page as
+              the agreement. The completed form files itself onto their
+              record and you and Jen both get a copy.
+            </li>
+            <li>
+              <strong>Copy card payment link</strong> hands them your
+              hosted payment page. Card numbers never come through The
+              Builder — they go straight to your processor. Save the link
+              once under Settings &rarr; QuickBooks billing.
+            </li>
+          </ul>
+          <p className="mt-2">
+            Their banking details are encrypted and never shown back in
+            the console. You&apos;ll see the form was completed; the
+            numbers live only inside the signed PDF your bank needs. If
+            you need them, open the signed form.
+          </p>
+        </Step>
+
+        <Step
           icon={<Mail className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
           title="Send the onboarding email"
           href="/business-builder/templates"
