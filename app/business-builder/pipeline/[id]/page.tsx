@@ -50,6 +50,7 @@ import { listEnvelopesForProspect } from "@/lib/db/queries/signatures";
 import { listForProspect } from "@/lib/db/queries/client-communications";
 import { listBusinessBuilders } from "@/lib/db/queries/user-profiles";
 import {
+  availabilityRequests,
   documentTemplates,
   pricingTiers,
   emailTemplates,
@@ -65,6 +66,7 @@ import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivity
 import { ProspectComments } from "@/components/pipeline/ProspectComments";
 import { ProspectDocuments } from "@/components/pipeline/ProspectDocuments";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
+import { ProspectAvailabilityPanel } from "@/components/pipeline/ProspectAvailabilityPanel";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
 import { ActivateEngagementButton } from "@/components/pipeline/ActivateEngagementButton";
@@ -79,6 +81,7 @@ import { getBookingFollowThroughForProspect } from "@/lib/db/queries/booking-fol
 import { SoulFilePreviewButton } from "@/components/pipeline/SoulFilePreviewButton";
 import { DeleteProspectButton } from "@/components/pipeline/DeleteProspectButton";
 import { isSmsConfigured } from "@/lib/integrations/twilio";
+import { sanitizeSlots } from "@/lib/scheduling/availability-grid";
 import {
   prospectPhase,
   STAGE_STYLES,
@@ -122,6 +125,7 @@ export default async function ProspectDetailPage({
     businessBuilders,
     comments,
     prospectDocs,
+    availabilityRequest,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -197,6 +201,19 @@ export default async function ProspectDetailPage({
     listBusinessBuilders(),
     listProspectComments(prospect.id),
     listProspectDocuments(prospect.id),
+    // Most recent availability request for this lead — drives the panel.
+    withSystemContext(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(availabilityRequests)
+        .where(eq(availabilityRequests.prospectId, prospect.id));
+      // Prefer an answered one; otherwise the open invitation.
+      return (
+        rows.find((r) => r.submittedAt !== null) ??
+        rows.find((r) => r.submittedAt === null) ??
+        null
+      );
+    }),
   ]);
 
   // Booking follow-through row, if this prospect came in via a booked
@@ -699,6 +716,20 @@ export default async function ProspectDetailPage({
           {/* Communications timeline — every email / SMS / WhatsApp / call
               note attached to this prospect. Lives in the left column so it
               lines up with the sections above it. Collapsed by default. */}
+          <CollapsibleSection
+            title="Meeting availability"
+            storageKey="availability"
+            icon={<CalendarClock className="w-3.5 h-3.5" aria-hidden />}
+          >
+            <ProspectAvailabilityPanel
+              prospectId={prospect.id}
+              submittedAt={availabilityRequest?.submittedAt ?? null}
+              slots={sanitizeSlots(availabilityRequest?.slots)}
+              note={availabilityRequest?.note ?? null}
+              existingToken={availabilityRequest?.publicToken ?? null}
+            />
+          </CollapsibleSection>
+
           <CollapsibleSection
             title="Communications"
             storageKey="communications"

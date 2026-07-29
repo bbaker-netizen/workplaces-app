@@ -3618,3 +3618,56 @@ export const eaAgendaProposals = pgTable(
 
 export type EaAgendaProposal = typeof eaAgendaProposals.$inferSelect;
 export type NewEaAgendaProposal = typeof eaAgendaProposals.$inferInsert;
+
+
+/**
+ * Availability requests — the client-facing "when can you meet?" grid that
+ * replaced the Google Form in onboarding. One row per request, holding both
+ * the invitation and the answer: a request has at most one response, so a
+ * second table would only add a join.
+ */
+export const availabilityRequests = pgTable(
+  "availability_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    prospectId: uuid("prospect_id").references(() => prospects.id, {
+      onDelete: "cascade",
+    }),
+    engagementId: uuid("engagement_id").references(() => engagements.id, {
+      onDelete: "cascade",
+    }),
+    /** The auth. Clients have no login, so the token is the only gate. */
+    publicToken: text("public_token").notNull().unique(),
+    contactName: text("contact_name"),
+    contactEmail: text("contact_email"),
+    /** Array of {day, period}. jsonb rather than ten boolean columns — the
+     *  grid's shape is presentation, and a fixed set would need a migration
+     *  the first time an evening or Saturday slot is wanted. */
+    slots: jsonb("slots"),
+    note: text("note"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submittedIp: text("submitted_ip"),
+    createdByUserProfileId: uuid("created_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("availability_requests_org_idx").on(t.orgId),
+    prospectIdx: index("availability_requests_prospect_idx").on(t.prospectId),
+    engagementIdx: index("availability_requests_engagement_idx").on(
+      t.engagementId,
+    ),
+  }),
+);
+
+export type AvailabilityRequest = typeof availabilityRequests.$inferSelect;
