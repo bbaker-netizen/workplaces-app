@@ -2293,6 +2293,16 @@ export const prospects = pgTable(
     contact2PreferredName: text("contact2_preferred_name"),
     contact2Email: text("contact2_email"),
     contact2Phone: text("contact2_phone"),
+    /** TTI Person Profile completion, per participant. Timestamps not
+     *  booleans — a future reminder needs to know how long someone has been
+     *  outstanding. Marked by hand: the TTI link is one shared URL with no
+     *  per-person identity and no API, so nothing can detect completion. */
+    assessment1CompletedAt: timestamp("assessment1_completed_at", {
+      withTimezone: true,
+    }),
+    assessment2CompletedAt: timestamp("assessment2_completed_at", {
+      withTimezone: true,
+    }),
     contactEmail: text("contact_email").notNull(),
     phone: text("phone"),
     companyWebsite: text("company_website"),

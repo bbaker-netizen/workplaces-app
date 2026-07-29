@@ -51,6 +51,7 @@ import { listForProspect } from "@/lib/db/queries/client-communications";
 import { listBusinessBuilders } from "@/lib/db/queries/user-profiles";
 import {
   availabilityRequests,
+  bbsSessions,
   documentTemplates,
   pricingTiers,
   emailTemplates,
@@ -67,6 +68,7 @@ import { ProspectComments } from "@/components/pipeline/ProspectComments";
 import { ProspectDocuments } from "@/components/pipeline/ProspectDocuments";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectAvailabilityPanel } from "@/components/pipeline/ProspectAvailabilityPanel";
+import { ProspectAssessmentTracker } from "@/components/pipeline/ProspectAssessmentTracker";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
 import { ActivateEngagementButton } from "@/components/pipeline/ActivateEngagementButton";
@@ -126,6 +128,7 @@ export default async function ProspectDetailPage({
     comments,
     prospectDocs,
     availabilityRequest,
+    firstSessionAt,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -214,7 +217,45 @@ export default async function ProspectDetailPage({
         null
       );
     }),
+    // First session date is DERIVED, not a second field to keep in step —
+    // the earliest scheduled session on the engagement this lead converted
+    // into. Null before conversion, which is the normal case at onboarding;
+    // the email then uses its "one week before our first session" wording.
+    withSystemContext(async (tx) => {
+      if (!prospect.convertedEngagementId) return null;
+      const rows = await tx
+        .select({ scheduledAt: bbsSessions.scheduledAt })
+        .from(bbsSessions)
+        .where(eq(bbsSessions.engagementId, prospect.convertedEngagementId))
+        .orderBy(asc(bbsSessions.scheduledAt))
+        .limit(1);
+      return rows[0]?.scheduledAt ?? null;
+    }),
   ]);
+
+  // The assessments are due a week before that first session.
+  const assessmentDueDate = firstSessionAt
+    ? new Date(firstSessionAt.getTime() - 7 * 24 * 60 * 60 * 1000)
+    : null;
+  const assessmentParticipants = [
+    {
+      n: 1 as const,
+      name:
+        prospect.contactFirstName ??
+        prospect.contactName ??
+        "Primary contact",
+      completedAt: prospect.assessment1CompletedAt,
+    },
+    ...(prospect.contact2FirstName || prospect.contact2Email
+      ? [
+          {
+            n: 2 as const,
+            name: prospect.contact2FirstName ?? "Business partner",
+            completedAt: prospect.assessment2CompletedAt,
+          },
+        ]
+      : []),
+  ];
 
   // Booking follow-through row, if this prospect came in via a booked
   // session. Drives the three-email NDA/paperwork panel.
@@ -716,6 +757,18 @@ export default async function ProspectDetailPage({
           {/* Communications timeline — every email / SMS / WhatsApp / call
               note attached to this prospect. Lives in the left column so it
               lines up with the sections above it. Collapsed by default. */}
+          <CollapsibleSection
+            title="Person Profile assessments"
+            storageKey="assessments"
+            icon={<Zap className="w-3.5 h-3.5" aria-hidden />}
+          >
+            <ProspectAssessmentTracker
+              prospectId={prospect.id}
+              participants={assessmentParticipants}
+              dueDate={assessmentDueDate}
+            />
+          </CollapsibleSection>
+
           <CollapsibleSection
             title="Meeting availability"
             storageKey="availability"
