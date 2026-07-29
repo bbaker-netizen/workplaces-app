@@ -1570,6 +1570,67 @@ hit `/_not-found` identically.
 0086 applies on next deploy via `scripts/migrate-on-deploy.mjs`. The
 per-phase live checks in the build spec are the acceptance tests and all
 of them remain outstanding.
+## What was built — QuickBooks recurring retainer + onboarding merge fields (2026-07-29)
+
+Two pieces of Jen's onboarding spec. Migration `0104`.
+
+**Recurring retainer invoice.** Bruce's two answers: recurring MONTHLY,
+created as a draft rather than sent. No re-authorisation needed — the
+existing accounting scope already covers writing invoices; only the
+Payments API would have needed more, and this doesn't touch it.
+
+**`Active: false` is the safety line.** `RecurType: Scheduled` with
+`Active: false` means QuickBooks holds it as a template that does not
+fire and does not email anyone until a human activates it there. A bug
+here must not be able to invoice a client, or invoice them twice, before
+anyone has looked — that failure reaches a client's bank account, not a
+screen.
+
+0104 stores `qbo_service_item_id/name` + `qbo_tax_code_id/name` on
+`orgs`. A QBO invoice line REQUIRES an `ItemRef` and the id is specific
+to this QuickBooks file, so there is no sensible default and guessing
+would post coaching revenue against whatever item happened to be first.
+Chosen once at Settings → QuickBooks billing (master_admin only — which
+revenue account coaching income posts to is the practice owner's call).
+The item list is filtered to `Type='Service'`; offering inventory parts
+invites billing a coaching fee against a stock item.
+
+Every precondition refuses with a specific sentence rather than a
+generic failure: no item chosen, no QBO customer linked to the lead, no
+monthly fee set. Billing day clamped to 1–28 so February can't silently
+shift the date. The button sits beside the monthly fee on the client
+page — it bills exactly that number, and seeing the two together is what
+makes the amount checkable. Two clicks, with the confirm step stating
+the amount and the day.
+
+**`{{availability_link}}`.** The last hand-step in the onboarding email:
+the link existed, but reaching it meant opening the record, pressing
+Generate, copying, pasting — four chances to paste the previous client's
+link into this client's email.
+
+**It is the only merge field with a side effect** — resolving it CREATES
+a request row, where every other variable only reads. So it is minted
+only when the template text actually references it
+(`templateUsesVariable`); resolving unconditionally would leave a live
+link behind every time somebody previewed an unrelated template — a URL
+that submits real availability against a real client, issued by nobody
+and watched by nobody.
+
+Create-or-reuse moved to `lib/scheduling/availability-token.ts` so the
+button and the merge field share one implementation. Two copies drifting
+apart means a client holding a link that writes to a row the record
+isn't reading. Reuse of an *unanswered* request also makes drafting the
+same email twice yield the same link rather than orphaning the one
+already sent. On failure the placeholder is left visibly unresolved
+rather than dropped.
+
+**Verified:** `tsc --noEmit`, `next lint`, `next build` all clean.
+**Not exercised live** — the acceptance tests are a recurring invoice
+appearing inactive in QuickBooks, and an onboarding draft carrying a
+working availability link.
+
+---
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
