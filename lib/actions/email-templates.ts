@@ -9,11 +9,12 @@
  * left as-is so the user notices and fills them in.
  */
 
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
+  bbsSessions,
   emailTemplates,
   prospects,
   userProfiles,
@@ -149,6 +150,7 @@ export async function resolveTemplateForProspect(args: {
       const [p] = await tx
         .select({
           companyName: prospects.companyName,
+          convertedEngagementId: prospects.convertedEngagementId,
           contactName: prospects.contactName,
           contactFirstName: prospects.contactFirstName,
           contactPreferredName: prospects.contactPreferredName,
@@ -180,7 +182,24 @@ export async function resolveTemplateForProspect(args: {
           ),
         );
       const partnerName = others.length === 1 ? others[0].name : null;
+
+      // Assessments are due a week before the first session. DERIVED from
+      // the calendar rather than a second date field — per Bruce — so it
+      // can't drift out of step with what's actually booked. No session
+      // scheduled (the normal case at onboarding) means no date, and the
+      // sentence falls back to relative wording rather than inventing one.
+      let firstSessionAt: Date | null = null;
+      if (p?.convertedEngagementId) {
+        const rows = await tx
+          .select({ scheduledAt: bbsSessions.scheduledAt })
+          .from(bbsSessions)
+          .where(eq(bbsSessions.engagementId, p.convertedEngagementId))
+          .orderBy(asc(bbsSessions.scheduledAt))
+          .limit(1);
+        firstSessionAt = rows[0]?.scheduledAt ?? null;
+      }
       return {
+        firstSessionAt,
         tmpl: tmpl ?? null,
         p: p ?? null,
         sender: sender ?? null,
@@ -203,8 +222,25 @@ export async function resolveTemplateForProspect(args: {
       "";
     const hasPartner = partnerFirst.length > 0;
 
+    const dueDate = data.firstSessionAt
+      ? new Date(data.firstSessionAt.getTime() - 7 * 24 * 60 * 60 * 1000)
+      : null;
+    const dueDateLabel = dueDate
+      ? dueDate.toLocaleDateString("en-CA", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        })
+      : "";
+
     const vars: Record<string, string> = {
       company_name: data.p.companyName,
+      assessment_due_date: dueDateLabel,
+      // The whole clause, so the sentence reads properly either way rather
+      // than leaving "by " with nothing after it.
+      assessment_deadline_sentence: dueDate
+        ? `by ${dueDateLabel}`
+        : "one week before our first session",
       contact_name: data.p.contactName ?? "",
       contact_first_name: clientFirst,
       contact_email: data.p.contactEmail,

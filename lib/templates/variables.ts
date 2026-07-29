@@ -30,6 +30,14 @@ export const TEMPLATE_VARIABLES = [
   },
   { name: "assessment_noun", label: "\"Assessment\" or \"Assessments\"" },
   {
+    name: "assessment_due_date",
+    label: "Assessment due date (one week before the first session)",
+  },
+  {
+    name: "assessment_deadline_sentence",
+    label: "\"by <date>\" or \"one week before our first session\"",
+  },
+  {
     name: "assessment_completed_sentence",
     label: "\"We need it completed\" / \"We need these completed\"",
   },
