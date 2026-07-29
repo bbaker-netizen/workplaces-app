@@ -32,6 +32,7 @@ import {
   agendaItems,
   bbsSessions,
   coaches,
+  engagementMeetings,
   engagements,
   messages,
   sessionRecaps,
@@ -171,20 +172,69 @@ export async function generateSessionRecap(
   let firefliesUrl: string | null = null;
   let summaryText = "";
   if (session.firefliesRecordingId) {
-    try {
-      const detail = await fetchMeetingDetail(session.firefliesRecordingId);
-      if (detail) {
-        firefliesUrl = detail.transcript_url;
-        summaryText = [
-          detail.summary?.overview ?? "",
-          detail.summary?.shorthand_bullet ?? "",
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-      }
-    } catch (e) {
-      console.error("[ea] Fireflies detail fetch failed:", e);
+    // OUR OWN COPY FIRST. The hourly sync already stores every meeting's
+    // overview and bullets in `engagement_meetings`, so re-fetching from
+    // Fireflies here bought nothing and added a way to fail: one refused
+    // call — a rate limit, a dropped connection, a field the schema no
+    // longer likes — and the recap quietly fell back to neutral copy while
+    // the material sat in our own database. That is exactly what produced
+    // the empty Impactica recap on 29 Jul: 885 characters of overview and
+    // 3,406 of bullets, stored and unread.
+    const stored = await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          overview: engagementMeetings.summaryOverview,
+          bullets: engagementMeetings.summaryBullets,
+          url: engagementMeetings.transcriptUrl,
+        })
+        .from(engagementMeetings)
+        .where(
+          eq(
+            engagementMeetings.firefliesTranscriptId,
+            session.firefliesRecordingId as string,
+          ),
+        )
+        .limit(1);
+      return row ?? null;
+    });
+    if (stored) {
+      firefliesUrl = stored.url;
+      summaryText = [stored.overview ?? "", stored.bullets ?? ""]
+        .filter(Boolean)
+        .join("\n\n");
     }
+
+    // Reach for the API only when we genuinely have nothing — a meeting
+    // recorded since the last sync ran.
+    if (summaryText.trim().length === 0) {
+      try {
+        const detail = await fetchMeetingDetail(session.firefliesRecordingId);
+        if (detail) {
+          firefliesUrl = firefliesUrl ?? detail.transcript_url;
+          summaryText = [
+            detail.summary?.overview ?? "",
+            detail.summary?.shorthand_bullet ?? "",
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+        }
+      } catch (e) {
+        console.error("[ea] Fireflies detail fetch failed:", e);
+      }
+    }
+  }
+
+  // NO MATERIAL, NO APPROVAL EMAIL. A recap built from the neutral
+  // fallback copy is a heading, a sign-off, and nothing in between.
+  // Asking someone to approve sending that to a client is worse than
+  // sending nothing at all, because it reads as though the session itself
+  // produced nothing worth saying. Skipped rather than drafted, so the
+  // next sweep retries it once Fireflies has finished processing.
+  if (summaryText.trim().length === 0) {
+    console.warn(
+      `[ea] no transcript summary for session ${session.id}; skipping recap rather than drafting an empty one.`,
+    );
+    return { ok: false, reason: "no-transcript-content" };
   }
 
   /* ---- carry the agenda forward, then read what the next session holds ---- */
