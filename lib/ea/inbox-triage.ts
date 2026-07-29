@@ -23,7 +23,7 @@
  * bills for it twice) and never drafts a second reply.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { eaEmailThreads, schedulingLinks } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -279,18 +279,38 @@ async function sweepForRecipient(
   const refs = await listMessageRefsSince(token.token, since, 500);
   if (refs.length === 0) return result;
 
-  // Threads already in the ledger are done, whichever way they went.
-  // Read this BEFORE fetching anything: over a twelve-hour window an
-  // hourly sweep re-lists the same mail twelve times, and fetching those
-  // bodies only to discard them would burn the per-run work cap on
-  // threads already handled, starving the genuinely new mail behind them.
+  // Threads already SETTLED in the ledger are done — drafted, or
+  // deliberately skipped. Read this BEFORE fetching anything: over a
+  // twelve-hour window an hourly sweep re-lists the same mail twelve
+  // times, and fetching those bodies only to discard them would burn the
+  // per-run work cap on threads already handled, starving the genuinely
+  // new mail behind them.
+  //
+  // `failed` is deliberately NOT settled. It used to be, and that turned
+  // every transient fault into a permanent one: when the Gmail token was
+  // missing the `gmail.compose` scope, twelve real meeting requests came
+  // back "403 insufficient authentication scopes", were written to the
+  // ledger, and would never have been looked at again even after the
+  // scope was granted. A failure is a thread we have not handled yet.
+  //
+  // Retrying is bounded by the twelve-hour lookback rather than by a
+  // counter — a thread that keeps failing gets at most a dozen attempts
+  // before it ages out of the window, which is cheap enough and needs no
+  // extra state. The `onConflictDoNothing` on insert means a later
+  // success leaves the failed row in place, so the retry path also has
+  // to overwrite it; see the upsert below.
   const known = new Set(
     (
       await withSystemContext((tx) =>
         tx
           .select({ gmailThreadId: eaEmailThreads.gmailThreadId })
           .from(eaEmailThreads)
-          .where(eq(eaEmailThreads.userProfileId, recipient.userProfileId)),
+          .where(
+            and(
+              eq(eaEmailThreads.userProfileId, recipient.userProfileId),
+              ne(eaEmailThreads.status, "failed"),
+            ),
+          ),
       )
     ).map((r) => r.gmailThreadId),
   );
@@ -428,7 +448,22 @@ async function logThread(
           note,
           draftId: draftId ?? null,
         })
-        .onConflictDoNothing(),
+        // Upsert, not do-nothing. A thread only reaches here twice if the
+        // first attempt failed and the retry picked it up again, and in
+        // that case the new outcome is the true one — leaving the old
+        // `failed` row would keep a now-drafted thread looking broken and
+        // keep it in the retry set until it aged out of the window.
+        .onConflictDoUpdate({
+          target: eaEmailThreads.gmailThreadId,
+          set: {
+            classification,
+            status,
+            note,
+            draftId: draftId ?? null,
+            handledAt: new Date(),
+            updatedAt: new Date(),
+          },
+        }),
     );
   } catch (e) {
     console.error("[ea] could not log triage thread:", e);
