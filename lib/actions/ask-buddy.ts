@@ -108,6 +108,8 @@ The Business Builder Console sidebar groups work by lifecycle phase:
 
 **03 Deliver — ship the deep work**
 - Deliverables (/business-builder/deliverables) — the 9 BIG artifacts produced for clients over weeks. SOPs, Org Charts, Job Profiles & Interview Guides, Financial Dashboards, App Onboarding Guides, Client Operations Setup Guides, Business Plans, Marketing Plans, Stages of Growth Assessments. Lifecycle: Not started → In progress → Review → Done.
+- **Draft a deliverable straight from a meeting:** open the client's Meetings page (/business-builder/engagements/<id>/meetings), expand a recorded meeting, and hit **"Draft from this meeting."** Pick which of the nine types you want. Like action-item drafting it reads the WHOLE transcript and runs in the BACKGROUND — a long-form document off a two-hour session takes minutes, not seconds. The draft appears under Deliverables, and it tells you in its own header if it ran out of room or the transcript was cut short, rather than quietly stopping early.
+- If a draft comes back thin or off-topic, the usual cause is that Fireflies has no transcript text for that meeting (a recording with no words in it). The draft will say so rather than inventing content.
 - Projects (/business-builder/projects) — bigger initiatives within an engagement that span weeks/months. "Build Acme's hiring system." Tasks live in a Monday.com-style grid: inline-editable Owner / Status (colored pill) / Due / Progress cells that save instantly, with indented sub-tasks. Deliverables are the OUTPUTS of a project.
 
 **04 Bill**

@@ -822,6 +822,21 @@ export default async function CoachWelcomePage() {
             review, delivered, archived), a type, and the same revenue
             / margin impact flags as action items.
           </p>
+          <p className="mt-2">
+            <strong>Draft one straight from a meeting.</strong> Open the
+            client&apos;s Meetings page, expand a recorded meeting, hit{" "}
+            <strong>Draft from this meeting</strong> and pick the type.
+            It reads the whole transcript, not just the Fireflies
+            highlights, and runs in the background — a long-form document
+            off a two-hour session takes minutes, not seconds. The draft
+            lands under Deliverables for you to edit.
+          </p>
+          <p className="mt-2">
+            If a draft ever comes back thin, it will say so in its own
+            header — whether it ran out of room or the transcript was
+            short. It won&apos;t quietly stop early and leave you
+            guessing whether the meeting was covered.
+          </p>
         </Step>
 
         <Step
