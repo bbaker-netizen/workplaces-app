@@ -337,6 +337,9 @@ export default async function ProspectDetailPage({
                   contactFirstName: prospect.contactFirstName,
                   contactLastName: prospect.contactLastName,
                   contactPreferredName: prospect.contactPreferredName,
+                  contact2FirstName: prospect.contact2FirstName,
+                  contact2LastName: prospect.contact2LastName,
+                  contact2Email: prospect.contact2Email,
                   contactEmail: prospect.contactEmail,
                   phone: prospect.phone,
                   companyWebsite: prospect.companyWebsite,
@@ -629,6 +632,21 @@ export default async function ProspectDetailPage({
             prospectId={prospect.id}
             defaultSignerName={prospect.contactName ?? ""}
             defaultSignerEmail={prospect.contactEmail}
+            // Both partners sign when a second contact with an email exists.
+            // This is the whole reason the business partner is real fields
+            // rather than a name typed into an email — a signer needs their
+            // own address, and shows up on the signed record.
+            secondSigner={
+              prospect.contact2Email
+                ? {
+                    name:
+                      [prospect.contact2FirstName, prospect.contact2LastName]
+                        .filter(Boolean)
+                        .join(" ") || prospect.contact2Email,
+                    email: prospect.contact2Email,
+                  }
+                : null
+            }
             envelopes={envelopes.map((e) => ({
               id: e.id,
               subject: e.subject,

@@ -43,6 +43,9 @@ export function ProspectInlineEdit({
         contactFirstName?: string | null;
         contactLastName?: string | null;
         contactPreferredName?: string | null;
+        contact2FirstName?: string | null;
+        contact2LastName?: string | null;
+        contact2Email?: string | null;
         contactEmail: string;
         phone: string | null;
         companyWebsite: string | null;
@@ -96,6 +99,9 @@ function ContactEdit({
     contactFirstName?: string | null;
     contactLastName?: string | null;
     contactPreferredName?: string | null;
+    contact2FirstName?: string | null;
+    contact2LastName?: string | null;
+    contact2Email?: string | null;
     contactEmail: string;
     phone: string | null;
     companyWebsite: string | null;
@@ -115,6 +121,12 @@ function ContactEdit({
   const [preferredName, setPreferredName] = useState(
     initial.contactPreferredName ?? "",
   );
+  // Second contact — the client's business partner. Real fields because
+  // both partners often sign the agreement, so this person needs an email
+  // of their own.
+  const [p2First, setP2First] = useState(initial.contact2FirstName ?? "");
+  const [p2Last, setP2Last] = useState(initial.contact2LastName ?? "");
+  const [p2Email, setP2Email] = useState(initial.contact2Email ?? "");
   const contactName = [firstName.trim(), lastName.trim()]
     .filter(Boolean)
     .join(" ");
@@ -168,6 +180,12 @@ function ContactEdit({
       patch.contactLastName = lastName.trim() || null;
     if (preferredName.trim() !== (initial.contactPreferredName ?? ""))
       patch.contactPreferredName = preferredName.trim() || null;
+    if (p2First.trim() !== (initial.contact2FirstName ?? ""))
+      patch.contact2FirstName = p2First.trim() || null;
+    if (p2Last.trim() !== (initial.contact2LastName ?? ""))
+      patch.contact2LastName = p2Last.trim() || null;
+    if (p2Email.trim() !== (initial.contact2Email ?? ""))
+      patch.contact2Email = p2Email.trim() || null;
     if (contactEmail.trim() !== initial.contactEmail)
       patch.contactEmail = contactEmail.trim();
     if ((phone.trim() || null) !== (initial.phone ?? null))
@@ -194,6 +212,9 @@ function ContactEdit({
     firstName !== (initial.contactFirstName ?? "") ||
     lastName !== (initial.contactLastName ?? "") ||
     preferredName !== (initial.contactPreferredName ?? "") ||
+    p2First !== (initial.contact2FirstName ?? "") ||
+    p2Last !== (initial.contact2LastName ?? "") ||
+    p2Email !== (initial.contact2Email ?? "") ||
     contactEmail !== initial.contactEmail ||
     phone !== (initial.phone ?? "") ||
     companyWebsite !== (initial.companyWebsite ?? "") ||
@@ -255,6 +276,43 @@ function ContactEdit({
         </span>
       </label>
       {contactIssue && <InlineIssue message={contactIssue.message} />}
+
+      {/* Business partner / co-participant. Optional — solo clients are the
+          common case, and the onboarding email adjusts its wording when
+          these are blank. */}
+      <div className="pt-2 border-t border-tbb-line-soft space-y-2">
+        <span className={labelCls}>
+          Business partner (optional)
+        </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input
+            value={p2First}
+            onChange={(e) => setP2First(e.target.value)}
+            placeholder="First name"
+            disabled={isPending}
+            className={inputCls}
+          />
+          <input
+            value={p2Last}
+            onChange={(e) => setP2Last(e.target.value)}
+            placeholder="Last name"
+            disabled={isPending}
+            className={inputCls}
+          />
+        </div>
+        <input
+          type="email"
+          value={p2Email}
+          onChange={(e) => setP2Email(e.target.value)}
+          placeholder="partner@company.com"
+          disabled={isPending}
+          className={inputCls}
+        />
+        <span className="block text-[11px] text-tbb-ink-3">
+          Their email is needed if they&apos;re to sign the agreement — both
+          partners are added as signers automatically when it&apos;s filled in.
+        </span>
+      </div>
       <label className="block space-y-1">
         <span className={labelCls}>Email</span>
         <input

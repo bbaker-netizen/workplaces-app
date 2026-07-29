@@ -2285,6 +2285,14 @@ export const prospects = pgTable(
     /** What they actually go by, when it differs from their first name.
      *  Null = no preference recorded; templates fall back to first name. */
     contactPreferredName: text("contact_preferred_name"),
+    /** The client's business partner / co-participant. Real fields, not a
+     *  merge-field name, because both partners often sign the agreement —
+     *  a signer needs their own email and appears on the signed record. */
+    contact2FirstName: text("contact2_first_name"),
+    contact2LastName: text("contact2_last_name"),
+    contact2PreferredName: text("contact2_preferred_name"),
+    contact2Email: text("contact2_email"),
+    contact2Phone: text("contact2_phone"),
     contactEmail: text("contact_email").notNull(),
     phone: text("phone"),
     companyWebsite: text("company_website"),

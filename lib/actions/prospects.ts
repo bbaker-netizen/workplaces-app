@@ -104,6 +104,11 @@ const createSchema = z.object({
   contactFirstName: z.string().max(120).optional(),
   contactLastName: z.string().max(120).optional(),
   contactPreferredName: z.string().max(120).optional(),
+  contact2FirstName: z.string().max(120).optional(),
+  contact2LastName: z.string().max(120).optional(),
+  contact2PreferredName: z.string().max(120).optional(),
+  contact2Email: z.string().email().max(254).optional().or(z.literal("")),
+  contact2Phone: z.string().max(60).optional(),
   contactEmail: z.string().email().max(254),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -245,6 +250,17 @@ const updateSchema = z.object({
   contactFirstName: z.string().max(120).nullable().optional(),
   contactLastName: z.string().max(120).nullable().optional(),
   contactPreferredName: z.string().max(120).nullable().optional(),
+  contact2FirstName: z.string().max(120).nullable().optional(),
+  contact2LastName: z.string().max(120).nullable().optional(),
+  contact2PreferredName: z.string().max(120).nullable().optional(),
+  contact2Email: z
+    .string()
+    .email()
+    .max(254)
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
+  contact2Phone: z.string().max(60).nullable().optional(),
   contactEmail: z.string().email().max(254).optional(),
   phone: optionalString,
   companyWebsite: optionalString,
@@ -354,6 +370,17 @@ export async function updateProspect(
       if (data.contactPreferredName !== undefined)
         updates.contactPreferredName =
           data.contactPreferredName?.trim() || null;
+      for (const k of [
+        "contact2FirstName",
+        "contact2LastName",
+        "contact2PreferredName",
+        "contact2Email",
+        "contact2Phone",
+      ] as const) {
+        if (data[k] !== undefined) {
+          updates[k] = (data[k] as string | null)?.trim() || null;
+        }
+      }
       // Whenever either part moves, recompose the display name so the two
       // never disagree. Editing the single field directly still works for
       // callers that don't know about the split.

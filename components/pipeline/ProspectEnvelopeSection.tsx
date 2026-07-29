@@ -28,6 +28,7 @@ export function ProspectEnvelopeSection({
   prospectId,
   defaultSignerName,
   defaultSignerEmail,
+  secondSigner,
   envelopes,
   hasStoredSignature,
   documentTemplates,
@@ -37,6 +38,8 @@ export function ProspectEnvelopeSection({
   prospectId: string;
   defaultSignerName: string;
   defaultSignerEmail: string;
+  /** The client's business partner, when they have one with an email. */
+  secondSigner?: { name: string; email: string } | null;
   envelopes: EnvelopeRow[];
   hasStoredSignature: boolean;
   documentTemplates?: SendForSignatureDocumentTemplate[];
@@ -77,6 +80,15 @@ export function ProspectEnvelopeSection({
                       email: defaultSignerEmail,
                       roleLabel: "",
                     },
+                    ...(secondSigner
+                      ? [
+                          {
+                            name: secondSigner.name,
+                            email: secondSigner.email,
+                            roleLabel: "",
+                          },
+                        ]
+                      : []),
                   ]
                 : undefined
             }

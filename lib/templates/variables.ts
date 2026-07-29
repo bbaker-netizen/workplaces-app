@@ -13,6 +13,26 @@ export const TEMPLATE_VARIABLES = [
   { name: "sender_name", label: "Your full name" },
   { name: "sender_first_name", label: "Your first name" },
   { name: "sender_email", label: "Your email" },
+  {
+    name: "contact_partner_first_name",
+    label: "Client's business partner — first name",
+  },
+  {
+    name: "partner_first_name",
+    label: "The OTHER Business Builder's first name",
+  },
+  /* --- Solo-vs-two-partner wording. Resolved server-side so the sentence
+     reads correctly either way, instead of leaving a dangling "and" or a
+     plural noun when a client has no partner. --- */
+  {
+    name: "client_and_partner",
+    label: "\"you\" or \"you and <partner>\"",
+  },
+  { name: "assessment_noun", label: "\"Assessment\" or \"Assessments\"" },
+  {
+    name: "assessment_completed_sentence",
+    label: "\"We need it completed\" / \"We need these completed\"",
+  },
 ] as const;
 
 export const TEMPLATE_CATEGORIES = [
@@ -40,10 +60,17 @@ export function applyTemplate(
   vars: Record<string, string | null | undefined>,
 ): string {
   return text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, name) => {
-    const v = vars[name];
+    // `{{company_name_url}}` resolves company_name, URL-encoded. Needed
+    // because a template can carry a link with the prospect's details in the
+    // query string, and a company like "Acme Roofing" would otherwise put a
+    // raw space in the URL. Most mail clients stop the hyperlink at that
+    // space, so the recipient gets a broken link and never says why.
+    const urlSafe = name.endsWith("_url");
+    const key = urlSafe ? name.slice(0, -"_url".length) : name;
+    const v = vars[key];
     if (v === undefined || v === null || v === "") {
       return `{{${name}}}`;
     }
-    return v;
+    return urlSafe ? encodeURIComponent(v) : v;
   });
 }
