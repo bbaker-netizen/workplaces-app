@@ -51,6 +51,9 @@ import {
 } from "@/lib/signing/pdf";
 import { makeAuditEntry, type AuditEntry } from "@/lib/signing/audit";
 import { newSigningToken } from "@/lib/signing/token";
+import { encryptSecret } from "@/lib/crypto/secret-vault";
+import { validatePadFields } from "@/lib/payments/pad-form";
+import { renderCompletedPadForm } from "@/lib/payments/pad-context";
 import {
   deleteDocumentBlob,
   downloadDocumentBlob,
@@ -71,6 +74,11 @@ const signerInputSchema = z.object({
 
 const createSchema = z.object({
   sourceDocumentId: z.string().uuid(),
+  /** "agreement" (default) or "payment_authorization". Set at creation, not
+   *  patched afterwards: the first signer is emailed inside this call, and a
+   *  client who clicked immediately would otherwise reach a sign page that
+   *  didn't yet know to ask for their banking details. */
+  kind: z.enum(["agreement", "payment_authorization"]).optional(),
   prospectId: z.string().uuid().nullable().optional(),
   engagementId: z.string().uuid().nullable().optional(),
   subject: z.string().min(1).max(300),
@@ -201,6 +209,7 @@ export async function createSignatureEnvelope(
         sourceDocumentId: data.sourceDocumentId,
         subject: data.subject,
         message: data.message ?? null,
+        kind: data.kind ?? "agreement",
         routing: "sequential",
         status: "in_progress",
         createdByUserProfileId: profile.userProfileId,
@@ -691,6 +700,10 @@ const submitSchema = z.object({
     .regex(/^data:image\/(png|jpe?g);base64,/),
   ip: z.string().max(80).nullable().optional(),
   userAgent: z.string().max(500).nullable().optional(),
+  /** Typed answers captured with the signature — the PAD banking fields.
+   *  Validated against the fixed field list and encrypted before storage;
+   *  see `lib/payments/pad-form.ts`. */
+  fieldValues: z.record(z.string(), z.string()).optional(),
   /** Verbatim disclosure text the signer agreed to. Persisted into
    *  `signature_signers.consent_text` so we can prove later what THIS
    *  signer agreed to even if the disclosure wording changes. */
@@ -757,12 +770,33 @@ export async function submitSignature(
   // timestamp lands a fraction of a second before the signature
   // timestamp. We record both — `consentedAt` is the evidentiary
   // anchor for the ESIGN / UETA / Alberta ETA consent prong.
+  // Banking details, on a payment authorization. Validated against the
+  // fixed PAD field list — the endpoint is public, and a malformed transit
+  // number is a payment the bank bounces weeks later — then encrypted, so
+  // an account number never sits in a column an ordinary query can read.
+  let fieldValuesEncrypted: string | null = null;
+  if (ctx.env.kind === "payment_authorization") {
+    const checked = validatePadFields(data.fieldValues);
+    if (!checked.ok) return { ok: false, error: checked.error };
+    try {
+      fieldValuesEncrypted = encryptSecret(JSON.stringify(checked.values));
+    } catch (e) {
+      console.error("[signing] could not encrypt payment fields:", e);
+      return {
+        ok: false,
+        error:
+          "We couldn't securely store those banking details. Nothing was saved — please tell your Business Builder.",
+      };
+    }
+  }
+
   const now = new Date();
   await withSystemContext(async (tx) => {
     await tx
       .update(signatureSigners)
       .set({
         status: "signed",
+        fieldValuesEncrypted,
         signatureImageData: data.signatureImageData,
         signatureMethod: data.signatureMethod,
         signedAt: now,
@@ -1096,13 +1130,27 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
     }),
   );
 
-  // SHA-256 of the source PDF. Renders into the certificate so anyone
-  // can verify which exact file got signed.
-  const { createHash } = await import("node:crypto");
-  const sourceBytes =
+  // A payment authorization is signed as the COMPLETED form, not the blank
+  // one that was emailed. The client's answers were captured at submit, so
+  // the form is re-rendered with them filled in and that becomes the source
+  // the signature and certificate are stamped onto. Signing the blank copy
+  // would leave a signature attached to a form with no bank account on it.
+  let effectiveBytes: Uint8Array =
     sourceBlob.body instanceof Uint8Array
       ? sourceBlob.body
       : new Uint8Array(sourceBlob.body as ArrayBuffer);
+  if (ctx.env.kind === "payment_authorization") {
+    const filled = await renderCompletedPadForm(ctx.env, ctx.signers);
+    // Falls back to the blank source rather than losing the signature
+    // entirely — the certificate still carries who signed, when, and from
+    // where, which is the part with legal weight.
+    if (filled) effectiveBytes = filled;
+  }
+
+  // SHA-256 of the source PDF. Renders into the certificate so anyone
+  // can verify which exact file got signed.
+  const { createHash } = await import("node:crypto");
+  const sourceBytes = effectiveBytes;
   const sourceDocumentHash = createHash("sha256")
     .update(sourceBytes)
     .digest("hex");
@@ -1110,7 +1158,7 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
   const completedAt = new Date();
   let signedBytes: Uint8Array;
   try {
-    signedBytes = await buildSignedPdf(sourceBlob.body, {
+    signedBytes = await buildSignedPdf(effectiveBytes, {
       envelopeId: ctx.env.id,
       documentName: ctx.doc.originalFilename,
       sourceDocumentHash,
@@ -1250,6 +1298,9 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
   // Email the signed copy to every signer + the sender.
   const recipientList: string[] = [];
   const seen = new Set<string>();
+  // Who gets the internal envelope view rather than the client-facing
+  // download page. Sender plus, on a payment authorization, both Builders.
+  const internalEmails = new Set<string>();
   for (const s of ctx.signers) {
     if (!seen.has(s.email)) {
       seen.add(s.email);
@@ -1257,11 +1308,39 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
     }
   }
   if (ctx.createdByEmail && !seen.has(ctx.createdByEmail)) {
+    seen.add(ctx.createdByEmail);
     recipientList.push(ctx.createdByEmail);
+  }
+  if (ctx.createdByEmail) internalEmails.add(ctx.createdByEmail);
+
+  // A completed payment authorization goes to BOTH Business Builders, not
+  // just whoever sent it. Either of them may be the one who has to answer
+  // "are we set up to bill them yet?", and the answer shouldn't depend on
+  // which of them clicked send weeks earlier.
+  if (ctx.env.kind === "payment_authorization") {
+    const builders = await withSystemContext(async (tx) =>
+      tx
+        .select({ email: userProfiles.email })
+        .from(userProfiles)
+        .where(
+          and(
+            eq(userProfiles.orgId, ctx.env.orgId),
+            inArray(userProfiles.role, ["master_admin", "coach"]),
+          ),
+        ),
+    );
+    for (const b of builders) {
+      if (!b.email) continue;
+      internalEmails.add(b.email);
+      if (!seen.has(b.email)) {
+        seen.add(b.email);
+        recipientList.push(b.email);
+      }
+    }
   }
 
   for (const email of recipientList) {
-    const isSender = email === ctx.createdByEmail;
+    const isSender = internalEmails.has(email);
     const recipientName =
       ctx.signers.find((s) => s.email === email)?.name ??
       ctx.createdByName ??

@@ -5,6 +5,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { orgs } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { QboBillingDefaults } from "@/components/settings/QboBillingDefaults";
+import { CardPaymentUrlEditor } from "@/components/settings/CardPaymentUrlEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function QuickBooksBillingSettingsPage() {
         itemName: orgs.qboServiceItemName,
         taxCodeId: orgs.qboTaxCodeId,
         taxCodeName: orgs.qboTaxCodeName,
+        cardPaymentUrl: orgs.cardPaymentUrl,
       })
       .from(orgs)
       .where(eq(orgs.id, profile.orgId))
@@ -51,6 +53,8 @@ export default async function QuickBooksBillingSettingsPage() {
         initialTaxCodeId={org?.taxCodeId ?? null}
         initialTaxCodeName={org?.taxCodeName ?? null}
       />
+
+      <CardPaymentUrlEditor current={org?.cardPaymentUrl ?? null} />
 
       <p className="font-sans text-xs text-tbb-ink-3">
         Once this is set, a client&apos;s monthly retainer can be created as a

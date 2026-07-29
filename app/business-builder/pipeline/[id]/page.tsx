@@ -68,6 +68,7 @@ import { ProspectComments } from "@/components/pipeline/ProspectComments";
 import { ProspectDocuments } from "@/components/pipeline/ProspectDocuments";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectAvailabilityPanel } from "@/components/pipeline/ProspectAvailabilityPanel";
+import { RequestPaymentAuthorizationPanel } from "@/components/pipeline/RequestPaymentAuthorizationPanel";
 import { ProspectAssessmentTracker } from "@/components/pipeline/ProspectAssessmentTracker";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
@@ -752,6 +753,18 @@ export default async function ProspectDetailPage({
               },
             }}
           />
+          )}
+
+          {/* Payment setup. Same gate as Signing — asking a lead for their
+              bank details before there is a deal is the wrong moment. */}
+          {showSigning && (
+            <RequestPaymentAuthorizationPanel
+              prospectId={prospect.id}
+              engagementId={prospect.convertedEngagementId ?? null}
+              defaultName={prospect.contactName ?? ""}
+              defaultEmail={prospect.contactEmail ?? ""}
+              cardPaymentUrl={org?.cardPaymentUrl ?? null}
+            />
           )}
 
           {/* Communications timeline — every email / SMS / WhatsApp / call

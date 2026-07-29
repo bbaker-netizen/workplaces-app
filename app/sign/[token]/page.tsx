@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 import { getEnvelopeByToken } from "@/lib/db/queries/signatures";
 import { markSigningLinkViewed } from "@/lib/actions/signatures";
 import { SignaturePanel } from "@/components/signing/SignaturePanel";
+import { PAD_FIELDS, padTerms } from "@/lib/payments/pad-form";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ export default async function SigningPage({
 
   const isCompleted = data.envelopeStatus === "completed";
   const isVoided = data.envelopeStatus === "voided";
+  const isPaymentAuthorization =
+    data.envelopeKind === "payment_authorization";
   const alreadySigned = data.signer.status === "signed";
 
   return (
@@ -148,6 +151,27 @@ export default async function SigningPage({
           <SignaturePanel
             token={params.token}
             signerName={data.signer.name}
+            /* Field definitions are passed as plain data rather than
+               imported client-side: the module that owns them also renders
+               PDFs, and pdf-lib has no business in a browser bundle. */
+            paymentFields={
+              isPaymentAuthorization
+                ? PAD_FIELDS.map((f) => ({
+                    key: f.key,
+                    label: f.label,
+                    hint: f.hint,
+                    options: f.options,
+                  }))
+                : undefined
+            }
+            paymentTerms={
+              isPaymentAuthorization
+                ? padTerms(
+                    data.envelopePayeeName,
+                    "the amount stated on the form",
+                  )
+                : undefined
+            }
           />
         )}
 

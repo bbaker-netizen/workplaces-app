@@ -28,9 +28,22 @@ const TYPE_FONT = `italic 600 36px "Caveat", "Snell Roundhand", "Brush Script MT
 export function SignaturePanel({
   token,
   signerName,
+  paymentFields,
+  paymentTerms,
 }: {
   token: string;
   signerName: string;
+  /* Present only on a payment authorization. Passed as plain data from the
+     server page rather than imported here — the module that defines them
+     also renders PDFs, and pulling pdf-lib into the client bundle for a
+     list of labels would be a heavy mistake. */
+  paymentFields?: Array<{
+    key: string;
+    label: string;
+    hint?: string;
+    options?: string[];
+  }>;
+  paymentTerms?: string[];
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("typed");
@@ -38,6 +51,11 @@ export function SignaturePanel({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirmed, setConfirmed] = useState(false);
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const collectingFields = (paymentFields?.length ?? 0) > 0;
+  const fieldsComplete =
+    !collectingFields ||
+    (paymentFields ?? []).every((f) => (fieldValues[f.key] ?? "").trim() !== "");
 
   const drawCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const typedCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -173,6 +191,7 @@ export function SignaturePanel({
           typeof navigator !== "undefined" ? navigator.userAgent : null,
         consentText: CONSENT_DISCLOSURE_TEXT,
         consentVersion: CONSENT_DISCLOSURE_VERSION,
+        fieldValues: collectingFields ? fieldValues : undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -189,9 +208,75 @@ export function SignaturePanel({
           Sign here
         </p>
         <h2 className="font-bold text-foreground text-xl tracking-tight">
-          Type or draw your signature.
+          {collectingFields
+            ? "Your banking details, then your signature."
+            : "Type or draw your signature."}
         </h2>
       </header>
+
+      {collectingFields && (
+        <div className="space-y-3 border border-tbb-line rounded-md p-4 bg-tbb-cream-50">
+          {(paymentFields ?? []).map((f) => (
+            <label key={f.key} className="block space-y-1">
+              <span className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+                {f.label}
+              </span>
+              {f.options ? (
+                <select
+                  value={fieldValues[f.key] ?? ""}
+                  onChange={(e) =>
+                    setFieldValues((v) => ({ ...v, [f.key]: e.target.value }))
+                  }
+                  disabled={isPending}
+                  className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                >
+                  <option value="">— Choose —</option>
+                  {f.options.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  /* Never autofilled and never remembered: these are bank
+                     account details on a shared or borrowed device as often
+                     as not. */
+                  autoComplete="off"
+                  value={fieldValues[f.key] ?? ""}
+                  onChange={(e) =>
+                    setFieldValues((v) => ({ ...v, [f.key]: e.target.value }))
+                  }
+                  disabled={isPending}
+                  className="w-full bg-white border border-tbb-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+                />
+              )}
+              {f.hint && (
+                <span className="block font-sans text-xs text-tbb-ink-3">
+                  {f.hint}
+                </span>
+              )}
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/* The terms are shown ON SCREEN, not only inside the PDF. Nobody
+          should be agreeing to debit terms they were shown solely in an
+          attachment they may never have opened. */}
+      {paymentTerms && paymentTerms.length > 0 && (
+        <div className="border border-tbb-line rounded-md p-4 space-y-2">
+          <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+            What you are authorizing
+          </p>
+          {paymentTerms.map((t, i) => (
+            <p key={i} className="font-sans text-xs text-tbb-ink-2 leading-relaxed">
+              {t}
+            </p>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <ModeButton
@@ -295,7 +380,7 @@ export function SignaturePanel({
       <button
         type="button"
         onClick={submit}
-        disabled={isPending}
+        disabled={isPending || !fieldsComplete}
         className="w-full inline-flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-tbb-caps px-4 py-3 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
       >
         {isPending ? (

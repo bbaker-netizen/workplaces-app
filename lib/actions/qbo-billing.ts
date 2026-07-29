@@ -63,6 +63,47 @@ const saveSchema = z.object({
   taxCodeName: z.string().max(200).nullable(),
 });
 
+const cardUrlSchema = z.object({
+  url: z.string().trim().max(500),
+});
+
+/**
+ * The practice's hosted payment page for card authorizations.
+ *
+ * A LINK, not a form. Card numbers are never collected by this
+ * application — they go straight to QuickBooks Payments or Stripe, which
+ * keeps card data (and PCI obligations) out of a coaching practice's
+ * database entirely.
+ */
+export async function saveCardPaymentUrl(
+  input: z.input<typeof cardUrlSchema>,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin")
+    return { ok: false, error: "Only the practice owner can set this." };
+  const parsed = cardUrlSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input." };
+  const url = parsed.data.url;
+  // Blank clears it. Anything else must be a real https link — a client
+  // handed a malformed payment URL simply cannot pay.
+  if (url && !/^https:\/\/\S+$/.test(url))
+    return { ok: false, error: "Enter a full https:// link, or leave blank." };
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(orgs)
+        .set({ cardPaymentUrl: url || null })
+        .where(eq(orgs.id, profile.orgId));
+    });
+    revalidatePath("/business-builder/settings/quickbooks-billing");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function saveQboBillingDefaults(
   input: z.input<typeof saveSchema>,
 ): Promise<ActionResult> {

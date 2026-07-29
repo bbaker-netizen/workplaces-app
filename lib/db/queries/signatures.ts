@@ -11,6 +11,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 import {
   documents,
+  orgs,
   signatureEnvelopes,
   signatureSigners,
   type SignatureEnvelope,
@@ -40,6 +41,12 @@ export type SigningPageData = {
   envelopeSubject: string;
   envelopeMessage: string | null;
   envelopeStatus: string;
+  /** "agreement" | "payment_authorization" — tells the sign page whether
+   *  to collect banking details before the signature. */
+  envelopeKind: string;
+  /** Who is being authorized to debit, named on screen as well as in the
+   *  PDF. Legal entity name where the practice has set one. */
+  envelopePayeeName: string;
   signer: SignatureSigner;
   isYourTurn: boolean;
   sourceDocument: {
@@ -100,6 +107,11 @@ export async function getEnvelopeByToken(
         )[0] ?? null
       : null;
     if (!doc) return null;
+    const [payeeOrg] = await tx
+      .select({ name: orgs.name, legalName: orgs.legalName })
+      .from(orgs)
+      .where(eq(orgs.id, env.orgId))
+      .limit(1);
     const allSigners = await tx
       .select()
       .from(signatureSigners)
@@ -117,6 +129,9 @@ export async function getEnvelopeByToken(
       envelopeSubject: env.subject,
       envelopeMessage: env.message,
       envelopeStatus: env.status,
+      envelopeKind: env.kind ?? "agreement",
+      envelopePayeeName:
+        payeeOrg?.legalName || payeeOrg?.name || "the payee named on the form",
       signer,
       isYourTurn,
       sourceDocument: {

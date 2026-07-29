@@ -357,6 +357,9 @@ export const orgs = pgTable("orgs", {
   qboServiceItemName: text("qbo_service_item_name"),
   qboTaxCodeId: text("qbo_tax_code_id"),
   qboTaxCodeName: text("qbo_tax_code_name"),
+  /** Hosted payment page (QuickBooks Payments / Stripe) for card
+   *  authorizations. Card numbers are never collected by this app. */
+  cardPaymentUrl: text("card_payment_url"),
   type: orgTypeEnum("type").notNull().default("client"),
   // Lead-capture webhook secret (migration 0068). Secures the public
   // /api/leads/<token> endpoint that external channels POST leads to.
@@ -2789,6 +2792,10 @@ export const signatureEnvelopes = pgTable(
     ),
     subject: text("subject").notNull(),
     message: text("message"),
+    /** "agreement" | "payment_authorization". A PAD request rides the same
+     *  envelope machinery; this is what tells the sign page to collect the
+     *  banking fields before the signature. */
+    kind: text("kind").notNull().default("agreement"),
     routing: text("routing").notNull().default("sequential"),
     status: text("status").notNull().default("in_progress"),
     createdByUserProfileId: uuid("created_by_user_profile_id").references(
@@ -2866,6 +2873,11 @@ export const signatureSigners = pgTable(
     signedAt: timestamp("signed_at", { withTimezone: true }),
     declinedReason: text("declined_reason"),
     signerIp: text("signer_ip"),
+    /** Typed answers captured alongside the signature, ENCRYPTED at rest
+     *  (secret vault, same as stored API keys). Holds bank transit and
+     *  account numbers on a PAD form, so it is never selected into a view
+     *  and is decrypted only when the completed PDF is rendered. */
+    fieldValuesEncrypted: text("field_values_encrypted"),
     signerUserAgent: text("signer_user_agent"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
