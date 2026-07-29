@@ -47,6 +47,11 @@ import {
 } from "@/lib/email/templates";
 import { fetchMeetingDetail } from "@/lib/integrations/fireflies";
 import { THREAD_TYPE } from "@/lib/communication/audience";
+import {
+  signatureLooksLikeHtml,
+  signatureToEmailHtml,
+  signatureToPlainText,
+} from "@/lib/templates/markdown-to-html";
 import { EA_TIMEZONE } from "./digest-data";
 import { approvalUrl, mintApprovalToken } from "./tokens";
 
@@ -478,11 +483,22 @@ export function buildRecapBody(args: {
     `<p style="margin:24px 0 0 0;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;">${esc(args.closingNote)}</p>`,
   );
 
-  if (args.signature && args.signature.trim().length > 0) {
+  // The stored signature is HTML whenever it was written in the
+  // signature editor (which emits HTML), and plain text only for legacy
+  // ones. Escaping it produced literal `<p style="text-align: left;">`
+  // in the email — which is what a client would have read. Same helpers
+  // the client-message path has always used.
+  const sigRaw = args.signature?.trim() ?? "";
+  const sigIsHtml = sigRaw.length > 0 && signatureLooksLikeHtml(sigRaw);
+  const sigPlain = sigIsHtml ? signatureToPlainText(sigRaw) : sigRaw;
+
+  if (sigRaw.length > 0) {
     h.push(
-      `<div style="margin:20px 0 0 0;padding-top:16px;border-top:1px solid ${RULE};font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:${MUTED};">${esc(
-        args.signature.trim(),
-      ).replace(/\n/g, "<br>")}</div>`,
+      `<div style="margin:20px 0 0 0;padding-top:16px;border-top:1px solid ${RULE};font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:${MUTED};">${
+        sigIsHtml
+          ? signatureToEmailHtml(sigRaw)
+          : esc(sigRaw).replace(/\n/g, "<br>")
+      }</div>`,
     );
   }
 
@@ -518,8 +534,11 @@ export function buildRecapBody(args: {
     m.push(`[Full transcript and recording](${args.firefliesUrl})`, "");
   }
   m.push(args.closingNote);
-  if (args.signature && args.signature.trim().length > 0) {
-    m.push("", "---", "", args.signature.trim());
+  // Plain text, not the raw HTML: the portal renders this through
+  // react-markdown with raw HTML stripped, so tags would either vanish
+  // or show as escaped noise on the client's own record of the session.
+  if (sigPlain.length > 0) {
+    m.push("", "---", "", sigPlain);
   }
 
   /* ---- plain text ---- */
@@ -549,8 +568,8 @@ export function buildRecapBody(args: {
     t.push("");
   }
   t.push(args.closingNote);
-  if (args.signature && args.signature.trim().length > 0) {
-    t.push("", args.signature.trim());
+  if (sigPlain.length > 0) {
+    t.push("", sigPlain);
   }
 
   return {

@@ -257,6 +257,27 @@ export function buildHtmlBodyWithSignature(
   );
 }
 
+/**
+ * Exported so every surface that renders a stored signature uses the
+ * SAME three treatments. The EA session recap grew its own handling and
+ * got all three wrong — escaping the HTML into the email (so the client
+ * would have received visible `<p style=...>` tags) and dumping raw tags
+ * into the plain-text and portal copies. One implementation, imported.
+ */
+export function signatureLooksLikeHtml(s: string): boolean {
+  return looksLikeHtml(s);
+}
+
+/** Email-safe, inline-styled version of an HTML signature. */
+export function signatureToEmailHtml(html: string): string {
+  return styleSignatureHtml(html);
+}
+
+/** Tags stripped, paragraph breaks kept, link URLs in parens. */
+export function signatureToPlainText(html: string): string {
+  return stripHtmlForPlainText(html);
+}
+
 function looksLikeHtml(s: string): boolean {
   return s.trim().startsWith("<");
 }
