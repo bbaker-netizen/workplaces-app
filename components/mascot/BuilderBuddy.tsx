@@ -30,6 +30,7 @@ import {
   Send,
 } from "lucide-react";
 import { askBuddy, type BuddyMessage } from "@/lib/actions/ask-buddy";
+import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { useUserStorage } from "@/lib/client/user-storage";
 
 const STORAGE_MUTED = "tbb_buddy_muted_v2";
@@ -490,13 +491,25 @@ function ChatBubble({
       )}
       <div
         className={
-          "max-w-[78%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap leading-snug " +
+          "max-w-[78%] px-3 py-2 rounded-2xl text-sm leading-snug " +
           (isUser
-            ? "bg-tbb-blue text-white rounded-tr-md"
+            ? "bg-tbb-blue text-white rounded-tr-md whitespace-pre-wrap"
             : "bg-white border border-tbb-line text-tbb-ink-2 rounded-tl-md")
         }
       >
-        {content}
+        {isUser ? (
+          content
+        ) : (
+          /* Buddy's replies were rendered as raw text, so its formatting
+             arrived as literal **asterisks** and dashes. Rendered properly
+             they become real bold, real bullets, real links.
+
+             Through the same sanitizing renderer as every other message
+             body, NOT raw HTML: Buddy quotes back client names, email
+             text and notes, so anything it echoes is untrusted content
+             heading for the DOM. */
+          <MarkdownBody body={content} className="text-tbb-ink-2" />
+        )}
       </div>
     </div>
   );

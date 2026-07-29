@@ -191,7 +191,7 @@ export function ModuleReference() {
         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ExternalToolCard
             name="QuickBooks Online"
-            why="Accounting, tax, and payments. You invoice clients directly in QBO; The Builder doesn't create invoices — it reads each client's payments back and shows them as pipeline Value. Connect under Practice → QuickBooks."
+            why="Accounting, tax, and payments. Day-to-day invoicing happens in QBO, and The Builder reads each client's payments back as pipeline Value. The exception is the monthly retainer: the Recurring invoice button on a client's workspace page creates it in QuickBooks, inactive and unsent, for you to activate there. Pick the service item once at Settings → QuickBooks billing. Connect under Practice → QuickBooks."
             url="https://qbo.intuit.com"
           />
           <ExternalToolCard

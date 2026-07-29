@@ -22,6 +22,7 @@ import {
   FileText,
   Filter,
   Folder,
+  Mail,
   MessagesSquare,
   PenSquare,
   Sparkles,
@@ -206,6 +207,75 @@ export default async function CoachWelcomePage() {
         </p>
       </section>
 
+      <section className="border-t border-tbb-line-soft pt-8 space-y-4">
+        <h2 className="text-tbb-h2 font-bold text-tbb-navy tracking-tbb-tight">
+          Whose clients you see
+        </h2>
+        <p className="text-tbb-ink-2 max-w-prose">
+          You land on <strong>your own book</strong> — the clients you
+          own, plus any new lead nobody has claimed yet. That applies to
+          everyone, Bruce included. It isn&apos;t just a filter on the
+          list: another Builder&apos;s client can&apos;t be opened by
+          pasting a link either.
+        </p>
+        <p className="text-tbb-ink-2 max-w-prose">
+          A <strong>Just mine / All clients</strong> toggle sits on the
+          Console home, the Pipeline and the Deliverables tracker — but
+          only for people allowed the whole practice. If you don&apos;t
+          see the toggle, that&apos;s deliberate, not a bug.
+        </p>
+        <p className="text-tbb-ink-2 max-w-prose">
+          Who owns a client comes from the <strong>Owner</strong> field on
+          the lead — set it early. Change the Owner later and the client
+          moves across with their deliverables, notifications and My
+          Work.
+        </p>
+      </section>
+
+      <section className="border-t border-tbb-line-soft pt-8 space-y-4">
+        <h2 className="text-tbb-h2 font-bold text-tbb-navy tracking-tbb-tight">
+          What arrives without you asking
+        </h2>
+        <p className="text-tbb-ink-2 max-w-prose">
+          You get your own assistant emails, built from your own clients
+          and your own calendar. Nothing here reaches a client without
+          you approving it first.
+        </p>
+        <ul className="space-y-3 text-tbb-ink-2">
+          <li>
+            <strong className="text-tbb-navy">07:00 weekday briefing</strong>{" "}
+            &mdash; today&apos;s sessions with a suggested agenda, what
+            was left open last time, your commitments, the week ahead,
+            and any prospect with no next step booked.
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Friday rollup</strong>{" "}
+            &mdash; the week&apos;s numbers, hours per client and what
+            they earn, plus a health check on the background jobs.
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Session recaps</strong>{" "}
+            &mdash; drafted from the meeting transcript and emailed to
+            you to approve. Tap approve and it sends from{" "}
+            <em>your</em> Gmail, so the client&apos;s reply reaches you
+            rather than a no-reply address.
+          </li>
+          <li>
+            <strong className="text-tbb-navy">Focus blocks</strong>{" "}
+            &mdash; proposed calendar time for your open commitments. It
+            asks before booking anything.
+          </li>
+        </ul>
+        <p className="text-tbb-ink-2 max-w-prose">
+          To switch them on: connect Google. If the address you actually
+          watch isn&apos;t your account email, set an{" "}
+          <Link href="/business-builder/settings/profile" className="text-tbb-blue underline">
+            Assistant email
+          </Link>{" "}
+          under Settings &rarr; Profile.
+        </p>
+      </section>
+
       <Phase number="01" label="Pipeline" caption="Bring new prospects in">
         <Step
           icon={<Filter className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
@@ -332,13 +402,25 @@ export default async function CoachWelcomePage() {
           <p>
             Open any prospect, scroll to the Signing section, click{" "}
             <strong>Prepare Business Building Agreement</strong>. Choose
-            one of your saved templates, add up to four signers (their
-            contact email + name + role) and an optional message. Your
-            signature comes from the template itself, which you set up at{" "}
+            one of your saved templates, add up to four signers (first
+            name, last name, email, role) and an optional message. Use
+            two signers when a client and their business partner both
+            sign. Your signature is already in the template — there is no
+            &quot;sign as me&quot; step to remember. Set it up once at{" "}
             <Link href="/business-builder/templates" className="text-tbb-blue underline">
               Templates &amp; signatures
             </Link>
-            ).
+            .
+          </p>
+          <p className="mt-2">
+            The <strong>Program</strong> and <strong>Pricing tier</strong>{" "}
+            on the lead drive the dollar figure and the Schedule A
+            wording, pulled from{" "}
+            <Link href="/business-builder/settings/pricing" className="text-tbb-blue underline">
+              Settings &rarr; Pricing tiers
+            </Link>
+            . Tier labels are internal segmentation and never appear in
+            the client&apos;s document.
           </p>
           <p className="mt-2">
             Each signer gets an email with their personal signing link.
@@ -500,6 +582,45 @@ export default async function CoachWelcomePage() {
               scans your Drive and matches folders to clients by name.
             </li>
           </ul>
+        </Step>
+
+        <Step
+          icon={<Mail className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Send the onboarding email"
+          href="/business-builder/templates"
+          hrefLabel="Open your templates"
+        >
+          <p>
+            Open the client, go to the <strong>Communications</strong>{" "}
+            panel, start an email and pick the{" "}
+            <strong>Onboarding</strong> template from &quot;Use
+            template.&quot; It fills in for that client and sends from
+            your own Gmail. Read it, adjust anything, send.
+          </p>
+          <p className="mt-2">
+            Everything that used to be copied by hand now fills itself
+            in — their name, their business partner&apos;s name, the
+            assessment wording, and{" "}
+            <strong>their availability link</strong>. The client ticks
+            the days and times that suit them and it lands on their
+            record in the <strong>Availability</strong> panel. Nobody
+            re-keys times out of an email.
+          </p>
+          <p className="mt-2">
+            <strong>Schedule the first session before you send it.</strong>{" "}
+            The assessment deadline is worked out from the calendar — a
+            week before the first Business Building Session. With nothing
+            booked, the email says &quot;one week before our first
+            session&quot; instead of naming a date. Both read fine; only
+            one gives them a date.
+          </p>
+          <p className="mt-2">
+            Assessment completion is ticked by hand on the client&apos;s
+            record, one tick per person. It has to be: the TTI link is a
+            single shared survey with no per-person identity, so nothing
+            can tell us who finished. Tick it when TTI sends the report
+            through.
+          </p>
         </Step>
       </Phase>
 
@@ -720,11 +841,26 @@ export default async function CoachWelcomePage() {
             .
           </p>
           <p className="mt-2">
-            The Builder doesn&apos;t create invoices. Instead it reads each
-            client&apos;s lifetime payments from QuickBooks and shows them
-            as the &quot;Value&quot; on your pipeline — refreshed nightly,
-            or on demand via &quot;Sync now&quot; on the QuickBooks
-            settings page.
+            The Builder reads each client&apos;s lifetime payments from
+            QuickBooks and shows them as the &quot;Value&quot; on your
+            pipeline — refreshed nightly, or on demand via &quot;Sync
+            now&quot; on the QuickBooks settings page.
+          </p>
+          <p className="mt-2">
+            <strong>The one thing it does create is the monthly
+            retainer.</strong> On a client&apos;s workspace page, beside
+            their <strong>Monthly fee</strong>, hit{" "}
+            <strong>Recurring invoice</strong>. It sets up a monthly
+            recurring invoice in QuickBooks for exactly that fee — two
+            clicks, with the confirm step stating the amount and the day.
+          </p>
+          <p className="mt-2">
+            What lands in QuickBooks is <strong>inactive and unsent</strong>:
+            a template that doesn&apos;t fire and doesn&apos;t email the
+            client until you activate it there. Nothing in The Builder
+            bills a client on its own. If the button refuses it tells you
+            why — no service item picked, the client isn&apos;t linked to
+            a QuickBooks customer, or there&apos;s no monthly fee set.
           </p>
         </Step>
       </Phase>
