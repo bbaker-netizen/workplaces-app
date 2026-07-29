@@ -43,6 +43,7 @@ import {
 import { withSystemContext, type Tx } from "@/lib/db/tenant";
 import { complete } from "@/lib/ai/anthropic";
 import { fetchMeetingDetail } from "@/lib/integrations/fireflies";
+import { sessionWasHeld } from "./held-sessions";
 import { mintApprovalToken } from "./tokens";
 
 /** Most talking points to propose. An agenda longer than this is a wish
@@ -140,7 +141,11 @@ async function gatherAgendaContext(
       and(
         eq(bbsSessions.engagementId, session.engagementId),
         ne(bbsSessions.id, session.id),
-        eq(bbsSessions.status, "completed"),
+        // Held before THIS session — not merely "not cancelled", or the
+        // DESC ordering below would happily return a future session as
+        // the previous one. See lib/ea/held-sessions.ts for why this is
+        // no longer `status = 'completed'`.
+        sessionWasHeld(session.scheduledAt),
       ),
     )
     .orderBy(desc(bbsSessions.scheduledAt))

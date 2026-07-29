@@ -37,6 +37,7 @@ import {
   type EaRecipient,
 } from "./recipients";
 import { EA_TIMEZONE } from "./digest-data";
+import { sessionWasHeld } from "./held-sessions";
 
 export type EngagementHours = {
   engagementId: string;
@@ -131,7 +132,11 @@ export async function loadEngagementHours(
     .where(
       and(
         inArray(bbsSessions.engagementId, ids),
-        eq(bbsSessions.status, "completed"),
+        // Sessions actually held. This was `status = 'completed'`, which
+        // only a manual click sets — so session hours were near zero for
+        // every engagement and every effective hourly rate below was
+        // computed against almost no time. See lib/ea/held-sessions.ts.
+        sessionWasHeld(now),
       ),
     );
 

@@ -999,6 +999,76 @@ function humanStatus(s: string): string {
   return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
+/* ------------------- state-of-the-book renderers -------------------
+ *
+ * Shared by the daily briefing and the Friday rollup. Both emails read
+ * the same three sections out of the same gathered payload, so the
+ * rendering lives in one place — two copies could drift and then the two
+ * emails would disagree about the same facts, which is exactly what the
+ * single-gatherer design was meant to prevent.
+ */
+
+function deliverableStateHtml(
+  byStatus: DigestPayload["deliverablesByStatus"],
+  pastTarget: DigestPayload["deliverablesPastTarget"],
+): string {
+  return (
+    byStatus
+      .map(
+        (g) => `
+<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:${NAVY};text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px 0;">${escapeHtml(humanStatus(g.status))} (${g.items.length})</div>
+${g.items
+  .map((d) =>
+    eaRow(
+      d.title,
+      `${d.engagementLabel} &middot; ${d.daysInState} day${d.daysInState === 1 ? "" : "s"} without a change`,
+      { accent: d.daysPastTarget !== null ? ORANGE : undefined },
+    ),
+  )
+  .join("")}
+<div style="height:12px;"></div>`,
+      )
+      .join("") +
+    (pastTarget.length
+      ? `
+<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:${ORANGE};text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px 0;">Past the promised date (${pastTarget.length})</div>
+${pastTarget
+  .map((d) =>
+    eaRow(d.title, `${d.engagementLabel} &middot; promised ${fmtDate(d.targetDate)}`, {
+      accent: ORANGE,
+      note: `${d.daysPastTarget} day${d.daysPastTarget === 1 ? "" : "s"} late`,
+    }),
+  )
+  .join("")}`
+      : "")
+  );
+}
+
+function clientOwedHtml(items: DigestPayload["clientOverdue"]): string {
+  return items
+    .map((i) =>
+      eaRow(
+        i.title,
+        `${i.engagementLabel} &middot; ${i.assigneeName ?? "unassigned"} &middot; ${i.daysOverdue} day${i.daysOverdue === 1 ? "" : "s"} overdue`,
+      ),
+    )
+    .join("");
+}
+
+function quietEngagementsHtml(
+  items: DigestPayload["quietEngagements"],
+): string {
+  return items
+    .map((q) =>
+      eaRow(
+        q.engagementLabel,
+        `${q.quietDays} days with no session and no movement on any item`,
+        { accent: ORANGE },
+      ),
+    )
+    .join("");
+}
+
 /* --------------------------- daily digest --------------------------- */
 
 export type DailyDigestEmailInput = {
@@ -1184,18 +1254,38 @@ ${b.items
     ),
   );
 
+  /* State of the book.
+   *
+   * These three were moved to the Friday rollup on 2026-07-25 to keep the
+   * 7am email short, and moved back on 2026-07-29 at Bruce's direction:
+   * a briefing that omits what clients owe you and which engagements have
+   * gone quiet is not a briefing. They sit LAST, below everything that
+   * needs acting on this morning, so the top of the email still opens on
+   * today rather than on the state of the whole book.
+   *
+   * `eaSection` renders nothing for an empty body, so a clean book costs
+   * no space at all. */
+  parts.push(
+    eaSection(
+      "Deliverables in flight",
+      deliverableStateHtml(p.deliverablesByStatus, p.deliverablesPastTarget),
+    ),
+  );
+  parts.push(
+    eaSection("What your clients owe you", clientOwedHtml(p.clientOverdue), {
+      subtitle: "overdue commitments held by client-side people",
+    }),
+  );
+  parts.push(
+    eaSection("Gone quiet", quietEngagementsHtml(p.quietEngagements), {
+      accent: ORANGE,
+    }),
+  );
+
   const anyContent = parts.slice(1).some((s) => s.trim().length > 0);
   if (!anyContent) {
     parts.push(
       `<p style="margin:0;font-family:Arial,sans-serif;font-size:15px;color:${MUTED};">Nothing needs you this morning. No overdue work, no sessions today, nothing waiting on a date.</p>`,
-    );
-  } else {
-    // The daily is deliberately only what you act on today. Deliverable
-    // states, what clients owe, and quiet engagements are a weekly read,
-    // not a 7am one, so they moved to the Friday rollup. The pointer
-    // stops that looking like something quietly went missing.
-    parts.push(
-      `<p style="margin:8px 0 0 0;font-family:Arial,sans-serif;font-size:12px;color:${MUTED};line-height:1.6;">Deliverable states, what your clients owe you, and any engagement gone quiet are in Friday's rollup.</p>`,
     );
   }
 
@@ -1265,6 +1355,36 @@ ${b.items
     t.push("NO NEXT STEP BOOKED");
     for (const pr of p.prospectsWithoutNextStep) {
       t.push(`  ${pr.companyName} - ${humanStatus(pr.status)}, last touched ${fmtDate(pr.lastActivityAt)}`);
+    }
+    t.push("");
+  }
+  // State of the book — same three sections as the HTML, in the same
+  // order, so the plain-text alternative is not a lesser email.
+  for (const g of p.deliverablesByStatus) {
+    t.push(`DELIVERABLES - ${humanStatus(g.status).toUpperCase()} (${g.items.length})`);
+    for (const d of g.items) {
+      t.push(`  ${d.title} (${d.engagementLabel}) - ${d.daysInState} days without a change`);
+    }
+    t.push("");
+  }
+  if (p.deliverablesPastTarget.length) {
+    t.push(`PAST THE PROMISED DATE (${p.deliverablesPastTarget.length})`);
+    for (const d of p.deliverablesPastTarget) {
+      t.push(`  ${d.title} (${d.engagementLabel}) - ${d.daysPastTarget} days late`);
+    }
+    t.push("");
+  }
+  if (p.clientOverdue.length) {
+    t.push("WHAT YOUR CLIENTS OWE YOU");
+    for (const i of p.clientOverdue) {
+      t.push(`  ${i.title} (${i.engagementLabel}) - ${i.assigneeName ?? "unassigned"}, ${i.daysOverdue} days overdue`);
+    }
+    t.push("");
+  }
+  if (p.quietEngagements.length) {
+    t.push("GONE QUIET");
+    for (const q of p.quietEngagements) {
+      t.push(`  ${q.engagementLabel} - ${q.quietDays} days with no session and no movement`);
     }
     t.push("");
   }
@@ -1655,56 +1775,19 @@ export function fridayRollupEmail(input: FridayRollupEmailInput): EmailEnvelope 
     input.shipped.filter((s) => !s.revenueImpact && !s.marginImpact).length +
     input.slipped.filter((s) => !s.revenueImpact && !s.marginImpact).length;
 
-  /* ---- state of the book: what the daily deliberately leaves out ---- */
+  /* ---- state of the book ----
+   *
+   * The same three renderers the daily uses. These sections appear in
+   * BOTH emails as of 2026-07-29 — the weekly view is the week's shape,
+   * the daily is where you act on it — and sharing the renderer is what
+   * guarantees they can never describe the same book differently. */
 
-  const delivHtml =
-    input.deliverablesByStatus
-      .map(
-        (g) => `
-<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:${NAVY};text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px 0;">${escapeHtml(humanStatus(g.status))} (${g.items.length})</div>
-${g.items
-  .map((d) =>
-    eaRow(
-      d.title,
-      `${d.engagementLabel} &middot; ${d.daysInState} day${d.daysInState === 1 ? "" : "s"} without a change`,
-      { accent: d.daysPastTarget !== null ? ORANGE : undefined },
-    ),
-  )
-  .join("")}
-<div style="height:12px;"></div>`,
-      )
-      .join("") +
-    (input.deliverablesPastTarget.length
-      ? `
-<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;color:${ORANGE};text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px 0;">Past the promised date (${input.deliverablesPastTarget.length})</div>
-${input.deliverablesPastTarget
-  .map((d) =>
-    eaRow(d.title, `${d.engagementLabel} &middot; promised ${fmtDate(d.targetDate)}`, {
-      accent: ORANGE,
-      note: `${d.daysPastTarget} day${d.daysPastTarget === 1 ? "" : "s"} late`,
-    }),
-  )
-  .join("")}`
-      : "");
-
-  const clientHtml = input.clientOverdue
-    .map((i) =>
-      eaRow(
-        i.title,
-        `${i.engagementLabel} &middot; ${i.assigneeName ?? "unassigned"} &middot; ${i.daysOverdue} day${i.daysOverdue === 1 ? "" : "s"} overdue`,
-      ),
-    )
-    .join("");
-
-  const quietHtml = input.quietEngagements
-    .map((q) =>
-      eaRow(
-        q.engagementLabel,
-        `${q.quietDays} days with no session and no movement on any item`,
-        { accent: ORANGE },
-      ),
-    )
-    .join("");
+  const delivHtml = deliverableStateHtml(
+    input.deliverablesByStatus,
+    input.deliverablesPastTarget,
+  );
+  const clientHtml = clientOwedHtml(input.clientOverdue);
+  const quietHtml = quietEngagementsHtml(input.quietEngagements);
 
   const bodyHtml = `
 <p style="margin:0 0 20px 0;font-family:Arial,sans-serif;font-size:15px;">Hi ${escapeHtml(firstName)}, here is ${escapeHtml(input.weekLabel)}.</p>

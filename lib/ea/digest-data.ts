@@ -52,6 +52,7 @@ import {
   listEngagementsForRecipient,
   type EaRecipient,
 } from "./recipients";
+import { sessionWasHeld } from "./held-sessions";
 
 export const EA_TIMEZONE = "America/Edmonton";
 
@@ -430,8 +431,9 @@ export async function gatherDigest(
       .where(
         and(
           eq(bbsSessions.engagementId, s.engagementId),
-          lt(bbsSessions.scheduledAt, s.scheduledAt),
-          eq(bbsSessions.status, "completed"),
+          // Held before this one. Was `status = 'completed'`, which only
+          // a manual click ever sets — see lib/ea/held-sessions.ts.
+          sessionWasHeld(s.scheduledAt),
         ),
       )
       // Most recent completed session before this one — DESC, not ASC.
@@ -515,7 +517,9 @@ export async function gatherDigest(
       .where(
         and(
           eq(bbsSessions.engagementId, e.id),
-          eq(bbsSessions.status, "completed"),
+          // See lib/ea/held-sessions.ts. With `completed` this was
+          // almost always empty, so every engagement looked silent.
+          sessionWasHeld(now),
         ),
       )
       // Most recent, not earliest — this drives the quiet-days count.

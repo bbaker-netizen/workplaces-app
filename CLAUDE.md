@@ -1945,3 +1945,69 @@ functions (was 18) and `{"cron":"0 8 * * *","name":"session-series"}` in
 the live schedule table. **Not yet confirmed end-to-end:** the
 acceptance test is a recap approval email actually landing, which needs
 the next `fireflies-sync` run against a session with a transcript.
+
+## What was built — the briefing that did nothing (2026-07-29)
+
+Bruce, on the first morning briefing to arrive after the cron fix: "2
+sessions today and it does absolutely nothing for me. I don't get notes,
+I don't get agendas, I get stuff Jen is working on." Two bugs and one
+decision reversed. No migration.
+
+**Bruce's briefing carried Jen's clients.** `listEngagementsForRecipient`
+returned every active engagement for `master_admin`, unconditionally.
+That was correct until own-book-by-default landed on 2026-07-26, and the
+module was never updated — its own header had warned "if the access
+model changes, both must change," and it didn't. Now mirrors
+`coachScopeWhere`: own book plus unclaimed. There is deliberately no
+mine/all equivalent here, because that toggle is a cookie and a cron has
+no browser to read one from; own book is the right default for a
+personal briefing.
+
+**Nothing ever became a "previous session", so agendas never drafted.**
+Four EA features keyed off `bbs_sessions.status = 'completed'`, and the
+only thing in the app that ever writes that value is a person clicking
+"Mark complete". There is no sweep. Sessions arriving from Google
+Calendar land as `scheduled` and stay that way for ever, so:
+
+- agenda drafting had no transcript to reason from and correctly
+  declined to propose anything (a model with no material invents one);
+- the "last session" prep line and the still-open-from-last-time list
+  were always empty;
+- **hours-per-engagement counted zero session hours**, which made every
+  effective hourly rate in the Friday rollup meaningless.
+
+`lib/ea/held-sessions.ts` now holds one definition — a session in the
+past that was not cancelled was held — imported by all four call sites so
+they cannot drift apart again. `cancelled` already carries the negative
+case, so nothing is inferred.
+
+Read-side, not a nightly sweep flipping past sessions to `completed`.
+Bruce's call: a sweep writes a claim the system cannot verify, and a
+meeting nobody attended would be recorded as held. `completeSession()`
+still means exactly what it always meant.
+
+The previous-session lookup in `agenda-draft` also gained an upper bound
+it never had. It ordered by `scheduledAt DESC` with no `lt`, so once the
+`completed` filter came off, the "previous" session could have been a
+FUTURE one. `sessionWasHeld(session.scheduledAt)` carries the bound.
+
+**The three state-of-the-book sections are back in the daily.** Reversing
+the 2026-07-25 decision, at Bruce's direction: deliverable states, what
+clients owe, and engagements gone quiet all render in the 7am email
+again. They sit LAST, below everything actionable, so the top of the
+email still opens on today. `eaSection` renders nothing for an empty
+body, so a clean book costs no space.
+
+The renderers moved into three shared functions used by BOTH the daily
+and the Friday rollup. Two copies of the same section could drift and
+then the two emails would disagree about the same book — the exact
+failure the single-gatherer design was meant to prevent. The plain-text
+alternative carries all three too, in the same order.
+
+**Verified:** `tsc --noEmit` and `next lint` clean. Rendered through
+`npx tsx scripts/preview-ea-email.ts digest` and read end to end — the
+three sections appear below "No next step booked", the suggested agenda
+renders under today's session, and the Friday pointer line is gone.
+**Still not confirmed against live data:** whether real sessions now
+produce real agendas depends on transcripts having been attached, which
+needs `fireflies-sync` to have run against a session with a recording.

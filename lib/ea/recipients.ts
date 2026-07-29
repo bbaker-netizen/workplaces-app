@@ -9,15 +9,19 @@
  * does nothing while reporting success. Every EA background job resolves
  * its subjects through here, under `withSystemContext`, instead.
  *
- * The access rules mirror `listCoachEngagements` exactly — master admins
- * see every active client, a restricted Business Builder sees only their
- * explicit grants, and a default Builder sees the clients they are the
- * assigned coach on. Duplicating the rule rather than importing it is
- * deliberate: the original is session-bound and cannot be called here.
- * If the access model changes, both must change.
+ * The access rules mirror `listCoachEngagements` — everyone, master
+ * admin included, gets their OWN book (the clients they are the assigned
+ * coach on, plus any with no coach yet); a restricted Business Builder
+ * sees only their explicit grants. Duplicating the rule rather than
+ * importing it is deliberate: the original is session-bound and cannot
+ * be called here. **If the access model changes, both must change** —
+ * that is not a caution, it is a bug this module already shipped. The
+ * master-admin arm returned the whole practice for two days after
+ * own-book-by-default landed on 2026-07-26, so Bruce's briefing carried
+ * Jen's clients.
  */
 
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import {
   bbClientAccess,
   coaches,
@@ -106,11 +110,33 @@ export async function listEngagementsForRecipient(
   const notArchived = isNull(engagements.archivedAt);
   const notInternal = ne(engagements.isInternal, true);
 
+  // The master admin gets their OWN book, not the practice's. This used
+  // to return every active engagement, which is what put Jen's clients
+  // in Bruce's morning briefing — the briefing is "your day", and a day
+  // that includes someone else's clients is noise you have to filter by
+  // hand every morning.
+  //
+  // Mirrors `coachScopeWhere`: mine, PLUS anything with no coach yet, so
+  // an unassigned client can't fall out of every Builder's view at once.
+  // The in-app mine/all toggle has no equivalent here on purpose — it is
+  // a cookie, and a cron has no browser to read one from. Own book is
+  // the right default for a personal briefing; the whole practice is
+  // what the app is for.
   if (recipient.role === "master_admin") {
+    const [masterCoach] = await tx
+      .select({ id: coaches.id })
+      .from(coaches)
+      .where(eq(coaches.userProfileId, recipient.userProfileId))
+      .limit(1);
+    // No coaches row — fall back to unclaimed engagements only, rather
+    // than to everything. Better a thin briefing than another person's.
+    const mine = masterCoach
+      ? or(eq(engagements.coachId, masterCoach.id), isNull(engagements.coachId))
+      : isNull(engagements.coachId);
     return tx
       .select()
       .from(engagements)
-      .where(and(notArchived, notInternal));
+      .where(and(mine, notArchived, notInternal));
   }
 
   if (!recipient.allClientsAccess) {
