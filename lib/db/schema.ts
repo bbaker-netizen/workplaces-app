@@ -20,6 +20,7 @@ import {
   bigint,
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -1462,6 +1463,67 @@ export const documentTags = pgTable(
     pk: primaryKey({ columns: [t.documentId, t.tag] }),
     orgIdx: index("document_tags_org_idx").on(t.orgId),
     tagIdx: index("document_tags_tag_idx").on(t.tag),
+  })
+);
+
+/**
+ * `document_annotations` — PDF markup held as data, not baked into the file.
+ *
+ * See migration 0106 for the reasoning. The short version: coordinates are
+ * fractions of the page's UNROTATED size with a BOTTOM-LEFT origin, i.e.
+ * normalized PDF user space. Capture converts through pdf.js's
+ * `viewport.convertToPdfPoint()`, so zoom level and page /Rotate are both
+ * resolved before anything is stored, and the burn step needs no rotation
+ * maths to place geometry.
+ *
+ * Rows hang off a specific `documents` row, which here means a specific
+ * version — page numbers cannot survive a page reorder, so the export path
+ * burns markup into a new version rather than trying to remap it.
+ */
+export const documentAnnotations = pgTable(
+  "document_annotations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    /** 1-based, as every PDF tool and every human counts pages. */
+    pageNumber: integer("page_number").notNull(),
+    kind: text("kind").notNull(),
+    x: doublePrecision("x").notNull().default(0),
+    y: doublePrecision("y").notNull().default(0),
+    w: doublePrecision("w").notNull().default(0),
+    h: doublePrecision("h").notNull().default(0),
+    /** Freehand ink: [{x,y},…] in the same normalized space. */
+    points: jsonb("points"),
+    body: text("body"),
+    color: text("color").notNull().default("#1A1A1A"),
+    fontSize: doublePrecision("font_size"),
+    strokeWidth: doublePrecision("stroke_width"),
+    opacity: doublePrecision("opacity"),
+    /** Data URL, only for kind='image' (stamping a stored signature). */
+    imageData: text("image_data"),
+    authorUserProfileId: uuid("author_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgDocPageIdx: index("document_annotations_org_doc_page_idx").on(
+      t.orgId,
+      t.documentId,
+      t.pageNumber,
+    ),
+    documentIdx: index("document_annotations_document_idx").on(t.documentId),
   })
 );
 
@@ -3042,6 +3104,8 @@ export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
 export type DocumentTag = typeof documentTags.$inferSelect;
 export type NewDocumentTag = typeof documentTags.$inferInsert;
+export type DocumentAnnotation = typeof documentAnnotations.$inferSelect;
+export type NewDocumentAnnotation = typeof documentAnnotations.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type ProspectComment = typeof prospectComments.$inferSelect;
