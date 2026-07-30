@@ -91,21 +91,36 @@ export async function recordJobRun(args: {
  * and alerting should still see a failure, the heartbeat is an observer
  * and not a catch-all. `countItems` extracts the "what did it do" number
  * from the job's own result shape.
+ *
+ * `extractError` is what makes a graded failure legible. Most EA jobs
+ * loop over recipients and CATCH per-item errors so one bad recipient
+ * cannot stop the sweep — which means the job returns normally with a
+ * failure count and never throws. Without this callback those runs
+ * recorded `status: failed, error_text: null`, and a failure with no
+ * reason is barely better than no heartbeat at all: it says something is
+ * broken and refuses to say what. That is exactly how the inbox sweep
+ * failed 29 times running from 28 Jul 2026 with nothing to point at.
+ * Jobs that swallow per-item errors must surface the first one here.
  */
 export async function withHeartbeat<T>(
   jobId: string,
   fn: () => Promise<T>,
   countItems: (result: T) => number,
   gradeResult?: (result: T) => JobRunStatus,
+  extractError?: (result: T) => string | null | undefined,
 ): Promise<T> {
   const startedAt = new Date();
   try {
     const result = await fn();
+    const status = gradeResult ? gradeResult(result) : "success";
     await recordJobRun({
       jobId,
       startedAt,
-      status: gradeResult ? gradeResult(result) : "success",
+      status,
       itemsProcessed: countItems(result),
+      // Only on a non-clean run: a success carrying an error string would
+      // read as a fault in the rollup's job table.
+      errorText: status === "success" ? null : extractError?.(result) ?? null,
     });
     return result;
   } catch (e) {

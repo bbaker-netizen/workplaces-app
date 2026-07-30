@@ -64,6 +64,7 @@ import {
   type NetlifyProjectOption,
 } from "@/components/business-builder/EmbeddedAppManager";
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
+import { InvitePortalUserForm } from "@/components/business-builder/InvitePortalUserForm";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
@@ -452,6 +453,16 @@ export default async function EngagementDetailPage({
               invited={clientInvited}
               clientEmail={data.clientEmail}
             />
+            {/* Only once the portal exists — there is no Clerk org to
+                invite anyone into before the lead has been invited. */}
+            {clientInvited && (
+              <div className="pt-2">
+                <InvitePortalUserForm
+                  engagementId={id}
+                  clientLabel={data.eng.name ?? "this client"}
+                />
+              </div>
+            )}
           </div>
           <p className="text-xs text-tbb-ink-3 max-w-2xl">
             Toggle which modules appear in this client&apos;s portal. Everything

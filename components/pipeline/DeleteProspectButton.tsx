@@ -82,9 +82,9 @@ export function DeleteProspectButton({
     if (
       !window.confirm(
         `Permanently delete "${prospectLabel}"?\n\n` +
-          `This removes the lead and its activity log from the app for ` +
-          `good. It cannot be undone. (Prefer Restore if you might want ` +
-          `them back.)`,
+          `This removes the lead, its activity log, its uploaded files and ` +
+          `any unsigned agreement sent to them. It cannot be undone. ` +
+          `(Prefer Restore if you might want them back.)`,
       )
     )
       return;

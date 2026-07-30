@@ -47,7 +47,12 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
   const selectedKey = cookies().get(SELECTED_ENGAGEMENT_COOKIE)?.value;
   if (selectedKey) {
     const selected = await getEngagementByIdOrSlug(selectedKey);
-    if (selected) {
+    // A cookie pointing at the internal workspace is ignored rather than
+    // honoured. Anyone who landed on "Workplaces Team" before the
+    // fallback below was fixed has it saved in their browser, and
+    // without this they would keep landing there. The internal workspace
+    // has its own surface at /business-builder/team.
+    if (selected && !selected.isInternal) {
       const isCoach =
         profile.role === "master_admin" || profile.role === "coach";
       if (isCoach) {
@@ -96,12 +101,24 @@ export async function getCurrentEngagement(): Promise<Engagement | null> {
         .select()
         .from(engagements)
         .where(
-          restricted
-            ? and(
-                isNull(engagements.archivedAt),
-                inArray(engagements.id, access.grantedEngagementIds),
-              )
-            : isNull(engagements.archivedAt),
+          and(
+            // NEVER the internal workspace. "Workplaces Team" is the
+            // practice's own engagement — Bruce and Jen's touch-bases and
+            // the tasks they set each other — and it is not a client. It
+            // is also the NEWEST engagement on the books, because it was
+            // created the first time anyone opened the Team module, so a
+            // plain most-recent pick landed every Business Builder on it
+            // when they opened the client portal. `listCoachEngagements`
+            // has always filtered it out of client lists; this fallback
+            // was the one path that did not.
+            eq(engagements.isInternal, false),
+            restricted
+              ? and(
+                  isNull(engagements.archivedAt),
+                  inArray(engagements.id, access.grantedEngagementIds),
+                )
+              : isNull(engagements.archivedAt),
+          ),
         )
         .orderBy(desc(engagements.createdAt))
         .limit(1);

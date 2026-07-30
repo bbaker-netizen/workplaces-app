@@ -75,6 +75,14 @@ export type SweepResult = {
   drafted: number;
   skipped: number;
   failed: number;
+  /**
+   * The first error this run hit, carried out so the heartbeat can say
+   * WHY the sweep failed rather than only that it did. Per-recipient
+   * errors are caught here so one bad mailbox cannot stop the others,
+   * which means the job returns normally and the reason would otherwise
+   * die in a log nobody reads.
+   */
+  firstError: string | null;
 };
 
 /* --------------------------- booking link --------------------------- */
@@ -237,6 +245,7 @@ export async function runInboxSweep(now: Date = new Date()): Promise<SweepResult
     drafted: 0,
     skipped: 0,
     failed: 0,
+    firstError: null,
   };
 
   for (const recipient of recipients) {
@@ -246,8 +255,11 @@ export async function runInboxSweep(now: Date = new Date()): Promise<SweepResult
       out.drafted += one.drafted;
       out.skipped += one.skipped;
       out.failed += one.failed;
+      out.firstError ??= one.firstError;
     } catch (e) {
       out.failed++;
+      const message = e instanceof Error ? e.message : String(e);
+      out.firstError ??= `${recipient.email ?? recipient.userProfileId}: ${message}`;
       console.error(`[ea] inbox sweep failed for ${recipient.userProfileId}:`, e);
     }
   }
@@ -259,7 +271,13 @@ async function sweepForRecipient(
   recipient: EaRecipient,
   now: Date,
 ): Promise<Omit<SweepResult, "recipients">> {
-  const result = { threadsSeen: 0, drafted: 0, skipped: 0, failed: 0 };
+  const result: Omit<SweepResult, "recipients"> = {
+    threadsSeen: 0,
+    drafted: 0,
+    skipped: 0,
+    failed: 0,
+    firstError: null,
+  };
 
   const token = await getValidAccessToken(recipient.userProfileId);
   if (!token) return result;
@@ -363,6 +381,7 @@ async function sweepForRecipient(
         .toLowerCase();
     } catch (e) {
       console.error("[ea] classification failed:", e);
+      result.firstError ??= `classifier: ${e instanceof Error ? e.message : String(e)}`;
       await logThread(recipient, msg, "other", "failed", "classifier error");
       result.failed++;
       continue;
@@ -406,6 +425,7 @@ async function sweepForRecipient(
       result.drafted++;
     } catch (e) {
       console.error("[ea] draft creation failed:", e);
+      result.firstError ??= `draft: ${e instanceof Error ? e.message : String(e)}`;
       await logThread(
         recipient,
         msg,

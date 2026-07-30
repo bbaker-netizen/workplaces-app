@@ -36,6 +36,14 @@ export type RecapSweepResult = {
   failed: number;
   /** Transcripts paired to their session by this run. */
   transcriptsAttached: number;
+  /**
+   * Why the first non-draft happened. A skip is usually benign (no
+   * transcript yet), but a run that skips everything for a REASON — the
+   * model refusing, a summary that never arrives — must be able to say
+   * so, or "no recaps this week" is indistinguishable from "no sessions
+   * this week".
+   */
+  firstError: string | null;
 };
 
 export async function runRecapSweep(
@@ -47,6 +55,7 @@ export async function runRecapSweep(
     skipped: 0,
     failed: 0,
     transcriptsAttached: 0,
+    firstError: null,
   };
 
   // Pair up transcripts FIRST. Until this ran, the only thing that ever
@@ -105,11 +114,20 @@ export async function runRecapSweep(
   for (const session of candidates.slice(0, MAX_PER_RUN)) {
     try {
       const result = await generateSessionRecap(session.id);
-      if (!result.ok) out.skipped++;
-      else if (result.created) out.drafted++;
+      if (!result.ok) {
+        out.skipped++;
+        // "Waiting for Fireflies" is the ordinary case and not worth
+        // reporting; anything else means the pipeline is stuck and the
+        // reason has to travel out to the heartbeat.
+        if (result.reason !== "no-transcript-content") {
+          out.firstError ??= `${session.id}: ${result.reason}`;
+        }
+      } else if (result.created) out.drafted++;
       else out.skipped++;
     } catch (e) {
       out.failed++;
+      const message = e instanceof Error ? e.message : String(e);
+      out.firstError ??= `${session.id}: ${message}`;
       console.error(`[ea] recap generation failed for ${session.id}:`, e);
     }
   }

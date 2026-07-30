@@ -14,7 +14,6 @@ import { EngagementArchiveButton } from "@/components/business-builder/Engagemen
 import { EngagementSearchList } from "@/components/business-builder/EngagementSearchList";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { CollapsibleSection } from "@/components/business-builder/CollapsibleSection";
-import { SeedDemoButton } from "@/components/business-builder/SeedDemoButton";
 import { SyncAssignmentsButton } from "@/components/business-builder/SyncAssignmentsButton";
 
 export default async function EngagementsListPage() {
@@ -100,7 +99,6 @@ export default async function EngagementsListPage() {
         </p>
         {(profile.role === "master_admin" || profile.role === "coach") && (
           <div className="pt-2 flex items-center gap-2 flex-wrap">
-            <SeedDemoButton />
             <Link
               href="/business-builder/drive-link"
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill border border-tbb-line text-tbb-navy hover:border-tbb-blue hover:text-tbb-blue transition-colors"

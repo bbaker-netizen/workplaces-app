@@ -237,6 +237,44 @@ export async function generateSessionRecap(
     return { ok: false, reason: "no-transcript-content" };
   }
 
+  /* ---- prose, BEFORE anything is written ---- */
+  //
+  // Ordered ahead of the carry-forward deliberately: nothing may be
+  // mutated until we know a real recap can be produced. An abort here
+  // leaves the session exactly as it was, so the next sweep retries it
+  // cleanly.
+  //
+  // NO PROSE, NO RECAP. This used to fall back to neutral copy — a
+  // headline, a sign-off, and nothing in between — and store it as a
+  // draft. That is worse than failing, for two reasons. It asks someone
+  // to approve sending a client an email that says nothing, and because
+  // `bbs_session_id` is UNIQUE it permanently consumes the session's one
+  // recap slot, so the retry that would have worked never runs. That is
+  // what produced the empty A&M Abatement recap on 30 Jul 2026 while
+  // 2,420 characters of Fireflies summary sat in the database unread.
+  let prose: z.infer<typeof recapSchema>;
+  try {
+    const result = await complete({
+      system: RECAP_SYSTEM,
+      user: `Client: ${engagement.name ?? "the client"}\nSession date: ${dateMt(session.scheduledAt)}\n\nMeeting summary:\n${summaryText}`,
+      maxTokens: 1200,
+    });
+    const cleaned = result.text
+      .trim()
+      .replace(/^```json\s*/i, "")
+      .replace(/^```/, "")
+      .replace(/```$/, "")
+      .trim();
+    prose = recapSchema.parse(JSON.parse(cleaned));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(
+      `[ea] recap prose failed for session ${session.id}; not drafting an empty recap:`,
+      e,
+    );
+    return { ok: false, reason: `prose-failed: ${message}` };
+  }
+
   /* ---- carry the agenda forward, then read what the next session holds ---- */
   const forward = await withSystemContext(async (tx) => {
     const [next] = await tx
@@ -292,33 +330,6 @@ export async function generateSessionRecap(
         ),
       ),
   );
-
-  /* ---- prose ---- */
-  let prose: z.infer<typeof recapSchema> = {
-    headline: `Notes from our session on ${dateMt(session.scheduledAt)}.`,
-    decisions: [],
-    closingNote: "Thanks for the time. See you at the next session.",
-  };
-  if (summaryText.trim().length > 0) {
-    try {
-      const result = await complete({
-        system: RECAP_SYSTEM,
-        user: `Client: ${engagement.name ?? "the client"}\nSession date: ${dateMt(session.scheduledAt)}\n\nMeeting summary:\n${summaryText}`,
-        maxTokens: 1200,
-      });
-      const cleaned = result.text
-        .trim()
-        .replace(/^```json\s*/i, "")
-        .replace(/^```/, "")
-        .replace(/```$/, "")
-        .trim();
-      prose = recapSchema.parse(JSON.parse(cleaned));
-    } catch (e) {
-      // Fall back to the neutral copy above. A recap with no decisions
-      // section is still worth sending; a failed job is not.
-      console.error("[ea] recap generation failed, using fallback copy:", e);
-    }
-  }
 
   /* ---- assemble the client-facing body ---- */
   const built = buildRecapBody({
@@ -809,6 +820,15 @@ export async function describeRecap(recapId: string): Promise<{
   subject: string;
   bodyHtml: string;
   status: string;
+  /**
+   * How many client contacts would actually be emailed. Counted for the
+   * confirmation page, because zero is common and invisible: a client
+   * who has never been invited to their portal has no user rows at all,
+   * so approving files the record and emails nobody. Saying that BEFORE
+   * the tap is the difference between a considered decision and
+   * believing a client was written to when they were not.
+   */
+  recipientCount: number;
 } | null> {
   return withSystemContext(async (tx) => {
     const [row] = await tx
@@ -817,17 +837,32 @@ export async function describeRecap(recapId: string): Promise<{
         bodyHtml: sessionRecaps.bodyHtml,
         status: sessionRecaps.status,
         clientLabel: engagements.name,
+        orgId: engagements.orgId,
       })
       .from(sessionRecaps)
       .innerJoin(engagements, eq(engagements.id, sessionRecaps.engagementId))
       .where(eq(sessionRecaps.id, recapId))
       .limit(1);
     if (!row) return null;
+
+    // Same rule the send path uses, so the count cannot disagree with
+    // what actually happens.
+    const contacts = await tx
+      .select({ email: userProfiles.email })
+      .from(userProfiles)
+      .where(
+        and(
+          eq(userProfiles.orgId, row.orgId),
+          inArray(userProfiles.role, ["client_lead", "client_manager"]),
+        ),
+      );
+
     return {
       clientLabel: row.clientLabel ?? "Client",
       subject: row.subject,
       bodyHtml: row.bodyHtml,
       status: row.status,
+      recipientCount: contacts.filter((c) => c.email?.includes("@")).length,
     };
   });
 }

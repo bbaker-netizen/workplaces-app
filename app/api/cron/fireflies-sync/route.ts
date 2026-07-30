@@ -62,8 +62,20 @@ export async function GET(req: Request) {
         "ea-recap-sweep",
         () => runRecapSweep(),
         (r) => r.drafted,
-        (r) =>
-          gradeSweep({ succeeded: r.drafted + r.skipped, failed: r.failed }),
+        (r) => {
+          // A skip is counted as a success here because "no transcript
+          // yet" is the ordinary state of most sessions. But that makes
+          // a sweep which skipped EVERYTHING for a real reason grade
+          // clean, and a clean grade stores no error text — hiding the
+          // exact fault this reporting exists to expose. A recorded
+          // reason downgrades the run to partial so it survives.
+          const base = gradeSweep({
+            succeeded: r.drafted + r.skipped,
+            failed: r.failed,
+          });
+          return base === "success" && r.firstError ? "partial" : base;
+        },
+        (r) => r.firstError,
       );
     } catch (e) {
       console.error("[cron/fireflies-sync] EA recap sweep failed:", e);

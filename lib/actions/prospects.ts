@@ -12,18 +12,21 @@
  *     "last contact" column stays accurate without manual updates)
  */
 
-import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   coaches,
+  documents,
   engagements,
   notifications,
   orgs,
   prospects,
+  signatureEnvelopes,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { deleteDocumentBlob } from "@/lib/storage/blobs";
 import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { validateProspect } from "@/lib/pipeline/validate-prospect";
 import {
@@ -550,6 +553,35 @@ export async function updateProspect(
         );
       }
 
+      // The monthly fee follows the lead to the client, for the same
+      // reason the Owner does above: the engagement is where the number
+      // is actually USED. It drives the QuickBooks recurring retainer
+      // (which refuses outright without one) and the effective hourly
+      // rate in the Friday rollup.
+      //
+      // Until now the fee was copied once, at activation, and never
+      // again — so a fee agreed or corrected after the client was
+      // created stayed on the lead and the client's own record read
+      // blank. On 30 Jul 2026 that was 16 of 18 clients.
+      //
+      // Deliberately one-directional and only on an explicit edit:
+      // `setEngagementMonthlyFee` exists so a fee can be corrected on
+      // the client alone, and copying on every unrelated save would let
+      // a stale lead value silently overwrite it.
+      if (data.monthlyFeeCents !== undefined) {
+        const [linked] = await tx
+          .select({ convertedEngagementId: prospects.convertedEngagementId })
+          .from(prospects)
+          .where(eq(prospects.id, data.id))
+          .limit(1);
+        if (linked?.convertedEngagementId) {
+          await tx
+            .update(engagements)
+            .set({ monthlyFeeCents: data.monthlyFeeCents })
+            .where(eq(engagements.id, linked.convertedEngagementId));
+        }
+      }
+
       // Acting on a lead resolves its outstanding nudges. Rescheduling
       // the follow-up, logging contact, or closing the lead all mean the
       // old "follow-up due" / "gone quiet" rows have served their purpose
@@ -828,6 +860,132 @@ export async function touchLastContact(prospectId: string): Promise<void> {
 
 
 /**
+ * Shared body of the two permanent-delete actions. Returns the ids that
+ * actually went, plus the storage keys of the files that went with them.
+ *
+ * Why this isn't a bare `DELETE FROM prospects` any more. The delete
+ * cascades into the lead's documents, and
+ * `signature_envelopes.source_document_id` is ON DELETE RESTRICT — which
+ * is correct and stays: removing a file from the Documents page must
+ * never quietly destroy the signing record built from it. But a lead that
+ * was sent a contract owns both the file and the envelope, so erasing the
+ * lead hit that RESTRICT and failed the whole statement. The FK on
+ * `signature_envelopes.prospect_id` is only SET NULL, so the cascade
+ * couldn't clear its own path.
+ *
+ * Postgres fires referential actions in constraint-name order, so making
+ * that FK a CASCADE would have left the fix resting on the two
+ * constraints happening to sort the right way. The envelopes are removed
+ * explicitly instead — first, in the same transaction, so the ordering is
+ * stated rather than inherited. Their signers cascade from the envelope.
+ *
+ * Blob keys are collected BEFORE the rows go, because a database cascade
+ * can't reach Netlify Blobs. Without this, every permanent delete left
+ * the stored file behind with nothing pointing at it.
+ *
+ * Not exported — "use server" requires every export to be a server
+ * action, and this is an internal helper.
+ */
+async function hardDeleteProspectRows(
+  ids: string[],
+  orgId: string,
+): Promise<{ deletedIds: string[]; blobKeys: string[] }> {
+  const { deletedIds, blobKeys } = await withSystemContext(async (tx) => {
+    // Resolve the guards once, up front, so every later statement works
+    // off the same set: archived, not a converted client, our org.
+    const deletable = await tx
+      .select({ id: prospects.id })
+      .from(prospects)
+      .where(
+        and(
+          inArray(prospects.id, ids),
+          eq(prospects.orgId, orgId),
+          isNotNull(prospects.archivedAt),
+          isNull(prospects.convertedEngagementId),
+        ),
+      );
+    const targetIds = deletable.map((r) => r.id);
+    if (targetIds.length === 0) return { deletedIds: [], blobKeys: [] };
+
+    const docs = await tx
+      .select({ id: documents.id, blobKey: documents.blobKey })
+      .from(documents)
+      .where(inArray(documents.prospectId, targetIds));
+    const docIds = docs.map((d) => d.id);
+
+    // Envelopes raised against these leads, plus any envelope built from
+    // a document that is about to be cascade-deleted. The second arm
+    // matters because the source file won't survive either way, so an
+    // envelope pointing at it can't be left standing.
+    await tx
+      .delete(signatureEnvelopes)
+      .where(
+        docIds.length > 0
+          ? or(
+              inArray(signatureEnvelopes.prospectId, targetIds),
+              inArray(signatureEnvelopes.sourceDocumentId, docIds),
+              inArray(signatureEnvelopes.signedDocumentId, docIds),
+            )
+          : inArray(signatureEnvelopes.prospectId, targetIds),
+      );
+
+    const deleted = await tx
+      .delete(prospects)
+      .where(inArray(prospects.id, targetIds))
+      .returning({ id: prospects.id });
+
+    return {
+      deletedIds: deleted.map((r) => r.id),
+      blobKeys: docs.map((d) => d.blobKey).filter(Boolean),
+    };
+  });
+
+  // Outside the transaction: a storage round trip must not hold a pooled
+  // Postgres connection, and a blob that fails to go is a leaked file,
+  // not a reason to un-delete a lead the operator asked to erase.
+  for (const key of blobKeys) {
+    try {
+      await deleteDocumentBlob(key);
+    } catch (e) {
+      console.error("[prospects] failed to delete blob", key, e);
+    }
+  }
+
+  return { deletedIds, blobKeys };
+}
+
+/**
+ * Turn a database failure into something a Business Builder can act on.
+ * The raw Drizzle error is a full "Failed query:" dump of the statement
+ * and its bind parameters — it names the top-level DELETE and says
+ * nothing about the constraint that actually refused, which is how a
+ * referencing-row problem reads as gibberish on screen. The real error
+ * still goes to the server log in full.
+ */
+function describeDeleteFailure(e: unknown, context: string): string {
+  console.error(`[prospects] ${context}`, e);
+  const chain: unknown[] = [];
+  let cursor: unknown = e;
+  while (cursor && chain.length < 5) {
+    chain.push(cursor);
+    cursor = (cursor as { cause?: unknown }).cause;
+  }
+  const pg = chain.find(
+    (c): c is { code?: string; table?: string } =>
+      typeof (c as { code?: unknown })?.code === "string",
+  );
+  if (pg?.code === "23503") {
+    return (
+      "Something else in the app still points at this record" +
+      (pg.table ? ` (${pg.table})` : "") +
+      ", so it can't be removed. Nothing was deleted. Send this message " +
+      "on — it needs a code fix, not something you can clear from here."
+    );
+  }
+  return e instanceof Error ? e.message : String(e);
+}
+
+/**
  * Permanently delete an archived LEAD (hard delete). Irreversible.
  *
  * Guarded three ways so it can only ever remove a true throwaway lead:
@@ -837,8 +995,10 @@ export async function touchLastContact(prospectId: string): Promise<void> {
  *      NULL). Clients keep their engagement, portal, documents and
  *      invoices, so they're archive-only and can't be destroyed here.
  *   3. Scoped to the caller's org.
- * The DB foreign keys cascade-delete prospect_activities and the alias
- * row, and null out any booking references, so no orphans are left.
+ * Activity log, comments, documents, communications and the alias row
+ * cascade; bookings and EA email threads are nulled out; signature
+ * envelopes and stored files are removed by hardDeleteProspectRows. No
+ * orphans are left.
  */
 export async function permanentlyDeleteProspect(
   id: string,
@@ -852,20 +1012,8 @@ export async function permanentlyDeleteProspect(
     return { ok: false, error: "You don't have access to that lead." };
   }
   try {
-    const result = await withSystemContext(async (tx) => {
-      return await tx
-        .delete(prospects)
-        .where(
-          and(
-            eq(prospects.id, id),
-            eq(prospects.orgId, profile.orgId),
-            isNotNull(prospects.archivedAt),
-            isNull(prospects.convertedEngagementId),
-          ),
-        )
-        .returning({ id: prospects.id });
-    });
-    if (result.length === 0) {
+    const { deletedIds } = await hardDeleteProspectRows([id], profile.orgId);
+    if (deletedIds.length === 0) {
       return {
         ok: false,
         error:
@@ -876,7 +1024,10 @@ export async function permanentlyDeleteProspect(
     revalidatePath("/business-builder/pipeline");
     return { ok: true, data: undefined };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return {
+      ok: false,
+      error: describeDeleteFailure(e, "permanentlyDeleteProspect failed"),
+    };
   }
 }
 
@@ -910,23 +1061,14 @@ export async function bulkPermanentlyDeleteProspects(
       return { ok: false, error: "Invalid prospect id in selection." };
   }
   try {
-    const deleted = await withSystemContext(async (tx) => {
-      const result = await tx
-        .delete(prospects)
-        .where(
-          and(
-            inArray(prospects.id, ids),
-            eq(prospects.orgId, profile.orgId),
-            isNotNull(prospects.archivedAt),
-            isNull(prospects.convertedEngagementId),
-          ),
-        )
-        .returning({ id: prospects.id });
-      return result.length;
-    });
+    const { deletedIds } = await hardDeleteProspectRows(ids, profile.orgId);
+    const deleted = deletedIds.length;
     revalidatePath("/business-builder/pipeline");
     return { ok: true, data: { deleted, skipped: ids.length - deleted } };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return {
+      ok: false,
+      error: describeDeleteFailure(e, "bulkPermanentlyDeleteProspects failed"),
+    };
   }
 }

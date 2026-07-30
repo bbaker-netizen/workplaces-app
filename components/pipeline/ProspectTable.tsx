@@ -729,9 +729,10 @@ export function ProspectTable({
     if (
       !window.confirm(
         `Permanently delete ${count} archived lead${count === 1 ? "" : "s"}?\n\n` +
-          `This removes them and their activity logs from the app for good. ` +
-          `It cannot be undone. Any converted clients in the selection are ` +
-          `skipped (clients are archive-only).`,
+          `This removes them, their activity logs, their uploaded files and ` +
+          `any unsigned agreements sent to them. It cannot be undone. Any ` +
+          `converted clients in the selection are skipped (clients are ` +
+          `archive-only).`,
       )
     )
       return;

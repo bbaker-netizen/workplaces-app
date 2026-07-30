@@ -143,9 +143,17 @@ export async function GET(
   return html(
     confirmPage({
       heading: `Send this recap to ${recap.clientLabel}?`,
+      // The recipient count is stated up front because zero is both
+      // common and silent: a client nobody has invited to their portal
+      // yet has no contacts to email, so approving would file the record
+      // and send nothing. Discovering that afterwards is how a coach
+      // believes a client was written to when they were not.
       detail:
-        "This emails the recap to the client contacts and files it on their portal thread as a permanent record. Read it through first.",
-      buttonLabel: "Approve and send",
+        recap.recipientCount > 0
+          ? `This emails the recap to ${recap.recipientCount} contact${recap.recipientCount === 1 ? "" : "s"} at ${recap.clientLabel} and files it on their portal thread as a permanent record. Read it through first.`
+          : `Nobody at ${recap.clientLabel} has been invited to their portal yet, so approving will file this on their portal thread but email no one. Invite them first if you want them to receive it.`,
+      buttonLabel:
+        recap.recipientCount > 0 ? "Approve and send" : "File it anyway",
       previewHtml: recap.bodyHtml,
     }),
   );
@@ -194,12 +202,15 @@ export async function POST(
   if (!result.ok) {
     return html(errorPage("Could not send it", result.reason), 409);
   }
+  // The heading tells the truth about what happened. "Sent" over a recap
+  // that reached nobody is the kind of false confirmation that only
+  // surfaces weeks later, when a client mentions they never saw it.
   return html(
     successPage(
-      "Sent",
+      result.sentTo > 0 ? "Sent" : "Filed, not sent",
       result.sentTo > 0
         ? `The recap has gone to ${result.sentTo} contact${result.sentTo === 1 ? "" : "s"} at ${result.clientLabel} and is filed on their portal thread.`
-        : `The recap is filed on ${result.clientLabel}'s portal thread. No client contact had a usable email address, so nothing was emailed.`,
+        : `The recap is filed on ${result.clientLabel}'s portal thread, but nobody was emailed — no one at ${result.clientLabel} has a portal account with a usable address. Invite them, then send it from the session in the app.`,
     ),
   );
 }

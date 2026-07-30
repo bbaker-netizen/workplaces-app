@@ -36,6 +36,7 @@ export async function GET(req: Request) {
       () => runInboxSweep(),
       (r) => r.drafted,
       (r) => gradeSweep({ succeeded: r.drafted + r.skipped, failed: r.failed }),
+      (r) => r.firstError,
     );
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {

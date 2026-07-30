@@ -2072,3 +2072,192 @@ renders under today's session, and the Friday pointer line is gone.
 **Still not confirmed against live data:** whether real sessions now
 produce real agendas depends on transcripts having been attached, which
 needs `fireflies-sync` to have run against a session with a recording.
+
+## What was built — deleting an archived lead with a contract out (2026-07-30)
+
+Bruce, deleting four archived contacts, got a raw `Failed query: delete
+from "prospects" …` dump. No migration; this is action logic.
+
+**A cascade hit a RESTRICT two levels down.** Deleting a prospect
+cascades into its `documents`, and
+`signature_envelopes.source_document_id` is ON DELETE **RESTRICT**. Two of
+the four leads had been sent a Business Building agreement, so each held a
+document that an in-progress envelope pointed at, and the whole statement
+failed — including for the two leads with nothing wrong with them, because
+one DELETE either takes every row or none.
+
+The RESTRICT is right and stays: removing a file from the Documents page
+must never quietly destroy the signing record built from it. What was
+wrong is that `signature_envelopes.prospect_id` is only SET NULL, so the
+cascade could not clear its own path — the model said "keep the envelope,
+orphaned" and "destroy the document it depends on" at the same time.
+
+**Flipping that FK to CASCADE was rejected.** Postgres fires referential
+actions in constraint-name order, so the fix would have rested on
+`signature_envelopes_prospect_id_…` happening to sort before
+`documents_prospect_id_…` — true today, silently breakable by any future
+rename. `hardDeleteProspectRows` deletes the envelopes explicitly, first,
+in the same transaction. Signers cascade from the envelope. Ordering is
+now stated rather than inherited.
+
+**Stored files were leaking on every permanent delete.** A database
+cascade cannot reach Netlify Blobs, so each deleted document left its blob
+behind with nothing pointing at it. Blob keys are now collected before the
+rows go and dropped after the commit, best-effort and logged — a storage
+round trip must not hold a pooled Postgres connection, and a blob that
+fails to go is not a reason to un-delete a lead the operator asked to
+erase.
+
+**The error message was the other half of the bug.** Both actions returned
+`e.message`, which for Drizzle is the whole statement plus its bind
+parameters — it names the top-level DELETE and never mentions the
+constraint that actually refused. `describeDeleteFailure` logs the real
+error server-side and returns a sentence; a 23503 now says which table
+still points at the record and that nothing was deleted.
+
+Both confirm dialogs now say files and unsigned agreements go too, because
+they do.
+
+`scripts/diagnose-prospect-delete.mjs` (read-only, writes nothing) walks
+the cascade graph out from `prospects`, flags any NO ACTION / RESTRICT
+reachable through it, and runs the real DELETE inside a transaction forced
+to roll back by a `SELECT 1/0` sentinel — which is how the constraint was
+identified. **That sentinel trick is the general tool here:** any "Failed
+query" with no constraint in it can be resolved this way in one run.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build` compiles
+successfully (the sync non-exported helpers satisfy the `"use server"`
+all-exports-async rule). The new statement order was run against the live
+database inside a rolled-back transaction — 4 targets, 2 documents, both
+envelopes and all four prospects deleted with no constraint error, and all
+four rows confirmed still present afterwards. **The real delete has not
+been run** — the acceptance test is Bruce deleting those four archived
+contacts from the Archived view.
+
+## What was built — the recap that said nothing, and five things around it (2026-07-30)
+
+Bruce, on the first A&M Abatement recap approval email: "it really
+doesn't give me much." It didn't. No migration; this is logic, plus two
+one-time data repairs.
+
+**The recap fell back to boilerplate with the material sitting right
+there.** 2,420 characters of Fireflies overview and bullets were written
+to `engagement_meetings` at 17:08:08 and the recap was drafted at
+17:08:16 — eight seconds later, off the same cron, from our own copy.
+The prose step failed and the `catch` swallowed it into neutral copy: a
+headline, a sign-off, nothing between. The whole run took under eight
+seconds including several queries, so the model call failed fast rather
+than timing out.
+
+**The root cause is still unidentified, and that is the finding.** The
+API key works — 86 Haiku classifications ran in production on 29 Jul
+through the same `complete()` and the same `client()`. What went wrong
+on the Sonnet call is in a Netlify log line nobody reads. So the fix is
+not a guess at the cause; it is making the next occurrence say what it
+is.
+
+**Three failures were being counted and never described.**
+
+- `withHeartbeat` only recorded `error_text` when the job THREW. Most EA
+  jobs catch per-item errors so one bad recipient cannot stop the sweep,
+  which means they return normally with a failure count. Those runs
+  stored `status: failed, error_text: null`. `ea-inbox-sweep` had failed
+  on **29 consecutive runs since 28 Jul** with nothing recorded against
+  any of them. New optional `extractError` callback; sweeps now carry a
+  `firstError` out.
+- The recap sweep grades a skip as a success, because "no transcript
+  yet" is the ordinary state of most sessions. That made a sweep which
+  skipped EVERYTHING for a real reason grade clean — and a clean grade
+  stores no error. A recorded reason now downgrades the run to
+  `partial` so it survives into the Friday rollup's job table.
+- `no-transcript-content` is deliberately NOT reported. It is the
+  ordinary waiting state, and reporting it would train the eye to
+  ignore the column.
+
+**No prose, no recap.** The fallback is gone. A failed prose step
+returns `prose-failed: <message>` and writes nothing. The old behaviour
+was worse than failing twice over: it asked someone to approve sending a
+client an email that said nothing, and because `bbs_session_id` is
+UNIQUE it permanently consumed that session's one recap slot, so the
+retry that would have worked could never run. Prose generation moved
+AHEAD of the agenda carry-forward, so an abort mutates nothing and the
+next sweep retries cleanly.
+
+`scripts/clear-empty-recaps.mjs` deleted the two boilerplate drafts (A&M
+28 Jul, Impactica 30 Jul) that had already taken their slots. It only
+ever touches rows that are draft, unapproved, unsent, unfiled AND carry
+neither a decisions nor a commitments heading, and re-asserts all of it
+in the DELETE.
+
+**Nobody was going to receive it anyway.** A&M Abatement has zero users
+in its org; across the whole app only two clients have ever been invited.
+Approving would have filed the portal record and emailed no one, left
+the recap `approved` rather than `sent`, and shown a page headed "Sent".
+`describeRecap` now counts the real recipients using the same rule the
+send path uses, the confirmation page says so BEFORE the tap ("Nobody at
+X has been invited to their portal yet"), the button reads "File it
+anyway", and a zero-delivery result is headed "Filed, not sent".
+
+**Adding a second person to a client portal.** `inviteClientToPortal`
+handles exactly one person and refuses to run twice, so the only route
+was the client lead inviting their own people — impossible until the
+lead had accepted. `lib/actions/invite-portal-user.ts` +
+`InvitePortalUserForm` on the engagement page, gated on
+`canCurrentBbAccessEngagement`.
+
+**It sends NO `inviterUserId`, and that is the load-bearing detail.**
+The invite-client flow steps the coach back out as admin of the client's
+Clerk org, so there is no membership to invite from. The obvious
+workaround — re-add as admin, invite, remove — fires
+`organizationMembership.created`, which our Clerk webhook turns into a
+`user_profiles` row: a Business Builder profile planted inside the
+client's org on every invitation. Clerk makes `inviterUserId` optional,
+so the invitation is issued without one and the client org stays clean.
+The comment in `invite-client.ts` claiming Clerk requires it was true
+only because the coach happened still to be admin at that moment.
+
+**The monthly fee never followed the lead.** It was copied once, at
+activation, and never again — so a fee agreed or corrected afterwards
+stayed on the lead while the client's own record read blank. That was
+**16 of 18 clients**, $27,250/month unrecorded. The blank is what the
+QuickBooks recurring retainer bills from (it refuses outright without
+one) and what the Friday rollup's effective hourly rate divides by, so
+both were wrong or missing for nearly the whole book.
+
+`updateProspect` now writes the fee through to the converted
+engagement, in the same transaction and for the same reason the Owner
+reassignment already did. One-directional and only on an explicit fee
+edit: `setEngagementMonthlyFee` exists so a client's fee can be
+corrected independently, and copying on every unrelated save would let a
+stale lead value overwrite it. `scripts/backfill-engagement-fees.mjs`
+repaired the 16; it only ever fills NULLs, so a deliberate correction is
+never stamped on.
+
+**"Workplaces Team" was showing as the client portal.** The internal
+workspace is the NEWEST engagement on the books — it is created the
+first time anyone opens the Team module — and `getCurrentEngagement`'s
+coach fallback picked the most recent engagement with no `is_internal`
+filter. `listCoachEngagements` had always filtered it out of client
+lists; this one path did not. Filtered now, AND ignored when it arrives
+from the selected-engagement cookie, because anyone who already landed
+there has it saved in their browser and would otherwise keep landing
+there.
+
+**"Create sample engagement" removed** — `SeedDemoButton` and
+`lib/actions/demo-seed.ts` both deleted.
+
+**Neon returns numeric columns as strings.** The backfill's first run
+reported a total of `$350,000,150,000,179,960,000,…` because
+`sum + row.fee` concatenated. Caught before any write. Every arithmetic
+use of a Neon numeric needs an explicit `Number()`.
+
+**Verified:** `tsc --noEmit` and `next lint` clean. `next build`
+compiles: 76 prerender failures, 152 `Missing publishableKey` errors and
+zero of any other cause — matching the recorded baseline exactly.
+Netlify has the key.
+
+**Outstanding, and this is the acceptance test:** the recap prose
+failure is fixed to REPORT, not fixed to work. The next `fireflies-sync`
+run after deploy redrafts A&M and Impactica; either a real recap arrives
+or `ea_job_runs.error_text` finally names the fault. Nothing here has
+been exercised against a live deploy.
