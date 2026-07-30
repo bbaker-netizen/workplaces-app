@@ -48,7 +48,7 @@
     "nextjs-toploader": "^3.9.17",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1",
-    "pdfjs-dist": "^6.2.108",
+    "pdfjs-dist": "^5.4.149",
     "react": "^18",
     "react-dom": "^18",
     "react-joyride": "^3.1.0",

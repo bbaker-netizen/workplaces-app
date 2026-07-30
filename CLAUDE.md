@@ -1714,6 +1714,17 @@ the first ground rule of the Cowork `workplaces-pdf` skill.
    `canvasContext`), and `destroy()` lives on the loading task — the document
    proxy only exposes `cleanup()`, which frees parsed pages but leaves the
    worker running.
+3. **pdfjs-dist is PINNED to 5.4.x, and 6.x must not be installed without a
+   real browser test.** 6.2.108 calls `Map.prototype.getOrInsertComputed` —
+   a method that only exists in Chrome 142 and equivalents — in BOTH its
+   modern and its legacy build, with no polyfill. Below that floor the
+   library throws before the first page renders, so the editor does not open
+   at all rather than degrading. Nothing in the type system or the build
+   catches this: `tsc`, `next lint` and `next build` were all green on
+   6.2.108, and it failed the moment a browser executed it. The floor buys
+   nothing either — the whole feature uses only `getDocument`, `getPage`,
+   `getViewport`, `render` and the two viewport converters, all stable since
+   v3.
 
 ### Smaller things worth remembering
 
@@ -1749,11 +1760,22 @@ marks land on their targets, the highlighter multiplies so text shows
 through, and multi-line text stacks downward in both upright and rotated
 orientations.
 
-**Not yet exercised in a browser or against a live database.** Migration
-0106 applies on next deploy via `scripts/migrate-on-deploy.mjs`. The
-acceptance test is opening a real client PDF at Documents → Mark up, drawing
-on it, saving a marked-up copy, and confirming the new version appears in
-the document list.
+**The coordinate contract has now been exercised in a real browser** —
+headless Chromium 141 driving the actual pdf.js build through the exact
+`toNorm` / `toPx` helpers from `PdfPageSurface`. Pixel→normalized→pixel
+round-trips are exact to ~1e-13 px at 50/100/150/200% on both an upright and
+a `/Rotate 90` page, and the same screen position resolves to bit-identical
+normalized coordinates at 75% and 150% (zoom invariance). The decisive check
+is visual: overlay probes positioned by the BROWSER from stored coordinates
+land exactly on ink burned by the SERVER from those same coordinates, on both
+page orientations — capture space and burn space are provably the same space.
+That test is what caught the pdfjs-dist 6.x compatibility floor above.
+
+**Still not exercised against a live database, and the UI itself has not been
+clicked.** Migration 0106 applies on next deploy via
+`scripts/migrate-on-deploy.mjs`. The acceptance test is opening a real client
+PDF at Documents → Mark up, drawing on it, saving a marked-up copy, and
+confirming the new version appears in the document list.
 
 **Deliberately not built:** OCR (so highlighting a SCANNED page has no text
 layer to select — pen and free-form marks work), compression, text

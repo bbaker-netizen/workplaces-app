@@ -116,6 +116,15 @@ export function PdfMarkupEditor({
 
     (async () => {
       try {
+        // PINNED TO pdfjs-dist 5.4.x ON PURPOSE — do not bump to 6.x without
+        // testing in a real browser first. 6.2.108 calls
+        // `Map.prototype.getOrInsertComputed`, which only exists in Chrome 142+
+        // (and equivalents), in BOTH its modern and legacy builds, with no
+        // polyfill. On anything older the library throws
+        // `TypeError: ...getOrInsertComputed is not a function` before the
+        // first page renders, so the editor fails to open entirely rather than
+        // degrading. Verified empirically: 6.2.108 throws in Chromium 141,
+        // 5.4.149 renders and round-trips coordinates exactly.
         const pdfjs = await import("pdfjs-dist");
         // Served from `public/`, copied there by scripts/copy-pdf-worker.mjs.
         // Letting webpack emit it via `new URL(…, import.meta.url)` compiles,
