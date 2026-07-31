@@ -42,6 +42,7 @@ import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
 import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import { sendEmailQuietly } from "@/lib/email/send";
 import {
+  agreementSignedEmail,
   signatureCompletedEmail,
   signatureRequestEmail,
 } from "@/lib/email/templates";
@@ -1312,6 +1313,48 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
     recipientList.push(ctx.createdByEmail);
   }
   if (ctx.createdByEmail) internalEmails.add(ctx.createdByEmail);
+
+  // AN AGREEMENT COMING BACK SIGNED IS A HAND-OFF, not just a receipt, so
+  // the lead's OWNER is told — not whoever happened to press send. Jen can
+  // prepare a contract on one of Bruce's leads and vice versa; without
+  // this, the person who has to run the onboarding is the one person not
+  // told it can start. Sent in addition to the signed copy, because that
+  // email is a filing artefact and reads like one.
+  if (ctx.env.kind !== "payment_authorization" && ctx.env.prospectId) {
+    const owner = await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({
+          email: userProfiles.email,
+          name: userProfiles.fullName,
+          company: prospects.companyName,
+          contact: prospects.contactName,
+        })
+        .from(prospects)
+        .leftJoin(
+          userProfiles,
+          eq(userProfiles.id, prospects.ownerUserProfileId),
+        )
+        .where(eq(prospects.id, ctx.env.prospectId as string))
+        .limit(1);
+      return row ?? null;
+    });
+    // No owner set means nobody is accountable for this lead yet; the
+    // sender still gets the signed copy, so nothing is lost silently.
+    if (owner?.email) {
+      const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+      await sendEmailQuietly({
+        ...agreementSignedEmail({
+          to: owner.email,
+          recipientName: owner.name ?? "there",
+          clientLabel: owner.company || owner.contact || "A new client",
+          prospectUrl: `${base}/business-builder/pipeline/${ctx.env.prospectId}`,
+          signedDocUrl: `${base}/api/documents/${signedDocId}/download`,
+        }),
+        // A signed contract should not wait for Monday morning.
+        bypassWorkingHours: true,
+      });
+    }
+  }
 
   // A completed payment authorization goes to BOTH Business Builders, not
   // just whoever sent it. Either of them may be the one who has to answer

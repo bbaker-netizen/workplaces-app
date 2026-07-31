@@ -1901,3 +1901,66 @@ ${eaSection("Your assistant", heartbeatTable(input.heartbeats), { subtitle: "pro
     text,
   };
 }
+
+/* ------------------ agreement signed: start onboarding ------------------ */
+
+export type AgreementSignedEmailInput = {
+  to: string;
+  recipientName: string;
+  clientLabel: string;
+  prospectUrl: string;
+  signedDocUrl: string;
+};
+
+/**
+ * Goes to the Business Builder who OWNS the lead, the moment the last
+ * signature lands.
+ *
+ * Distinct from the signed-copy email every signer receives. That one is
+ * a receipt; this one is a hand-off — it exists to start the onboarding
+ * clock, so it says what to do next rather than just what happened.
+ */
+export function agreementSignedEmail(
+  input: AgreementSignedEmailInput,
+): EmailEnvelope {
+  const firstName = input.recipientName.split(" ")[0] ?? input.recipientName;
+  const bodyHtml = `
+<p style="margin:0 0 14px 0;font-family:Arial,sans-serif;font-size:15px;"><strong>${escapeHtml(input.clientLabel)}</strong> has signed. They are your client as of now, ${escapeHtml(firstName)}.</p>
+<p style="margin:0 0 8px 0;font-family:Arial,sans-serif;font-size:14px;color:${MUTED};">To get them started:</p>
+<ol style="margin:0 0 20px 0;padding-left:20px;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;">
+  <li>Move them to <strong>Won</strong> — that creates their workspace and Drive folder in one step.</li>
+  <li>Set their <strong>monthly fee</strong>, then create the recurring invoice in QuickBooks.</li>
+  <li>Send the <strong>PAD form</strong> from Payment setup.</li>
+  <li>Schedule the <strong>first session</strong> — do this before the next step, so the onboarding email carries a real assessment deadline.</li>
+  <li>Send the <strong>onboarding email</strong> from their Communications panel.</li>
+  <li><strong>Invite them to their portal</strong> once their workspace is set up.</li>
+</ol>
+${bulletproofButton({ href: input.prospectUrl, label: "Open their record", width: 240 })}
+<p style="margin:14px 0 0 0;font-family:Arial,sans-serif;font-size:13px;color:${MUTED};"><a href="${escapeHtml(input.signedDocUrl)}" style="color:${NAVY};">Download the signed agreement</a></p>`;
+
+  return {
+    to: input.to,
+    subject: `Signed: ${input.clientLabel} — start onboarding`,
+    html: shell({
+      preheader: `${input.clientLabel} signed. Here is what to do next.`,
+      heading: "Agreement signed",
+      bodyHtml,
+      buttonHref: input.prospectUrl,
+      buttonLabel: "Open their record",
+    }),
+    text: [
+      `${input.clientLabel} has signed.`,
+      "",
+      "To get them started:",
+      "1. Move them to Won (creates their workspace and Drive folder).",
+      "2. Set their monthly fee, then create the recurring QuickBooks invoice.",
+      "3. Send the PAD form from Payment setup.",
+      "4. Schedule the first session (before the next step).",
+      "5. Send the onboarding email from Communications.",
+      "6. Invite them to their portal.",
+      "",
+      `Their record: ${input.prospectUrl}`,
+      `Signed agreement: ${input.signedDocUrl}`,
+    ].join("\n"),
+  };
+}

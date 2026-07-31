@@ -28,7 +28,6 @@ import {
   CalendarClock,
   Video,
   Activity,
-  Archive,
 } from "lucide-react";
 import { CollapsibleSection } from "@/components/pipeline/CollapsibleSection";
 import { linkedInSearchUrl } from "@/lib/pipeline/social";
@@ -325,7 +324,24 @@ export default async function ProspectDetailPage({
               alreadyConverted={Boolean(prospect.convertedEngagementId)}
             />
           </span>
+          {/* Archive lived in a collapsed panel at the very bottom, which
+              cost a full section heading for one button. Up here it is a
+              header control like Stage — reachable without scrolling and
+              taking no vertical space at all. */}
+          <span className="ml-auto">
+            <DeleteProspectButton
+              prospectId={prospect.id}
+              prospectLabel={prospect.companyName}
+              archived={Boolean(prospect.archivedAt)}
+              isClient={Boolean(prospect.convertedEngagementId)}
+            />
+          </span>
         </div>
+        {prospect.archivedAt && (
+          <p className="text-xs text-tbb-ink-3">
+            Archived — hidden from the pipeline, restorable at any time.
+          </p>
+        )}
         <p className="text-sm text-tbb-ink-3">
           {stage.caption} · Created{" "}
           {prospect.createdAt.toLocaleDateString(undefined, {
@@ -814,28 +830,6 @@ export default async function ProspectDetailPage({
             />
           </CollapsibleSection>
 
-          {/* Archive this prospect (soft-delete) — collapsed by default; it's
-              rarely used and destructive, so it stays out of the way until
-              asked for. Recoverable from the Archived view. */}
-          <CollapsibleSection
-            title={prospect.archivedAt ? "Archived" : "Archive"}
-            storageKey="archive"
-            icon={<Archive className="w-3.5 h-3.5" aria-hidden />}
-          >
-            <div className="p-5 space-y-3">
-              <p className="text-sm text-tbb-ink-2">
-                {prospect.archivedAt
-                  ? "This prospect is archived and hidden from the pipeline. Restore it to bring it back, or — for a lead you’re sure about — delete it permanently. Converted clients are archive-only."
-                  : "Archive removes this prospect from the pipeline but keeps the record, activity log, and communications — restore it anytime. For deals that didn't close, set Stage = Lost instead so they stay in the funnel history."}
-              </p>
-              <DeleteProspectButton
-                prospectId={prospect.id}
-                prospectLabel={prospect.companyName}
-                archived={Boolean(prospect.archivedAt)}
-                isClient={Boolean(prospect.convertedEngagementId)}
-              />
-            </div>
-          </CollapsibleSection>
         </div>
 
         {/* Right column — documents on file + team discussion + activity,
