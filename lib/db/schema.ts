@@ -1515,6 +1515,12 @@ export const documentAnnotations = pgTable(
     body: text("body"),
     color: text("color").notNull().default("#1A1A1A"),
     fontSize: doublePrecision("font_size"),
+    /**
+     * Standard-font key for kind='text' (see MARKUP_FONTS in lib/pdf/
+     * annotations.ts). NULL means Helvetica regular, which is what every mark
+     * written before migration 0107 is — so no backfill was needed.
+     */
+    font: text("font"),
     strokeWidth: doublePrecision("stroke_width"),
     opacity: doublePrecision("opacity"),
     /** Data URL, only for kind='image' (stamping a stored signature). */

@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/tenant";
 import {
   isAnnotationKind,
+  isMarkupFont,
   type MarkupAnnotation,
   type NormalizedPoint,
 } from "@/lib/pdf/annotations";
@@ -113,6 +114,7 @@ export function toMarkup(row: {
   body: string | null;
   color: string;
   fontSize: number | null;
+  font: string | null;
   strokeWidth: number | null;
   opacity: number | null;
   imageData: string | null;
@@ -133,6 +135,7 @@ export function toMarkup(row: {
     body: row.body,
     color: row.color,
     fontSize: row.fontSize,
+    font: isMarkupFont(row.font) ? row.font : null,
     strokeWidth: row.strokeWidth,
     opacity: row.opacity,
     imageData: row.imageData,

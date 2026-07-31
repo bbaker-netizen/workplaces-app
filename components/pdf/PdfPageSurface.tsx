@@ -30,6 +30,8 @@ import {
   DEFAULT_STROKE_WIDTH,
   clamp01,
   defaultOpacityFor,
+  matchStandardFont,
+  type MarkupFont,
   type AnnotationKind,
   type MarkupAnnotation,
   type NormalizedPoint,
@@ -54,6 +56,8 @@ type TextRun = {
   str: string;
   /** Font size in PDF points, recovered from the run's transform. */
   size: number;
+  /** Closest standard font to the one the page actually uses. */
+  font: MarkupFont;
   /** Normalized rect, bottom-left origin, same contract as MarkupAnnotation. */
   x: number;
   y: number;
@@ -76,6 +80,7 @@ export function PdfPageSurface({
   onCreate,
   onUpdateBody,
   onDelete,
+  onGeometry,
   onPageRendered,
 }: {
   pdf: PDFDocumentProxy;
@@ -93,6 +98,15 @@ export function PdfPageSurface({
   onCreate: (a: Omit<MarkupAnnotation, "id">) => string;
   onUpdateBody: (id: string, body: string) => void;
   onDelete: (id: string) => void;
+  /**
+   * Live geometry during a drag, then a commit. `rect` is null on the commit
+   * call — the parent already holds the last live value.
+   */
+  onGeometry?: (
+    id: string,
+    rect: { x: number; y: number; w: number; h: number } | null,
+    commit: boolean,
+  ) => void;
   onPageRendered?: (info: { width: number; height: number }) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -242,12 +256,22 @@ export function PdfPageSurface({
         const page = await pdf.getPage(pageNumber);
         const content = await page.getTextContent();
         if (cancelled) return;
-        const runs: TextRun[] = [];
-        content.items.forEach((raw, i) => {
+        // Fragments first, then merged into lines below.
+        type Frag = {
+          str: string;
+          size: number;
+          font: MarkupFont;
+          x0: number;
+          x1: number;
+          baseline: number;
+        };
+        const frags: Frag[] = [];
+        content.items.forEach((raw) => {
           const item = raw as {
             str?: string;
             width?: number;
             transform?: number[];
+            fontName?: string;
           };
           const str = item.str ?? "";
           const t = item.transform;
@@ -259,20 +283,69 @@ export function PdfPageSurface({
           const width = item.width ?? 0;
           if (width <= 0) return;
 
-          // t[4]/t[5] are the run's origin ON THE BASELINE. Pad below for
-          // descenders and above for ascenders so the cover rectangle
-          // actually hides the glyphs rather than clipping them.
-          const x0 = t[4];
-          const y0 = t[5] - size * 0.25;
-          runs.push({
+          const style = item.fontName
+            ? (content.styles as Record<string, { fontFamily?: string }>)?.[
+                item.fontName
+              ]
+            : undefined;
+
+          frags.push({
+            str,
+            size,
+            font: matchStandardFont(style?.fontFamily, item.fontName),
+            x0: t[4],
+            x1: t[4] + width,
+            // t[5] is the BASELINE, which is what lines are grouped on.
+            baseline: t[5],
+          });
+        });
+
+        // Merge fragments into lines. A PDF splits one visual line into
+        // several runs whenever the font, size or kerning changes, so
+        // clicking "Peter Williams — Site Supervisor" could otherwise be
+        // three separate edits. Anything sharing a baseline is one line, which
+        // is the unit Acrobat edits too.
+        frags.sort((a, b) => b.baseline - a.baseline || a.x0 - b.x0);
+        const lines: Frag[][] = [];
+        for (const f of frags) {
+          const line = lines[lines.length - 1];
+          const prev = line?.[line.length - 1];
+          // Tolerance scales with the type size: a 6pt footnote and a 24pt
+          // heading do not share a sensible fixed threshold.
+          if (prev && Math.abs(prev.baseline - f.baseline) <= f.size * 0.3) {
+            line.push(f);
+          } else {
+            lines.push([f]);
+          }
+        }
+
+        const runs: TextRun[] = lines.map((line, i) => {
+          const size = Math.max(...line.map((f) => f.size));
+          const x0 = Math.min(...line.map((f) => f.x0));
+          const x1 = Math.max(...line.map((f) => f.x1));
+          const baseline = line[0].baseline;
+          // Re-insert the spaces the PDF implied through positioning rather
+          // than through space characters.
+          let str = "";
+          line.forEach((f, j) => {
+            const prev = line[j - 1];
+            if (prev && f.x0 - prev.x1 > f.size * 0.18 && !/\s$/.test(str)) {
+              str += " ";
+            }
+            str += f.str;
+          });
+          return {
             key: `${pageNumber}:${i}`,
             str,
             size,
+            font: line[0].font,
             x: clamp01((x0 - box.x) / box.w),
-            y: clamp01((y0 - box.y) / box.h),
-            w: width / box.w,
+            // Pad below the baseline for descenders, or the white-out clips
+            // the tails of g, y and p.
+            y: clamp01((baseline - size * 0.25 - box.y) / box.h),
+            w: (x1 - x0) / box.w,
             h: (size * 1.2) / box.h,
-          });
+          };
         });
         setTextRuns(runs);
         setTextError(
@@ -314,6 +387,7 @@ export function PdfPageSurface({
       body: null,
       color: "#FFFFFF",
       fontSize: null,
+      font: null,
       strokeWidth: null,
       opacity: 1,
       imageData: null,
@@ -331,12 +405,46 @@ export function PdfPageSurface({
       body: run.str,
       color,
       fontSize: Math.round(run.size * 10) / 10,
+      font: run.font,
       strokeWidth: null,
       opacity: 1,
       imageData: null,
     });
     setEditingId(id);
     setTextDraft(run.str);
+  };
+
+  // ---- move and resize -------------------------------------------------
+
+  /**
+   * Dragging a placed mark.
+   *
+   * Deltas are taken in NORMALIZED space, not pixels: converting both the
+   * start and the current point through `toNorm` and subtracting means a drag
+   * behaves correctly at any zoom and on a rotated page, where screen x is not
+   * page x. Live updates are local-only; the move is persisted once on release
+   * so a drag is one database write rather than one per frame.
+   */
+  const [drag, setDrag] = useState<{
+    id: string;
+    mode: "move" | "resize";
+    from: NormalizedPoint;
+    orig: { x: number; y: number; w: number; h: number };
+  } | null>(null);
+
+  const beginDrag = (
+    a: MarkupAnnotation,
+    mode: "move" | "resize",
+    e: React.PointerEvent,
+  ) => {
+    const p = localPoint(e);
+    setDrag({
+      id: a.id,
+      mode,
+      from: toNorm(p.x, p.y),
+      orig: { x: a.x, y: a.y, w: a.w, h: a.h },
+    });
+    onSelect(a.id);
   };
 
   // ---- capture ---------------------------------------------------------
@@ -377,6 +485,30 @@ export function PdfPageSurface({
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!viewport) return;
+    if (drag) {
+      const p = localPoint(e);
+      const now = toNorm(p.x, p.y);
+      const dx = now.x - drag.from.x;
+      const dy = now.y - drag.from.y;
+      const next =
+        drag.mode === "move"
+          ? {
+              x: clamp01(drag.orig.x + dx),
+              y: clamp01(drag.orig.y + dy),
+              w: drag.orig.w,
+              h: drag.orig.h,
+            }
+          : {
+              x: drag.orig.x,
+              y: drag.orig.y,
+              // A mark dragged smaller than a hair is unclickable and
+              // invisible; floor it rather than let it vanish.
+              w: Math.max(0.004, drag.orig.w + dx),
+              h: Math.max(0.004, drag.orig.h + dy),
+            };
+      onGeometry?.(drag.id, next, false);
+      return;
+    }
     if (inkPath) {
       const p = localPoint(e);
       setInkPath((prev) =>
@@ -392,6 +524,15 @@ export function PdfPageSurface({
 
   const onPointerUp = () => {
     if (!viewport) return;
+
+    if (drag) {
+      const finished = drag;
+      setDrag(null);
+      // Commit whatever the last live position was — the parent already holds
+      // it, so this only tells it to persist.
+      onGeometry?.(finished.id, null, true);
+      return;
+    }
 
     if (inkPath) {
       const path = inkPath;
@@ -411,6 +552,7 @@ export function PdfPageSurface({
         body: null,
         color,
         fontSize: null,
+        font: null,
         strokeWidth,
         opacity: 1,
         imageData: null,
@@ -438,6 +580,7 @@ export function PdfPageSurface({
         body: null,
         color,
         fontSize: null,
+        font: null,
         strokeWidth,
         opacity: defaultOpacityFor(kind),
         imageData: kind === "image" ? stampImage : null,
@@ -468,6 +611,7 @@ export function PdfPageSurface({
       body: "",
       color,
       fontSize,
+      font: null,
       strokeWidth: null,
       opacity: 1,
       imageData: null,
@@ -560,6 +704,7 @@ export function PdfPageSurface({
               textDraft={textDraft}
               selectable={tool === "select"}
               onSelect={() => onSelect(a.id)}
+              onBeginDrag={(mode, e) => beginDrag(a, mode, e)}
               onStartEditing={() => startEditing(a)}
               onChangeDraft={setTextDraft}
               onCommit={commitEditing}
@@ -647,6 +792,27 @@ export function PdfPageSurface({
             </button>
           )}
 
+          {/*
+            Resize handle, bottom-right of the selection. Ink is excluded: its
+            shape is a path, and scaling the bounding box would not scale the
+            stroke with it.
+          */}
+          {selectedTarget && selectedTarget.a.kind !== "ink" && (
+            <div
+              role="presentation"
+              title="Drag to resize"
+              className="absolute z-10 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-tbb-blue shadow"
+              style={{
+                left: selectedTarget.css.left + selectedTarget.css.width - 6,
+                top: selectedTarget.css.top + selectedTarget.css.height - 6,
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                beginDrag(selectedTarget.a, "resize", e);
+              }}
+            />
+          )}
+
           {inkPath && inkPath.length > 1 && (
             <svg
               className="absolute inset-0 pointer-events-none"
@@ -684,6 +850,7 @@ function AnnotationView({
   textDraft,
   selectable,
   onSelect,
+  onBeginDrag,
   onStartEditing,
   onChangeDraft,
   onCommit,
@@ -697,6 +864,7 @@ function AnnotationView({
   textDraft: string;
   selectable: boolean;
   onSelect: () => void;
+  onBeginDrag: (mode: "move" | "resize", e: React.PointerEvent) => void;
   onStartEditing: () => void;
   onChangeDraft: (v: string) => void;
   onCommit: () => void;
@@ -729,6 +897,7 @@ function AnnotationView({
           if (!selectable) return;
           e.stopPropagation();
           onSelect();
+          onBeginDrag("move", e);
         }}
       >
         <polyline
@@ -800,6 +969,7 @@ function AnnotationView({
           if (!selectable) return;
           e.stopPropagation();
           onSelect();
+          onBeginDrag("move", e);
         }}
         onDoubleClick={(e) => {
           e.stopPropagation();
@@ -820,6 +990,7 @@ function AnnotationView({
           if (!selectable) return;
           e.stopPropagation();
           onSelect();
+          onBeginDrag("move", e);
         }}
       >
         {a.imageData && (
@@ -858,6 +1029,7 @@ function AnnotationView({
         if (!selectable) return;
         e.stopPropagation();
         onSelect();
+        onBeginDrag("move", e);
       }}
     >
       {a.kind === "strikeout" && (

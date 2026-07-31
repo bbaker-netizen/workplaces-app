@@ -1828,6 +1828,54 @@ formula wrap every line of glyphs tightly on both the upright and the
 `/Rotate 90` page — the rects come out of `rectToCss`, so rotation is handled
 by the existing contract rather than by new maths.
 
+### Polish pass — font matching, whole lines, undo, move/resize
+
+Four things that would bite in the first ten minutes of real use.
+Migration `0107` adds `document_annotations.font` (nullable; NULL = Helvetica,
+which is what every mark written before it is, so no backfill).
+
+**Replaced text now matches the original font.** Always retyping in Helvetica
+makes an edit obvious the moment the document is set in anything else, and
+client contracts are usually Times. pdf.js reports a font family per run and
+the PostScript name carries the weight and slant (`ABCDEF+TimesNewRomanPS-
+BoldItalicMT`), so `matchStandardFont()` picks the closest of the twelve
+standard faces. The key has to be PERSISTED or the burn step would fall back
+to Helvetica and undo the whole point — hence the column.
+
+Only the standard fourteen, deliberately. Embedding the document's ACTUAL
+font would close the last of the gap, but subset fonts routinely lack the
+glyphs a replacement needs, and that fails at export rather than at the click.
+
+**Fragments are merged into lines.** A PDF splits one visual line into several
+runs whenever the font, size or kerning changes, so "Peter Williams — Site
+Supervisor" could be three separate edits. Anything sharing a baseline
+(tolerance scaled to the type size, since a 6pt footnote and a 24pt heading
+have no sensible fixed threshold) is one clickable line — the unit Acrobat
+edits too. Spaces the PDF implied through positioning rather than through
+space characters are re-inserted when the gap exceeds 0.18em.
+
+**Undo is inverse operations, not snapshots.** Each entry says what to put
+back and what to take away, which covers create, delete, edit, clear-page and
+drag with one shape — because `saveAnnotation` is an upsert keyed on the
+client-minted id, restoring a deleted mark and reverting an edited one are the
+same call. Snapshots would have needed a diff against the server on every
+undo. Capped at 40; this is a convenience, not a document history.
+
+**Drag to move, corner handle to resize.** Deltas are taken in NORMALIZED
+space — both the start and current point go through `toNorm` and are
+subtracted — so a drag behaves correctly at any zoom and on a rotated page,
+where screen x is not page x. Live updates are local-only and the move
+persists once on release, so a drag is one write and one undo step rather than
+one per frame. Ink is excluded from resize: its shape is a path, and scaling
+the bounding box would not scale the stroke with it.
+
+**Verified:** font matching exercised through 10 real-world font names
+(Times/Arial/Courier/Consolas/Calibri/Georgia with bold and italic variants);
+all six representative fonts burned and rasterized, and they render visibly
+distinct; a NULL font still falls back to Helvetica, so pre-0107 rows are
+safe. Line grouping checked in the browser — 7 fragments collapse to 4 lines
+on the rotated page and the boxes wrap each line.
+
 **Buddy and the module guide updated.** The Buddy system prompt gained a PDF
 markup entry covering every tool, the new-version guarantee, and both real
 limits (no reflow, no text layer on scans) so it answers honestly rather than

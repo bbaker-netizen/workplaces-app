@@ -67,6 +67,8 @@ export type MarkupAnnotation = {
   color: string;
   /** Points (PDF units), for kind='text'. */
   fontSize: number | null;
+  /** Standard-font key for kind='text'. Null means Helvetica regular. */
+  font: MarkupFont | null;
   /** Points (PDF units), for ink / box / strikeout. */
   strokeWidth: number | null;
   opacity: number | null;
@@ -90,6 +92,107 @@ export const MARKUP_COLORS = [
   { label: "Red", hex: "#C1121F" },
   { label: "Yellow", hex: "#FFD54A" },
 ] as const;
+
+/**
+ * The twelve standard PDF fonts, keyed.
+ *
+ * Replaced text used to always come back in Helvetica, which makes an edit
+ * obvious in a document set in anything else — and client contracts are
+ * usually Times. pdf.js reports a font family per text run, so the editor
+ * picks the closest of these and the burn step honours it.
+ *
+ * Only the standard fourteen, deliberately: they need no embedding, they are
+ * present in every reader, and matching the family and weight closes most of
+ * the visible gap. Embedding the document's ACTUAL font would close the rest,
+ * but subset fonts routinely lack the glyphs a replacement needs, which fails
+ * at export time rather than here.
+ */
+export const MARKUP_FONTS = [
+  "helvetica",
+  "helvetica-bold",
+  "helvetica-oblique",
+  "helvetica-boldoblique",
+  "times",
+  "times-bold",
+  "times-italic",
+  "times-bolditalic",
+  "courier",
+  "courier-bold",
+  "courier-oblique",
+  "courier-boldoblique",
+] as const;
+
+export type MarkupFont = (typeof MARKUP_FONTS)[number];
+
+export function isMarkupFont(v: unknown): v is MarkupFont {
+  return typeof v === "string" && (MARKUP_FONTS as readonly string[]).includes(v);
+}
+
+/**
+ * Pick the closest standard font for a run of existing text.
+ *
+ * `family` is pdf.js's reported family for the run ("serif", "monospace", or
+ * the real name when it can work one out); `psName` is the raw PostScript
+ * name, which is where the weight and slant usually hide — embedded fonts
+ * arrive as things like "ABCDEF+TimesNewRomanPS-BoldItalicMT".
+ */
+export function matchStandardFont(
+  family: string | null | undefined,
+  psName: string | null | undefined,
+): MarkupFont {
+  const hay = `${family ?? ""} ${psName ?? ""}`.toLowerCase();
+
+  const mono =
+    /mono|courier|consol|menlo/.test(hay) ||
+    (family ?? "").toLowerCase() === "monospace";
+  // Check the well-known serif faces by name before falling back to the
+  // family, because plenty of PDFs report a generic family for everything.
+  const serif =
+    !mono &&
+    (/serif/.test(hay) ||
+      /times|georgia|garamond|book|minion|roman|cambria|palatino/.test(hay)) &&
+    !/sans/.test(hay);
+
+  const bold = /bold|black|heavy|semib|demib/.test(hay);
+  // "oblique" is the sans spelling of the same idea.
+  const italic = /italic|oblique/.test(hay);
+
+  if (mono) {
+    if (bold && italic) return "courier-boldoblique";
+    if (bold) return "courier-bold";
+    if (italic) return "courier-oblique";
+    return "courier";
+  }
+  if (serif) {
+    if (bold && italic) return "times-bolditalic";
+    if (bold) return "times-bold";
+    if (italic) return "times-italic";
+    return "times";
+  }
+  if (bold && italic) return "helvetica-boldoblique";
+  if (bold) return "helvetica-bold";
+  if (italic) return "helvetica-oblique";
+  return "helvetica";
+}
+
+/** CSS shorthand for previewing a markup font in the browser. */
+export function fontToCss(font: MarkupFont | null): {
+  fontFamily: string;
+  fontWeight: number;
+  fontStyle: string;
+} {
+  const f = font ?? "helvetica";
+  const family = f.startsWith("times")
+    ? "Times New Roman, Times, serif"
+    : f.startsWith("courier")
+      ? "Courier New, Courier, monospace"
+      : "Helvetica, Arial, sans-serif";
+  return {
+    fontFamily: family,
+    fontWeight: /bold/.test(f) ? 700 : 400,
+    fontStyle: /italic|oblique/.test(f) ? "italic" : "normal",
+  };
+}
 
 export const DEFAULT_FONT_SIZE = 12;
 export const DEFAULT_STROKE_WIDTH = 2;
