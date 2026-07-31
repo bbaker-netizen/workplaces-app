@@ -372,11 +372,33 @@ export async function deleteDocument(id: string): Promise<ActionResult> {
     revalidatePath(`/business-builder/documents/${blobKey.engagementId}`);
     return { ok: true, data: undefined };
   } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    };
+    console.error("[documents] delete failed:", e);
+    return { ok: false, error: describeDocumentDeleteFailure(e) };
   }
+}
+
+/**
+ * Say what actually blocked the delete, and where to go instead.
+ *
+ * A document that a signature envelope was built from is protected by an
+ * ON DELETE RESTRICT — deliberately, because removing a file from this
+ * panel must never silently destroy the signing record and its
+ * certificate of completion. But the raw Postgres error names only the
+ * failed statement, so the refusal read as the app being broken rather
+ * than as a rule doing its job. Bruce lost time to exactly that.
+ */
+function describeDocumentDeleteFailure(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  if (
+    /signature_envelopes/i.test(raw) ||
+    (/foreign key|violates|23503/i.test(raw) && /source_document/i.test(raw))
+  ) {
+    return "This file belongs to an agreement sent for signature, so it can't be deleted on its own — that would destroy the signing record built from it. Open the agreement from the Signing section on this record and delete it there; the files go with it.";
+  }
+  if (/foreign key|violates|23503/i.test(raw)) {
+    return "Something else still references this file, so it wasn't deleted. Nothing was changed.";
+  }
+  return raw;
 }
 
 /* ----------------------------- set tags ----------------------------- */
