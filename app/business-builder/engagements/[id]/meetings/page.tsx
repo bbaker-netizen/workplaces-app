@@ -34,7 +34,10 @@ import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
 import { MeetingActionItemsButton } from "@/components/meetings/MeetingActionItemsButton";
 import { MeetingDeliverableButton } from "@/components/meetings/MeetingDeliverableButton";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
-import { formatMeetingSummary } from "@/lib/meetings/format";
+import {
+  cleanMeetingTitle,
+  formatMeetingSummary,
+} from "@/lib/meetings/format";
 
 export default async function EngagementMeetingsPage({
   params,
@@ -142,9 +145,20 @@ function MeetingCard({
       {/* Native <details> = collapse with no client JS. Collapsed by
           default so the list stays scannable. */}
       <details className="group">
-        <summary className="cursor-pointer list-none px-5 py-3 bg-tbb-cream-50/40 flex items-center justify-between gap-3 flex-wrap hover:bg-tbb-cream-50">
-          <div className="flex items-baseline gap-3 flex-wrap min-w-0">
-            <h3 className="font-bold text-tbb-navy">{meeting.title}</h3>
+        {/* Two fixed lines, always: title, then metadata beneath it.
+            Title and date used to share one wrapping row, so a long title
+            shoved the chevron onto a line of its own and every row was a
+            different height. Worse, the date started at a different x on
+            every row, so there was no column for the eye to follow. */}
+        <summary className="cursor-pointer list-none px-5 py-3 bg-tbb-cream-50/40 flex items-center justify-between gap-3 hover:bg-tbb-cream-50">
+          <div className="min-w-0 flex-1">
+            <h3
+              className="font-bold text-tbb-navy truncate"
+              title={cleanMeetingTitle(meeting.title)}
+            >
+              {cleanMeetingTitle(meeting.title)}
+            </h3>
+            <div className="flex items-center gap-3 mt-0.5">
             <span className="inline-flex items-center gap-1 text-xs text-tbb-ink-3">
               <CalendarDays className="w-3 h-3" aria-hidden />
               {new Date(meeting.occurredAt).toLocaleString("en-CA", {
@@ -162,6 +176,7 @@ function MeetingCard({
                 · {meeting.durationMin} min
               </span>
             )}
+            </div>
           </div>
           <ChevronDown
             className="w-4 h-4 text-tbb-ink-3 shrink-0 transition-transform group-open:rotate-180"
