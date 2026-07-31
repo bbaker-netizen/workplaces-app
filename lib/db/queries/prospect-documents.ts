@@ -4,11 +4,17 @@
  * Kept regardless of whether the prospect ever converts.
  */
 
-import { and, desc, eq, isNotNull } from "drizzle-orm";
-import { documents, userProfiles } from "@/lib/db/schema";
+import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import {
+  documents,
+  signatureEnvelopes,
+  userProfiles,
+  type DocumentOrigin,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { canCurrentBbWriteProspect } from "@/lib/db/queries/prospects";
+import type { EnvelopeRole } from "@/lib/documents/presentation";
 
 export type ProspectDocument = {
   id: string;
@@ -17,6 +23,19 @@ export type ProspectDocument = {
   sizeBytes: number;
   uploaderName: string | null;
   createdAt: Date;
+  /** Recorded at write time — see migration 0106. */
+  origin: DocumentOrigin;
+  /**
+   * The signing envelope this file belongs to, if any. Carried so the
+   * panel can show an agreement's sent copy and its executed copy as one
+   * thing. Two near-identically-named files days apart read as a
+   * duplicate, and on KS Developments that nearly got a real signed
+   * contract deleted.
+   */
+  envelopeId: string | null;
+  envelopeSubject: string | null;
+  envelopeStatus: string | null;
+  envelopeRole: EnvelopeRole | null;
 };
 
 export async function listProspectDocuments(
@@ -36,6 +55,7 @@ export async function listProspectDocuments(
         sizeBytes: documents.sizeBytes,
         uploaderName: userProfiles.fullName,
         createdAt: documents.createdAt,
+        origin: documents.origin,
       })
       .from(documents)
       .leftJoin(
@@ -44,7 +64,63 @@ export async function listProspectDocuments(
       )
       .where(eq(documents.prospectId, prospectId))
       .orderBy(desc(documents.createdAt));
-    return rows;
+
+    if (rows.length === 0) return [];
+
+    // Which of these files are halves of a signing envelope. One batched
+    // read rather than a join, because a document can be referenced as
+    // either the source or the signed output and joining twice for that
+    // is harder to read than resolving it here.
+    const ids = rows.map((r) => r.id);
+    const envs = await tx
+      .select({
+        id: signatureEnvelopes.id,
+        subject: signatureEnvelopes.subject,
+        status: signatureEnvelopes.status,
+        sourceDocumentId: signatureEnvelopes.sourceDocumentId,
+        signedDocumentId: signatureEnvelopes.signedDocumentId,
+      })
+      .from(signatureEnvelopes)
+      .where(
+        or(
+          inArray(signatureEnvelopes.sourceDocumentId, ids),
+          inArray(signatureEnvelopes.signedDocumentId, ids),
+        ),
+      );
+
+    const byDoc = new Map<
+      string,
+      { id: string; subject: string; status: string; role: EnvelopeRole }
+    >();
+    for (const e of envs) {
+      if (e.sourceDocumentId && ids.includes(e.sourceDocumentId)) {
+        byDoc.set(e.sourceDocumentId, {
+          id: e.id,
+          subject: e.subject,
+          status: e.status,
+          role: "source",
+        });
+      }
+      if (e.signedDocumentId && ids.includes(e.signedDocumentId)) {
+        byDoc.set(e.signedDocumentId, {
+          id: e.id,
+          subject: e.subject,
+          status: e.status,
+          role: "signed",
+        });
+      }
+    }
+
+    return rows.map((r) => {
+      const env = byDoc.get(r.id) ?? null;
+      return {
+        ...r,
+        envelopeId: env?.id ?? null,
+        envelopeSubject: env?.subject ?? null,
+        envelopeStatus: env?.status ?? null,
+        envelopeRole: env?.role ?? null,
+      };
+    });
   });
 }
 

@@ -112,7 +112,12 @@ export async function POST(req: Request) {
             originalFilename: upload.filename,
             fileType: upload.fileType,
             sizeBytes: upload.sizeBytes,
+            // Arrived from the assessment tool, not from a person. Stated
+            // rather than inferred from the null uploader — the signing
+            // flow also writes a null uploader, and conflating the two is
+            // what made signed agreements read as Climb PDFs.
             uploaderUserProfileId: null,
+            origin: "the_climb",
           })
           .returning({ id: documents.id });
         await tx.insert(prospectActivities).values({

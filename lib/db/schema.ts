@@ -1354,6 +1354,12 @@ export const messageReactions = pgTable(
  * preserves the user-supplied name for display and download; `file_type`
  * is the MIME type.
  */
+/**
+ * Provenance of a stored file. See migration 0106 for why this is a
+ * recorded fact rather than something derived from the uploader column.
+ */
+export type DocumentOrigin = "upload" | "the_climb" | "signed";
+
 export const documents = pgTable(
   "documents",
   {
@@ -1377,6 +1383,13 @@ export const documents = pgTable(
     uploaderUserProfileId: uuid("uploader_user_profile_id").references(
       () => userProfiles.id,
     ),
+    // Where this file came from. Recorded at write time rather than
+    // inferred from a missing uploader — see migration 0106. A null
+    // uploader means only "no person attached", which was true of both
+    // The Climb ingest and the signing flow, and captioning every signed
+    // agreement as "The Climb" is what made an executed contract look
+    // like a stray duplicate.
+    origin: text("origin").notNull().default("upload").$type<DocumentOrigin>(),
     version: bigint("version", { mode: "number" }).notNull().default(1),
     // When this engagement has a managed Drive folder, app uploads are
     // mirrored into Drive and the resulting file is recorded here.
@@ -3701,3 +3714,57 @@ export const availabilityRequests = pgTable(
 );
 
 export type AvailabilityRequest = typeof availabilityRequests.$inferSelect;
+
+/**
+ * One "Start onboarding" run per engagement. See migration 0107 for why
+ * this is one UNIQUE row with a column per step rather than a status.
+ */
+export const onboardingRuns = pgTable(
+  "onboarding_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    /** UNIQUE — the double-fire guard, enforced by the database. */
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .unique()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    /**
+     * Whose Gmail sends the onboarding email and whose Clerk identity
+     * creates the client org. Read from here rather than from a session:
+     * the sequence runs in a background function, which has none.
+     */
+    startedByUserProfileId: uuid("started_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    welcomeEmailSentAt: timestamp("welcome_email_sent_at", {
+      withTimezone: true,
+    }),
+    welcomeEmailError: text("welcome_email_error"),
+    padSentAt: timestamp("pad_sent_at", { withTimezone: true }),
+    padError: text("pad_error"),
+    portalInviteSentAt: timestamp("portal_invite_sent_at", {
+      withTimezone: true,
+    }),
+    portalInviteError: text("portal_invite_error"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("onboarding_runs_org_idx").on(t.orgId),
+    engagementIdx: index("onboarding_runs_engagement_idx").on(t.engagementId),
+  }),
+);
+
+export type OnboardingRun = typeof onboardingRuns.$inferSelect;

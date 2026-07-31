@@ -17,15 +17,31 @@ import {
   setDocumentTags,
 } from "@/lib/actions/documents";
 import { formatBytes, fileIconFor } from "./utils";
+import {
+  documentDisplayName,
+  documentProvenance,
+  type PresentableDocument,
+} from "@/lib/documents/presentation";
+import type { DocumentOrigin } from "@/lib/db/schema";
 
 export type DocumentRow = {
   id: string;
   filename: string;
   fileType: string;
   sizeBytes: number;
-  uploaderName: string;
+  /**
+   * Null for documents no person uploaded — an executed agreement filed
+   * by the signing flow, a Climb PDF. Those used to be dropped from this
+   * list altogether by an inner join; read `origin` for what made them.
+   */
+  uploaderName: string | null;
   createdAt: Date;
   tags: string[];
+  origin: DocumentOrigin;
+  envelopeId: string | null;
+  envelopeSubject: string | null;
+  envelopeStatus: string | null;
+  envelopeRole: "source" | "signed" | null;
   /** Whether the viewer is allowed to attempt delete. */
   canDelete: boolean;
 };
@@ -77,7 +93,11 @@ function DocumentRowView({
     if (!row.canDelete) return;
     if (
       !window.confirm(
-        `Delete "${row.filename}"? This removes it from the engagement permanently.`,
+        row.envelopeRole === "signed"
+          ? // The executed contract is the one file here that cannot be
+            // reproduced. Say so before the click, not after.
+            `Delete the SIGNED copy of "${row.envelopeSubject ?? row.filename}"? This is the executed agreement and it cannot be regenerated.`
+          : `Delete "${row.filename}"? This removes it from the engagement permanently.`,
       )
     )
       return;
@@ -118,14 +138,17 @@ function DocumentRowView({
             href={`/api/documents/${row.id}/download`}
             className="font-sans text-sm font-bold text-foreground hover:text-tbb-blue underline-offset-4 hover:underline truncate"
           >
-            {row.filename}
+            {documentDisplayName(row as PresentableDocument)}
           </Link>
           <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             {formatBytes(row.sizeBytes)}
           </span>
         </div>
         <div className="mt-1 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
-          Uploaded by {row.uploaderName} ·{" "}
+          {/* Was hard-coded "Uploaded by {name}", which printed nothing
+              useful for the documents no person uploaded — and those are
+              exactly the important ones, the executed agreements. */}
+          {documentProvenance(row as PresentableDocument)} ·{" "}
           {row.createdAt.toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",

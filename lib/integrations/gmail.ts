@@ -25,6 +25,10 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext, withTenantContext } from "@/lib/db/tenant";
 import { getValidAccessToken } from "@/lib/integrations/google-calendar";
+import {
+  asciiFallbackFilename,
+  mimeContentDisposition,
+} from "@/lib/http/content-disposition";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";
 
@@ -227,12 +231,18 @@ export async function sendGmailMessage(
       // Break base64 into 76-char lines per RFC 2045 to keep some
       // mail servers happy.
       const wrapped = att.base64.replace(/(.{76})/g, "$1\r\n").trimEnd();
-      const safeFilename = att.filename.replace(/"/g, "");
+      // Mail headers must be ASCII too. This did not throw the way the
+      // HTTP routes did — the whole message is base64'd as UTF-8, so a
+      // non-ASCII filename went out raw and arrived mis-decoded instead.
+      // A signed agreement ("… — signed.pdf") reached the client with a
+      // mangled attachment name. `mimeContentDisposition` emits the
+      // RFC 2231 encoded form alongside a readable ASCII fallback.
+      const safeFilename = asciiFallbackFilename(att.filename);
       parts.push(
         [
           `--${mixedBoundary}`,
           `Content-Type: ${att.contentType}; name="${safeFilename}"`,
-          `Content-Disposition: attachment; filename="${safeFilename}"`,
+          `Content-Disposition: ${mimeContentDisposition(att.filename)}`,
           "Content-Transfer-Encoding: base64",
           "",
           wrapped,

@@ -17,6 +17,10 @@ import { NextResponse } from "next/server";
 import { documents, signatureEnvelopes } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { downloadDocumentBlob } from "@/lib/storage/blobs";
+import {
+  contentDisposition,
+  safeContentType,
+} from "@/lib/http/content-disposition";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -53,10 +57,15 @@ export async function GET(
     return NextResponse.json({ error: "File missing" }, { status: 404 });
   }
 
+  // This route serves the SIGNED copy, which is always named
+  // "… — signed.pdf". Interpolating that straight into the header threw
+  // on the em dash, so the "download your signed copy" link in the
+  // completion email 500'd for every signer. Same fix as the main
+  // document download route.
   return new Response(new Uint8Array(blob.body), {
     headers: {
-      "Content-Type": doc.fileType || "application/pdf",
-      "Content-Disposition": `attachment; filename="${doc.originalFilename.replace(/"/g, "")}"`,
+      "Content-Type": safeContentType(doc.fileType, "application/pdf"),
+      "Content-Disposition": contentDisposition(doc.originalFilename),
       "Cache-Control": "private, no-store",
     },
   });

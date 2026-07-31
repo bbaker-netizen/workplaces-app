@@ -45,6 +45,7 @@ import {
   embeddedApps,
   engagements,
   goals,
+  onboardingRuns,
   orgs,
   portalModuleAssignments,
   projects,
@@ -52,6 +53,8 @@ import {
   resources,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { checkOnboardingReadiness } from "@/lib/onboarding/preflight";
+import { StartOnboardingPanel } from "@/components/business-builder/StartOnboardingPanel";
 import { ALL_MODULES } from "@/lib/modules";
 import { QuickAddDeliverableButton } from "@/components/deliverables/QuickAddDeliverableButton";
 import {
@@ -262,6 +265,20 @@ export default async function EngagementDetailPage({
     ? !data.clerkOrgId.startsWith("pending:")
     : true;
 
+  // Onboarding: the pre-flight is resolved on the server so the blockers
+  // render before the button is pressed, not after.
+  const [onboardingReadiness, onboardingRun] = await Promise.all([
+    checkOnboardingReadiness(id),
+    withSystemContext(async (tx) => {
+      const [r] = await tx
+        .select()
+        .from(onboardingRuns)
+        .where(eq(onboardingRuns.engagementId, id))
+        .limit(1);
+      return r ?? null;
+    }),
+  ]);
+
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
       {justOnboarded && (
@@ -429,6 +446,28 @@ export default async function EngagementDetailPage({
           </span>
         </div>
       </header>
+
+      {/* Start onboarding. Sits ABOVE the portal panel because the last
+          of its three steps is the portal invitation — the modules below
+          need to be right before that goes out. */}
+      <StartOnboardingPanel
+        engagementId={id}
+        blockers={onboardingReadiness.blockers}
+        run={
+          onboardingRun
+            ? {
+                startedAt: onboardingRun.startedAt,
+                welcomeEmailSentAt: onboardingRun.welcomeEmailSentAt,
+                welcomeEmailError: onboardingRun.welcomeEmailError,
+                padSentAt: onboardingRun.padSentAt,
+                padError: onboardingRun.padError,
+                portalInviteSentAt: onboardingRun.portalInviteSentAt,
+                portalInviteError: onboardingRun.portalInviteError,
+                completedAt: onboardingRun.completedAt,
+              }
+            : null
+        }
+      />
 
       {/* Client portal manager — which modules this client sees. */}
       <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">

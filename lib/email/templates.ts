@@ -108,15 +108,22 @@ export function shell({
   preheader: string;
   heading: string;
   bodyHtml: string;
-  buttonHref: string;
-  buttonLabel: string;
+  /**
+   * Optional. Some emails deliberately have no call to action — the
+   * onboarding email's whole job is to say what is arriving next, and
+   * giving it a button would compete with the two real actions landing
+   * minutes later.
+   */
+  buttonHref?: string;
+  buttonLabel?: string;
   /** Optional accent color for the heading rule (e.g. orange for overdue). */
   accent?: string;
 }): string {
   const safePreheader = escapeHtml(preheader);
   const safeHeading = escapeHtml(heading);
-  const safeButtonLabel = escapeHtml(buttonLabel);
-  const safeButtonHref = escapeHtml(buttonHref);
+  const hasButton = Boolean(buttonHref && buttonLabel);
+  const safeButtonLabel = escapeHtml(buttonLabel ?? "");
+  const safeButtonHref = escapeHtml(buttonHref ?? "");
   const ruleColor = accent ?? "#2E4057";
   const logoUrl = `${appUrl()}/brand/logo-blue.png`;
   return `<!doctype html>
@@ -157,11 +164,15 @@ export function shell({
           <tr>
             <td style="padding:24px 40px 32px 40px;font-size:16px;line-height:1.65;color:#1A1A1A;">
               ${bodyHtml}
-              <div style="margin-top:32px;text-align:center;">
+              ${
+                hasButton
+                  ? `<div style="margin-top:32px;text-align:center;">
                 <a href="${safeButtonHref}" style="display:inline-block;background:#2E4057;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:9999px;letter-spacing:0.04em;">
                   ${safeButtonLabel}
                 </a>
-              </div>
+              </div>`
+                  : ""
+              }
             </td>
           </tr>
           <tr>
@@ -820,6 +831,143 @@ export function engagementWelcomeEmail(
     `Accept your invitation: ${input.acceptUrl}`,
     "",
     "Anything you need before our first session, just reply to this email.",
+    "",
+    "Talk soon,",
+    senderFirstName,
+    input.senderTitle ?? "Business Builder · Workplaces",
+    input.senderEmail,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
+/* ----------------------- client onboarding: step 1 ---------------------- */
+
+export type ClientOnboardingEmailInput = {
+  to: string;
+  recipientName: string;
+  engagementName: string;
+  /** First scheduled session, ISO date. Guaranteed present — the
+   *  pre-flight refuses to start onboarding without one. */
+  firstSessionDate: string;
+  senderName: string;
+  senderEmail: string;
+  senderTitle?: string | null;
+  /** Appended verbatim when the Builder has one saved. */
+  signature?: string | null;
+};
+
+/**
+ * The first of the three onboarding sends.
+ *
+ * **Why it names the other two.** This email arrives, and then a few
+ * minutes later a request to sign a payment form arrives, and then an
+ * invitation to a portal. Three emails from a practice they have just
+ * signed with, in quick succession, with no explanation, reads as either
+ * a mistake or a phishing attempt — and the payment one is exactly the
+ * message a careful client is right to distrust. So this email says, up
+ * front, what is coming and in what order. That is the whole reason the
+ * sequence is staggered rather than sent at once: the client reads this
+ * before the other two land.
+ *
+ * It deliberately does NOT carry the portal link. The invitation is a
+ * separate, later step, because accepting it drops the client into their
+ * workspace and that must not happen before the modules and Soul File are
+ * ready.
+ */
+export function clientOnboardingEmail(
+  input: ClientOnboardingEmailInput,
+): EmailEnvelope {
+  const firstName = input.recipientName.split(" ")[0] ?? input.recipientName;
+  const senderFirstName = input.senderName.split(" ")[0] ?? input.senderName;
+  const sessionLabel = (() => {
+    try {
+      return DateTime.fromISO(input.firstSessionDate, {
+        zone: "America/Edmonton",
+      }).toFormat("EEEE, MMMM d, yyyy");
+    } catch {
+      return input.firstSessionDate;
+    }
+  })();
+
+  const subject = `Welcome aboard, ${firstName} — here's what happens next`;
+
+  const step = (n: number, body: string) => `
+    <tr>
+      <td style="padding:0 0 14px 0;vertical-align:top;width:40px;">
+        <div style="width:32px;height:32px;border-radius:9999px;background:#2E4057;color:#FFFFFF;font-weight:700;font-size:14px;text-align:center;line-height:32px;">${n}</div>
+      </td>
+      <td style="padding:0 0 14px 0;vertical-align:top;font-size:15px;line-height:1.55;">${body}</td>
+    </tr>`;
+
+  const html = shell({
+    preheader: `Your first session is ${sessionLabel}. Two more emails are on their way — here's what they are.`,
+    heading: "You're in. Here's what happens next.",
+    accent: "#E87722",
+    bodyHtml: `
+      <p style="margin:0 0 18px 0;font-size:17px;">Hi ${escapeHtml(firstName)},</p>
+
+      <p style="margin:0 0 18px 0;">
+        Everything's signed and we're underway. Our first Business Building
+        Session is <strong>${escapeHtml(sessionLabel)}</strong>.
+      </p>
+
+      <p style="margin:0 0 14px 0;font-size:17px;font-weight:700;color:#2E4057;">
+        Two more emails are on their way
+      </p>
+
+      <p style="margin:0 0 16px 0;">
+        They'll arrive over the next few minutes, from this same address.
+        Nothing is wrong — they're separate because each one needs
+        something different from you.
+      </p>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;width:100%;">
+        ${step(
+          1,
+          `<strong>A payment authorization form</strong> to complete and sign. It sets up the monthly retainer. Your banking details go straight onto the signed form — nobody re-keys them, and we never see a card number.`,
+        )}
+        ${step(
+          2,
+          `<strong>An invitation to your private portal</strong>, where the whole engagement lives — sessions, action items, documents, and everything we build together. That one asks you to set up a login.`,
+        )}
+      </table>
+
+      <p style="margin:0 0 24px 0;padding:16px 20px;background:#F5F1E8;border-left:4px solid #2E4057;font-size:15px;line-height:1.55;">
+        If either of those doesn't turn up within the hour, reply here and
+        I'll sort it out. And if you get anything asking for payment
+        details that <em>didn't</em> come from my address, don't act on it
+        — check with me first.
+      </p>
+
+      <p style="margin:0 0 8px 0;">
+        Anything you need before ${escapeHtml(sessionLabel)}, just reply to
+        this email.
+      </p>
+
+      <p style="margin:0 0 4px 0;">Talk soon,</p>
+      <p style="margin:0 0 2px 0;font-weight:700;font-size:16px;color:#2E4057;">${escapeHtml(senderFirstName)}</p>
+      <p style="margin:0;font-size:13px;color:#666666;">
+        ${escapeHtml(input.senderTitle ?? "Business Builder · Workplaces")}<br>
+        <a href="mailto:${escapeHtml(input.senderEmail)}" style="color:#2E4057;text-decoration:underline;">${escapeHtml(input.senderEmail)}</a>
+      </p>
+      ${input.signature ? `<div style="margin-top:16px;">${input.signature}</div>` : ""}
+    `,
+  });
+
+  const text = [
+    `Hi ${firstName},`,
+    "",
+    `Everything's signed and we're underway. Our first Business Building Session is ${sessionLabel}.`,
+    "",
+    "Two more emails are on their way, from this same address, over the next few minutes. Nothing is wrong — they're separate because each one needs something different from you:",
+    "",
+    "  1. A payment authorization form to complete and sign. It sets up the monthly retainer. Your banking details go straight onto the signed form — nobody re-keys them, and we never see a card number.",
+    "  2. An invitation to your private portal, where the whole engagement lives — sessions, action items, documents, and everything we build together. That one asks you to set up a login.",
+    "",
+    "If either doesn't turn up within the hour, reply here and I'll sort it out. And if you get anything asking for payment details that DIDN'T come from my address, don't act on it — check with me first.",
+    "",
+    `Anything you need before ${sessionLabel}, just reply to this email.`,
     "",
     "Talk soon,",
     senderFirstName,

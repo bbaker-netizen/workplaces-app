@@ -44,7 +44,6 @@ import { sendEmailQuietly } from "@/lib/email/send";
 import {
   agreementSignedEmail,
   signatureCompletedEmail,
-  signatureRequestEmail,
 } from "@/lib/email/templates";
 import {
   buildSignedPdf,
@@ -52,6 +51,14 @@ import {
 } from "@/lib/signing/pdf";
 import { makeAuditEntry, type AuditEntry } from "@/lib/signing/audit";
 import { newSigningToken } from "@/lib/signing/token";
+// Signer notification moved to a plain module so the onboarding
+// sequence — which runs in a background function with no Clerk session
+// — can reuse it rather than keeping a second copy of these rules.
+import {
+  emailNextPendingSigner,
+  emailSignerByRow,
+  getNextPendingSigner,
+} from "@/lib/signing/notify";
 import { encryptSecret } from "@/lib/crypto/secret-vault";
 import { validatePadFields } from "@/lib/payments/pad-form";
 import { renderCompletedPadForm } from "@/lib/payments/pad-context";
@@ -982,97 +989,6 @@ export async function clearMySignatureImage(): Promise<ActionResult> {
 
 /* ------------------------- internal helpers ------------------------- */
 
-async function getNextPendingSigner(
-  envelopeId: string,
-): Promise<{ id: string; orderIndex: number } | null> {
-  return withSystemContext(async (tx) => {
-    const rows = await tx
-      .select({
-        id: signatureSigners.id,
-        orderIndex: signatureSigners.orderIndex,
-        status: signatureSigners.status,
-      })
-      .from(signatureSigners)
-      .where(eq(signatureSigners.envelopeId, envelopeId))
-      .orderBy(asc(signatureSigners.orderIndex));
-    for (const r of rows) {
-      if (r.status === "pending" || r.status === "viewed") {
-        return { id: r.id, orderIndex: r.orderIndex };
-      }
-    }
-    return null;
-  });
-}
-
-async function emailNextPendingSigner(
-  envelopeId: string,
-  senderName: string,
-): Promise<void> {
-  const next = await getNextPendingSigner(envelopeId);
-  if (!next) return;
-  await emailSignerByRow(next.id, envelopeId, senderName);
-}
-
-async function emailSignerByRow(
-  signerId: string,
-  envelopeId: string,
-  senderNameHint?: string,
-): Promise<void> {
-  const ctx = await withSystemContext(async (tx) => {
-    const [signer] = await tx
-      .select()
-      .from(signatureSigners)
-      .where(eq(signatureSigners.id, signerId))
-      .limit(1);
-    if (!signer) return null;
-    const [env] = await tx
-      .select()
-      .from(signatureEnvelopes)
-      .where(eq(signatureEnvelopes.id, envelopeId))
-      .limit(1);
-    if (!env) return null;
-    let senderName = senderNameHint ?? "Bruce Baker";
-    if (env.createdByUserProfileId) {
-      const [creator] = await tx
-        .select({ fullName: userProfiles.fullName })
-        .from(userProfiles)
-        .where(eq(userProfiles.id, env.createdByUserProfileId))
-        .limit(1);
-      if (creator?.fullName) senderName = creator.fullName;
-    }
-    return { signer, env, senderName };
-  });
-  if (!ctx) return;
-
-  // Signature requests are transactional and explicitly user-triggered
-  // — they bypass the working-hours guard so the signer doesn't have
-  // to wait until Monday morning to receive their link.
-  await sendEmailQuietly({
-    ...signatureRequestEmail({
-      to: ctx.signer.email,
-      signerName: ctx.signer.name,
-      senderName: ctx.senderName,
-      envelopeSubject: ctx.env.subject,
-      message: ctx.env.message,
-      signUrl: `/sign/${ctx.signer.publicToken}`,
-    }),
-    bypassWorkingHours: true,
-  });
-
-  await withSystemContext(async (tx) => {
-    const audit = (ctx.env.auditLog as AuditEntry[]) ?? [];
-    audit.push(
-      makeAuditEntry("signer_emailed", {
-        signerEmail: ctx.signer.email,
-      }),
-    );
-    await tx
-      .update(signatureEnvelopes)
-      .set({ auditLog: audit })
-      .where(eq(signatureEnvelopes.id, ctx.env.id));
-  });
-}
-
 async function completeEnvelope(envelopeId: string): Promise<void> {
   // Load everything needed to build the signed PDF.
   const ctx = await withSystemContext(async (tx) => {
@@ -1225,7 +1141,11 @@ async function completeEnvelope(envelopeId: string): Promise<void> {
         originalFilename: upload.filename,
         fileType: upload.fileType,
         sizeBytes: upload.sizeBytes,
+        // No person uploaded this — the signing flow generated it. That
+        // is recorded explicitly, because a null uploader alone used to
+        // make the documents panel caption it "The Climb".
         uploaderUserProfileId: null,
+        origin: "signed",
       })
       .returning({ id: documents.id });
     const audit = (ctx.env.auditLog as AuditEntry[]) ?? [];

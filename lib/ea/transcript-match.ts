@@ -58,24 +58,69 @@ import { withSystemContext } from "@/lib/db/tenant";
  */
 const MATCH_WINDOW_MINUTES = 120;
 
-/** Same lookback as the recap sweep — this feeds it. */
-const LOOKBACK_DAYS = 7;
+/**
+ * How far back to look for a session that still needs a transcript.
+ *
+ * **This used to be 7 days, and that was the whole reason almost nothing
+ * ever matched.** The hourly Fireflies sync was itself dead until 28 July
+ * (see the 2026-07-28 entry in CLAUDE.md), so when it was fixed it
+ * backfilled the entire history of `engagement_meetings` in one go — 231
+ * transcripts. But this sweep could only see sessions from the previous
+ * week, and that particular week happened to contain no matching pairs.
+ * Every older session was permanently out of reach: they aged past the
+ * window before a transcript for them had ever been synced.
+ *
+ * Measured against the live database: with a 7-day lookback the sweep
+ * attaches 0. With no limit it attaches 56 — sessions that have an
+ * unclaimed transcript for the same client sitting within ±2 hours.
+ *
+ * The window itself was never the problem and is unchanged: widening it
+ * from ±60 to ±360 minutes moves the total from 55 to 56 while doubling
+ * the ambiguous count, so ±120 is already the right call.
+ */
+const LOOKBACK_DAYS = 3650;
+
+/**
+ * How recent a session must be for attaching its transcript to also
+ * DRAFT things off it.
+ *
+ * Attaching is silent and cheap — one UPDATE — and it is worth doing
+ * across all history, because the link feeds drafted agendas, the
+ * meetings library, and Soul File search.
+ *
+ * Drafting is neither. Each attachment triggers action-item extraction,
+ * and the recap sweep that follows drafts a recap and emails the coach
+ * for approval. Doing that to the whole backfill would have put ~56
+ * approval emails in front of Bruce and Jen, most for sessions months
+ * old — which is exactly the flood the original 7-day lookback existed
+ * to prevent. Bruce's call: backfill the links, leave the history quiet.
+ *
+ * So the two concerns are now separate rather than conflated into one
+ * number. The recap sweep keeps its own 7-day lookback, so a historical
+ * attachment produces no recap by the same rule.
+ */
+const DRAFT_WINDOW_DAYS = 7;
 
 /**
  * Most attachments per run.
  *
- * Each attachment drafts action items from the transcript, and the recap
- * sweep that follows drafts a recap — two Claude calls per session. The
- * cron route has 300 seconds, so this is kept low deliberately: three
- * sessions an hour drains any realistic backlog within a day without
- * risking a timeout that would leave the run half-finished.
+ * Raised from 3 now that attaching no longer implies a Claude call for
+ * every session. The expensive work is bounded by DRAFT_WINDOW_DAYS
+ * instead, so this only limits UPDATE statements — and a backlog of 56
+ * that drains three an hour takes most of a day for no reason.
  */
-const MAX_ATTACH_PER_RUN = 3;
+const MAX_ATTACH_PER_RUN = 40;
 
 export type TranscriptMatchResult = {
   considered: number;
   attached: number;
   ambiguousSkipped: number;
+  /**
+   * Of `attached`, how many were historical — linked but deliberately
+   * not drafted from. Counted so the backfill is visible in the logs
+   * rather than looking like a burst of new activity.
+   */
+  backfilledQuietly: number;
 };
 
 export async function attachTranscriptsToSessions(
@@ -85,9 +130,13 @@ export async function attachTranscriptsToSessions(
     considered: 0,
     attached: 0,
     ambiguousSkipped: 0,
+    backfilledQuietly: 0,
   };
 
   const cutoff = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const draftCutoff = new Date(
+    now.getTime() - DRAFT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  );
   const windowMs = MATCH_WINDOW_MINUTES * 60 * 1000;
 
   const work = await withSystemContext(async (tx) => {
@@ -126,7 +175,11 @@ export async function attachTranscriptsToSessions(
         .filter((v): v is string => v !== null),
     );
 
-    const matches: { sessionId: string; transcriptId: string }[] = [];
+    const matches: {
+      sessionId: string;
+      transcriptId: string;
+      draft: boolean;
+    }[] = [];
     let ambiguous = 0;
 
     for (const session of orphans) {
@@ -168,6 +221,9 @@ export async function attachTranscriptsToSessions(
       matches.push({
         sessionId: session.id,
         transcriptId: winner.transcriptId,
+        // Decided here, against the session's own date, so a long
+        // backfill can't drift into drafting as it runs.
+        draft: session.scheduledAt.getTime() >= draftCutoff.getTime(),
       });
     }
 
@@ -204,19 +260,28 @@ export async function attachTranscriptsToSessions(
       // here would have looked correct and done nothing, which is the
       // same mistake that stopped the whole EA module firing.
       //
+      // Only for RECENT sessions. A historical backfill gets its link
+      // and nothing else: drafting action items and recaps for sessions
+      // months old floods the coach's inbox with approvals for work
+      // already finished. See DRAFT_WINDOW_DAYS.
+      //
       // Best-effort: a failed extraction must not undo the attachment,
       // because the transcript link is useful on its own and the recap
       // sweep runs off it moments later.
-      try {
-        const { extractFromFirefliesAsSystem } = await import(
-          "@/lib/actions/fireflies-extract"
-        );
-        await extractFromFirefliesAsSystem(m.sessionId);
-      } catch (e) {
-        console.error(
-          `[ea] action-item extraction failed for ${m.sessionId}:`,
-          e,
-        );
+      if (m.draft) {
+        try {
+          const { extractFromFirefliesAsSystem } = await import(
+            "@/lib/actions/fireflies-extract"
+          );
+          await extractFromFirefliesAsSystem(m.sessionId);
+        } catch (e) {
+          console.error(
+            `[ea] action-item extraction failed for ${m.sessionId}:`,
+            e,
+          );
+        }
+      } else {
+        out.backfilledQuietly++;
       }
 
       out.attached++;

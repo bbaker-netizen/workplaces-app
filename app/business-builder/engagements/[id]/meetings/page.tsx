@@ -33,6 +33,7 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
 import { MeetingActionItemsButton } from "@/components/meetings/MeetingActionItemsButton";
 import { MeetingDeliverableButton } from "@/components/meetings/MeetingDeliverableButton";
+import { dayPreview, groupMeetingsByDay } from "@/lib/meetings/grouping";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import {
   cleanMeetingTitle,
@@ -122,11 +123,47 @@ export default async function EngagementMeetingsPage({
           </p>
         </div>
       ) : (
-        <ul className="space-y-3">
-          {data.meetings.map((m) => (
-            <MeetingCard key={m.id} meeting={m} />
+        // Grouped by day. A busy on-site morning produces one Fireflies
+        // recording per conversation — thirteen, in A&M Abatement's case
+        // — and flat they read as thirteen separate meetings. Nothing is
+        // hidden; a day is shown as a day. See lib/meetings/grouping.ts.
+        <div className="space-y-6">
+          {groupMeetingsByDay(data.meetings).map((g) => (
+            <section key={g.dayKey} className="space-y-2">
+              <h2 className="flex items-baseline gap-2 font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-ink-3">
+                {g.dayLabel}
+                {g.meetings.length > 1 && (
+                  <span className="text-tbb-blue font-bold">
+                    {g.meetings.length} recordings
+                  </span>
+                )}
+              </h2>
+              {g.meetings.length > 1 ? (
+                <details className="border border-tbb-line-soft rounded-lg bg-tbb-cream-50/60">
+                  <summary className="cursor-pointer list-none px-4 py-2.5 text-xs text-tbb-ink-3 hover:text-tbb-navy">
+                    <span className="font-bold text-tbb-navy">
+                      {g.meetings.length} recordings from this day
+                    </span>
+                    <span className="block mt-0.5 truncate">
+                      {dayPreview(g.meetings.map((m) => m.title))}
+                    </span>
+                  </summary>
+                  <ul className="space-y-3 p-3 pt-0">
+                    {g.meetings.map((m) => (
+                      <MeetingCard key={m.id} meeting={m} />
+                    ))}
+                  </ul>
+                </details>
+              ) : (
+                <ul className="space-y-3">
+                  {g.meetings.map((m) => (
+                    <MeetingCard key={m.id} meeting={m} />
+                  ))}
+                </ul>
+              )}
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </main>
   );

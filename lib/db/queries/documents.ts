@@ -29,10 +29,26 @@ import {
   withTenantContext,
 } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
+import { envelopeRefsForDocuments } from "./document-envelopes";
+import type { EnvelopeRole } from "@/lib/documents/presentation";
 
+/**
+ * `uploaderName` is nullable because `uploader_user_profile_id` is.
+ * Migration 0017 made that column nullable so system flows — the signing
+ * flow filing an executed agreement, The Climb ingest — could write a
+ * document with no person attached. These queries were never updated to
+ * match: they INNER JOINed the uploader, so every one of those documents
+ * was silently dropped from the list. A client's own signed contract did
+ * not appear on their Documents page at all. Read `origin` for what
+ * produced the file; see lib/documents/presentation.ts for the caption.
+ */
 export type ListedDocument = Document & {
-  uploaderName: string;
+  uploaderName: string | null;
   tags: string[];
+  envelopeId: string | null;
+  envelopeSubject: string | null;
+  envelopeStatus: string | null;
+  envelopeRole: EnvelopeRole | null;
 };
 
 export async function listEngagementDocuments(
@@ -53,7 +69,9 @@ export async function listEngagementDocuments(
         uploaderName: userProfiles.fullName,
       })
       .from(documents)
-      .innerJoin(
+      // LEFT, not INNER — a document filed by the signing flow has no
+      // uploader, and an inner join dropped it from the list entirely.
+      .leftJoin(
         userProfiles,
         eq(userProfiles.id, documents.uploaderUserProfileId),
       )
@@ -83,11 +101,19 @@ export async function listEngagementDocuments(
     }
     tagsByDoc.forEach((arr) => arr.sort());
 
+    const envelopeByDoc = await envelopeRefsForDocuments(tx, ids);
+
     return rows
       .map((r) => ({
         ...r.document,
         uploaderName: r.uploaderName,
         tags: tagsByDoc.get(r.document.id) ?? [],
+        envelopeId: envelopeByDoc.get(r.document.id)?.envelopeId ?? null,
+        envelopeSubject:
+          envelopeByDoc.get(r.document.id)?.envelopeSubject ?? null,
+        envelopeStatus:
+          envelopeByDoc.get(r.document.id)?.envelopeStatus ?? null,
+        envelopeRole: envelopeByDoc.get(r.document.id)?.envelopeRole ?? null,
       }))
       // Reverse-chronological: newest first feels right for a docs feed.
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -119,7 +145,12 @@ export async function getDocument(
             uploaderName: userProfiles.fullName,
           })
           .from(documents)
-          .innerJoin(
+          // LEFT, not INNER — same reason as listEngagementDocuments.
+          // With an inner join this returned null for any signed
+          // agreement, so the download route fell through to its
+          // prospect-only fallback and an engagement-linked signed
+          // contract could not be resolved at all.
+          .leftJoin(
             userProfiles,
             eq(userProfiles.id, documents.uploaderUserProfileId),
           )
@@ -132,10 +163,16 @@ export async function getDocument(
           .from(documentTags)
           .where(eq(documentTags.documentId, id));
 
+        const env = (await envelopeRefsForDocuments(tx, [id])).get(id) ?? null;
+
         return {
           ...row.document,
           uploaderName: row.uploaderName,
           tags: tagRows.map((t) => t.tag).sort(),
+          envelopeId: env?.envelopeId ?? null,
+          envelopeSubject: env?.envelopeSubject ?? null,
+          envelopeStatus: env?.envelopeStatus ?? null,
+          envelopeRole: env?.envelopeRole ?? null,
         };
       },
     );

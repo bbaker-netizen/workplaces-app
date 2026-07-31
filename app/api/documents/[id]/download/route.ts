@@ -14,6 +14,10 @@
 import { getDocument } from "@/lib/db/queries/documents";
 import { getProspectDocumentForDownload } from "@/lib/db/queries/prospect-documents";
 import { downloadDocumentBlob } from "@/lib/storage/blobs";
+import {
+  contentDisposition,
+  safeContentType,
+} from "@/lib/http/content-disposition";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,19 +41,37 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const blob = await downloadDocumentBlob(meta.blobKey);
+  // A storage failure used to surface as an unhandled throw, i.e. a bare
+  // 500 with nothing in it. Say which half broke — the file is missing
+  // from storage, as opposed to the caller not being allowed to see it.
+  let blob;
+  try {
+    blob = await downloadDocumentBlob(meta.blobKey);
+  } catch (e) {
+    console.error(
+      `[documents] blob read failed for ${params.id} (${meta.blobKey}):`,
+      e,
+    );
+    return new Response("Could not read the file from storage.", {
+      status: 502,
+    });
+  }
   if (!blob) {
     return new Response("File missing on storage.", { status: 410 });
   }
 
   // Use `attachment` disposition by default — the browser downloads
-  // rather than tries to render unfamiliar mime types. Quote-escape
-  // the filename per RFC 6266.
-  const safeName = meta.filename.replace(/"/g, '\\"');
+  // rather than tries to render unfamiliar mime types.
+  //
+  // `contentDisposition` is what stops a non-ASCII filename throwing on
+  // the way into the header. Every signed agreement is named
+  // "… — signed.pdf", and the em dash in that suffix made this route
+  // return 500 for the one document that mattered most. See the header
+  // comment in lib/http/content-disposition.ts.
   return new Response(blob.body, {
     headers: {
-      "Content-Type": meta.fileType || "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${safeName}"`,
+      "Content-Type": safeContentType(meta.fileType),
+      "Content-Disposition": contentDisposition(meta.filename),
       "Cache-Control": "private, max-age=0, no-store",
     },
   });

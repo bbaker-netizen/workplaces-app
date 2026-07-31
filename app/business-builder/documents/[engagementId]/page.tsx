@@ -128,6 +128,11 @@ export default async function CoachDocumentsPage({
     uploaderName: d.uploaderName,
     createdAt: d.createdAt,
     tags: d.tags,
+    origin: d.origin,
+    envelopeId: d.envelopeId,
+    envelopeSubject: d.envelopeSubject,
+    envelopeStatus: d.envelopeStatus,
+    envelopeRole: d.envelopeRole,
     canDelete: true, // master_admin / Coach can delete any
   }));
 

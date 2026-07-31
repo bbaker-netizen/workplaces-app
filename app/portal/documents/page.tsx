@@ -77,6 +77,11 @@ export default async function PortalDocumentsPage() {
     uploaderName: d.uploaderName,
     createdAt: d.createdAt,
     tags: d.tags,
+    origin: d.origin,
+    envelopeId: d.envelopeId,
+    envelopeSubject: d.envelopeSubject,
+    envelopeStatus: d.envelopeStatus,
+    envelopeRole: d.envelopeRole,
     canDelete:
       isLeadership || d.uploaderUserProfileId === profile.userProfileId,
   }));
