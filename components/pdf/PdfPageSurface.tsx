@@ -35,9 +35,31 @@ import {
   type NormalizedPoint,
 } from "@/lib/pdf/annotations";
 
-export type Tool = AnnotationKind | "select";
+export type Tool = AnnotationKind | "select" | "edit";
 
 type DraftRect = { x0: number; y0: number; x1: number; y1: number };
+
+/**
+ * A run of existing text on the page, located in normalized PDF user space.
+ *
+ * This is what makes "edit the words that are already there" possible without
+ * touching the content stream: pdf.js hands back every text run with its
+ * string, its transform, and its width, all in UNSCALED user space — the same
+ * space this component already stores marks in. So a run converts straight to
+ * a normalized rect with no viewport maths, and clicking one can cover it and
+ * retype it in exactly the right spot.
+ */
+type TextRun = {
+  key: string;
+  str: string;
+  /** Font size in PDF points, recovered from the run's transform. */
+  size: number;
+  /** Normalized rect, bottom-left origin, same contract as MarkupAnnotation. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
 
 export function PdfPageSurface({
   pdf,
@@ -67,7 +89,8 @@ export function PdfPageSurface({
   annotations: MarkupAnnotation[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onCreate: (a: Omit<MarkupAnnotation, "id">) => void;
+  /** Returns the id of the created mark, so the caller can open it to edit. */
+  onCreate: (a: Omit<MarkupAnnotation, "id">) => string;
   onUpdateBody: (id: string, body: string) => void;
   onDelete: (id: string) => void;
   onPageRendered?: (info: { width: number; height: number }) => void;
@@ -204,6 +227,118 @@ export function PdfPageSurface({
     [toPx],
   );
 
+  // ---- existing text, for the Edit text tool ---------------------------
+
+  const [textRuns, setTextRuns] = useState<TextRun[] | null>(null);
+  const [textError, setTextError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Only fetched when the tool is actually in use — parsing text content is
+    // wasted work for someone who only wants to highlight.
+    if (tool !== "edit" || !box) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        if (cancelled) return;
+        const runs: TextRun[] = [];
+        content.items.forEach((raw, i) => {
+          const item = raw as {
+            str?: string;
+            width?: number;
+            transform?: number[];
+          };
+          const str = item.str ?? "";
+          const t = item.transform;
+          if (!str.trim() || !t || t.length < 6) return;
+
+          // Vertical scale of the text matrix is the rendered font size.
+          const size = Math.hypot(t[1], t[3]) || Math.abs(t[3]) || 0;
+          if (size <= 0) return;
+          const width = item.width ?? 0;
+          if (width <= 0) return;
+
+          // t[4]/t[5] are the run's origin ON THE BASELINE. Pad below for
+          // descenders and above for ascenders so the cover rectangle
+          // actually hides the glyphs rather than clipping them.
+          const x0 = t[4];
+          const y0 = t[5] - size * 0.25;
+          runs.push({
+            key: `${pageNumber}:${i}`,
+            str,
+            size,
+            x: clamp01((x0 - box.x) / box.w),
+            y: clamp01((y0 - box.y) / box.h),
+            w: width / box.w,
+            h: (size * 1.2) / box.h,
+          });
+        });
+        setTextRuns(runs);
+        setTextError(
+          runs.length === 0
+            ? "No selectable text on this page — it's probably a scan. Use White out and Text instead."
+            : null,
+        );
+      } catch (e) {
+        if (!cancelled) {
+          setTextError(e instanceof Error ? e.message : String(e));
+          setTextRuns([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pdf, pageNumber, tool, box]);
+
+  /**
+   * Replace a run of existing text.
+   *
+   * Two marks, in this order: an opaque white rectangle over the old words,
+   * then a text box pre-filled with them. Creation order is paint order, so
+   * the cover always sits under the replacement. This is cover-and-retype
+   * automated — it is what "editing" a line in a PDF amounts to, and it is
+   * why the paragraph does not reflow.
+   */
+  const replaceRun = (run: TextRun) => {
+    const pad = 0.002;
+    onCreate({
+      pageNumber,
+      kind: "whiteout",
+      x: clamp01(run.x - pad),
+      y: clamp01(run.y - pad),
+      w: run.w + pad * 2,
+      h: run.h + pad * 2,
+      points: null,
+      body: null,
+      color: "#FFFFFF",
+      fontSize: null,
+      strokeWidth: null,
+      opacity: 1,
+      imageData: null,
+    });
+    const id = onCreate({
+      pageNumber,
+      kind: "text",
+      x: run.x,
+      y: run.y,
+      // Give the replacement room to run a little longer than the original,
+      // since retyped text is usually not the same length.
+      w: Math.min(run.w * 1.6 + 0.02, 1 - run.x),
+      h: run.h,
+      points: null,
+      body: run.str,
+      color,
+      fontSize: Math.round(run.size * 10) / 10,
+      strokeWidth: null,
+      opacity: 1,
+      imageData: null,
+    });
+    setEditingId(id);
+    setTextDraft(run.str);
+  };
+
   // ---- capture ---------------------------------------------------------
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -216,9 +351,10 @@ export function PdfPageSurface({
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!viewport || editingId) return;
-    if (tool === "select") {
-      // Clicks on an annotation are handled by the annotation itself; a click
-      // on bare page clears the selection.
+    if (tool === "select" || tool === "edit") {
+      // Neither tool draws. Clicks on an existing mark are handled by the mark
+      // itself and clicks on a text run by its hotspot; a click on bare page
+      // just clears the selection.
       onSelect(null);
       return;
     }
@@ -382,7 +518,7 @@ export function PdfPageSurface({
   })();
 
   const cursor =
-    tool === "select"
+    tool === "select" || tool === "edit"
       ? "default"
       : tool === "text"
         ? "text"
@@ -449,6 +585,42 @@ export function PdfPageSurface({
               }}
             />
           )}
+          {tool === "edit" && textError && (
+            <div className="absolute left-2 top-2 right-2 z-20 rounded border border-tbb-orange/50 bg-white/95 px-3 py-2 font-sans text-xs text-foreground shadow-sm">
+              {textError}
+            </div>
+          )}
+
+          {/*
+            Hotspots over every run of existing text, for the Edit text tool.
+            Rendered from stored-space rects through the same `rectToCss` the
+            marks use, so they line up on rotated pages for free.
+          */}
+          {tool === "edit" &&
+            textRuns?.map((run) => {
+              const css = rectToCss(run);
+              if (css.width < 2 || css.height < 2) return null;
+              return (
+                <button
+                  key={run.key}
+                  type="button"
+                  title={`Replace “${run.str.slice(0, 60)}”`}
+                  className="absolute cursor-text rounded-[2px] border border-dashed border-transparent hover:border-tbb-blue hover:bg-tbb-blue/10"
+                  style={{
+                    left: css.left,
+                    top: css.top,
+                    width: css.width,
+                    height: css.height,
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    replaceRun(run);
+                  }}
+                />
+              );
+            })}
+
           {/*
             One delete button for whatever is selected, floated at the mark's
             top-right corner. Rendered here rather than inside each mark

@@ -1778,9 +1778,63 @@ PDF at Documents → Mark up, drawing on it, saving a marked-up copy, and
 confirming the new version appears in the document list.
 
 **Deliberately not built:** OCR (so highlighting a SCANNED page has no text
-layer to select — pen and free-form marks work), compression, text
-replacement inside existing content, moving or resizing a mark after it is
-placed (delete and redraw), and any client-portal markup surface.
+layer to select — pen and free-form marks work), compression, moving or
+resizing a mark after it is placed (delete and redraw), and any client-portal
+markup surface.
+
+---
+
+## What was built — Edit text, and the markup page's missing container (2026-07-31)
+
+Bruce's first look at the shipped editor: the toolbar ran to the window
+edges, and he wanted Acrobat's "edit the words that are already there".
+
+**The layout bug was a missing wrapper, not styling.** Every other console
+page renders inside `max-w-4xl mx-auto px-6 py-8`; the markup route returned
+a bare `space-y-6` div, so it inherited the layout's full width with no
+padding at all. Now `max-w-[88rem] mx-auto px-6 py-8` — wider than 4xl
+because a page at 150% needs the room, padded the same as everything else.
+
+**Edit text replaces a line without touching the content stream.** pdf.js
+`getTextContent()` returns every run with its string, its transform and its
+width in UNSCALED user space — which is the space annotations are already
+stored in. So a run converts straight to a normalized rect with no viewport
+maths, and clicking one writes TWO marks in creation order: an opaque white
+rectangle over the old words, then a text box pre-filled with them, opened
+for typing. Creation order is paint order, so the cover can never land on top
+of its replacement.
+
+This is cover-and-retype automated, and calling it that matters — the
+paragraph does not reflow, and the replacement renders in Helvetica, so a
+different original font looks slightly different. The alternative is the
+actual Acrobat engine.
+
+The run's `transform[4]/[5]` is the BASELINE origin, not the top-left, so the
+cover rect is padded a quarter of the font size below it and the box is
+1.2× the size tall — otherwise the descenders survive the white-out. The
+replacement box is given 1.6× the original width because retyped text is
+rarely the same length.
+
+Text content is fetched only while the tool is selected — parsing it is
+wasted work for someone who only wants to highlight. A page with no
+selectable text says so plainly and points at White out + Text, because a
+scan is the one case where this tool legitimately cannot work.
+
+`onCreate` now RETURNS the new mark's id. Without that the surface could not
+open the replacement for editing, since the id is minted in the parent.
+
+**Verified in the browser harness:** text-run hotspots computed by the same
+formula wrap every line of glyphs tightly on both the upright and the
+`/Rotate 90` page — the rects come out of `rectToCss`, so rotation is handled
+by the existing contract rather than by new maths.
+
+**Buddy and the module guide updated.** The Buddy system prompt gained a PDF
+markup entry covering every tool, the new-version guarantee, and both real
+limits (no reflow, no text layer on scans) so it answers honestly rather than
+overselling. `ModuleReference`'s Documents card now names Acrobat as the
+thing this replaces. The other recent changes — own-book scoping, the
+recurring QuickBooks retainer, `{{availability_link}}` — were already in the
+prompt and needed nothing.
 
 ---
 

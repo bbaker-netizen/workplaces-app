@@ -54,7 +54,10 @@ export default async function DocumentMarkupPage({
   const backHref = `/business-builder/documents/${params.engagementId}`;
 
   return (
-    <div className="space-y-6">
+    // Wider than the 4xl the other console pages use — a page at 150% needs
+    // the room — but padded the same way, so the toolbar stops short of the
+    // window edge like every other page in the console.
+    <main className="max-w-[88rem] mx-auto px-6 py-8 sm:py-10 space-y-6">
       <div className="space-y-2">
         <Link
           href={backHref}
@@ -93,6 +96,6 @@ export default async function DocumentMarkupPage({
           </Link>
         </div>
       )}
-    </div>
+    </main>
   );
 }

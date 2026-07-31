@@ -36,6 +36,7 @@ import {
   Square,
   Stamp,
   Strikethrough,
+  TextCursorInput,
   Trash2,
   Type,
 } from "lucide-react";
@@ -62,6 +63,7 @@ const TOOLS: Array<{
   Icon: typeof Type;
 }> = [
   { tool: "select", label: "Select", Icon: MousePointer2 },
+  { tool: "edit", label: "Edit text", Icon: TextCursorInput },
   { tool: "text", label: "Text", Icon: Type },
   { tool: "highlight", label: "Highlight", Icon: Highlighter },
   { tool: "ink", label: "Pen", Icon: PenLine },
@@ -190,7 +192,7 @@ export function PdfMarkupEditor({
 
   // ---- markup writes ---------------------------------------------------
 
-  const create = (draft: Omit<MarkupAnnotation, "id">) => {
+  const create = (draft: Omit<MarkupAnnotation, "id">): string => {
     const id =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -223,6 +225,7 @@ export function PdfMarkupEditor({
         setError(result.error);
       }
     });
+    return id;
   };
 
   const updateBody = (id: string, body: string) => {
@@ -511,7 +514,9 @@ export function PdfMarkupEditor({
         </div>
 
         <p className="font-sans text-xs text-muted-foreground">
-          {tool === "select"
+          {tool === "edit"
+            ? "Click any line of existing text to replace it — the old words are covered and reopened for you to retype."
+            : tool === "select"
             ? "Click a mark to select it, double-click text to edit, Delete to remove."
             : tool === "text"
               ? "Click where the text should start, then type."
