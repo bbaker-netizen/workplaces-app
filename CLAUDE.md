@@ -1631,6 +1631,159 @@ working availability link.
 
 ---
 
+## What was built — PDF markup and page editing (2026-07-30)
+
+Bruce's ask, arrived at in two steps: first "could we build a PDF Adobe Pro
+type app", then the sharper version — "what I really need is to be able to
+edit a PDF and mark it up", internal only, no client-facing surface.
+Migration `0106`.
+
+**Marking up is an overlay; editing text is not.** That distinction is the
+whole reason this was buildable. Drawing on top of a page never touches the
+content stream, so highlight / pen / typed notes / white-out are ordinary
+geometry. Changing the words inside an existing paragraph so the text
+reflows is the actual Acrobat engine and is not attempted. Cover-and-retype
+(a white rectangle plus a text box) is provided instead, which is what
+"editing" a line in a PDF amounts to visually anyway.
+
+**Markup is stored as rows, not written into the file.** pdf.js ships its own
+AnnotationEditorLayer which would have saved real PDF annotations, and it was
+rejected: an annotation inside the file is no longer queryable, cannot be
+reopened for editing without round-tripping the document, and could not
+later be resolved or assigned. As rows in `document_annotations` they are
+ordinary application data, and burning them into a PDF becomes an export
+step rather than the storage format. It also avoids depending on pdf.js's
+semi-internal viewer API, which moves between versions.
+
+**Export is flattened, deliberately.** A native annotation can be dragged or
+deleted by whoever opens the file, which is wrong for a marked-up document
+going to a client — the markup is a statement about the document, not a
+suggestion. Flattening also renders identically in Preview, a phone mail
+client, and a printer, none of which agree on annotation rendering.
+
+### The coordinate contract, which is where this silently goes wrong
+
+`x/y/w/h` are fractions of the page's CROP BOX with a BOTTOM-LEFT origin —
+normalized PDF user space, never screen pixels. Capture converts every point
+through pdf.js's `viewport.convertToPdfPoint()`, so zoom level and the page's
+`/Rotate` are both resolved before storage. Consequences: a mark made at 150%
+lands correctly at any other zoom, and the burn step needs no rotation maths
+to POSITION anything.
+
+Crop box rather than media box because pdf.js renders the view box; on any
+print-prepped PDF where the two differ, normalizing against the media box
+offsets every mark by the inset.
+
+Text is the one thing that still needs the rotation: a page with `/Rotate 90`
+displays rotated clockwise, so glyphs drawn unrotated would appear sideways.
+pdf-lib rotates counter-clockwise for positive degrees, so drawing at
+`+angle` cancels it. Same reasoning gives the wrap width — on a quarter-turned
+page the reading direction runs along the user-space Y axis, so the box
+HEIGHT constrains line length.
+
+### Page operations burn markup first
+
+`delete` / `rotate` mutate in place (preserving form fields, outlines and
+links, which pdf-lib does not model); `reorder` / `extract` rebuild via
+`copyPages` and do drop those extras.
+
+Annotations carry a page number, so deleting page 3 would leave every mark on
+pages 4-plus attached to the wrong page. The three options were remapping
+coordinates (only correct for reorder), refusing page ops while markup exists
+(arbitrary), or baking the markup down before changing the page set. Burning
+is the only one that cannot misplace a mark. The new version therefore starts
+with no annotation rows and the previous version keeps both its file and its
+editable markup.
+
+**Every write is a new version.** Nothing here can overwrite an original,
+which is what makes the editor safe to point at a signed contract. Mirrors
+the first ground rule of the Cowork `workplaces-pdf` skill.
+
+### Two traps that cost a build each
+
+1. **The pdf.js worker cannot go through the bundler.**
+   `new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url)` compiles
+   and webpack emits the asset — then Terser minifies that emitted file as a
+   classic script and the worker's own `import.meta` is a syntax error
+   (`static/media/pdf.worker.min.<hash>.mjs from Terser`). It is copied into
+   `public/` by `scripts/copy-pdf-worker.mjs` from `prebuild`/`predev`
+   instead, where nothing processes it. Copied rather than committed so the
+   worker stays pinned to the installed library version — a mismatched pair
+   fails at parse time with an unhelpful error. Gitignored.
+2. **pdf.js v6 changed two APIs.** `page.render()` now wants `canvas` (not
+   `canvasContext`), and `destroy()` lives on the loading task — the document
+   proxy only exposes `cleanup()`, which frees parsed pages but leaves the
+   worker running.
+3. **pdfjs-dist is PINNED to 5.4.x, and 6.x must not be installed without a
+   real browser test.** 6.2.108 calls `Map.prototype.getOrInsertComputed` —
+   a method that only exists in Chrome 142 and equivalents — in BOTH its
+   modern and its legacy build, with no polyfill. Below that floor the
+   library throws before the first page renders, so the editor does not open
+   at all rather than degrading. Nothing in the type system or the build
+   catches this: `tsc`, `next lint` and `next build` were all green on
+   6.2.108, and it failed the moment a browser executed it. The floor buys
+   nothing either — the whole feature uses only `getDocument`, `getPage`,
+   `getViewport`, `render` and the two viewport converters, all stable since
+   v3.
+
+### Smaller things worth remembering
+
+- `toWinAnsi()` in `lib/pdf/annotations.ts` is not optional. pdf-lib's
+  standard fonts are WinAnsi and THROW on anything outside it, so a single
+  curly quote pasted from Word would fail an entire export.
+- `parsePageRange` lives in its own `lib/pdf/ranges.ts` because the browser
+  needs it and `page-ops.ts` imports pdf-lib at module scope — importing it
+  from there would ship the whole PDF writing library to the client.
+- `lib/documents/new-version.ts` has NO `"use server"` directive: it writes
+  documents without doing its own authorization, so making its exports
+  browser-reachable POST endpoints would be a hole. Same reasoning as
+  `lib/integrations/fireflies-sync.ts`.
+- Access is enforced by `withEngagementContext`, which already checks the
+  per-Business-Builder client grants — so a coach restricted to their own
+  book cannot mark up another coach's client document by pasting an id.
+- Restricted to ENGAGEMENT documents. A prospect document has no engagement
+  to resolve and therefore no access rule to check; deciding who may edit
+  those is a separate authorization question, and `getDocument` already
+  declines them for the same reason.
+- Markup colours add a highlighter yellow and a correction red to the brand
+  palette. A narrow, deliberate exception: these are tool colours, ink in a
+  pen. All surrounding chrome stays on the brand hexes.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build` compiles
+successfully with the prerender baseline unchanged (76 failures, 152
+`Missing publishableKey`, zero errors of any other cause). The burn and
+page-op layer was exercised through 24 assertions covering every markup
+kind, non-WinAnsi text, stale page references, rotated pages, additive
+rotation, sequential ops, the refusals (delete-every-page, partial reorder)
+and range parsing — all pass. Burned output was also rasterized and read:
+marks land on their targets, the highlighter multiplies so text shows
+through, and multi-line text stacks downward in both upright and rotated
+orientations.
+
+**The coordinate contract has now been exercised in a real browser** —
+headless Chromium 141 driving the actual pdf.js build through the exact
+`toNorm` / `toPx` helpers from `PdfPageSurface`. Pixel→normalized→pixel
+round-trips are exact to ~1e-13 px at 50/100/150/200% on both an upright and
+a `/Rotate 90` page, and the same screen position resolves to bit-identical
+normalized coordinates at 75% and 150% (zoom invariance). The decisive check
+is visual: overlay probes positioned by the BROWSER from stored coordinates
+land exactly on ink burned by the SERVER from those same coordinates, on both
+page orientations — capture space and burn space are provably the same space.
+That test is what caught the pdfjs-dist 6.x compatibility floor above.
+
+**Still not exercised against a live database, and the UI itself has not been
+clicked.** Migration 0106 applies on next deploy via
+`scripts/migrate-on-deploy.mjs`. The acceptance test is opening a real client
+PDF at Documents → Mark up, drawing on it, saving a marked-up copy, and
+confirming the new version appears in the document list.
+
+**Deliberately not built:** OCR (so highlighting a SCANNED page has no text
+layer to select — pen and free-form marks work), compression, text
+replacement inside existing content, moving or resizing a mark after it is
+placed (delete and redraw), and any client-portal markup surface.
+
+---
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
