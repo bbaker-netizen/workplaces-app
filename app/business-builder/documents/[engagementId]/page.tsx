@@ -208,7 +208,10 @@ export default async function CoachDocumentsPage({
         <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
           All documents
         </h2>
-        <DocumentList rows={rows} />
+        <DocumentList
+          rows={rows}
+          markupBasePath={`/business-builder/documents/${params.engagementId}/markup`}
+        />
       </section>
     </main>
   );

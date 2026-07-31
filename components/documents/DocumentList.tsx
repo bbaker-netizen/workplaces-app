@@ -11,7 +11,7 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, PenLine, Trash2 } from "lucide-react";
 import {
   deleteDocument,
   setDocumentTags,
@@ -30,7 +30,25 @@ export type DocumentRow = {
   canDelete: boolean;
 };
 
-export function DocumentList({ rows }: { rows: DocumentRow[] }) {
+/** Whether this row can be opened in the PDF editor. */
+function isPdf(row: DocumentRow): boolean {
+  return (
+    row.fileType.toLowerCase().includes("pdf") || /\.pdf$/i.test(row.filename)
+  );
+}
+
+export function DocumentList({
+  rows,
+  markupBasePath,
+}: {
+  rows: DocumentRow[];
+  /**
+   * When set, PDFs get a "Mark up" link to `<markupBasePath>/<documentId>`.
+   * Only the Business Builder console passes it — markup is an internal review
+   * tool and the client portal has no editor.
+   */
+  markupBasePath?: string;
+}) {
   // Optimistic deletion: hide the row instantly, restore on failure.
   const [optimisticDeleted, addOptimisticDeleted] = useOptimistic<
     Set<string>,
@@ -53,6 +71,7 @@ export function DocumentList({ rows }: { rows: DocumentRow[] }) {
           <li key={row.id}>
             <DocumentRowView
               row={row}
+              markupBasePath={markupBasePath}
               onOptimisticDelete={addOptimisticDeleted}
             />
           </li>
@@ -63,9 +82,11 @@ export function DocumentList({ rows }: { rows: DocumentRow[] }) {
 
 function DocumentRowView({
   row,
+  markupBasePath,
   onOptimisticDelete,
 }: {
   row: DocumentRow;
+  markupBasePath?: string;
   onOptimisticDelete: (id: string) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +144,15 @@ function DocumentRowView({
           <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
             {formatBytes(row.sizeBytes)}
           </span>
+          {markupBasePath && isPdf(row) && (
+            <Link
+              href={`${markupBasePath}/${row.id}`}
+              className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+            >
+              <PenLine className="h-3 w-3" aria-hidden />
+              Mark up
+            </Link>
+          )}
         </div>
         <div className="mt-1 font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
           Uploaded by {row.uploaderName} ·{" "}
