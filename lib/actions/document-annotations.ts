@@ -30,7 +30,7 @@ import {
   withEngagementContext,
   withSystemContext,
 } from "@/lib/db/tenant";
-import { ANNOTATION_KINDS, clamp01 } from "@/lib/pdf/annotations";
+import { ANNOTATION_KINDS, MARKUP_FONTS, clamp01 } from "@/lib/pdf/annotations";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -66,6 +66,7 @@ const saveSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, "Colour must be a hex value.")
     .default("#1A1A1A"),
   fontSize: z.number().finite().min(4).max(96).nullable().optional(),
+  font: z.enum(MARKUP_FONTS).nullable().optional(),
   strokeWidth: z.number().finite().min(0.5).max(24).nullable().optional(),
   opacity: z.number().finite().min(0).max(1).nullable().optional(),
   imageData: z.string().max(MAX_IMAGE_CHARS).nullable().optional(),
@@ -152,6 +153,7 @@ export async function saveAnnotation(
           body: a.body ?? null,
           color: a.color,
           fontSize: a.fontSize ?? null,
+          font: a.font ?? null,
           strokeWidth: a.strokeWidth ?? null,
           opacity: a.opacity ?? null,
           imageData: a.imageData ?? null,
@@ -174,6 +176,7 @@ export async function saveAnnotation(
               body: values.body,
               color: values.color,
               fontSize: values.fontSize,
+              font: values.font,
               strokeWidth: values.strokeWidth,
               opacity: values.opacity,
               imageData: values.imageData,

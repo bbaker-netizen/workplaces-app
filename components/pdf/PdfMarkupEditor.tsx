@@ -36,8 +36,10 @@ import {
   Square,
   Stamp,
   Strikethrough,
+  TextCursorInput,
   Trash2,
   Type,
+  Undo2,
 } from "lucide-react";
 import {
   clearAnnotations,
@@ -62,6 +64,7 @@ const TOOLS: Array<{
   Icon: typeof Type;
 }> = [
   { tool: "select", label: "Select", Icon: MousePointer2 },
+  { tool: "edit", label: "Edit text", Icon: TextCursorInput },
   { tool: "text", label: "Text", Icon: Type },
   { tool: "highlight", label: "Highlight", Icon: Highlighter },
   { tool: "ink", label: "Pen", Icon: PenLine },
@@ -102,6 +105,25 @@ export function PdfMarkupEditor({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
+
+  /**
+   * Undo, as inverse operations rather than snapshots.
+   *
+   * Every entry says what to put back and what to take away. That works for
+   * all four cases with one shape, because `saveAnnotation` is an UPSERT keyed
+   * on the client-minted id: restoring a deleted mark and reverting an edited
+   * one are the same call. Snapshots of the whole array would have needed a
+   * diff against the server on every undo.
+   */
+  const [undoStack, setUndoStack] = useState<
+    Array<{ restore: MarkupAnnotation[]; remove: string[] }>
+  >([]);
+  const pushUndo = (entry: { restore?: MarkupAnnotation[]; remove?: string[] }) =>
+    setUndoStack((prev) =>
+      // Capped: this is a convenience, not a document history, and the marks
+      // themselves are already durable.
+      [...prev, { restore: entry.restore ?? [], remove: entry.remove ?? [] }].slice(-40),
+    );
 
   const fileUrl = `/api/documents/${documentId}/download`;
 
@@ -190,13 +212,14 @@ export function PdfMarkupEditor({
 
   // ---- markup writes ---------------------------------------------------
 
-  const create = (draft: Omit<MarkupAnnotation, "id">) => {
+  const create = (draft: Omit<MarkupAnnotation, "id">): string => {
     const id =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const optimistic: MarkupAnnotation = { ...draft, id };
     setAnnotations((prev) => [...prev, optimistic]);
+    pushUndo({ remove: [id] });
     setError(null);
 
     startBusy(async () => {
@@ -223,6 +246,7 @@ export function PdfMarkupEditor({
         setError(result.error);
       }
     });
+    return id;
   };
 
   const updateBody = (id: string, body: string) => {
@@ -237,6 +261,7 @@ export function PdfMarkupEditor({
     }
 
     const previous = target.body;
+    pushUndo({ restore: [target] });
     setAnnotations((prev) =>
       prev.map((a) => (a.id === id ? { ...a, body } : a)),
     );
@@ -258,6 +283,8 @@ export function PdfMarkupEditor({
 
   const remove = (id: string) => {
     const previous = annotations;
+    const gone = annotations.find((a) => a.id === id);
+    if (gone) pushUndo({ restore: [gone] });
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
     if (selectedId === id) setSelectedId(null);
     setError(null);
@@ -266,6 +293,68 @@ export function PdfMarkupEditor({
       if (!result.ok) {
         setAnnotations(previous);
         setError(result.error);
+      }
+    });
+  };
+
+  /**
+   * Persist a moved or resized mark.
+   *
+   * `rect` null means "commit what you already have" — the live drag has been
+   * updating local state on every pointer move, and only the release writes.
+   * The undo entry is pushed on the FIRST live update of a drag, so one drag
+   * is one undo step rather than one per frame.
+   */
+  const draggingId = useRef<string | null>(null);
+  const onGeometry = (
+    id: string,
+    rect: { x: number; y: number; w: number; h: number } | null,
+    commit: boolean,
+  ) => {
+    if (!commit && rect) {
+      if (draggingId.current !== id) {
+        const before = annotations.find((a) => a.id === id);
+        if (before) pushUndo({ restore: [before] });
+        draggingId.current = id;
+      }
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, ...rect } : a)),
+      );
+      return;
+    }
+    draggingId.current = null;
+    const moved = annotations.find((a) => a.id === id);
+    if (!moved) return;
+    setError(null);
+    startBusy(async () => {
+      const result = await saveAnnotation({ ...moved, documentId });
+      if (!result.ok) setError(result.error);
+    });
+  };
+
+  /** Put back whatever the last action changed. */
+  const undo = () => {
+    const entry = undoStack[undoStack.length - 1];
+    if (!entry) return;
+    setUndoStack((prev) => prev.slice(0, -1));
+    setSelectedId(null);
+    setError(null);
+
+    setAnnotations((prev) => {
+      const withoutRemoved = prev.filter((a) => !entry.remove.includes(a.id));
+      const byId = new Map(withoutRemoved.map((a) => [a.id, a]));
+      for (const a of entry.restore) byId.set(a.id, a);
+      return Array.from(byId.values());
+    });
+
+    startBusy(async () => {
+      for (const id of entry.remove) {
+        const r = await deleteAnnotation(id);
+        if (!r.ok) setError(r.error);
+      }
+      for (const a of entry.restore) {
+        const r = await saveAnnotation({ ...a, documentId });
+        if (!r.ok) setError(r.error);
       }
     });
   };
@@ -279,6 +368,7 @@ export function PdfMarkupEditor({
     )
       return;
     const previous = annotations;
+    pushUndo({ restore: pageAnnotations });
     setAnnotations((prev) => prev.filter((a) => a.pageNumber !== pageNumber));
     setSelectedId(null);
     startBusy(async () => {
@@ -294,15 +384,20 @@ export function PdfMarkupEditor({
   // while a text box has focus, where those keys mean "edit the text".
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!selectedId) return;
       const el = e.target as HTMLElement | null;
-      if (
+      const typing =
         el &&
         (el.tagName === "TEXTAREA" ||
           el.tagName === "INPUT" ||
-          el.isContentEditable)
-      )
+          el.isContentEditable);
+      // Undo works with nothing selected — it is a document-level action.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !typing) {
+        e.preventDefault();
+        undo();
         return;
+      }
+      if (!selectedId) return;
+      if (typing) return;
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         remove(selectedId);
@@ -311,7 +406,7 @@ export function PdfMarkupEditor({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, annotations]);
+  }, [selectedId, annotations, undoStack]);
 
   // ---- exports and page operations -------------------------------------
 
@@ -487,6 +582,16 @@ export function PdfMarkupEditor({
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
+              onClick={undo}
+              disabled={busy || undoStack.length === 0}
+              title="Undo (⌘/Ctrl + Z)"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-tbb-line bg-white font-sans text-xs text-foreground hover:border-tbb-blue disabled:opacity-40"
+            >
+              <Undo2 className="h-3.5 w-3.5" aria-hidden />
+              Undo
+            </button>
+            <button
+              type="button"
               onClick={clearPage}
               disabled={busy || pageAnnotations.length === 0}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-tbb-line bg-white font-sans text-xs text-foreground hover:border-tbb-orange disabled:opacity-40"
@@ -511,8 +616,10 @@ export function PdfMarkupEditor({
         </div>
 
         <p className="font-sans text-xs text-muted-foreground">
-          {tool === "select"
-            ? "Click a mark to select it, double-click text to edit, Delete to remove."
+          {tool === "edit"
+            ? "Click any line of existing text to replace it — the old words are covered and reopened for you to retype."
+            : tool === "select"
+            ? "Click a mark to select it, drag to move, drag the blue corner to resize, double-click text to edit, Delete to remove."
             : tool === "text"
               ? "Click where the text should start, then type."
               : tool === "ink"
@@ -590,6 +697,7 @@ export function PdfMarkupEditor({
             onCreate={create}
             onUpdateBody={updateBody}
             onDelete={remove}
+            onGeometry={onGeometry}
             onPageRendered={onPageRendered}
           />
         ) : (
