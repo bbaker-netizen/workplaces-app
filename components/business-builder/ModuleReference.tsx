@@ -95,7 +95,7 @@ export function ModuleReference() {
       <ModuleCard
         icon={<Folder />}
         name="Documents"
-        what="Every file related to the engagement, scoped per engagement, with tags, an uploader, and version history. A linked Google Drive folder also mirrors in read-only. Every PDF also gets a “Mark up” link that opens it in a built-in editor — replace existing lines of text, type anywhere, highlight, pen, box, strikethrough, white out, stamp your signature, and delete / rotate / reorder / extract pages. Every save lands as a new version, so the original is never overwritten."
+        what="Every file related to the engagement, scoped per engagement, with tags, an uploader, and version history. A linked Google Drive folder also mirrors in read-only. Every PDF also gets a “Mark up” link that opens it in a built-in editor — replace existing lines of text (in a font matched to the original), type anywhere, highlight, pen, box, strikethrough, white out, stamp your signature, and delete / rotate / reorder / extract pages. Marks can be dragged, resized and undone. Every save lands as a new version, so the original is never overwritten."
         when="Anytime you produce or receive a file related to the engagement. Replaces the per-client Drive folder — and Acrobat, for marking a client document up before you send it back."
         replaces={`Per-client Drive folders, and Adobe Acrobat for everyday PDF markup and page edits. Files attached to Communication messages also land here automatically.`}
         link="/business-builder/documents"
