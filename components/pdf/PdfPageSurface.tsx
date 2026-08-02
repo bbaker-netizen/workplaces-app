@@ -30,14 +30,40 @@ import {
   DEFAULT_STROKE_WIDTH,
   clamp01,
   defaultOpacityFor,
+  matchStandardFont,
+  type MarkupFont,
   type AnnotationKind,
   type MarkupAnnotation,
   type NormalizedPoint,
 } from "@/lib/pdf/annotations";
 
-export type Tool = AnnotationKind | "select";
+export type Tool = AnnotationKind | "select" | "edit";
 
 type DraftRect = { x0: number; y0: number; x1: number; y1: number };
+
+/**
+ * A run of existing text on the page, located in normalized PDF user space.
+ *
+ * This is what makes "edit the words that are already there" possible without
+ * touching the content stream: pdf.js hands back every text run with its
+ * string, its transform, and its width, all in UNSCALED user space — the same
+ * space this component already stores marks in. So a run converts straight to
+ * a normalized rect with no viewport maths, and clicking one can cover it and
+ * retype it in exactly the right spot.
+ */
+type TextRun = {
+  key: string;
+  str: string;
+  /** Font size in PDF points, recovered from the run's transform. */
+  size: number;
+  /** Closest standard font to the one the page actually uses. */
+  font: MarkupFont;
+  /** Normalized rect, bottom-left origin, same contract as MarkupAnnotation. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
 
 export function PdfPageSurface({
   pdf,
@@ -54,6 +80,7 @@ export function PdfPageSurface({
   onCreate,
   onUpdateBody,
   onDelete,
+  onGeometry,
   onPageRendered,
 }: {
   pdf: PDFDocumentProxy;
@@ -67,9 +94,19 @@ export function PdfPageSurface({
   annotations: MarkupAnnotation[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onCreate: (a: Omit<MarkupAnnotation, "id">) => void;
+  /** Returns the id of the created mark, so the caller can open it to edit. */
+  onCreate: (a: Omit<MarkupAnnotation, "id">) => string;
   onUpdateBody: (id: string, body: string) => void;
   onDelete: (id: string) => void;
+  /**
+   * Live geometry during a drag, then a commit. `rect` is null on the commit
+   * call — the parent already holds the last live value.
+   */
+  onGeometry?: (
+    id: string,
+    rect: { x: number; y: number; w: number; h: number } | null,
+    commit: boolean,
+  ) => void;
   onPageRendered?: (info: { width: number; height: number }) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -204,6 +241,212 @@ export function PdfPageSurface({
     [toPx],
   );
 
+  // ---- existing text, for the Edit text tool ---------------------------
+
+  const [textRuns, setTextRuns] = useState<TextRun[] | null>(null);
+  const [textError, setTextError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Only fetched when the tool is actually in use — parsing text content is
+    // wasted work for someone who only wants to highlight.
+    if (tool !== "edit" || !box) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        if (cancelled) return;
+        // Fragments first, then merged into lines below.
+        type Frag = {
+          str: string;
+          size: number;
+          font: MarkupFont;
+          x0: number;
+          x1: number;
+          baseline: number;
+        };
+        const frags: Frag[] = [];
+        content.items.forEach((raw) => {
+          const item = raw as {
+            str?: string;
+            width?: number;
+            transform?: number[];
+            fontName?: string;
+          };
+          const str = item.str ?? "";
+          const t = item.transform;
+          if (!str.trim() || !t || t.length < 6) return;
+
+          // Vertical scale of the text matrix is the rendered font size.
+          const size = Math.hypot(t[1], t[3]) || Math.abs(t[3]) || 0;
+          if (size <= 0) return;
+          const width = item.width ?? 0;
+          if (width <= 0) return;
+
+          const style = item.fontName
+            ? (content.styles as Record<string, { fontFamily?: string }>)?.[
+                item.fontName
+              ]
+            : undefined;
+
+          frags.push({
+            str,
+            size,
+            font: matchStandardFont(style?.fontFamily, item.fontName),
+            x0: t[4],
+            x1: t[4] + width,
+            // t[5] is the BASELINE, which is what lines are grouped on.
+            baseline: t[5],
+          });
+        });
+
+        // Merge fragments into lines. A PDF splits one visual line into
+        // several runs whenever the font, size or kerning changes, so
+        // clicking "Peter Williams — Site Supervisor" could otherwise be
+        // three separate edits. Anything sharing a baseline is one line, which
+        // is the unit Acrobat edits too.
+        frags.sort((a, b) => b.baseline - a.baseline || a.x0 - b.x0);
+        const lines: Frag[][] = [];
+        for (const f of frags) {
+          const line = lines[lines.length - 1];
+          const prev = line?.[line.length - 1];
+          // Tolerance scales with the type size: a 6pt footnote and a 24pt
+          // heading do not share a sensible fixed threshold.
+          if (prev && Math.abs(prev.baseline - f.baseline) <= f.size * 0.3) {
+            line.push(f);
+          } else {
+            lines.push([f]);
+          }
+        }
+
+        const runs: TextRun[] = lines.map((line, i) => {
+          const size = Math.max(...line.map((f) => f.size));
+          const x0 = Math.min(...line.map((f) => f.x0));
+          const x1 = Math.max(...line.map((f) => f.x1));
+          const baseline = line[0].baseline;
+          // Re-insert the spaces the PDF implied through positioning rather
+          // than through space characters.
+          let str = "";
+          line.forEach((f, j) => {
+            const prev = line[j - 1];
+            if (prev && f.x0 - prev.x1 > f.size * 0.18 && !/\s$/.test(str)) {
+              str += " ";
+            }
+            str += f.str;
+          });
+          return {
+            key: `${pageNumber}:${i}`,
+            str,
+            size,
+            font: line[0].font,
+            x: clamp01((x0 - box.x) / box.w),
+            // Pad below the baseline for descenders, or the white-out clips
+            // the tails of g, y and p.
+            y: clamp01((baseline - size * 0.25 - box.y) / box.h),
+            w: (x1 - x0) / box.w,
+            h: (size * 1.2) / box.h,
+          };
+        });
+        setTextRuns(runs);
+        setTextError(
+          runs.length === 0
+            ? "No selectable text on this page — it's probably a scan. Use White out and Text instead."
+            : null,
+        );
+      } catch (e) {
+        if (!cancelled) {
+          setTextError(e instanceof Error ? e.message : String(e));
+          setTextRuns([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pdf, pageNumber, tool, box]);
+
+  /**
+   * Replace a run of existing text.
+   *
+   * Two marks, in this order: an opaque white rectangle over the old words,
+   * then a text box pre-filled with them. Creation order is paint order, so
+   * the cover always sits under the replacement. This is cover-and-retype
+   * automated — it is what "editing" a line in a PDF amounts to, and it is
+   * why the paragraph does not reflow.
+   */
+  const replaceRun = (run: TextRun) => {
+    const pad = 0.002;
+    onCreate({
+      pageNumber,
+      kind: "whiteout",
+      x: clamp01(run.x - pad),
+      y: clamp01(run.y - pad),
+      w: run.w + pad * 2,
+      h: run.h + pad * 2,
+      points: null,
+      body: null,
+      color: "#FFFFFF",
+      fontSize: null,
+      font: null,
+      strokeWidth: null,
+      opacity: 1,
+      imageData: null,
+    });
+    const id = onCreate({
+      pageNumber,
+      kind: "text",
+      x: run.x,
+      y: run.y,
+      // Give the replacement room to run a little longer than the original,
+      // since retyped text is usually not the same length.
+      w: Math.min(run.w * 1.6 + 0.02, 1 - run.x),
+      h: run.h,
+      points: null,
+      body: run.str,
+      color,
+      fontSize: Math.round(run.size * 10) / 10,
+      font: run.font,
+      strokeWidth: null,
+      opacity: 1,
+      imageData: null,
+    });
+    setEditingId(id);
+    setTextDraft(run.str);
+  };
+
+  // ---- move and resize -------------------------------------------------
+
+  /**
+   * Dragging a placed mark.
+   *
+   * Deltas are taken in NORMALIZED space, not pixels: converting both the
+   * start and the current point through `toNorm` and subtracting means a drag
+   * behaves correctly at any zoom and on a rotated page, where screen x is not
+   * page x. Live updates are local-only; the move is persisted once on release
+   * so a drag is one database write rather than one per frame.
+   */
+  const [drag, setDrag] = useState<{
+    id: string;
+    mode: "move" | "resize";
+    from: NormalizedPoint;
+    orig: { x: number; y: number; w: number; h: number };
+  } | null>(null);
+
+  const beginDrag = (
+    a: MarkupAnnotation,
+    mode: "move" | "resize",
+    e: React.PointerEvent,
+  ) => {
+    const p = localPoint(e);
+    setDrag({
+      id: a.id,
+      mode,
+      from: toNorm(p.x, p.y),
+      orig: { x: a.x, y: a.y, w: a.w, h: a.h },
+    });
+    onSelect(a.id);
+  };
+
   // ---- capture ---------------------------------------------------------
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -216,9 +459,10 @@ export function PdfPageSurface({
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!viewport || editingId) return;
-    if (tool === "select") {
-      // Clicks on an annotation are handled by the annotation itself; a click
-      // on bare page clears the selection.
+    if (tool === "select" || tool === "edit") {
+      // Neither tool draws. Clicks on an existing mark are handled by the mark
+      // itself and clicks on a text run by its hotspot; a click on bare page
+      // just clears the selection.
       onSelect(null);
       return;
     }
@@ -241,6 +485,30 @@ export function PdfPageSurface({
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!viewport) return;
+    if (drag) {
+      const p = localPoint(e);
+      const now = toNorm(p.x, p.y);
+      const dx = now.x - drag.from.x;
+      const dy = now.y - drag.from.y;
+      const next =
+        drag.mode === "move"
+          ? {
+              x: clamp01(drag.orig.x + dx),
+              y: clamp01(drag.orig.y + dy),
+              w: drag.orig.w,
+              h: drag.orig.h,
+            }
+          : {
+              x: drag.orig.x,
+              y: drag.orig.y,
+              // A mark dragged smaller than a hair is unclickable and
+              // invisible; floor it rather than let it vanish.
+              w: Math.max(0.004, drag.orig.w + dx),
+              h: Math.max(0.004, drag.orig.h + dy),
+            };
+      onGeometry?.(drag.id, next, false);
+      return;
+    }
     if (inkPath) {
       const p = localPoint(e);
       setInkPath((prev) =>
@@ -256,6 +524,15 @@ export function PdfPageSurface({
 
   const onPointerUp = () => {
     if (!viewport) return;
+
+    if (drag) {
+      const finished = drag;
+      setDrag(null);
+      // Commit whatever the last live position was — the parent already holds
+      // it, so this only tells it to persist.
+      onGeometry?.(finished.id, null, true);
+      return;
+    }
 
     if (inkPath) {
       const path = inkPath;
@@ -275,6 +552,7 @@ export function PdfPageSurface({
         body: null,
         color,
         fontSize: null,
+        font: null,
         strokeWidth,
         opacity: 1,
         imageData: null,
@@ -302,6 +580,7 @@ export function PdfPageSurface({
         body: null,
         color,
         fontSize: null,
+        font: null,
         strokeWidth,
         opacity: defaultOpacityFor(kind),
         imageData: kind === "image" ? stampImage : null,
@@ -332,6 +611,7 @@ export function PdfPageSurface({
       body: "",
       color,
       fontSize,
+      font: null,
       strokeWidth: null,
       opacity: 1,
       imageData: null,
@@ -382,7 +662,7 @@ export function PdfPageSurface({
   })();
 
   const cursor =
-    tool === "select"
+    tool === "select" || tool === "edit"
       ? "default"
       : tool === "text"
         ? "text"
@@ -424,6 +704,7 @@ export function PdfPageSurface({
               textDraft={textDraft}
               selectable={tool === "select"}
               onSelect={() => onSelect(a.id)}
+              onBeginDrag={(mode, e) => beginDrag(a, mode, e)}
               onStartEditing={() => startEditing(a)}
               onChangeDraft={setTextDraft}
               onCommit={commitEditing}
@@ -449,6 +730,42 @@ export function PdfPageSurface({
               }}
             />
           )}
+          {tool === "edit" && textError && (
+            <div className="absolute left-2 top-2 right-2 z-20 rounded border border-tbb-orange/50 bg-white/95 px-3 py-2 font-sans text-xs text-foreground shadow-sm">
+              {textError}
+            </div>
+          )}
+
+          {/*
+            Hotspots over every run of existing text, for the Edit text tool.
+            Rendered from stored-space rects through the same `rectToCss` the
+            marks use, so they line up on rotated pages for free.
+          */}
+          {tool === "edit" &&
+            textRuns?.map((run) => {
+              const css = rectToCss(run);
+              if (css.width < 2 || css.height < 2) return null;
+              return (
+                <button
+                  key={run.key}
+                  type="button"
+                  title={`Replace “${run.str.slice(0, 60)}”`}
+                  className="absolute cursor-text rounded-[2px] border border-dashed border-transparent hover:border-tbb-blue hover:bg-tbb-blue/10"
+                  style={{
+                    left: css.left,
+                    top: css.top,
+                    width: css.width,
+                    height: css.height,
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    replaceRun(run);
+                  }}
+                />
+              );
+            })}
+
           {/*
             One delete button for whatever is selected, floated at the mark's
             top-right corner. Rendered here rather than inside each mark
@@ -473,6 +790,27 @@ export function PdfPageSurface({
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden />
             </button>
+          )}
+
+          {/*
+            Resize handle, bottom-right of the selection. Ink is excluded: its
+            shape is a path, and scaling the bounding box would not scale the
+            stroke with it.
+          */}
+          {selectedTarget && selectedTarget.a.kind !== "ink" && (
+            <div
+              role="presentation"
+              title="Drag to resize"
+              className="absolute z-10 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-tbb-blue shadow"
+              style={{
+                left: selectedTarget.css.left + selectedTarget.css.width - 6,
+                top: selectedTarget.css.top + selectedTarget.css.height - 6,
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                beginDrag(selectedTarget.a, "resize", e);
+              }}
+            />
           )}
 
           {inkPath && inkPath.length > 1 && (
@@ -512,6 +850,7 @@ function AnnotationView({
   textDraft,
   selectable,
   onSelect,
+  onBeginDrag,
   onStartEditing,
   onChangeDraft,
   onCommit,
@@ -525,6 +864,7 @@ function AnnotationView({
   textDraft: string;
   selectable: boolean;
   onSelect: () => void;
+  onBeginDrag: (mode: "move" | "resize", e: React.PointerEvent) => void;
   onStartEditing: () => void;
   onChangeDraft: (v: string) => void;
   onCommit: () => void;
@@ -557,6 +897,7 @@ function AnnotationView({
           if (!selectable) return;
           e.stopPropagation();
           onSelect();
+          onBeginDrag("move", e);
         }}
       >
         <polyline
@@ -628,6 +969,7 @@ function AnnotationView({
           if (!selectable) return;
           e.stopPropagation();
           onSelect();
+          onBeginDrag("move", e);
         }}
         onDoubleClick={(e) => {
           e.stopPropagation();
@@ -648,6 +990,7 @@ function AnnotationView({
           if (!selectable) return;
           e.stopPropagation();
           onSelect();
+          onBeginDrag("move", e);
         }}
       >
         {a.imageData && (
@@ -686,6 +1029,7 @@ function AnnotationView({
         if (!selectable) return;
         e.stopPropagation();
         onSelect();
+        onBeginDrag("move", e);
       }}
     >
       {a.kind === "strikeout" && (

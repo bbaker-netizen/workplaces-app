@@ -44,6 +44,7 @@ import {
 } from "pdf-lib";
 import {
   DEFAULT_FONT_SIZE,
+  type MarkupFont,
   DEFAULT_STROKE_WIDTH,
   hexToRgb01,
   toWinAnsi,
@@ -55,6 +56,27 @@ export type BurnResult = {
   bytes: Uint8Array;
   /** Markup that referenced a page the document no longer has. */
   skipped: number;
+};
+
+/**
+ * Markup font key to the pdf-lib standard font.
+ *
+ * Only the standard fourteen are used, so nothing here needs embedding from
+ * the source document — see MARKUP_FONTS in lib/pdf/annotations.ts for why.
+ */
+const STANDARD_FONT: Record<MarkupFont, StandardFonts> = {
+  helvetica: StandardFonts.Helvetica,
+  "helvetica-bold": StandardFonts.HelveticaBold,
+  "helvetica-oblique": StandardFonts.HelveticaOblique,
+  "helvetica-boldoblique": StandardFonts.HelveticaBoldOblique,
+  times: StandardFonts.TimesRoman,
+  "times-bold": StandardFonts.TimesRomanBold,
+  "times-italic": StandardFonts.TimesRomanItalic,
+  "times-bolditalic": StandardFonts.TimesRomanBoldItalic,
+  courier: StandardFonts.Courier,
+  "courier-bold": StandardFonts.CourierBold,
+  "courier-oblique": StandardFonts.CourierOblique,
+  "courier-boldoblique": StandardFonts.CourierBoldOblique,
 };
 
 /** A page's crop box — the basis every normalized coordinate resolves against. */
@@ -98,12 +120,17 @@ export async function burnAnnotations(
   );
   const pages = pdf.getPages();
 
-  // Fonts are embedded lazily — a document marked up with highlights only
-  // should not carry an unused font.
-  let regular: PDFFont | null = null;
-  const font = async () => {
-    if (!regular) regular = await pdf.embedFont(StandardFonts.Helvetica);
-    return regular;
+  // Fonts are embedded lazily AND cached per key — a document marked up with
+  // highlights only should carry no font at all, and one marked up in Times
+  // throughout should embed Times once rather than per mark.
+  const embedded = new Map<MarkupFont, PDFFont>();
+  const font = async (key: MarkupFont | null) => {
+    const k: MarkupFont = key ?? "helvetica";
+    const hit = embedded.get(k);
+    if (hit) return hit;
+    const f = await pdf.embedFont(STANDARD_FONT[k]);
+    embedded.set(k, f);
+    return f;
   };
 
   let skipped = 0;
@@ -215,7 +242,7 @@ export async function burnAnnotations(
         const raw = (a.body ?? "").trim();
         if (!raw) break;
         const size = a.fontSize ?? DEFAULT_FONT_SIZE;
-        const f = await font();
+        const f = await font(a.font);
         const angle = normalizeAngle(page.getRotation().angle);
         const quarterTurned = angle === 90 || angle === 270;
 

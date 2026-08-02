@@ -1778,9 +1778,111 @@ PDF at Documents → Mark up, drawing on it, saving a marked-up copy, and
 confirming the new version appears in the document list.
 
 **Deliberately not built:** OCR (so highlighting a SCANNED page has no text
-layer to select — pen and free-form marks work), compression, text
-replacement inside existing content, moving or resizing a mark after it is
-placed (delete and redraw), and any client-portal markup surface.
+layer to select — pen and free-form marks work), compression, moving or
+resizing a mark after it is placed (delete and redraw), and any client-portal
+markup surface.
+
+---
+
+## What was built — Edit text, and the markup page's missing container (2026-07-31)
+
+Bruce's first look at the shipped editor: the toolbar ran to the window
+edges, and he wanted Acrobat's "edit the words that are already there".
+
+**The layout bug was a missing wrapper, not styling.** Every other console
+page renders inside `max-w-4xl mx-auto px-6 py-8`; the markup route returned
+a bare `space-y-6` div, so it inherited the layout's full width with no
+padding at all. Now `max-w-[88rem] mx-auto px-6 py-8` — wider than 4xl
+because a page at 150% needs the room, padded the same as everything else.
+
+**Edit text replaces a line without touching the content stream.** pdf.js
+`getTextContent()` returns every run with its string, its transform and its
+width in UNSCALED user space — which is the space annotations are already
+stored in. So a run converts straight to a normalized rect with no viewport
+maths, and clicking one writes TWO marks in creation order: an opaque white
+rectangle over the old words, then a text box pre-filled with them, opened
+for typing. Creation order is paint order, so the cover can never land on top
+of its replacement.
+
+This is cover-and-retype automated, and calling it that matters — the
+paragraph does not reflow, and the replacement renders in Helvetica, so a
+different original font looks slightly different. The alternative is the
+actual Acrobat engine.
+
+The run's `transform[4]/[5]` is the BASELINE origin, not the top-left, so the
+cover rect is padded a quarter of the font size below it and the box is
+1.2× the size tall — otherwise the descenders survive the white-out. The
+replacement box is given 1.6× the original width because retyped text is
+rarely the same length.
+
+Text content is fetched only while the tool is selected — parsing it is
+wasted work for someone who only wants to highlight. A page with no
+selectable text says so plainly and points at White out + Text, because a
+scan is the one case where this tool legitimately cannot work.
+
+`onCreate` now RETURNS the new mark's id. Without that the surface could not
+open the replacement for editing, since the id is minted in the parent.
+
+**Verified in the browser harness:** text-run hotspots computed by the same
+formula wrap every line of glyphs tightly on both the upright and the
+`/Rotate 90` page — the rects come out of `rectToCss`, so rotation is handled
+by the existing contract rather than by new maths.
+
+### Polish pass — font matching, whole lines, undo, move/resize
+
+Four things that would bite in the first ten minutes of real use.
+Migration `0107` adds `document_annotations.font` (nullable; NULL = Helvetica,
+which is what every mark written before it is, so no backfill).
+
+**Replaced text now matches the original font.** Always retyping in Helvetica
+makes an edit obvious the moment the document is set in anything else, and
+client contracts are usually Times. pdf.js reports a font family per run and
+the PostScript name carries the weight and slant (`ABCDEF+TimesNewRomanPS-
+BoldItalicMT`), so `matchStandardFont()` picks the closest of the twelve
+standard faces. The key has to be PERSISTED or the burn step would fall back
+to Helvetica and undo the whole point — hence the column.
+
+Only the standard fourteen, deliberately. Embedding the document's ACTUAL
+font would close the last of the gap, but subset fonts routinely lack the
+glyphs a replacement needs, and that fails at export rather than at the click.
+
+**Fragments are merged into lines.** A PDF splits one visual line into several
+runs whenever the font, size or kerning changes, so "Peter Williams — Site
+Supervisor" could be three separate edits. Anything sharing a baseline
+(tolerance scaled to the type size, since a 6pt footnote and a 24pt heading
+have no sensible fixed threshold) is one clickable line — the unit Acrobat
+edits too. Spaces the PDF implied through positioning rather than through
+space characters are re-inserted when the gap exceeds 0.18em.
+
+**Undo is inverse operations, not snapshots.** Each entry says what to put
+back and what to take away, which covers create, delete, edit, clear-page and
+drag with one shape — because `saveAnnotation` is an upsert keyed on the
+client-minted id, restoring a deleted mark and reverting an edited one are the
+same call. Snapshots would have needed a diff against the server on every
+undo. Capped at 40; this is a convenience, not a document history.
+
+**Drag to move, corner handle to resize.** Deltas are taken in NORMALIZED
+space — both the start and current point go through `toNorm` and are
+subtracted — so a drag behaves correctly at any zoom and on a rotated page,
+where screen x is not page x. Live updates are local-only and the move
+persists once on release, so a drag is one write and one undo step rather than
+one per frame. Ink is excluded from resize: its shape is a path, and scaling
+the bounding box would not scale the stroke with it.
+
+**Verified:** font matching exercised through 10 real-world font names
+(Times/Arial/Courier/Consolas/Calibri/Georgia with bold and italic variants);
+all six representative fonts burned and rasterized, and they render visibly
+distinct; a NULL font still falls back to Helvetica, so pre-0107 rows are
+safe. Line grouping checked in the browser — 7 fragments collapse to 4 lines
+on the rotated page and the boxes wrap each line.
+
+**Buddy and the module guide updated.** The Buddy system prompt gained a PDF
+markup entry covering every tool, the new-version guarantee, and both real
+limits (no reflow, no text layer on scans) so it answers honestly rather than
+overselling. `ModuleReference`'s Documents card now names Acrobat as the
+thing this replaces. The other recent changes — own-book scoping, the
+recurring QuickBooks retainer, `{{availability_link}}` — were already in the
+prompt and needed nothing.
 
 ---
 
