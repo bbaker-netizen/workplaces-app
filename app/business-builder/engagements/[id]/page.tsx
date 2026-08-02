@@ -532,7 +532,13 @@ export default async function EngagementDetailPage({
             Toggle which modules appear in this client&apos;s portal. Everything
             is on by default; turn off anything they don&apos;t need.
           </p>
-          <PortalModuleManager engagementId={id} modules={moduleStates} />
+          <PortalModuleManager
+            engagementId={id}
+            modules={moduleStates}
+            // Same test the onboarding pre-flight uses: any assignment row
+            // means a choice has been recorded for this client.
+            reviewed={data.moduleAssignments.length > 0}
+          />
 
           <div className="border-t border-tbb-line-soft pt-4 space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
