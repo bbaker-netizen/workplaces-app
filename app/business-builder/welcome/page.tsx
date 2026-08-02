@@ -17,6 +17,7 @@ import {
   Briefcase,
   CalendarClock,
   CheckSquare,
+  Rocket,
   CreditCard,
   FileSignature,
   FileText,
@@ -305,12 +306,13 @@ export default async function CoachWelcomePage() {
             from one place.
           </p>
           <p className="mt-2 text-sm text-tbb-ink-3">
-            <strong>Won starts onboarding automatically.</strong> The
-            moment you move a prospect to <strong>Won</strong>, the app
-            asks if you want to start onboarding — one click spins up their
-            engagement workspace, creates their Google Drive folder, and
-            lands you on their workspace with a next-steps checklist. More
-            on that in Phase 03.
+            <strong>Won creates the client.</strong> The moment you move a
+            prospect to <strong>Won</strong>, the app asks to confirm — say
+            yes and it spins up their engagement workspace, creates their
+            Google Drive folder, and lands you on their workspace page.
+            Nothing is emailed to the client at this point. Sending them
+            anything is the separate <strong>Start onboarding</strong>{" "}
+            button, waiting for you on that page. More on both in Phase 03.
           </p>
         </Step>
 
@@ -436,38 +438,87 @@ export default async function CoachWelcomePage() {
       <Phase number="03" label="Open the engagement" caption="Provision the portal">
         <Step
           icon={<CheckSquare className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
-          title="Won → onboarding, in one click"
+          title="Step one — Won turns the lead into a client"
           href="/business-builder/pipeline"
           hrefLabel="Open the Pipeline"
         >
           <p>
-            The fastest way to open an engagement is straight from the
-            Pipeline. When you move a prospect to <strong>Won</strong> —
-            by clicking the stage chip or dragging their card into the Won
-            column — the app asks{" "}
-            <em>&quot;Mark this client as Won and start onboarding
-            now?&quot;</em>. Say yes and it does three things for you:
-            spins up the client&apos;s engagement workspace,{" "}
+            Turning a signed lead into a client happens straight from the
+            Pipeline. Move them to <strong>Won</strong> — click the stage
+            chip or drag their card into the Won column — and the app asks
+            to confirm. Say yes and it does three things: spins up the
+            client&apos;s engagement workspace,{" "}
             <strong>automatically creates their Google Drive folder</strong>{" "}
             (if your Google account is connected), and{" "}
-            <strong>drops you straight onto their workspace page with a
-            checklist of what&apos;s left</strong> — so onboarding never
-            leaves you guessing what to do next.
+            <strong>drops you straight onto their workspace page</strong>.
           </p>
           <p className="mt-2">
-            That checklist walks you through the rest: upload their signed
-            contract, confirm the Drive folder, pick their portal modules,
-            and — when you&apos;re ready — <strong>Invite client</strong>.
+            The same thing sits on the prospect page itself as{" "}
+            <strong>Convert to active engagement</strong>, once the deal
+            reaches Contract sent or Contract signed. The only difference:
+            that one asks you to confirm <strong>Accelerator</strong> or{" "}
+            <strong>Implementer</strong> first. Going via Won uses whatever
+            Program is already on the lead — so if you&apos;re not certain
+            it&apos;s set, use the button.
           </p>
           <p className="mt-2 text-sm text-tbb-ink-3">
-            The confirm is there so a stray drag never provisions a
-            workspace by accident. Starting onboarding creates the
-            workspace (and Drive folder) only — it does <strong>not</strong>{" "}
-            email or invite the client. That stays a deliberate step you
-            take when you&apos;re ready (the <strong>Invite client</strong>{" "}
-            button, below). If your Google account isn&apos;t connected yet,
-            the Drive folder is skipped and the checklist prompts you to
-            connect it (Practice → Google Workspace) and create it.
+            <strong>Nothing reaches the client here.</strong> This creates
+            the workspace and the Drive folder, nothing else — no email, no
+            invitation. That is the next step, and it is deliberately
+            separate so you can get the workspace right first. The confirm
+            is there so a stray drag never provisions a client by accident.
+            If your Google account isn&apos;t connected yet the Drive folder
+            is skipped, and the page prompts you to connect it (Practice →
+            Google Workspace).
+          </p>
+        </Step>
+
+        <Step
+          icon={<Rocket className="w-6 h-6 text-tbb-blue" strokeWidth={1.75} aria-hidden />}
+          title="Step two — Start onboarding sends the three things"
+          href="/business-builder/engagements"
+          hrefLabel="Open Clients"
+        >
+          <p>
+            On the client&apos;s page — first panel under the header —
+            there&apos;s <strong>Start onboarding</strong>. One press sends
+            all three onboarding items in order, a couple of minutes apart,
+            from your own Gmail:
+          </p>
+          <ol className="list-decimal pl-5 mt-2 space-y-1">
+            <li>
+              <strong>The onboarding email</strong> — tells them what&apos;s
+              coming and to distrust a payment request from any other
+              address.
+            </li>
+            <li>
+              <strong>The payment authorization form</strong> — sent for
+              signature, sets up the monthly retainer.
+            </li>
+            <li>
+              <strong>The portal invitation</strong> — creates their login
+              and drops them into their workspace.
+            </li>
+          </ol>
+          <p className="mt-2">
+            It won&apos;t let you press it until four things are true, and
+            it names each one with a link to the fix:{" "}
+            <strong>a monthly fee</strong> (the payment form authorizes a
+            debit, so it needs the amount), <strong>a first session on the
+            books</strong> (the email quotes their start date and works the
+            assessment deadline back from it), <strong>a contact
+            email</strong>, and <strong>portal modules reviewed</strong>{" "}
+            (everything is on by default, so an untouched list means nobody
+            has looked).
+          </p>
+          <p className="mt-2 text-sm text-tbb-ink-3">
+            There is no override, on purpose: once the first two emails have
+            gone they cannot be recalled, so a blocked start is safer than a
+            half-finished one. If a step fails, the panel says which one and
+            offers <strong>Resume</strong> — only the steps that haven&apos;t
+            been sent will run. On a client who is already up and running the
+            panel collapses to a single line, with a <strong>Show</strong>{" "}
+            control if you need it back.
           </p>
         </Step>
 
