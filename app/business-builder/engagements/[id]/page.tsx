@@ -19,7 +19,7 @@
 
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq, lt, ne } from "drizzle-orm";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -41,6 +41,7 @@ import { listProspectActivities } from "@/lib/db/queries/prospects";
 import { activityTypeLabel } from "@/lib/pipeline/stages";
 import {
   actionItems,
+  bbsSessions,
   deliverables,
   embeddedApps,
   engagements,
@@ -267,17 +268,40 @@ export default async function EngagementDetailPage({
 
   // Onboarding: the pre-flight is resolved on the server so the blockers
   // render before the button is pressed, not after.
-  const [onboardingReadiness, onboardingRun] = await Promise.all([
-    checkOnboardingReadiness(id),
-    withSystemContext(async (tx) => {
-      const [r] = await tx
-        .select()
-        .from(onboardingRuns)
-        .where(eq(onboardingRuns.engagementId, id))
-        .limit(1);
-      return r ?? null;
-    }),
-  ]);
+  const [onboardingReadiness, onboardingRun, heldSessionCount] =
+    await Promise.all([
+      checkOnboardingReadiness(id),
+      withSystemContext(async (tx) => {
+        const [r] = await tx
+          .select()
+          .from(onboardingRuns)
+          .where(eq(onboardingRuns.engagementId, id))
+          .limit(1);
+        return r ?? null;
+      }),
+      // Has this engagement already met? A session in the past that was
+      // not cancelled is the same "was it held" definition the EA uses
+      // (lib/ea/held-sessions.ts) — nothing in the app ever flips a
+      // session to `completed` on its own, so status is not the test.
+      withSystemContext(async (tx) => {
+        const [row] = await tx
+          .select({ n: count() })
+          .from(bbsSessions)
+          .where(
+            and(
+              eq(bbsSessions.engagementId, id),
+              lt(bbsSessions.scheduledAt, new Date()),
+              ne(bbsSessions.status, "cancelled"),
+            ),
+          );
+        return Number(row?.n ?? 0);
+      }),
+    ]);
+
+  // Onboarding already happened, outside this flow: they hold a real
+  // Clerk org (someone invited them) or they have already met. Collapses
+  // the panel to a line rather than hiding it.
+  const onboardingEstablished = clientInvited || heldSessionCount > 0;
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
@@ -453,6 +477,7 @@ export default async function EngagementDetailPage({
       <StartOnboardingPanel
         engagementId={id}
         blockers={onboardingReadiness.blockers}
+        established={onboardingEstablished}
         run={
           onboardingRun
             ? {
