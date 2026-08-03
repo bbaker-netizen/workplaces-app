@@ -2126,15 +2126,53 @@ drafts with correct recipient counts. **Not yet clicked in a browser** —
 the acceptance test is opening a meeting workspace, editing a recap, and
 sending it.
 
-**Still open from this session:** no `time_block` or `agenda_proposal`
-approval token has ever been minted, and neither is a bug. Time blocks
-are proposed only for the recipient's OWN commitments and **no action
-item in the practice is assigned to Bruce or Jen** (14 drafts sit
-unreviewed on Crown and Ember; 1 open, 1 in progress). Agenda drafting
-needs a previous session's transcript or open published commitments and
-has had neither on a session inside the digest window. Both features are
-starved, not broken — publishing and assigning that backlog is what
-lights them up.
+**Still open from this session:** no `time_block` approval token has
+ever been minted, and that one is not a bug. Time blocks are proposed
+only for the recipient's OWN commitments and **no action item in the
+practice is assigned to Bruce or Jen** (14 drafts sat unreviewed on
+Crown and Ember; 1 open, 1 in progress). Publishing and assigning that
+backlog is what lights it up.
+
+### The calendar sync had never seen a future event
+
+The agenda half of that conclusion was WRONG, and the way it was wrong
+matters. "No agenda has been drafted because A&M has no upcoming
+session" was read out of our own `bbs_sessions` table. Bruce's reply —
+"have a look at my calendar and tell me if you don't see any A&M
+Abatement scheduled" — surfaced four upcoming A&M sessions (13 and 27
+Aug, 10 and 24 Sep). The app had none of them, and no upcoming session
+for ANY client. **Checking our copy of a thing is not checking the
+thing.** The source was one MCP call away.
+
+Both Google event listings made a single request with `maxResults` and
+read `data.items` once, never touching `nextPageToken`. With
+`orderBy=startTime` that does not return a sample — it returns the
+OLDEST N events in the range and stops. The sync reads 180 days back and
+120 forward, and any working calendar carries far more than 250 timed
+events in ten months, so the response never reached the present day.
+
+Measured against the live calendar: the first 250 timed events in the
+window run 4 Feb → 16 Apr, with a `nextPageToken` nobody followed. The
+database agreed exactly — the newest sessions the sync had ever created
+were dated 8–10 April. It ran hourly, reported success, inserted rows,
+and had not seen a present-day event in months.
+
+**`maxResults` is a PAGE size, not a range limit.** That single
+misreading starved every feature needing a NEXT session: no agenda had
+ever been drafted, the briefing's next-seven-days was empty, and recaps
+had no next session to point at. `listAllEventPages` follows the tokens
+for both callers, and its 12-page ceiling is LOGGED when hit rather than
+swallowed — a silent cap is what caused this.
+
+`listExternalEvents` had it too, and there truncation is worse than
+useless: it feeds the EA's free-time search, so unread events look like
+FREE time and a focus block gets proposed on top of a meeting.
+
+This is the same family as the cron/`ensureUserProfile` traps — a job
+that runs, reports success, and does a fraction of its work. **The tell
+is the same every time: output that is consistently the wrong SHAPE
+rather than absent.** Sessions that were always months old should have
+read as loudly as no sessions at all.
 
 ## Active Phase
 
