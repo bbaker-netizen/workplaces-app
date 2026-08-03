@@ -27,10 +27,12 @@ import {
   actionItems,
   agendaItems,
   bbsSessions,
+  engagementMeetings,
   notifications,
   userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
+import { DELIVERABLE_TYPES } from "@/lib/deliverables/types";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
@@ -82,6 +84,13 @@ const createSchema = z.object({
   agendaItemId: z.string().uuid().nullable().optional(),
   /** Optional link to the session this came out of. */
   bbsSessionId: z.string().uuid().nullable().optional(),
+  /** Which of the nine methodology documents this item IS. Null (the
+   *  default) means an ordinary commitment. Migration 0109 retired the
+   *  separate `deliverables` table; this is what replaced it. */
+  deliverableType: z.enum(DELIVERABLE_TYPES).nullable().optional(),
+  /** The synced meeting this came out of, so it appears in that
+   *  meeting's workspace beside everything else from the same session. */
+  engagementMeetingId: z.string().uuid().nullable().optional(),
 });
 
 const updateSchema = z.object({
@@ -97,6 +106,9 @@ const updateSchema = z.object({
   revenueImpact: z.boolean().optional(),
   marginImpact: z.boolean().optional(),
   projectId: z.string().uuid().nullable().optional(),
+  /** Retype an item, or clear the type to turn a document back into an
+   *  ordinary commitment. Full editors only — see FULL_EDITOR_ROLES. */
+  deliverableType: z.enum(DELIVERABLE_TYPES).nullable().optional(),
 });
 
 export type CreateActionItemInput = z.input<typeof createSchema>;
@@ -177,6 +189,25 @@ export async function createActionItem(
         validAgendaItemId = a?.id ?? null;
       }
 
+      // Same check, same reason, for the meeting link: RLS stops
+      // cross-org but not cross-engagement-within-org, so an id from
+      // another client's meeting would insert cleanly and then put this
+      // client's commitment in that client's workspace.
+      let validMeetingId: string | null = null;
+      if (data.engagementMeetingId) {
+        const [m] = await tx
+          .select({ id: engagementMeetings.id })
+          .from(engagementMeetings)
+          .where(
+            and(
+              eq(engagementMeetings.id, data.engagementMeetingId),
+              eq(engagementMeetings.engagementId, data.engagementId),
+            ),
+          )
+          .limit(1);
+        validMeetingId = m?.id ?? null;
+      }
+
       const [item] = await tx
         .insert(actionItems)
         .values({
@@ -192,6 +223,8 @@ export async function createActionItem(
           projectId: data.projectId ?? null,
           agendaItemId: validAgendaItemId,
           bbsSessionId: validSessionId,
+          deliverableType: data.deliverableType ?? null,
+          engagementMeetingId: validMeetingId,
           createdBy: "coach",
         })
         .returning({ id: actionItems.id });
@@ -337,6 +370,10 @@ export async function updateActionItem(
             "revenueImpact",
             "marginImpact",
             "projectId",
+            // What KIND of thing this is is a Business Builder's call.
+            // Without this, a client_manager updating the status of
+            // their own item could also retype it as a business plan.
+            "deliverableType",
           ] as const;
           for (const key of restrictedKeys) {
             if (data[key] !== undefined) {
@@ -362,6 +399,8 @@ export async function updateActionItem(
         if (data.marginImpact !== undefined)
           update.marginImpact = data.marginImpact;
         if (data.projectId !== undefined) update.projectId = data.projectId;
+        if (data.deliverableType !== undefined)
+          update.deliverableType = data.deliverableType;
 
         if (Object.keys(update).length === 0) return null; // no-op
 

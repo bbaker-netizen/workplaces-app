@@ -15,7 +15,6 @@ export const CONSOLE_MODULES: ConsoleModule[] = [
   { href: "/business-builder/action-items", label: "Action items" },
   { href: "/business-builder/inbox", label: "Inbox (email / SMS / calls)" },
   { href: "/business-builder/communication", label: "Communication" },
-  { href: "/business-builder/deliverables", label: "Deliverables" },
   { href: "/business-builder/projects", label: "Projects" },
   { href: "/business-builder/templates", label: "Templates & signatures" },
   { href: "/business-builder/library", label: "Client tools & tutorials" },

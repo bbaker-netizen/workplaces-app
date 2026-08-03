@@ -49,70 +49,71 @@ export function ActionItemCard({
           : "border-tbb-line hover:border-tbb-ink-3")
       }
     >
-      <div className="p-4 sm:p-5">
-        {/* Top row: status pill + revenue/margin badges */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <StatusPill
-            itemId={item.id}
-            status={item.status}
-            options={statusOptions}
-            disabled={pillDisabled}
-          />
-          <div className="flex gap-1.5 flex-wrap justify-end">
-            {item.revenueImpact && (
-              <span className="font-mono text-[9px] uppercase tracking-tbb-caps px-2 py-0.5 rounded-sm border border-tbb-navy text-tbb-navy">
-                Revenue
-              </span>
-            )}
-            {item.marginImpact && (
-              <span className="font-mono text-[9px] uppercase tracking-tbb-caps px-2 py-0.5 rounded-sm border border-tbb-navy text-tbb-navy">
-                Margin
-              </span>
-            )}
-          </div>
+      {/* Three tight rows, not six tall ones. A list is for scanning:
+          the old card set the title at text-2xl with its own padded
+          block and gave the status pill a whole row to itself, so three
+          items filled a screen and you could never see a client's work
+          at once. Title is body-scale here and the pill shares its
+          line. */}
+      <div className="px-3.5 py-2.5">
+        {/* Row 1: pill + title + quality-gate badges, all on one line. */}
+        <div className="flex items-baseline gap-2.5">
+          <span className="shrink-0 self-center">
+            <StatusPill
+              itemId={item.id}
+              status={item.status}
+              options={statusOptions}
+              disabled={pillDisabled}
+            />
+          </span>
+          <Link
+            href={detailHref}
+            className="flex-1 min-w-0 font-bold text-[15px] text-foreground leading-snug hover:underline underline-offset-2"
+          >
+            {item.title}
+          </Link>
+          {(item.revenueImpact || item.marginImpact) && (
+            <span className="shrink-0 flex gap-1 self-center">
+              {item.revenueImpact && (
+                <span className="font-mono text-[9px] uppercase tracking-tbb-caps px-1.5 py-0.5 rounded-sm border border-tbb-navy text-tbb-navy">
+                  Rev
+                </span>
+              )}
+              {item.marginImpact && (
+                <span className="font-mono text-[9px] uppercase tracking-tbb-caps px-1.5 py-0.5 rounded-sm border border-tbb-navy text-tbb-navy">
+                  Mgn
+                </span>
+              )}
+            </span>
+          )}
         </div>
 
-        {/* Title — clickable to detail */}
-        <Link
-          href={detailHref}
-          className="block font-bold text-foreground tracking-tight text-xl sm:text-2xl leading-tight hover:underline underline-offset-4 decoration-2"
-        >
-          {item.title}
-        </Link>
-
-        {/* Optional description excerpt — rendered through the shared
-            markdown renderer (Phase 1.3) so Coach-authored descriptions
-            with **bold**, lists, links, etc., display correctly. The
-            line-clamp keeps cards compact in the list view. */}
+        {/* Row 2: description, one line. Clamped to 1 rather than 2 —
+            it is a hint at what the item is about, and the detail page
+            is one click away for the rest. */}
         {item.description && (
-          <div className="mt-2 line-clamp-2 text-muted-foreground">
+          <div className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground [&_p]:inline">
             <MarkdownBody body={item.description} />
           </div>
         )}
 
-        {/* Bottom row: assignee + due + (optional) engagement label */}
-        <div className="mt-4 flex items-center flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-muted-foreground">
-          <span>
-            <span className="uppercase tracking-tbb-caps mr-1.5">Owner</span>
-            <span className={item.assigneeName ? "text-foreground" : ""}>
-              {item.assigneeName ?? "Unassigned"}
-            </span>
+        {/* Row 3: owner · due · client, separated by dots rather than
+            wide gaps so the whole line reads as one string. */}
+        <div className="mt-1 flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-mono text-muted-foreground">
+          <span className={item.assigneeName ? "text-foreground" : ""}>
+            {item.assigneeName ?? "Unassigned"}
           </span>
-          <span>
-            <span className="uppercase tracking-tbb-caps mr-1.5">Due</span>
-            <span
-              className={
-                overdue ? "text-tbb-danger font-bold" : "text-foreground"
-              }
-            >
-              {formatDueDate(item.dueDate)}
-            </span>
+          <span aria-hidden className="text-tbb-line">·</span>
+          <span
+            className={overdue ? "text-tbb-danger font-bold" : "text-foreground"}
+          >
+            {formatDueDate(item.dueDate)}
           </span>
           {item.engagementName && (
-            <span>
-              <span className="uppercase tracking-tbb-caps mr-1.5">Client</span>
+            <>
+              <span aria-hidden className="text-tbb-line">·</span>
               <span className="text-foreground">{item.engagementName}</span>
-            </span>
+            </>
           )}
         </div>
       </div>

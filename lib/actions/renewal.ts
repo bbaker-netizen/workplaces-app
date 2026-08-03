@@ -13,12 +13,13 @@ import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
-  deliverables,
+  actionItems,
   engagements,
   goals,
   soulFiles,
   type UserProfile,
 } from "@/lib/db/schema";
+import { isPublishedDeliverable } from "@/lib/deliverables/query";
 import {
   withEngagementContext,
 } from "@/lib/db/tenant";
@@ -97,16 +98,24 @@ export async function generateRenewalProposal(
         .from(soulFiles)
         .where(eq(soulFiles.engagementId, data.engagementId))
         .limit(1);
+      // The nine documents for this client. Drafts excluded — a renewal
+      // proposal listing work we have not reviewed, let alone produced,
+      // would overstate the engagement to the client paying for it.
       const recentDeliverables = await tx
         .select({
-          title: deliverables.title,
-          type: deliverables.type,
-          status: deliverables.status,
-          deliveredAt: deliverables.deliveredAt,
+          title: actionItems.title,
+          type: actionItems.deliverableType,
+          status: actionItems.status,
+          deliveredAt: actionItems.updatedAt,
         })
-        .from(deliverables)
-        .where(eq(deliverables.engagementId, data.engagementId))
-        .orderBy(desc(deliverables.updatedAt))
+        .from(actionItems)
+        .where(
+          and(
+            eq(actionItems.engagementId, data.engagementId),
+            isPublishedDeliverable(),
+          ),
+        )
+        .orderBy(desc(actionItems.updatedAt))
         .limit(20);
       const openGoals = await tx
         .select({

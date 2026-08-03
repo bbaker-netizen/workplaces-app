@@ -109,7 +109,7 @@ export function ActionItemListClient({
   }, [groupByDueDate, nowMs, visible]);
 
   const list = (rows: ActionItemListItem[]) => (
-    <ul className="space-y-3 sm:space-y-4">
+    <ul className="space-y-1.5">
       {rows.map((item) => (
         <li key={item.id}>
           <ActionItemCard
@@ -164,7 +164,7 @@ export function ActionItemListClient({
                 defaultOpen={defaultOpen}
                 badge={rows.length}
               >
-                <div className="p-4">{list(rows)}</div>
+                <div className="p-2">{list(rows)}</div>
               </CollapsibleSection>
             );
           })}

@@ -35,17 +35,20 @@
  * not UTC's.
  */
 
-import { and, desc, eq, gte, inArray, lt, lte, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, ne } from "drizzle-orm";
 import { DateTime } from "luxon";
 import {
   actionItems,
   bbsSessions,
-  deliverables,
   eaTimeBlocks,
   prospects,
   userProfiles,
   type Engagement,
 } from "@/lib/db/schema";
+import {
+  OPEN_DELIVERABLE_STATUSES,
+  isPublishedDeliverable,
+} from "@/lib/deliverables/query";
 import type { Tx } from "@/lib/db/tenant";
 import {
   engagementLabel,
@@ -216,7 +219,9 @@ const LIVE_PROSPECT_STATUSES = [
 ] as const;
 
 /** Deliverable states that still owe the client something. */
-const OPEN_DELIVERABLE_STATUSES = ["not_started", "in_progress", "review"] as const;
+// Statuses now come from lib/deliverables/query.ts — the old
+// not_started/in_progress/review ladder died with the deliverables
+// table in migration 0109.
 
 /* --------------------------- the gather --------------------------- */
 
@@ -282,7 +287,12 @@ export async function gatherDigest(
     })
     .from(actionItems)
     .leftJoin(userProfiles, eq(userProfiles.id, actionItems.assigneeUserProfileId))
-    .where(and(inOwned, liveItem));
+    // Plain commitments only. Since 0109 the nine documents live in this
+    // same table, and without this filter every document would be
+    // counted twice in one email — once under "your commitments" and
+    // again under "documents in flight". One list in the UI is the
+    // point; one item reported twice in the same briefing is just noise.
+    .where(and(inOwned, liveItem, isNull(actionItems.deliverableType)));
 
   const toItem = (r: (typeof itemRows)[number]): DigestItem => ({
     id: r.id,
@@ -336,21 +346,25 @@ export async function gatherDigest(
 
   /* ------------------------- deliverables ------------------------- */
 
+  // Since 0109 a deliverable IS an action item with a deliverable_type.
+  // `isPublishedDeliverable()` also drops drafts — an unreviewed
+  // machine draft must not be reported to a Builder as work in flight.
   const deliverableRows = await tx
     .select({
-      id: deliverables.id,
-      title: deliverables.title,
-      type: deliverables.type,
-      status: deliverables.status,
-      engagementId: deliverables.engagementId,
-      targetDate: deliverables.targetDate,
-      updatedAt: deliverables.updatedAt,
+      id: actionItems.id,
+      title: actionItems.title,
+      type: actionItems.deliverableType,
+      status: actionItems.status,
+      engagementId: actionItems.engagementId,
+      targetDate: actionItems.dueDate,
+      updatedAt: actionItems.updatedAt,
     })
-    .from(deliverables)
+    .from(actionItems)
     .where(
       and(
-        inArray(deliverables.engagementId, engagementIds),
-        inArray(deliverables.status, [...OPEN_DELIVERABLE_STATUSES]),
+        inArray(actionItems.engagementId, engagementIds),
+        isPublishedDeliverable(),
+        inArray(actionItems.status, [...OPEN_DELIVERABLE_STATUSES]),
       ),
     );
 
@@ -359,7 +373,11 @@ export async function gatherDigest(
   ): DigestDeliverable => ({
     id: r.id,
     title: r.title,
-    type: r.type,
+    // Non-null by construction: isPublishedDeliverable() filters on
+    // `deliverable_type IS NOT NULL`. The select's type can't see the
+    // WHERE, and a `?? "sop"` fallback would silently mislabel a
+    // business plan as an SOP rather than fail loudly.
+    type: r.type!,
     status: r.status,
     engagementId: r.engagementId,
     engagementLabel: labelById.get(r.engagementId) ?? "Client",

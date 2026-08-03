@@ -14,9 +14,10 @@
  * received. "Slipped" is anything still open past its date.
  */
 
-import { and, eq, gte, inArray, isNotNull, lt, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, ne } from "drizzle-orm";
 import { DateTime } from "luxon";
-import { actionItems, deliverables } from "@/lib/db/schema";
+import { actionItems } from "@/lib/db/schema";
+import { OPEN_DELIVERABLE_STATUSES } from "@/lib/deliverables/query";
 import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { fridayRollupEmail } from "@/lib/email/templates";
@@ -71,22 +72,33 @@ export async function runFridayRollup(
               inArray(actionItems.engagementId, ids),
               eq(actionItems.status, "done"),
               gte(actionItems.updatedAt, weekStart),
+              // Plain commitments only — the nine documents share this
+              // table since 0109 and are counted separately just below.
+              // Without this every document finished this week would be
+              // reported twice in the same email.
+              isNull(actionItems.deliverableType),
             ),
           );
 
+        // A finished document. The retired table had `delivered_at`;
+        // action items record completion by moving to `done`, so
+        // `updated_at` on a done row is the closest honest answer. It
+        // drifts if the document is edited afterwards — the cost of one
+        // list, accepted deliberately.
         const deliveredThisWeek = await tx
           .select({
-            title: deliverables.title,
-            engagementId: deliverables.engagementId,
-            revenueImpact: deliverables.revenueImpact,
-            marginImpact: deliverables.marginImpact,
+            title: actionItems.title,
+            engagementId: actionItems.engagementId,
+            revenueImpact: actionItems.revenueImpact,
+            marginImpact: actionItems.marginImpact,
           })
-          .from(deliverables)
+          .from(actionItems)
           .where(
             and(
-              inArray(deliverables.engagementId, ids),
-              isNotNull(deliverables.deliveredAt),
-              gte(deliverables.deliveredAt, weekStart),
+              inArray(actionItems.engagementId, ids),
+              isNotNull(actionItems.deliverableType),
+              eq(actionItems.status, "done"),
+              gte(actionItems.updatedAt, weekStart),
             ),
           );
 
@@ -106,24 +118,27 @@ export async function runFridayRollup(
               lt(actionItems.dueDate, startOfToday),
               ne(actionItems.status, "done"),
               ne(actionItems.status, "draft"),
+              // Documents are chased in their own section below.
+              isNull(actionItems.deliverableType),
             ),
           );
 
         const lateDeliverables = await tx
           .select({
-            title: deliverables.title,
-            engagementId: deliverables.engagementId,
-            targetDate: deliverables.targetDate,
-            revenueImpact: deliverables.revenueImpact,
-            marginImpact: deliverables.marginImpact,
+            title: actionItems.title,
+            engagementId: actionItems.engagementId,
+            targetDate: actionItems.dueDate,
+            revenueImpact: actionItems.revenueImpact,
+            marginImpact: actionItems.marginImpact,
           })
-          .from(deliverables)
+          .from(actionItems)
           .where(
             and(
-              inArray(deliverables.engagementId, ids),
-              isNotNull(deliverables.targetDate),
-              lt(deliverables.targetDate, startOfToday),
-              inArray(deliverables.status, ["not_started", "in_progress", "review"]),
+              inArray(actionItems.engagementId, ids),
+              isNotNull(actionItems.deliverableType),
+              isNotNull(actionItems.dueDate),
+              lt(actionItems.dueDate, startOfToday),
+              inArray(actionItems.status, [...OPEN_DELIVERABLE_STATUSES]),
             ),
           );
 

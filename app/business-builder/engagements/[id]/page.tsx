@@ -19,7 +19,7 @@
 
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { and, asc, count, eq, lt, ne } from "drizzle-orm";
+import { and, asc, count, eq, isNull, lt, ne } from "drizzle-orm";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -42,7 +42,6 @@ import { activityTypeLabel } from "@/lib/pipeline/stages";
 import {
   actionItems,
   bbsSessions,
-  deliverables,
   embeddedApps,
   engagements,
   goals,
@@ -53,11 +52,14 @@ import {
   prospects,
   resources,
 } from "@/lib/db/schema";
+import {
+  deliverableCompletedAt,
+  isPublishedDeliverable,
+} from "@/lib/deliverables/query";
 import { withSystemContext } from "@/lib/db/tenant";
 import { checkOnboardingReadiness } from "@/lib/onboarding/preflight";
 import { StartOnboardingPanel } from "@/components/business-builder/StartOnboardingPanel";
 import { ALL_MODULES } from "@/lib/modules";
-import { QuickAddDeliverableButton } from "@/components/deliverables/QuickAddDeliverableButton";
 import {
   PortalModuleManager,
   type ModuleState,
@@ -132,20 +134,25 @@ export default async function EngagementDetailPage({
         tx
           .select()
           .from(actionItems)
-          .where(eq(actionItems.engagementId, id))
+          // Plain commitments. The nine documents are listed separately
+          // below; since 0109 they share this table, so without the
+          // split each one would be counted in both panels.
+          .where(
+            and(eq(actionItems.engagementId, id), isNull(actionItems.deliverableType)),
+          )
           .orderBy(asc(actionItems.dueDate), asc(actionItems.createdAt)),
         tx
           .select({
-            id: deliverables.id,
-            type: deliverables.type,
-            title: deliverables.title,
-            status: deliverables.status,
-            targetDate: deliverables.targetDate,
-            deliveredAt: deliverables.deliveredAt,
+            id: actionItems.id,
+            type: actionItems.deliverableType,
+            title: actionItems.title,
+            status: actionItems.status,
+            targetDate: actionItems.dueDate,
+            updatedAt: actionItems.updatedAt,
           })
-          .from(deliverables)
-          .where(eq(deliverables.engagementId, id))
-          .orderBy(asc(deliverables.targetDate), asc(deliverables.createdAt)),
+          .from(actionItems)
+          .where(and(eq(actionItems.engagementId, id), isPublishedDeliverable()))
+          .orderBy(asc(actionItems.dueDate), asc(actionItems.createdAt)),
         tx
           .select({
             module: portalModuleAssignments.module,
@@ -195,7 +202,13 @@ export default async function EngagementDetailPage({
       goals: goalRows,
       projects: projectRows,
       actions: actionRows,
-      deliverables: deliverableRows,
+      // deliveredAt is derived from status `done` — see
+      // lib/deliverables/query.ts. There is no stored delivered_at
+      // since 0109.
+      deliverables: deliverableRows.map((d) => ({
+        ...d,
+        deliveredAt: deliverableCompletedAt(d),
+      })),
       moduleAssignments: moduleRows,
       apps: appRows,
       netlifyResources: netlifyRows,
@@ -632,13 +645,13 @@ export default async function EngagementDetailPage({
               {data.deliverables.length}
             </span>
           </div>
-          <QuickAddDeliverableButton engagementId={id} />
         </header>
         {data.deliverables.length === 0 ? (
           <p className="text-xs text-tbb-ink-3 italic px-5 py-4">
-            No deliverables yet. Click <span className="font-bold">+ Add deliverable</span> above
-            to queue one — pick the methodology type (SOP, org chart, business plan, etc.) and
-            give it a title.
+            No documents yet. Open a meeting&rsquo;s workspace under{" "}
+            <span className="font-bold">Meetings</span> and pick a document type
+            to draft one from the transcript — or add an item there and set its
+            type to one of the nine.
           </p>
         ) : (
           <ul className="divide-y divide-tbb-line-soft">
@@ -653,13 +666,13 @@ export default async function EngagementDetailPage({
                     aria-hidden
                   />
                   <Link
-                    href="/portal/deliverables"
+                    href={`/business-builder/action-items/${d.id}`}
                     className="font-bold text-tbb-navy hover:underline"
                   >
                     {d.title}
                   </Link>
                   <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-                    {d.type.replace(/_/g, " ")}
+                    {d.type?.replace(/_/g, " ")}
                   </span>
                 </span>
                 <span className="flex items-baseline gap-3">

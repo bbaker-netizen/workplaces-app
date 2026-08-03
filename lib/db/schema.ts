@@ -282,13 +282,10 @@ export const deliverableTypeEnum = pgEnum("deliverable_type", [
   "stages_of_growth_assessment",
 ]);
 
-export const deliverableStatusEnum = pgEnum("deliverable_status", [
-  "not_started",
-  "in_progress",
-  "review",
-  "delivered",
-  "archived",
-]);
+// `deliverable_status` was dropped by migration 0109 along with the
+// `deliverables` table. Deliverables are action items now and ride the
+// action-item status ladder. `deliverable_type` above survives as the
+// tag that marks an action item as one of the nine documents.
 
 export const embeddedAppAuthModeEnum = pgEnum("embedded_app_auth_mode", [
   "public",
@@ -1237,6 +1234,35 @@ export const actionItems = pgTable(
       { onDelete: "set null" },
     ),
     confidenceFlag: confidenceFlagEnum("confidence_flag"),
+    /** Which of the nine methodology documents this item IS, or NULL for
+     *  an ordinary commitment. Migration 0109 retired the separate
+     *  `deliverables` table; this nullable tag is what replaced it, so a
+     *  session produces one follow-through list instead of two that
+     *  could not see each other.
+     *
+     *  Deliberately one nullable column rather than a `kind` flag beside
+     *  it — a flag and a type can contradict each other, a single
+     *  nullable column cannot. */
+    deliverableType: deliverableTypeEnum("deliverable_type"),
+    /** The finished document, once one exists. Carried over from the
+     *  retired `deliverables` table: a deliverable's whole point is that
+     *  it eventually becomes a file. NULL on ordinary commitments. */
+    documentId: uuid("document_id").references((): AnyPgColumn => documents.id, {
+      onDelete: "set null",
+    }),
+    /** The synced meeting this came out of. `fireflies_transcript_id`
+     *  below already carried the transcript id as loose text, but text
+     *  is not a join — nothing indexed it against the meeting row and
+     *  nothing stopped it naming a transcript we never synced. The
+     *  per-meeting workspace hangs off this FK.
+     *
+     *  SET NULL for the same reason as `agenda_item_id`: re-syncing or
+     *  removing a meeting record must never destroy the commitments
+     *  that came out of it. */
+    engagementMeetingId: uuid("engagement_meeting_id").references(
+      (): AnyPgColumn => engagementMeetings.id,
+      { onDelete: "set null" },
+    ),
     createdBy: actionItemCreatedByEnum("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1249,6 +1275,12 @@ export const actionItems = pgTable(
     projectIdx: index("action_items_project_idx").on(t.projectId),
     agendaItemIdx: index("action_items_agenda_item_idx").on(t.agendaItemId),
     eaExternalIdx: index("action_items_ea_external_id_idx").on(t.eaExternalId),
+    deliverableTypeIdx: index("action_items_deliverable_type_idx").on(
+      t.deliverableType,
+    ),
+    engagementMeetingIdx: index("action_items_engagement_meeting_idx").on(
+      t.engagementMeetingId,
+    ),
   })
 );
 
@@ -1692,55 +1724,17 @@ export const formSubmissions = pgTable(
 );
 
 // ---------- Phase 1.17: Deliverables ----------
-
-/**
- * `deliverables` — one of the 9 methodology-defined deliverable
- * types per engagement. Generated content lives on a linked
- * document; the row tracks lifecycle status.
- */
-export const deliverables = pgTable(
-  "deliverables",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    engagementId: uuid("engagement_id")
-      .notNull()
-      .references(() => engagements.id, { onDelete: "cascade" }),
-    type: deliverableTypeEnum("type").notNull(),
-    title: text("title").notNull(),
-    description: text("description"),
-    status: deliverableStatusEnum("status").notNull().default("not_started"),
-    documentId: uuid("document_id").references(() => documents.id, {
-      onDelete: "set null",
-    }),
-    /** Planning target for when this deliverable should ship. Optional
-     *  — set when the deliverable is queued. Used by the engagement
-     *  Gantt to plot the deliverable as a milestone diamond ahead of
-     *  delivery. Once delivered_at is set, that timestamp is preferred
-     *  for the milestone position. */
-    targetDate: timestamp("target_date", { withTimezone: true }),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-    /** Who marked this delivered (coach or client). Shown to both sides
-     *  alongside the delivered date. */
-    completedByUserProfileId: uuid("completed_by_user_profile_id").references(
-      () => userProfiles.id,
-      { onDelete: "set null" },
-    ),
-    revenueImpact: boolean("revenue_impact").notNull().default(false),
-    marginImpact: boolean("margin_impact").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    orgIdx: index("deliverables_org_idx").on(t.orgId),
-    engagementIdx: index("deliverables_engagement_idx").on(t.engagementId),
-    typeIdx: index("deliverables_type_idx").on(t.type),
-    statusIdx: index("deliverables_status_idx").on(t.status),
-    targetDateIdx: index("deliverables_target_date_idx").on(t.targetDate),
-  }),
-);
+//
+// The `deliverables` table was RETIRED by migration 0109. The nine
+// methodology document types are now a tag on `action_items`
+// (`deliverable_type`, nullable — NULL means an ordinary commitment),
+// so a session produces ONE follow-through list rather than two that
+// could not see each other. `deliverableTypeEnum` above survives as
+// that tag; `deliverable_status` was dropped with the table.
+//
+// If you are looking for what used to be here: the type taxonomy lives
+// in lib/deliverables/types.ts, and the queries live alongside the
+// other action-item queries in lib/db/queries/action-items.ts.
 
 // ---------- Phase 1.18: Invoices + Subscriptions + Embedded Apps ----------
 
@@ -3080,6 +3074,23 @@ export const engagementMeetings = pgTable(
     summaryBullets: text("summary_bullets"),
     summaryKeywords: text("summary_keywords"),
     transcriptUrl: text("transcript_url"),
+    /** The words. Flattened, speaker-tagged transcript body, stored by
+     *  the sync (migration 0109) so the portal can render a client's own
+     *  session instead of bouncing them to a third-party site. NULL for
+     *  meetings synced before 0109 until the next sync backfills them. */
+    transcriptText: text("transcript_text"),
+    /** The release gate. NULL means internal — a Business Builder has
+     *  not shared this transcript with the client, and the portal will
+     *  not render it. Defaults NULL so nothing publishes retroactively:
+     *  Bruce chose full transcripts visible to EVERY role in the
+     *  engagement, which is only safe because release is per meeting and
+     *  deliberate. */
+    transcriptSharedAt: timestamp("transcript_shared_at", {
+      withTimezone: true,
+    }),
+    transcriptSharedByUserProfileId: uuid(
+      "transcript_shared_by_user_profile_id",
+    ).references((): AnyPgColumn => userProfiles.id, { onDelete: "set null" }),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -3155,8 +3166,9 @@ export type Form = typeof forms.$inferSelect;
 export type NewForm = typeof forms.$inferInsert;
 export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type NewFormSubmission = typeof formSubmissions.$inferInsert;
-export type Deliverable = typeof deliverables.$inferSelect;
-export type NewDeliverable = typeof deliverables.$inferInsert;
+// Deliverable / NewDeliverable retired with the table (migration 0109).
+// An action item carrying a non-null `deliverableType` IS a deliverable;
+// use ActionItem.
 export type EmbeddedApp = typeof embeddedApps.$inferSelect;
 export type NewEmbeddedApp = typeof embeddedApps.$inferInsert;
 export type Course = typeof courses.$inferSelect;

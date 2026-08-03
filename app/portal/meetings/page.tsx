@@ -102,6 +102,23 @@ export default async function PortalMeetingsPage() {
                   />
                 </summary>
                 <div className="px-5 py-4 space-y-3 border-t border-tbb-line-soft">
+                  {/* The full transcript, but only once a Business
+                      Builder has released THIS meeting. `transcriptText`
+                      is present on any meeting anyone has opened
+                      internally, so the gate is `transcriptSharedAt` —
+                      never the presence of the text. Getting that
+                      backwards would publish every session a Builder had
+                      merely read. */}
+                  {m.transcriptSharedAt && m.transcriptText && (
+                    <details className="rounded-md border border-tbb-line bg-tbb-cream-50/50">
+                      <summary className="cursor-pointer list-none px-3 py-2 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:text-tbb-navy">
+                        Read the full transcript
+                      </summary>
+                      <pre className="max-h-[26rem] overflow-y-auto whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-tbb-ink-2 px-3 py-2 border-t border-tbb-line-soft">
+                        {m.transcriptText}
+                      </pre>
+                    </details>
+                  )}
                   {m.transcriptUrl && (
                     <a
                       href={m.transcriptUrl}

@@ -119,7 +119,6 @@ const BUSINESS_BUILDER_PHASES: BusinessBuilderPhase[] = [
     caption: "Ship the deep work",
     icon: Workflow,
     items: [
-      { href: "/business-builder/deliverables", label: "Deliverables", icon: FileText, tourId: "Coach-deliverables" },
       { href: "/business-builder/projects", label: "Projects", icon: Briefcase },
       // Goals removed per Bruce — was redundant with Projects in practice.
       // Soul File removed per Bruce — the concept is retired across the app.

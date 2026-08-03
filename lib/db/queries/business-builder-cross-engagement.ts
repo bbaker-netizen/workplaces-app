@@ -10,12 +10,22 @@
  * caller isn't a Coach, returns empty.
  */
 
-import { and, desc, eq, gte, isNotNull, isNull, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  type SQL,
+} from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
+  actionItems,
   bbsSessions,
   coaches,
-  deliverables,
   engagements,
   goals,
   hires,
@@ -199,6 +209,17 @@ export type CoachDeliverableRow = {
   ownerName: string | null;
 };
 
+/**
+ * Cross-client view of the nine methodology documents.
+ *
+ * Since migration 0109 there is no `deliverables` table — a deliverable
+ * is an action item carrying a non-null `deliverable_type`. Merging the
+ * entities did NOT mean losing the ability to ask "show me just the
+ * documents"; that is a filter over the one list, and it is the view
+ * that tells a Builder which client is owed a business plan. Draft rows
+ * are excluded: an unpublished extraction is a guess, not a commitment
+ * to produce a document.
+ */
 export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") return [];
@@ -208,24 +229,30 @@ export async function listCoachDeliverables(): Promise<CoachDeliverableRow[]> {
   return withSystemContext(async (tx) =>
     tx
       .select({
-        id: deliverables.id,
-        title: deliverables.title,
-        type: deliverables.type,
-        status: deliverables.status,
-        engagementId: deliverables.engagementId,
+        id: actionItems.id,
+        title: actionItems.title,
+        type: actionItems.deliverableType,
+        status: actionItems.status,
+        engagementId: actionItems.engagementId,
         engagementName: engagements.name,
-        targetDate: deliverables.targetDate,
+        targetDate: actionItems.dueDate,
         ownerName: userProfiles.fullName,
       })
-      .from(deliverables)
-      .innerJoin(engagements, eq(engagements.id, deliverables.engagementId))
+      .from(actionItems)
+      .innerJoin(engagements, eq(engagements.id, actionItems.engagementId))
       // Left joins: a client with no assigned Builder still lists its
-      // deliverables, just without a name against them.
+      // documents, just without a name against them.
       .leftJoin(coaches, eq(coaches.id, engagements.coachId))
       .leftJoin(userProfiles, eq(userProfiles.id, coaches.userProfileId))
-      .where(where)
-      .orderBy(desc(deliverables.updatedAt)),
-  );
+      .where(
+        and(
+          where,
+          isNotNull(actionItems.deliverableType),
+          ne(actionItems.status, "draft"),
+        ),
+      )
+      .orderBy(desc(actionItems.updatedAt)),
+  ) as Promise<CoachDeliverableRow[]>;
 }
 
 export type CoachGoalRow = {

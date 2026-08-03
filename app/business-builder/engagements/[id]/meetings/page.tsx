@@ -19,7 +19,9 @@ import {
   ArrowLeft,
   CalendarDays,
   ChevronDown,
+  ClipboardList,
   ExternalLink,
+  Eye,
   Users,
   Video,
 } from "lucide-react";
@@ -31,8 +33,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
-import { MeetingActionItemsButton } from "@/components/meetings/MeetingActionItemsButton";
-import { MeetingDeliverableButton } from "@/components/meetings/MeetingDeliverableButton";
+import { countDraftsByMeeting } from "@/lib/db/queries/meeting-workspace";
 import { dayPreview, groupMeetingsByDay } from "@/lib/meetings/grouping";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import {
@@ -67,7 +68,7 @@ export default async function EngagementMeetingsPage({
       .from(engagementMeetings)
       .where(eq(engagementMeetings.engagementId, id))
       .orderBy(desc(engagementMeetings.occurredAt), asc(engagementMeetings.id));
-    return { eng, meetings };
+    return { eng, meetings, draftCounts: await countDraftsByMeeting(id) };
   });
 
   if (!data) notFound();
@@ -150,14 +151,24 @@ export default async function EngagementMeetingsPage({
                   </summary>
                   <ul className="space-y-3 p-3 pt-0">
                     {g.meetings.map((m) => (
-                      <MeetingCard key={m.id} meeting={m} />
+                      <MeetingCard
+                      key={m.id}
+                      meeting={m}
+                      engagementId={id}
+                      draftCount={data.draftCounts.get(m.id) ?? 0}
+                    />
                     ))}
                   </ul>
                 </details>
               ) : (
                 <ul className="space-y-3">
                   {g.meetings.map((m) => (
-                    <MeetingCard key={m.id} meeting={m} />
+                    <MeetingCard
+                      key={m.id}
+                      meeting={m}
+                      engagementId={id}
+                      draftCount={data.draftCounts.get(m.id) ?? 0}
+                    />
                   ))}
                 </ul>
               )}
@@ -171,8 +182,12 @@ export default async function EngagementMeetingsPage({
 
 function MeetingCard({
   meeting,
+  engagementId,
+  draftCount,
 }: {
   meeting: typeof engagementMeetings.$inferSelect;
+  engagementId: string;
+  draftCount: number;
 }) {
   const attendees = Array.isArray(meeting.attendees)
     ? (meeting.attendees as Array<{ email: string | null; name: string | null }>)
@@ -221,18 +236,39 @@ function MeetingCard({
           />
         </summary>
         <div className="px-5 py-4 space-y-3 border-t border-tbb-line-soft">
-          {meeting.transcriptUrl && (
-            <a
-              href={meeting.transcriptUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-blue hover:underline"
+          {/* One way in. Drafting, reviewing, assigning, the transcript
+              and its release control all live on the workspace page now
+              — the two rival buttons that used to sit here were the
+              redundancy this replaced. */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Link
+              href={`/business-builder/engagements/${engagementId}/meetings/${meeting.id}`}
+              className="inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-tbb-caps font-bold px-3.5 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
             >
-              <ExternalLink className="w-3 h-3" aria-hidden /> Open in Fireflies
-            </a>
-          )}
-          <MeetingActionItemsButton meetingId={meeting.id} />
-          <MeetingDeliverableButton meetingId={meeting.id} />
+              <ClipboardList className="w-3.5 h-3.5" aria-hidden />
+              Open workspace
+            </Link>
+            {draftCount > 0 && (
+              <span className="font-mono text-[11px] font-bold text-tbb-accent">
+                {draftCount} waiting for review
+              </span>
+            )}
+            {meeting.transcriptSharedAt && (
+              <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-tbb-caps text-tbb-blue">
+                <Eye className="w-3 h-3" aria-hidden /> Transcript released
+              </span>
+            )}
+            {meeting.transcriptUrl && (
+              <a
+                href={meeting.transcriptUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-blue"
+              >
+                <ExternalLink className="w-3 h-3" aria-hidden /> Fireflies
+              </a>
+            )}
+          </div>
           {meeting.summaryOverview && (
             <section>
               <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 mb-1">

@@ -212,6 +212,10 @@ export async function draftDeliverableFromMeeting(
       title:
         parsed.data.title ??
         `${DELIVERABLE_TYPE_LABEL[type]} — drafting…`,
+      // Ties the document to the session it came out of, so it lands in
+      // that meeting's workspace next to the commitments from the same
+      // conversation.
+      engagementMeetingId: meetingId,
     });
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

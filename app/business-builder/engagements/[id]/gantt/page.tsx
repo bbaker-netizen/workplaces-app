@@ -20,7 +20,7 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -30,12 +30,11 @@ import {
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
+import { actionItems, engagements, projects } from "@/lib/db/schema";
 import {
-  actionItems,
-  deliverables,
-  engagements,
-  projects,
-} from "@/lib/db/schema";
+  deliverableCompletedAt,
+  isPublishedDeliverable,
+} from "@/lib/deliverables/query";
 import { withSystemContext } from "@/lib/db/tenant";
 import { InlineProjectDateEdit } from "@/components/projects/InlineProjectDateEdit";
 import { InteractiveGantt } from "@/components/projects/InteractiveGantt";
@@ -83,24 +82,39 @@ export default async function ProjectGanttPage({
       tx
         .select()
         .from(actionItems)
-        .where(eq(actionItems.engagementId, id)),
+        // Plain commitments only — the nine documents come back in the
+        // query below and are plotted as milestone diamonds, not bars.
+        // Without this split every document would appear twice on the
+        // chart, once in each row band.
+        .where(
+          and(eq(actionItems.engagementId, id), isNull(actionItems.deliverableType)),
+        ),
       tx
         .select({
-          id: deliverables.id,
-          title: deliverables.title,
-          type: deliverables.type,
-          status: deliverables.status,
-          targetDate: deliverables.targetDate,
-          deliveredAt: deliverables.deliveredAt,
+          id: actionItems.id,
+          title: actionItems.title,
+          type: actionItems.deliverableType,
+          status: actionItems.status,
+          targetDate: actionItems.dueDate,
+          updatedAt: actionItems.updatedAt,
         })
-        .from(deliverables)
-        .where(eq(deliverables.engagementId, id)),
+        .from(actionItems)
+        .where(
+          and(eq(actionItems.engagementId, id), isPublishedDeliverable()),
+        ),
     ]);
     return {
       eng,
       projects: projectRows,
       actions: actionRows,
-      deliverables: deliverableRows,
+      // `deliveredAt` is derived, not stored: since 0109 completion is
+      // status `done`, so `updated_at` only means "delivered" on a done
+      // row. Mapping it unconditionally would have plotted every
+      // in-flight document at today's date as though it had shipped.
+      deliverables: deliverableRows.map((d) => ({
+        ...d,
+        deliveredAt: deliverableCompletedAt(d),
+      })),
     };
   });
 
@@ -279,10 +293,10 @@ export default async function ProjectGanttPage({
                   return (
                     <Link
                       key={d.id}
-                      href={`/portal/deliverables`}
+                      href={`/portal/action-items/${d.id}`}
                       className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 group"
                       style={{ left: `${offsetPct}%` }}
-                      title={`${d.title} — ${d.type.replace(/_/g, " ")} — ${
+                      title={`${d.title} — ${d.type?.replace(/_/g, " ")} — ${
                         delivered
                           ? "delivered " + date.toLocaleDateString()
                           : "target " + date.toLocaleDateString()

@@ -4,7 +4,7 @@
  * Global search.
  *
  * Phase 3.12. One server action that searches across action items,
- * goals, projects, deliverables, hires, documents, sessions, and
+ * goals, projects, hires, documents, sessions, and
  * messages by ILIKE on the title/body/name field. For Coach users,
  * spans every engagement they own; for client users, scoped to
  * their home org via RLS.
@@ -19,7 +19,6 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
   actionItems,
   bbsSessions,
-  deliverables,
   documents,
   engagements,
   goals,
@@ -79,7 +78,6 @@ export async function globalSearch(
       itemHits,
       goalHits,
       projHits,
-      delivHits,
       hireHits,
       docHits,
       sessHits,
@@ -119,21 +117,6 @@ export async function globalSearch(
         })
         .from(projects)
         .where(or(ilike(projects.name, q), ilike(projects.description, q)))
-        .limit(limit),
-      tx
-        .select({
-          id: deliverables.id,
-          title: deliverables.title,
-          description: deliverables.description,
-          engagementId: deliverables.engagementId,
-        })
-        .from(deliverables)
-        .where(
-          or(
-            ilike(deliverables.title, q),
-            ilike(deliverables.description, q),
-          ),
-        )
         .limit(limit),
       tx
         .select({
@@ -207,16 +190,10 @@ export async function globalSearch(
         href: `/portal/projects/${r.id}`,
       });
     }
-    for (const r of delivHits) {
-      hits.push({
-        type: "deliverable",
-        id: r.id,
-        title: r.title,
-        excerpt: r.description?.slice(0, 200) ?? null,
-        engagementId: r.engagementId,
-        href: `/portal/deliverables`,
-      });
-    }
+    // No separate deliverables pass. Migration 0109 merged the nine
+    // documents into `action_items`, so the action-item query above
+    // already returns them — searching both would list every document
+    // twice under two different type labels.
     for (const r of hireHits) {
       hits.push({
         type: "hire",

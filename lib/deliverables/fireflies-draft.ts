@@ -26,8 +26,8 @@
 
 import { eq } from "drizzle-orm";
 import {
+  actionItems,
   bbsSessions,
-  deliverables,
   engagementMeetings,
   soulFiles,
 } from "@/lib/db/schema";
@@ -90,22 +90,37 @@ export async function createDraftPlaceholder(args: {
   orgId: string;
   type: DeliverableType;
   title: string;
+  /** The meeting this was drafted from, so the finished document appears
+   *  in that meeting's workspace beside the commitments from the same
+   *  session rather than in a separate module. */
+  engagementMeetingId?: string | null;
 }): Promise<string> {
   return withSystemContext(async (tx) => {
     const [row] = await tx
-      .insert(deliverables)
+      .insert(actionItems)
       .values({
         orgId: args.orgId,
         engagementId: args.engagementId,
-        type: args.type,
+        // Non-null deliverableType is what makes this row one of the
+        // nine documents rather than an ordinary commitment. Since 0109
+        // there is no separate table to put it in.
+        deliverableType: args.type,
         title: args.title,
         description:
           "> _Reading the meeting transcript and drafting… this usually takes " +
           "a minute or two. If this message is still here after five minutes, " +
           "the drafting job didn't run — tell Bruce._",
-        status: "in_progress",
+        // `draft`, not `in_progress`. A machine-written document is a
+        // proposal until a Business Builder has read it, and draft is
+        // the status the portal filters out for every client role — so
+        // an unreviewed draft cannot appear in front of a client. That
+        // gate did not exist when this wrote to `deliverables`, whose
+        // rows were client-visible from the moment they were inserted.
+        status: "draft",
+        createdBy: "claude",
+        engagementMeetingId: args.engagementMeetingId ?? null,
       })
-      .returning({ id: deliverables.id });
+      .returning({ id: actionItems.id });
     return row.id;
   });
 }
@@ -119,13 +134,13 @@ export async function finishDraftPlaceholder(args: {
 }): Promise<void> {
   await withSystemContext(async (tx) => {
     await tx
-      .update(deliverables)
+      .update(actionItems)
       .set({
         ...(args.title ? { title: args.title } : {}),
         description: args.description,
         updatedAt: new Date(),
       })
-      .where(eq(deliverables.id, args.deliverableId));
+      .where(eq(actionItems.id, args.deliverableId));
   });
 }
 
@@ -311,20 +326,25 @@ export async function recordDeliverableDraftFailure(args: {
   type: DeliverableType;
   meetingLabel: string;
   reason: string;
+  engagementMeetingId?: string | null;
 }): Promise<void> {
   const stamp = new Date().toLocaleString();
   await withSystemContext(async (tx) => {
-    await tx.insert(deliverables).values({
+    await tx.insert(actionItems).values({
       orgId: args.orgId,
       engagementId: args.engagementId,
-      type: args.type,
+      deliverableType: args.type,
       title: `Draft failed — ${DELIVERABLE_TYPE_LABEL[args.type]} from ${args.meetingLabel}`,
       description:
-        `> _Drafting this deliverable from **${args.meetingLabel}** failed on ${stamp}. ` +
+        `> _Drafting this document from **${args.meetingLabel}** failed on ${stamp}. ` +
         `Nothing was generated. This row exists so the run didn't disappear silently — ` +
         `delete it once the cause below is sorted, and draft again._\n\n---\n\n` +
         `**Reason reported:**\n\n\`\`\`\n${args.reason}\n\`\`\`\n`,
-      status: "in_progress",
+      // draft: a failure notice is for the Builder's eyes. It must never
+      // be one status flip away from a client reading "Draft failed".
+      status: "draft",
+      createdBy: "claude",
+      engagementMeetingId: args.engagementMeetingId ?? null,
     });
   });
 }

@@ -36,10 +36,10 @@ import {
   actionItems,
   agendaItems,
   bbsSessions,
-  deliverables,
   eaAgendaProposals,
   userProfiles,
 } from "@/lib/db/schema";
+import { isPublishedDeliverable } from "@/lib/deliverables/query";
 import { withSystemContext, type Tx } from "@/lib/db/tenant";
 import { complete } from "@/lib/ai/anthropic";
 import { fetchMeetingDetail } from "@/lib/integrations/fireflies";
@@ -125,14 +125,24 @@ async function gatherAgendaContext(
       ),
     );
 
+  // Documents in flight for this client. `isPublishedDeliverable()`
+  // excludes drafts, which matters more here than anywhere else: this
+  // list is fed to a model that drafts CLIENT-VISIBLE agenda items, and
+  // an unreviewed machine draft must not become a talking point in a
+  // session before a Business Builder has even read it.
   const delivs = await tx
     .select({
-      title: deliverables.title,
-      status: deliverables.status,
-      targetDate: deliverables.targetDate,
+      title: actionItems.title,
+      status: actionItems.status,
+      targetDate: actionItems.dueDate,
     })
-    .from(deliverables)
-    .where(eq(deliverables.engagementId, session.engagementId));
+    .from(actionItems)
+    .where(
+      and(
+        eq(actionItems.engagementId, session.engagementId),
+        isPublishedDeliverable(),
+      ),
+    );
 
   const [previous] = await tx
     .select({ recordingId: bbsSessions.firefliesRecordingId })
@@ -160,7 +170,7 @@ async function gatherAgendaContext(
       overdue: Boolean(i.dueDate && i.dueDate < now),
     })),
     deliverablesInFlight: delivs
-      .filter((d) => d.status !== "delivered" && d.status !== "archived")
+      .filter((d) => d.status !== "done")
       .map((d) => ({
         title: d.title,
         status: d.status,

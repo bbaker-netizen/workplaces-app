@@ -105,7 +105,6 @@ export const ALL_MODULES: ReadonlyArray<PortalModule> = [
   // is better delivered contextually (callouts inside the relevant
   // module) and on-demand via Buddy. Revisit when that lands.
   { key: "projects",     label: "Projects",     href: "/portal/projects",     visibleTo: ALL_ROLES, sortOrder: 60, phase: "plan" },
-  { key: "deliverables", label: "Deliverables", href: "/portal/deliverables", visibleTo: ALL_ROLES, sortOrder: 70, phase: "plan" },
   { key: "courses",      label: "Courses",      href: "/portal/courses",      visibleTo: ALL_ROLES, sortOrder: 90, phase: "plan" },
   // Forms removed from the client portal per Bruce — not part of the
   // client-facing flow. The enum value stays for any existing data.

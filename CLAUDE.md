@@ -1886,6 +1886,162 @@ prompt and needed nothing.
 
 ---
 
+## What was built — one follow-through list per meeting (2026-08-03)
+
+Bruce, on the Meetings library: "why are there two options to pull draft
+to-dos?" There weren't — the top button drafted commitments, the bottom
+one drafted a long-form document — but the labels differed only in a
+caption above them, so it read as duplication. Pulling that thread got
+to the real ask: **the transcript in the client portal, everything it
+produces landing in one place for him and Jen to review, edit and
+assign, plus a way to add what it missed.** Migration `0109`.
+
+**Four decisions Bruce made before anything was written:** merge into one
+list called action items (the nine document types become a tag); the
+central area is the meeting itself; full transcripts visible to EVERYONE
+in the engagement; each transcript released by hand.
+
+**The merge was checked against the data before it was agreed to.** The
+`deliverables` table held exactly ONE row — an in-progress Stages of
+Growth assessment, 8,780 characters, undelivered, no document attached —
+and nothing in the schema referenced it by foreign key. That is why the
+merge was cheap. With forty delivered documents in there the advice
+would have been the opposite, and the check is the difference between a
+recommendation and a guess. **Size the blast radius before agreeing to a
+destructive change, not after.**
+
+### `deliverable_type IS NULL` is the whole discriminator
+
+NULL means an ordinary commitment; set means the row IS one of the nine
+documents. Deliberately not a `kind` flag beside a nullable type — two
+columns can contradict each other (flagged a deliverable with no type,
+or typed but flagged a task) and one nullable column cannot.
+
+Lossy in one direction, knowingly: `review` collapses into
+`in_progress`, `archived` into `done`, and `delivered_at` /
+`completed_by` are gone in favour of status `done` + `updated_at`. So a
+finished document's completion date drifts if the document is edited
+later. That is the price of one list and Bruce accepted it. `document_id`
+was carried across rather than dropped — a deliverable's whole point is
+that it eventually becomes a file.
+
+The INSERT and the DROP sit in one implicit transaction: a failed copy
+means the table is still there, so the row cannot be lost in the gap
+between the two statements.
+
+### The gate the old table never had
+
+`createDraftPlaceholder` used to insert a `deliverables` row that was
+**client-visible from the moment it existed**. Drafted documents now
+land as `status: 'draft'`, which is the status the portal filters out
+for every client role. A machine-written document is a proposal until a
+Business Builder has read it. Same for the failure notice a broken
+drafting run leaves behind — "Draft failed" must not be one status flip
+away from a client reading it.
+
+### Double-counting was the trap the merge created
+
+Once documents live in `action_items`, every query that had counted
+"action items" silently counted documents too, while the separate
+documents query counted them again. Six surfaces were affected: the EA
+daily briefing, the Friday rollup (both "completed this week" and the
+overdue chase), the engagement page, the Gantt, and global search —
+which already searched `action_items`, so its separate deliverables pass
+would have listed every document twice under two different labels, and
+was deleted outright.
+
+`lib/deliverables/query.ts` holds the one definition —
+`isPublishedDeliverable()`, `isPlainCommitment()`, the status mapping
+and `deliverableCompletedAt()`. Seven hand-written copies of the same
+WHERE clause is how they drift apart; same reasoning as
+`lib/ea/held-sessions.ts`.
+
+Every one of those queries also excludes drafts. An unreviewed draft
+must not be counted as work in flight, chased as late, listed in a
+renewal proposal to a paying client, or — worst — fed to the model that
+drafts CLIENT-VISIBLE agenda items.
+
+**`deliveredAt: actionItems.updatedAt` was wrong and nearly shipped.**
+Selected directly, every in-flight document has a non-null `updated_at`,
+so the Gantt would have plotted the whole book as delivered today. It is
+derived from status in JS, not selected in SQL.
+
+### Transcripts: lazy, and released one at a time
+
+`engagement_meetings` never stored the words, only a Fireflies link.
+`transcript_text` is filled on FIRST OPEN, not by the sync: the hourly
+sync calls `fetchMeetingDetail`, which deliberately omits sentences, and
+pulling full bodies there would mean 235 large payloads to store text
+most of which nobody ever reads. Transcripts are immutable once
+recorded, so the cache never goes stale. `lib/meetings/transcript.ts`
+has NO `"use server"` — an unguarded function that bills Fireflies per
+call and returns a client's verbatim session must not be a
+browser-reachable endpoint. Same rule as `fireflies-sync.ts`.
+
+**`transcript_shared_at` defaults NULL and nothing publishes
+retroactively.** Bruce chose full transcripts for every role in the
+engagement, employees included; that is only safe because release is per
+meeting and deliberate. A column defaulting to `now()` would have
+published sixteen clients' back catalogue on deploy. The portal gates on
+`transcript_shared_at`, never on the presence of `transcript_text` —
+getting that backwards would publish every session a Builder had merely
+opened to read. Sharing refuses if the body cannot be fetched, so a row
+can never be marked shared with nothing behind it.
+
+### The workspace
+
+`/business-builder/engagements/[id]/meetings/[meetingId]` is the one page
+per session: recap, transcript with its release control, drafts awaiting
+review, published items, and the manual add. The meetings index links
+into it and shows a waiting-for-review count; the two rival buttons are
+gone, and so is the SECOND copy of the same pair that sat on the BBS
+session detail page.
+
+One drafting control replaces both: a picker whose first option is
+"To-dos & commitments" and whose rest are the nine documents. The choice
+survives because it was always real — several short commitments versus
+one long document — but it is one question now rather than two buttons.
+
+`engagement_meeting_id` is a real FK, not the loose
+`fireflies_transcript_id` text that already existed: text cannot be
+indexed against the meeting row and nothing stopped it naming a
+transcript we never synced. `createActionItem` validates it belongs to
+the target engagement inside the bound transaction — RLS blocks
+cross-org but NOT cross-engagement-within-org, so an unvalidated id
+would put one client's commitment in another client's workspace. Same
+guard the `bbsSessionId` and `agendaItemId` links already had.
+`deliverableType` joins the restricted-field list, so a `client_manager`
+updating the status of their own item cannot also retype it as a
+business plan.
+
+0109 backfills the meeting link from the transcript id both tables
+already carried — without it the workspace would have opened empty for
+every session already held. All 15 existing items linked.
+
+### Action item cards
+
+Halved in height, separately from the above and at Bruce's ask: the
+title was set at `text-2xl` with the status pill on a row of its own, so
+three items filled a screen. Pill, title and quality-gate badges now
+share one line, the description clamps to one, and the metadata reads as
+a single dotted string.
+
+**Verified:** `tsc --noEmit` and `next lint` clean. `next build`
+compiles: 74 prerender failures and 148 `Missing publishableKey` errors,
+zero of any other cause — exactly the recorded 76/152 baseline less the
+two deleted deliverables pages. Migration 0109 was applied against the
+LIVE database inside a transaction forced to roll back: 15 → 16 action
+items, the Crown and Ember assessment carried across with all 8,780
+characters, transcript columns added, 15 meeting links backfilled, table
+dropped — then rolled back, database unchanged.
+
+**Not yet exercised against a real deploy, and the UI has not been
+clicked.** 0109 applies on next deploy via `scripts/migrate-on-deploy.mjs`.
+The acceptance test is opening a synced meeting's workspace, drafting
+to-dos from it, editing and assigning one, publishing it, adding a manual
+item, and releasing the transcript — then confirming it appears in the
+client portal and that an unreleased one does not.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
