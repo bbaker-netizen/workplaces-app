@@ -30,7 +30,7 @@ import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import {
   fromDateTimeLocalValue,
   formatSessionTime,
-  SESSION_STATUS_LABEL,
+  sessionStatusLabel,
   SESSION_TYPE_LABEL,
   toDateTimeLocalValue,
 } from "./utils";
@@ -67,11 +67,11 @@ export function SessionDetail({
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(session.notes ?? "");
 
-  const isOverdue =
-    session.status === "scheduled" && session.scheduledAt < new Date();
-  const statusLabel = isOverdue
-    ? "Missed"
-    : SESSION_STATUS_LABEL[session.status];
+  // "Held" rather than "Missed" when Fireflies recorded it — see
+  // sessionStatusLabel. `isOverdue` drives the alarm styling, so a
+  // recorded session loses the orange too.
+  const { label: statusLabel, isAlarm: isOverdue } =
+    sessionStatusLabel(session);
 
   const onComplete = () => {
     setError(null);

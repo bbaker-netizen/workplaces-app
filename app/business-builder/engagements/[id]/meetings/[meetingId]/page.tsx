@@ -28,6 +28,7 @@ import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { FollowThroughBoard } from "@/components/meetings/FollowThroughBoard";
 import { TranscriptPanel } from "@/components/meetings/TranscriptPanel";
 import { MeetingDraftControls } from "@/components/meetings/MeetingDraftControls";
+import { RecapPanel } from "@/components/meetings/RecapPanel";
 import { cleanMeetingTitle, formatMeetingSummary } from "@/lib/meetings/format";
 
 export default async function MeetingWorkspacePage({
@@ -109,6 +110,17 @@ export default async function MeetingWorkspacePage({
           )}
         </div>
       </header>
+
+      {/* The client-facing recap sits at the top, above the drafting
+          controls: it is the one thing on this page that leaves the
+          building, and it is what the approval email links here to do. */}
+      {ws.recap && (
+        <RecapPanel
+          recap={ws.recap}
+          engagementId={id}
+          clientLabel={ws.engagementName ?? "this client"}
+        />
+      )}
 
       <MeetingDraftControls meetingId={meetingId} />
 

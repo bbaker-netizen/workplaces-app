@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { CalendarDays, MapPin, Video } from "lucide-react";
 import type { ListedSession } from "@/lib/db/queries/bbs-sessions";
-import { formatSessionTime, SESSION_STATUS_LABEL } from "./utils";
+import { formatSessionTime, sessionStatusLabel } from "./utils";
 
 const TZ = "America/Edmonton";
 
@@ -94,10 +94,11 @@ function SessionRow({
   hrefBase: string;
   past?: boolean;
 }) {
-  const isOverdue =
-    session.status === "scheduled" && session.scheduledAt < new Date();
+  // "Held" rather than "Missed" when Fireflies recorded it — see
+  // sessionStatusLabel. `isOverdue` drives the orange chip and pill, so
+  // a recorded session drops back to the neutral tone.
+  const { label: statusLabel, isAlarm: isOverdue } = sessionStatusLabel(session);
   const isCancelled = session.status === "cancelled";
-  const statusLabel = isOverdue ? "Missed" : SESSION_STATUS_LABEL[session.status];
   const { month, day, weekday } = chipParts(session.scheduledAt);
   const isVirtual = session.type === "virtual";
 

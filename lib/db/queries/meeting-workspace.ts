@@ -9,11 +9,13 @@
  * Bruce asked to be rid of.
  */
 
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
   actionItems,
+  bbsSessions,
   engagementMeetings,
   engagements,
+  sessionRecaps,
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -34,6 +36,30 @@ export type FollowThroughItem = {
   confidenceFlag: "high" | "medium" | "low" | null;
 };
 
+/**
+ * The client-facing recap drafted from this session, if there is one.
+ *
+ * Until this shipped, `session_recaps` was rendered nowhere in the app —
+ * the only way to act on a drafted recap was the approve link in the
+ * emailed copy, which sends it verbatim. There was no way to change a
+ * word before it reached a client.
+ */
+export type WorkspaceRecap = {
+  id: string;
+  status: "draft" | "approved" | "sent";
+  subject: string;
+  /** What the editor edits. Markdown is the source of truth for an
+   *  edited recap; the HTML and plain-text bodies are derived from it. */
+  bodyMarkdown: string;
+  approvedAt: Date | null;
+  sentAt: Date | null;
+  /** How many client contacts a send would actually reach. Counted with
+   *  the same rule the send path uses, so the panel cannot promise a
+   *  delivery that will not happen. Zero is common — a client nobody has
+   *  invited to their portal yet has no user rows at all. */
+  recipientCount: number;
+};
+
 export type MeetingWorkspace = {
   meeting: typeof engagementMeetings.$inferSelect;
   engagementName: string | null;
@@ -41,6 +67,7 @@ export type MeetingWorkspace = {
   /** Everyone who could own something out of this session: the client's
    *  own people AND the Business Builders. Drives the owner dropdown. */
   members: { id: string; name: string | null; role: string }[];
+  recap: WorkspaceRecap | null;
 };
 
 export async function getMeetingWorkspace(
@@ -125,11 +152,67 @@ export async function getMeetingWorkspace(
       return true;
     });
 
+    // The recap for this meeting.
+    //
+    // `session_recaps` hangs off `bbs_sessions`, not off the meeting, so
+    // the join runs through the transcript id the two tables share —
+    // the same key the recap sweep used to attach the transcript in the
+    // first place. A meeting with no transcript can have no recap, so
+    // the lookup is skipped entirely rather than scanning.
+    let recap: WorkspaceRecap | null = null;
+    if (meeting.firefliesTranscriptId) {
+      const [row] = await tx
+        .select({
+          id: sessionRecaps.id,
+          status: sessionRecaps.status,
+          subject: sessionRecaps.subject,
+          bodyMarkdown: sessionRecaps.bodyMarkdown,
+          bodyText: sessionRecaps.bodyText,
+          approvedAt: sessionRecaps.approvedAt,
+          sentAt: sessionRecaps.sentAt,
+        })
+        .from(sessionRecaps)
+        .innerJoin(bbsSessions, eq(bbsSessions.id, sessionRecaps.bbsSessionId))
+        .where(
+          and(
+            eq(sessionRecaps.engagementId, meeting.engagementId),
+            eq(bbsSessions.firefliesRecordingId, meeting.firefliesTranscriptId),
+          ),
+        )
+        .limit(1);
+
+      if (row) {
+        const contacts = eng
+          ? await tx
+              .select({ email: userProfiles.email })
+              .from(userProfiles)
+              .where(
+                and(
+                  eq(userProfiles.orgId, eng.orgId),
+                  inArray(userProfiles.role, ["client_lead", "client_manager"]),
+                ),
+              )
+          : [];
+        recap = {
+          id: row.id,
+          status: row.status,
+          subject: row.subject,
+          // Pre-0087 recaps have no markdown column; the plain-text body
+          // is the closest thing to edit and reads acceptably as markdown.
+          bodyMarkdown: row.bodyMarkdown ?? row.bodyText,
+          approvedAt: row.approvedAt,
+          sentAt: row.sentAt,
+          recipientCount: contacts.filter((c) => c.email?.includes("@")).length,
+        };
+      }
+    }
+
     return {
       meeting,
       engagementName: eng?.name ?? null,
       items: rows as FollowThroughItem[],
       members,
+      recap,
     };
   });
 }
