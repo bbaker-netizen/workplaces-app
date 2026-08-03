@@ -2,10 +2,10 @@
  * /business-builder/engagements/[id]/meetings — every Fireflies-synced
  * meeting for this client engagement, newest first.
  *
- * Shows meeting metadata (title, date, duration, attendees) + the
- * Fireflies-generated summary (overview + bullets + keywords). Does
- * NOT auto-extract action items — that pipeline stays on the BBS
- * session detail page where it has Bruce's full attention.
+ * The index. Meeting metadata (title, date, duration, attendees) plus
+ * the Fireflies summary, with a link into each meeting's workspace —
+ * which is where drafting, review, assignment and transcript release
+ * all happen. Nothing is drafted from this page; it is the way in.
  *
  * "Sync from Fireflies" button at the top triggers the per-engagement
  * sync action. Skips transcripts already synced in the last 24h to
@@ -90,9 +90,10 @@ export default async function EngagementMeetingsPage({
         <p className="text-sm text-tbb-ink-3 max-w-2xl">
           Every Fireflies-recorded meeting that included someone from{" "}
           <span className="font-bold">{data.eng.name ?? "this engagement"}</span>.
-          Pulled on demand — hit Sync to fetch the latest. Action item
-          extraction stays on the BBS session page; this is the
-          reference library.
+          Pulled on demand — hit Sync to fetch the latest. Open a
+          meeting&rsquo;s workspace to draft to-dos and documents from
+          its transcript, review them, and release the transcript to the
+          client.
         </p>
         <div className="flex items-center justify-between gap-4 flex-wrap pt-2">
           <SyncMeetingsButton engagementId={id} />
