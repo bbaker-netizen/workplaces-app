@@ -65,7 +65,7 @@ export function MeetingDraftControls({ meetingId }: { meetingId: string }) {
         type="button"
         onClick={run}
         disabled={isPending}
-        className="inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-tbb-caps font-bold px-3.5 py-2 rounded-pill bg-tbb-accent text-white hover:brightness-95 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-tbb-caps font-bold px-4 py-2.5 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-60 shadow-tbb-cta"
       >
         {isPending ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
@@ -74,13 +74,34 @@ export function MeetingDraftControls({ meetingId }: { meetingId: string }) {
         )}
         {isPending ? "Reading the transcript…" : "Draft from this meeting"}
       </button>
-      <p className="text-[11px] text-tbb-ink-3">
-        Reads the whole transcript and writes up the commitments people made,
-        plus any of the nine documents this session actually called for. It
-        decides which — you don&rsquo;t have to say in advance. Everything
-        arrives below as a draft to edit, assign and publish; nothing reaches
-        the client until you do.
-      </p>
+      <div className="text-[11px] text-tbb-ink-3 space-y-1">
+        <p>
+          One press reads the whole transcript and writes up two things: the
+          commitments people made, and any of the nine documents this session
+          called for. You don&rsquo;t pick — it decides from what was said.
+        </p>
+        <ol className="list-decimal pl-4 space-y-0.5">
+          <li>
+            To-dos appear under{" "}
+            <span className="font-bold text-tbb-navy">Needs your review</span>{" "}
+            in about a minute. Documents take a few minutes longer.
+          </li>
+          <li>
+            Fix the wording, set an owner and a date, then hit{" "}
+            <span className="font-bold text-tbb-navy">Publish</span>.
+          </li>
+          <li>
+            Missed something? Use{" "}
+            <span className="font-bold text-tbb-navy">
+              Add something the transcript missed
+            </span>{" "}
+            below.
+          </li>
+        </ol>
+        <p className="italic">
+          Nothing is visible to the client until you publish it.
+        </p>
+      </div>
       {message && (
         <p className="font-sans text-xs text-tbb-navy border border-tbb-line rounded-md px-2.5 py-1.5 bg-tbb-cream-50">
           {message}

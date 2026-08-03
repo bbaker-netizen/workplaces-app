@@ -90,7 +90,7 @@ export function PortalModuleManager({
   return (
     <div className="space-y-2">
       {!isConfirmed && (
-        <div className="rounded-md border border-tbb-accent/50 bg-tbb-accent/5 p-3 flex items-start gap-3 flex-wrap">
+        <div className="rounded-md border border-tbb-blue/50 bg-tbb-blue/5 p-3 flex items-start gap-3 flex-wrap">
           <p className="text-xs text-tbb-ink-2 flex-1 min-w-[16rem]">
             Every module is on by default, so nothing here has been chosen
             yet. Switch off anything this client shouldn&apos;t see, then

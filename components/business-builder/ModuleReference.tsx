@@ -59,7 +59,7 @@ export function ModuleReference() {
       <ModuleCard
         icon={<CheckSquare />}
         name="Action items"
-        what="The commitments coming out of every session — and the ones you create manually between sessions. Each item has a title, description, assignee, due date, status, and revenue/margin impact flags. Draft them straight from a recorded meeting: the 'Draft action items from this meeting' button on a client's Meetings page reads the full transcript in the background and drops the to-dos here as drafts to review, assign, and publish."
+        what="The one follow-through list: the commitments coming out of every session, the ones you create between sessions, AND the nine big documents (which are action items carrying a document type — there is no separate Deliverables module). Each item has a title, description, owner, due date, status, and revenue/margin flags. To draft from a session: Meetings → Open workspace → Draft from this meeting. It reads the whole transcript and writes both the to-dos and any documents the session called for — you don't pick a type. Everything lands there as drafts to edit, assign and publish; nothing reaches the client until you publish."
         when="During and after every BBS. Whenever the client agrees to do something. Whenever you spot a gap that needs fixing."
         replaces={`The Monday BBS subitems with the Pending / In progress / Waiting / Completed status track. Action items roll up to a session and live on each assignee's portal automatically.`}
         link="/business-builder/action-items"
@@ -76,12 +76,12 @@ export function ModuleReference() {
       />
       <ModuleCard
         icon={<FileText />}
-        name="Deliverables"
-        what="The nine standard outputs you ship to clients: SOPs, org charts, job profiles + interview guides, financial dashboards, onboarding guides, operations setup guides, business plans, marketing plans, stages of growth assessments. Each carries a status and completion date."
-        when="Whenever you're producing a piece of formal client work. Track from draft through delivery."
+        name="Documents (the nine)"
+        what="The nine standard outputs you ship to clients: SOPs, org charts, job profiles + interview guides, financial dashboards, onboarding guides, operations setup guides, business plans, marketing plans, stages of growth assessments. These are NOT a separate module — each one is an action item carrying a document type, so a session produces one follow-through list instead of two. Draft one from a meeting workspace, or set the type on any existing item."
+        when="Whenever you're producing a piece of formal client work. It rides the action-item lifecycle from draft through done."
         replaces={`The Drive folders + Word docs you currently produce per engagement.`}
-        link="/business-builder/deliverables"
-        linkLabel="All deliverables in flight"
+        link="/business-builder/action-items"
+        linkLabel="Open the follow-through list"
       />
       <ModuleCard
         icon={<MessagesSquare />}

@@ -72,7 +72,7 @@ export function FollowThroughBoard({
             Needs your review
           </h2>
           {drafts.length > 0 && (
-            <span className="font-mono text-[11px] text-tbb-accent font-bold">
+            <span className="font-mono text-[11px] text-tbb-blue font-bold">
               {drafts.length} waiting
             </span>
           )}
@@ -178,7 +178,7 @@ function ItemRow({
     <li
       className={
         "rounded-md border bg-white px-3 py-2.5 space-y-2 " +
-        (isDraft ? "border-tbb-accent/50 bg-tbb-cream-50/40" : "border-tbb-line")
+        (isDraft ? "border-tbb-blue/50 bg-tbb-cream-50/40" : "border-tbb-line")
       }
     >
       <div className="flex items-start gap-2">

@@ -270,8 +270,8 @@ export function StartOnboardingPanel({
 
         {/* Pre-flight. Shown before the button, not after the click. */}
         {!run && !established && blockers.length > 0 && (
-          <div className="rounded-md border border-tbb-accent/50 bg-tbb-accent/5 p-3 space-y-2">
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-accent">
+          <div className="rounded-md border border-tbb-blue/50 bg-tbb-blue/5 p-3 space-y-2">
+            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
               <AlertTriangle className="w-3.5 h-3.5" aria-hidden />
               Not ready yet — {blockers.length}{" "}
               {blockers.length === 1 ? "thing" : "things"} to fix first
@@ -319,7 +319,7 @@ export function StartOnboardingPanel({
                 "Resume onboarding? Only the steps that haven't been sent will run — nothing already delivered is re-sent.",
               )
             }
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-accent text-white hover:opacity-90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:opacity-90 disabled:opacity-50"
           >
             {isPending ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />

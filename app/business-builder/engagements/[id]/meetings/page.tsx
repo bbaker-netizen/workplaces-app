@@ -250,7 +250,7 @@ function MeetingCard({
               Open workspace
             </Link>
             {draftCount > 0 && (
-              <span className="font-mono text-[11px] font-bold text-tbb-accent">
+              <span className="font-mono text-[11px] font-bold text-tbb-blue">
                 {draftCount} waiting for review
               </span>
             )}

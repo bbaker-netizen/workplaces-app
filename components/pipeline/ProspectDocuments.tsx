@@ -150,7 +150,7 @@ export function ProspectDocuments({
                           ? "border-tbb-blue text-tbb-blue"
                           : g.status === "voided"
                             ? "border-tbb-line text-tbb-ink-4"
-                            : "border-tbb-accent text-tbb-accent")
+                            : "border-tbb-blue text-tbb-blue")
                       }
                     >
                       {envelopeStatusLabel(g.status)}
