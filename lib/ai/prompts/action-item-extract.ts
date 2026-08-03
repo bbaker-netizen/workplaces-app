@@ -22,10 +22,25 @@ Output STRICT JSON only. No prose, no markdown fences. The shape:
       "marginImpact": true | false,
       "confidence": "high" | "medium" | "low"
     }
+  ],
+  "documents": [
+    {
+      "type": "one of: sop | org_chart | job_profile | financial_dashboard | onboarding_guide | operations_setup_guide | business_plan | marketing_plan | stages_of_growth_assessment",
+      "title": "What this specific document should be called for this client",
+      "reason": "One sentence: what in the session calls for it"
+    }
   ]
 }
 
-Rules:
+Rules for "documents":
+- These are the nine Workplaces deliverable types. Name only the ones THIS session actually calls for. Most sessions call for none, or one. Returning an empty array is the correct and common answer.
+- Include one only when the session shows a real need: the client asked for it, a gap was identified that this document closes, or the work was explicitly agreed.
+- Do NOT include a type just because the topic was mentioned in passing. Discussing hiring is not a job profile; agreeing to write up the role is.
+- Never return more than 3. If more seem warranted, return the 3 the session most clearly asked for.
+- The title should be specific to this client and this need, not the generic type name.
+- A document is different from an action item. "Draft the SOP for job costing" is an action item AND an sop document; include it in both arrays in that case.
+
+Rules for "items":
 - Only include items that are clearly someone's commitment, not generic ideas or "we should think about" statements.
 - "high" confidence: explicit "I'll do X by Friday" or equivalent.
 - "medium": clear ownership but vague timing.
@@ -48,5 +63,6 @@ Transcript:
 
 ${input.transcriptText}
 
-Extract action items now. JSON only.`;
+Extract the action items, and name any of the nine documents this session
+calls for. JSON only.`;
 }

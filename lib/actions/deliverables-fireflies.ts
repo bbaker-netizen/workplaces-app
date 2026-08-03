@@ -28,6 +28,7 @@ import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { type UserProfile } from "@/lib/db/schema";
 import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
+import { enqueueDeliverableDraft } from "@/lib/deliverables/enqueue";
 import {
   createDraftPlaceholder,
   resolveMeetingDraftTarget,
@@ -56,43 +57,6 @@ const typeEnum = z.enum(DELIVERABLE_TYPES);
  * null on success. Not exported — "use server" requires every export to be an
  * async server action.
  */
-async function enqueueDraft(payload: {
-  source: "meeting" | "session";
-  sourceId: string;
-  type: string;
-  title?: string;
-  deliverableId: string;
-}): Promise<string | null> {
-  const baseUrl =
-    process.env.URL ??
-    process.env.DEPLOY_PRIME_URL ??
-    process.env.NEXT_PUBLIC_APP_URL;
-  const secret = process.env.CRON_SECRET;
-  if (!baseUrl || !secret) {
-    return "Background drafting isn't configured on the server (missing URL or CRON_SECRET).";
-  }
-  try {
-    const resp = await fetch(
-      `${baseUrl}/.netlify/functions/draft-deliverable-background`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${secret}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      },
-    );
-    // Background functions answer 202 Accepted. Anything else means the job
-    // never started — surface it rather than pretending it's running.
-    if (resp.status !== 202 && !resp.ok) {
-      return `Couldn't start the drafting job (HTTP ${resp.status}). Try again in a moment.`;
-    }
-  } catch (e) {
-    return e instanceof Error ? e.message : String(e);
-  }
-  return null;
-}
 
 const sessionInputSchema = z.object({
   sessionId: z.string().uuid(),
@@ -150,7 +114,7 @@ export async function draftDeliverableFromFireflies(
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
-  const failure = await enqueueDraft({
+  const failure = await enqueueDeliverableDraft({
     source: "session",
     sourceId: sessionId,
     type,
@@ -221,7 +185,7 @@ export async function draftDeliverableFromMeeting(
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
-  const failure = await enqueueDraft({
+  const failure = await enqueueDeliverableDraft({
     source: "meeting",
     sourceId: meetingId,
     type,

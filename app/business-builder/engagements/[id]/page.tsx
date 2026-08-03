@@ -42,6 +42,7 @@ import { activityTypeLabel } from "@/lib/pipeline/stages";
 import {
   actionItems,
   bbsSessions,
+  engagementMeetings,
   embeddedApps,
   engagements,
   goals,
@@ -75,8 +76,6 @@ import { EngagementStatusControl } from "@/components/business-builder/Engagemen
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { EngagementRename } from "@/components/business-builder/EngagementRename";
-import { EngagementFeeControl } from "@/components/business-builder/EngagementFeeControl";
-import { QboRecurringInvoiceButton } from "@/components/business-builder/QboRecurringInvoiceButton";
 import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
 
 export default async function EngagementDetailPage({
@@ -281,7 +280,7 @@ export default async function EngagementDetailPage({
 
   // Onboarding: the pre-flight is resolved on the server so the blockers
   // render before the button is pressed, not after.
-  const [onboardingReadiness, onboardingRun, heldSessionCount] =
+  const [onboardingReadiness, onboardingRun, heldSessionCount, pastMeetingCount] =
     await Promise.all([
       checkOnboardingReadiness(id),
       withSystemContext(async (tx) => {
@@ -309,12 +308,36 @@ export default async function EngagementDetailPage({
           );
         return Number(row?.n ?? 0);
       }),
+      // Fireflies-synced meetings that already happened. This is the
+      // signal that actually catches an established client: sessions
+      // only exist as `bbs_sessions` rows if somebody typed them in,
+      // and a client of two years whose meetings live in Google
+      // Calendar and Fireflies has none — so they read as brand new and
+      // got told to schedule a first session they had been holding for
+      // two years. A synced meeting is evidence the relationship
+      // predates this app, and it needs nobody to have entered anything.
+      withSystemContext(async (tx) => {
+        const [row] = await tx
+          .select({ n: count() })
+          .from(engagementMeetings)
+          .where(
+            and(
+              eq(engagementMeetings.engagementId, id),
+              lt(engagementMeetings.occurredAt, new Date()),
+            ),
+          );
+        return Number(row?.n ?? 0);
+      }),
     ]);
 
   // Onboarding already happened, outside this flow: they hold a real
   // Clerk org (someone invited them) or they have already met. Collapses
   // the panel to a line rather than hiding it.
-  const onboardingEstablished = clientInvited || heldSessionCount > 0;
+  const onboardingEstablished =
+    clientInvited ||
+    heldSessionCount > 0 ||
+    pastMeetingCount > 0 ||
+    Boolean(data.eng.startedAt && data.eng.startedAt < new Date());
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
@@ -403,19 +426,14 @@ export default async function EngagementDetailPage({
             name={data.eng.name ?? "Engagement"}
           />
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Monthly fee. Drives the effective hourly rate in the
-                Friday rollup, so it needs to be correctable here rather
-                than only at engagement creation. */}
-            <EngagementFeeControl
-              engagementId={id}
-              currentCents={data.eng.monthlyFeeCents ?? null}
-            />
-            {/* Sits beside the fee because it bills exactly that number —
-                seeing them together is what makes the amount checkable. */}
-            <QboRecurringInvoiceButton
-              engagementId={id}
-              monthlyFeeCents={data.eng.monthlyFeeCents ?? null}
-            />
+            {/* The monthly fee and the recurring invoice used to sit
+                here. They are commercial terms, not delivery, and this
+                page is where the WORK lives — putting money controls in
+                its header muddled the two. Both moved to the client's
+                contact profile, which already owned the fee: it is set
+                on the lead and written through to the engagement, so
+                editing it in two places was also two answers to one
+                question. */}
             {/* Plain <a> (full-document nav): /portal/e/[id] is a Route
                 Handler that sets a cookie + redirects; Next's <Link>
                 client-side navigation can't follow it, so the click did

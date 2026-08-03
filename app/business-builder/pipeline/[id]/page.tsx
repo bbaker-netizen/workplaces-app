@@ -70,6 +70,7 @@ import { ProspectAvailabilityPanel } from "@/components/pipeline/ProspectAvailab
 import { RequestPaymentAuthorizationPanel } from "@/components/pipeline/RequestPaymentAuthorizationPanel";
 import { ProspectAssessmentTracker } from "@/components/pipeline/ProspectAssessmentTracker";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
+import { QboRecurringInvoiceButton } from "@/components/business-builder/QboRecurringInvoiceButton";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
 import { ActivateEngagementButton } from "@/components/pipeline/ActivateEngagementButton";
 import { ResetEngagementButton } from "@/components/pipeline/ResetEngagementButton";
@@ -685,6 +686,19 @@ export default async function ProspectDetailPage({
               programType={prospect.programType}
               monthlyFeeCents={prospect.monthlyFeeCents}
               businessBuilders={businessBuilders}
+            />
+          )}
+
+          {/* The recurring retainer invoice. Lives here rather than on
+              the engagement page because it bills the monthly fee set
+              just above — seeing the two together is what makes the
+              amount checkable before anything reaches QuickBooks. Only
+              once this lead has become a client; there is no engagement
+              to bill against before that. */}
+          {prospect.convertedEngagementId && (
+            <QboRecurringInvoiceButton
+              engagementId={prospect.convertedEngagementId}
+              monthlyFeeCents={prospect.monthlyFeeCents}
             />
           )}
 

@@ -1,38 +1,34 @@
 "use client";
 
 /**
- * One drafting control, not two.
+ * One button. No picker.
  *
- * The Meetings library used to show a big orange "Draft action items
- * from this meeting" button and, directly beneath it, a picker plus a
- * button reading "Draft from meeting". Bruce read them as two ways to
- * do the same thing, which is a fair reading: the labels differed only
- * in a caption above them.
+ * This went through two wrong shapes first. Originally the Meetings
+ * library showed two rival buttons — "Draft action items from this
+ * meeting" and "Draft from meeting" — whose labels differed only in a
+ * caption, so they read as duplicates. Collapsing them into one picker
+ * fixed the confusion but kept the wrong premise: it still asked the
+ * Business Builder to name which of the nine documents the session
+ * called for, BEFORE anything had read the transcript.
  *
- * They were never the same. The first reads the transcript and produces
- * SEVERAL short commitments; the second produces ONE long-form
- * document. So the choice stays, but it is expressed as one question —
- * what should Claude write? — rather than two competing buttons.
+ * That is backwards. The transcript already knows what the session
+ * produced. Asking someone to name it in advance is asking them to
+ * remember what they were just in the room for, and to guess how a
+ * conversation maps onto a taxonomy.
  *
- * Both land in the same place: as drafts on this meeting, below.
+ * So: one press reads the transcript once and writes both — the
+ * commitments people made, and any documents the session genuinely
+ * called for (usually none, capped at three). Everything lands as a
+ * draft below, to edit, assign and publish.
  */
 
 import { useState, useTransition } from "react";
 import { ClipboardCheck, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { extractActionItemsFromMeeting } from "@/lib/actions/fireflies-extract";
-import { draftDeliverableFromMeeting } from "@/lib/actions/deliverables-fireflies";
-import {
-  DELIVERABLE_TYPES,
-  DELIVERABLE_TYPE_LABEL,
-  type DeliverableType,
-} from "@/lib/deliverables/types";
-
-const TODOS = "__todos__";
 
 export function MeetingDraftControls({ meetingId }: { meetingId: string }) {
   const router = useRouter();
-  const [choice, setChoice] = useState<string>(TODOS);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,32 +38,17 @@ export function MeetingDraftControls({ meetingId }: { meetingId: string }) {
     setMessage(null);
     startTransition(async () => {
       try {
-        if (choice === TODOS) {
-          const r = await extractActionItemsFromMeeting({ meetingId });
-          if (!r.ok) {
-            setError(r.error);
-            return;
-          }
-          setMessage(
-            "Reading the full transcript now — usually under a minute. The " +
-              "drafts appear under “Needs your review” below; refresh to pick " +
-              "them up.",
-          );
-        } else {
-          const r = await draftDeliverableFromMeeting({
-            meetingId,
-            type: choice as DeliverableType,
-          });
-          if (!r.ok) {
-            setError(r.error);
-            return;
-          }
-          setMessage(
-            "Writing the document now — this one takes a minute or two " +
-              "because it reads the whole transcript. It appears under " +
-              "“Needs your review” below; refresh to pick it up.",
-          );
+        const r = await extractActionItemsFromMeeting({ meetingId });
+        if (!r.ok) {
+          setError(r.error);
+          return;
         }
+        setMessage(
+          "Reading the full transcript now. Commitments appear below within " +
+            "a minute; any documents it decides the session called for take " +
+            "a few minutes longer, and show as “drafting…” until they land. " +
+            "Refresh to pick them up.",
+        );
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -80,43 +61,25 @@ export function MeetingDraftControls({ meetingId }: { meetingId: string }) {
       <p className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
         Draft from this meeting
       </p>
-      <div className="flex items-center gap-2 flex-wrap">
-        <label className="sr-only" htmlFor={`draft-choice-${meetingId}`}>
-          What to draft
-        </label>
-        <select
-          id={`draft-choice-${meetingId}`}
-          value={choice}
-          onChange={(e) => setChoice(e.target.value)}
-          disabled={isPending}
-          className="font-sans text-xs px-2 py-2 rounded-sm border border-tbb-line bg-white text-tbb-navy focus:outline-none focus:border-tbb-blue disabled:opacity-50 max-w-[16rem]"
-        >
-          <option value={TODOS}>To-dos & commitments</option>
-          {DELIVERABLE_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {DELIVERABLE_TYPE_LABEL[t]}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={run}
-          disabled={isPending}
-          className="inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-tbb-caps font-bold px-3.5 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-50"
-        >
-          {isPending ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-          ) : (
-            <ClipboardCheck className="w-3.5 h-3.5" aria-hidden />
-          )}
-          {isPending ? "Starting…" : "Draft it"}
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={run}
+        disabled={isPending}
+        className="inline-flex items-center gap-1.5 font-sans text-xs uppercase tracking-tbb-caps font-bold px-3.5 py-2 rounded-pill bg-tbb-accent text-white hover:brightness-95 disabled:opacity-50"
+      >
+        {isPending ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+        ) : (
+          <ClipboardCheck className="w-3.5 h-3.5" aria-hidden />
+        )}
+        {isPending ? "Reading the transcript…" : "Draft from this meeting"}
+      </button>
       <p className="text-[11px] text-tbb-ink-3">
-        {choice === TODOS
-          ? "Pulls the commitments people made out of the transcript, as several short items."
-          : "Writes one long-form document from the whole transcript."}{" "}
-        Either way it arrives as a draft — nothing reaches the client until you publish it.
+        Reads the whole transcript and writes up the commitments people made,
+        plus any of the nine documents this session actually called for. It
+        decides which — you don&rsquo;t have to say in advance. Everything
+        arrives below as a draft to edit, assign and publish; nothing reaches
+        the client until you do.
       </p>
       {message && (
         <p className="font-sans text-xs text-tbb-navy border border-tbb-line rounded-md px-2.5 py-1.5 bg-tbb-cream-50">

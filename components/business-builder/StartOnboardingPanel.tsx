@@ -121,6 +121,12 @@ export function StartOnboardingPanel({
    * needs the operator's eyes. Everything else can be collapsed.
    */
   const needsAttention = Boolean(run && !run.completedAt);
+  // An established client's readiness blockers are not blockers —
+  // they are checks on a sequence that should not run for this client
+  // at all. Treating them as such is what made a two-year client read
+  // as "not ready", and pointed the operator at scheduling a session
+  // they had already been holding for two years.
+  const gatingBlockers = established ? [] : blockers;
   const collapsible = !needsAttention && (Boolean(run?.completedAt) || established);
   const showFull = !collapsible || expanded;
 
@@ -202,7 +208,11 @@ export function StartOnboardingPanel({
           <p className="rounded-md border border-tbb-line-soft bg-tbb-cream-50 px-3 py-2 text-xs text-tbb-ink-2">
             This client already has a portal or sessions on the books, so
             they were almost certainly onboarded before this button existed.
-            Running it would email them the whole welcome sequence again.
+            Running it would email them the whole welcome sequence again.{" "}
+            <span className="font-bold">
+              To give them portal access without the welcome sequence, use
+              &ldquo;Invite client&rdquo; under Client access below.
+            </span>
           </p>
         )}
 
@@ -259,7 +269,7 @@ export function StartOnboardingPanel({
         </ol>
 
         {/* Pre-flight. Shown before the button, not after the click. */}
-        {!run && blockers.length > 0 && (
+        {!run && !established && blockers.length > 0 && (
           <div className="rounded-md border border-tbb-accent/50 bg-tbb-accent/5 p-3 space-y-2">
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-accent">
               <AlertTriangle className="w-3.5 h-3.5" aria-hidden />
@@ -331,9 +341,9 @@ export function StartOnboardingPanel({
              above is understood as the cause rather than as decoration. */
           <button
             type="button"
-            disabled={isPending || blockers.length > 0}
+            disabled={isPending || gatingBlockers.length > 0}
             title={
-              blockers.length > 0
+              gatingBlockers.length > 0
                 ? `Blocked: ${blockers.length} ${
                     blockers.length === 1 ? "thing" : "things"
                   } listed above must be fixed first.`
@@ -347,19 +357,19 @@ export function StartOnboardingPanel({
             }
             className={
               "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill disabled:cursor-not-allowed " +
-              (blockers.length > 0
+              (gatingBlockers.length > 0
                 ? "border border-tbb-line bg-tbb-cream-50 text-tbb-ink-3"
                 : "bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-40")
             }
           >
             {isPending ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-            ) : blockers.length > 0 ? (
+            ) : gatingBlockers.length > 0 ? (
               <Lock className="w-3.5 h-3.5" aria-hidden />
             ) : (
               <Rocket className="w-3.5 h-3.5" aria-hidden />
             )}
-            {blockers.length > 0
+            {gatingBlockers.length > 0
               ? "Start onboarding — blocked"
               : "Start onboarding"}
           </button>
