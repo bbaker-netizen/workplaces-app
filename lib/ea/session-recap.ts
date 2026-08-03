@@ -171,6 +171,10 @@ export async function generateSessionRecap(
   /* ---- transcript summary, if Fireflies has one ---- */
   let firefliesUrl: string | null = null;
   let summaryText = "";
+  // The meeting workspace row for this session, when we have one. It is
+  // what the "open it in the console" link points at — see the note on
+  // `reviewUrl` below.
+  let engagementMeetingId: string | null = null;
   if (session.firefliesRecordingId) {
     // OUR OWN COPY FIRST. The hourly sync already stores every meeting's
     // overview and bullets in `engagement_meetings`, so re-fetching from
@@ -183,6 +187,7 @@ export async function generateSessionRecap(
     const stored = await withSystemContext(async (tx) => {
       const [row] = await tx
         .select({
+          id: engagementMeetings.id,
           overview: engagementMeetings.summaryOverview,
           bullets: engagementMeetings.summaryBullets,
           url: engagementMeetings.transcriptUrl,
@@ -198,6 +203,7 @@ export async function generateSessionRecap(
       return row ?? null;
     });
     if (stored) {
+      engagementMeetingId = stored.id;
       firefliesUrl = stored.url;
       summaryText = [stored.overview ?? "", stored.bullets ?? ""]
         .filter(Boolean)
@@ -410,7 +416,29 @@ export async function generateSessionRecap(
         sessionWhen: whenMt(session.scheduledAt),
         recapHtml: built.html,
         approveUrl: approvalUrl(token),
-        reviewUrl: `${appUrl()}/business-builder/sessions/${session.id}`,
+        // The MEETING WORKSPACE, not the BBS session record.
+        //
+        // This link previously pointed at
+        // /business-builder/sessions/<sessionId> — one path segment,
+        // where the route is /sessions/[engagementId]/[sessionId]. The
+        // session id landed in the engagementId slot, matched no
+        // engagement, and 404'd. That was the reported bug.
+        //
+        // Fixing the segment alone would have been the wrong repair:
+        // the session record holds only the scheduled time, a status
+        // and calendar-sync notes. It shows nothing about the recap, so
+        // "needs an edit first?" led somewhere with nothing to edit.
+        // The meeting workspace is the page that actually carries the
+        // session's material — transcript, Fireflies recap, drafted
+        // items awaiting review.
+        //
+        // Falls back to the session record when no meeting row resolved
+        // (no transcript matched). A recap is only drafted from a
+        // transcript today, so that path is defensive rather than
+        // expected — but a link to a thin page still beats no link.
+        reviewUrl: engagementMeetingId
+          ? `${appUrl()}/business-builder/engagements/${session.engagementId}/meetings/${engagementMeetingId}`
+          : `${appUrl()}/business-builder/sessions/${session.engagementId}/${session.id}`,
       }),
     );
   }
