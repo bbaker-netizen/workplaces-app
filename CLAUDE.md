@@ -2042,6 +2042,100 @@ to-dos from it, editing and assigning one, publishing it, adding a manual
 item, and releasing the transcript — then confirming it appears in the
 client portal and that an unreleased one does not.
 
+## What was built — the recap you can actually work with (2026-08-03)
+
+Bruce, on the first recap approval email: the approve links 404. Three
+faults, each hiding the next. No migration.
+
+**The 404 was a one-segment URL.** `reviewUrl` was built as
+`/business-builder/sessions/<sessionId>`, where the route is
+`/sessions/[engagementId]/[sessionId]`. The session id landed in the
+`engagementId` slot, matched no engagement, and the page called
+`notFound()`. It is also the email shell's `buttonHref`, so the most
+prominent button in the message was the dead one while the "Approve and
+send" button beside it worked fine.
+
+Both of the suspected causes were wrong, and the data said so before any
+code changed: `consumed_at` is NULL on all seven recap tokens ever
+minted, so no mail scanner had burned anything, and `peekApprovalToken`
+does a plain SELECT with no UPDATE. A bogus token POSTed at production
+returned **410**, not 404 — which is what proved the route healthy and
+sent the search upstream. **Every failure path in that route returns
+410; a 404 can only come from somewhere else.**
+
+**Fixing the segment would have been the wrong repair.** The BBS session
+record holds a scheduled time, a status and calendar-sync notes —
+nothing about the recap. "Needs an edit first?" led to a page with
+nothing to edit. The link now points at the meeting workspace, and the
+meeting id comes from the `engagement_meetings` lookup already running a
+few lines above for the transcript summary, so it costs no extra query.
+
+**`session_recaps` was rendered NOWHERE in the app** — one file outside
+`lib/` referenced it, the approve route itself. So the only two options
+for a drafted recap were "send exactly what the model wrote" or "send
+nothing". `components/meetings/RecapPanel.tsx` + `lib/actions/session-
+recaps.ts` close that: read in full, edit subject and body, save, send.
+
+Markdown is the source of truth for an edit and the HTML and plain-text
+bodies are DERIVED from it on every save — the portal renders markdown
+and the email renders HTML, so storing an edit to one of the three would
+let the client's emailed copy and their portal copy say different
+things. `markdownToEmailHtml` returns a whole `<!DOCTYPE html>` document
+and `body_html` is embedded as a FRAGMENT, so the wrapper is stripped.
+Editing is draft-only: once sent, the text is the record of what the
+client was told.
+
+Sending delegates to `approveSessionRecap` — the same function the
+emailed link calls, so the portal record, the write ordering and the
+"stamp `sent_at` only after delivery succeeds" rule cannot drift between
+the two entry points. Both actions gate on Clerk AND
+`canCurrentBbAccessEngagement`.
+
+**The recipient count is stated before the button and changes its
+label** — "File it" rather than "Send to client" at zero. Of the two
+drafts today A&M reaches 1 contact and Impactica 0, so both branches are
+live right now.
+
+**Caught in review, worth remembering:** the update's WHERE clause was
+first written as `eq(...) && eq(...) && eq(...)`. JavaScript `&&` on
+Drizzle conditions returns the LAST operand, so the guard would have
+collapsed to `status = 'draft'` and rewritten **every draft recap in the
+database**. Use `and()`. Nothing in `tsc` catches this — the types line
+up perfectly.
+
+**"MISSED" on sessions that plainly happened.** Same root as the
+2026-07-29 `sessionWasHeld` fix, on the read side of the UI this time:
+nothing writes `completed` except a person pressing "Mark complete", so
+every past session rendered "Missed" in orange — including the two we
+hold Fireflies recordings of, on the very page opened to review their
+recaps. A transcript is evidence, so a recorded past session now reads
+"Held" in the neutral tone; only a past session with NO recording keeps
+"Missed" and the alarm colour, where it is doing real work.
+`sessionStatusLabel` in `components/sessions/utils.ts` is the one
+definition, imported by both the list and the detail view.
+
+**An emailed link cannot be repaired retroactively** — the URL is baked
+in at send time, so recap emails already sent keep the broken one for
+ever. Worth stating in any future fix to a link that ships inside mail.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles with 74 prerender failures / 148 `Missing publishableKey` and
+zero errors of any other cause, matching the baseline. The workspace
+recap join was run against the live database and resolves both existing
+drafts with correct recipient counts. **Not yet clicked in a browser** —
+the acceptance test is opening a meeting workspace, editing a recap, and
+sending it.
+
+**Still open from this session:** no `time_block` or `agenda_proposal`
+approval token has ever been minted, and neither is a bug. Time blocks
+are proposed only for the recipient's OWN commitments and **no action
+item in the practice is assigned to Bruce or Jen** (14 drafts sit
+unreviewed on Crown and Ember; 1 open, 1 in progress). Agenda drafting
+needs a previous session's transcript or open published commitments and
+has had neither on a session inside the digest window. Both features are
+starved, not broken — publishing and assigning that backlog is what
+lights them up.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
