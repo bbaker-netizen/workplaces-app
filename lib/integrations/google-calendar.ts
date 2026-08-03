@@ -401,6 +401,58 @@ async function api<T>(
   return (await res.json()) as T;
 }
 
+/**
+ * Read EVERY event in a range, following Google's paging.
+ *
+ * **The bug this fixes, because it is worth not repeating.** Both event
+ * listings used to make a single request with `maxResults` and read
+ * `data.items` once, never touching `nextPageToken`. Combined with
+ * `orderBy=startTime` (ascending), that does not return "a sample" — it
+ * returns the OLDEST N events in the window and silently stops.
+ *
+ * The calendar sync reads a 300-day window (180 back, 120 forward). Any
+ * working calendar has far more than 250 timed events in ten months, so
+ * the response never reached the present day, let alone the future. The
+ * result: the sync ran hourly, reported success, created sessions — and
+ * every session it ever created was months old, while not one upcoming
+ * meeting existed in the app. Downstream, that starved everything that
+ * needs a NEXT session: no agenda was ever drafted, the briefing's
+ * next-seven-days was empty, and recaps had no "next session" to point
+ * at. All from a missing page token.
+ *
+ * `MAX_PAGES` bounds the cost, and hitting it is LOGGED rather than
+ * swallowed — a silent cap is what caused this in the first place.
+ */
+const MAX_EVENT_PAGES = 12;
+
+async function listAllEventPages<T>(
+  token: string,
+  calendarId: string,
+  params: URLSearchParams,
+  label: string,
+): Promise<T[]> {
+  const out: T[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < MAX_EVENT_PAGES; page++) {
+    const p = new URLSearchParams(params);
+    if (pageToken) p.set("pageToken", pageToken);
+    const data = await api<{ items?: T[]; nextPageToken?: string }>(
+      token,
+      `/calendars/${encodeURIComponent(calendarId)}/events?${p.toString()}`,
+    );
+    out.push(...(data.items ?? []));
+    if (!data.nextPageToken) return out;
+    pageToken = data.nextPageToken;
+  }
+
+  console.warn(
+    `[google-calendar] ${label}: hit the ${MAX_EVENT_PAGES}-page ceiling ` +
+      `after ${out.length} events; the tail of the range was not read.`,
+  );
+  return out;
+}
+
 export async function createCalendarEvent(
   userProfileId: string,
   payload: GoogleEventPayload,
@@ -808,20 +860,19 @@ export async function listExternalEvents(
     orderBy: "startTime",
     maxResults: "200",
   });
-  const data = await api<{
-    items: {
-      id: string;
-      summary?: string;
-      start?: { dateTime?: string; date?: string };
-      end?: { dateTime?: string; date?: string };
-      location?: string;
-      htmlLink?: string;
-    }[];
-  }>(
-    token.token,
-    `/calendars/${encodeURIComponent(token.calendarId)}/events?${params.toString()}`,
-  );
-  return (data.items ?? [])
+  // Paged for the same reason as the sync. This one feeds the EA's
+  // free-time search, where a truncated read is worse than useless: the
+  // missing events look like FREE time, so a focus block gets proposed
+  // on top of a meeting.
+  const items = await listAllEventPages<{
+    id: string;
+    summary?: string;
+    start?: { dateTime?: string; date?: string };
+    end?: { dateTime?: string; date?: string };
+    location?: string;
+    htmlLink?: string;
+  }>(token.token, token.calendarId, params, "listExternalEvents");
+  return items
     .map((e) => {
       const startStr = e.start?.dateTime ?? e.start?.date;
       const endStr = e.end?.dateTime ?? e.end?.date;
@@ -869,23 +920,21 @@ export async function listEventsForSync(
     maxResults: "250",
     showDeleted: "true",
   });
-  const data = await api<{
-    items: {
-      id: string;
-      summary?: string;
-      status?: string;
-      start?: { dateTime?: string; date?: string };
-      end?: { dateTime?: string; date?: string };
-      location?: string;
-      hangoutLink?: string;
-      conferenceData?: unknown;
-      attendees?: { email?: string }[];
-    }[];
-  }>(
-    token,
-    `/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
-  );
-  return (data.items ?? [])
+  // Paged. `maxResults` is a PAGE size, not a range limit — reading one
+  // page of a startTime-ordered query returns the oldest 250 events and
+  // silently drops everything after them. See listAllEventPages.
+  const items = await listAllEventPages<{
+    id: string;
+    summary?: string;
+    status?: string;
+    start?: { dateTime?: string; date?: string };
+    end?: { dateTime?: string; date?: string };
+    location?: string;
+    hangoutLink?: string;
+    conferenceData?: unknown;
+    attendees?: { email?: string }[];
+  }>(token, calendarId, params, "listEventsForSync");
+  return items
     .map((e) => {
       // Only timed events become sessions — skip all-day entries.
       const startStr = e.start?.dateTime;
