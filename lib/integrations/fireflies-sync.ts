@@ -36,6 +36,7 @@
 import { eq, inArray, isNull } from "drizzle-orm";
 import { engagementMeetings, engagements } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { enqueueMeetingExtraction } from "@/lib/meetings/enqueue-extraction";
 import {
   fetchMeetingDetail,
   listRecentTranscripts,
@@ -165,6 +166,7 @@ export async function syncMeetingsCore(
   const existingById = new Map(existing.map((e) => [e.transcriptId, e]));
   const refreshCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h
 
+  const newlyInserted: string[] = [];
   for (const summary of Array.from(transcriptSummaries.values())) {
     const prior = existingById.get(summary.id);
     if (prior && prior.lastSyncedAt > refreshCutoff) {
@@ -224,8 +226,47 @@ export async function syncMeetingsCore(
           transcriptUrl: detail!.transcript_url ?? null,
         });
         inserted += 1;
+        // Newly seen meeting — draft its follow-through automatically.
+        //
+        // Only on INSERT, never on update. That is the whole guard
+        // against the back catalogue: 235 meetings are already on file,
+        // and firing on every sync would re-draft all of them every
+        // hour. A row is inserted once, so each meeting is drafted once.
+        //
+        // Collected and dispatched AFTER the loop rather than here: this
+        // runs inside the transaction, and an HTTP round trip per
+        // meeting would hold a pooled Postgres connection open for the
+        // length of them.
+        newlyInserted.push(detail!.id);
       }
     });
+  }
+
+  // Fire the extraction jobs outside the transactions above. Best
+  // effort and individually caught — a client whose job fails to start
+  // must not stop the others, and none of it may fail the sync, whose
+  // real work (the meeting records) is already committed.
+  if (newlyInserted.length > 0) {
+    const rows = await withSystemContext(async (tx) =>
+      tx
+        .select({
+          id: engagementMeetings.id,
+          transcriptId: engagementMeetings.firefliesTranscriptId,
+        })
+        .from(engagementMeetings)
+        .where(eq(engagementMeetings.engagementId, engagementId)),
+    );
+    const idByTranscript = new Map(rows.map((r) => [r.transcriptId, r.id]));
+    for (const transcriptId of newlyInserted) {
+      const id = idByTranscript.get(transcriptId);
+      if (!id) continue;
+      const failure = await enqueueMeetingExtraction(id);
+      if (failure) {
+        console.error(
+          `Auto-draft for meeting ${id} didn't start: ${failure}`,
+        );
+      }
+    }
   }
 
   // Step 4: clean up any meetings previously mis-filed under this client.

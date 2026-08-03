@@ -35,6 +35,10 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { dailyDigestEmail } from "@/lib/email/templates";
 import { EA_TIMEZONE, gatherDigest, type DigestPayload } from "./digest-data";
+
+/** How far ahead a session gets a drafted agenda. Two days: enough to
+ *  prepare the evening before, near enough that the material is current. */
+const AGENDA_LEAD_HOURS = 48;
 import {
   proposeAgendaForSession,
   type AgendaProposal,
@@ -110,11 +114,33 @@ export async function runDigestForRecipient(
   //    proposal row and approve token in its own short transaction and
   //    links back via digest_id.
   //
-  //    Only today's sessions get one. Prep matters on the morning of;
-  //    drafting agendas for the whole week would be noise, and the
+  //    Sessions inside the next 48 HOURS, not just today. Bruce's call:
+  //    an agenda that first appears at 07:00 on the morning of leaves no
+  //    evening to prepare with it, which is when the preparation
+  //    actually happens. Two days is the useful window — far enough to
+  //    act on, near enough that the last session's transcript and the
+  //    open commitments are still the right material.
+  //
+  //    Still bounded. Drafting a week out would be noise, and the
   //    material would be stale by the time the session came round.
+  //
+  //    Re-offering is not a risk: `ea_agenda_proposals.bbs_session_id`
+  //    is UNIQUE, so a session that appears in two consecutive briefings
+  //    gets one proposal, not two, and a declined agenda stays declined
+  //    rather than returning every morning until the session happens.
   const agendaDrafts = new Map<string, AgendaProposal>();
-  for (const s of payload.todaysSessions) {
+  const agendaHorizon = now.getTime() + AGENDA_LEAD_HOURS * 60 * 60 * 1000;
+  // Today's sessions, plus anything else starting inside the horizon.
+  // Deduped by id — a session later today appears in both lists.
+  const agendaCandidates = [
+    ...payload.todaysSessions,
+    ...payload.upcomingSessions.filter(
+      (u) =>
+        new Date(u.scheduledAt).getTime() <= agendaHorizon &&
+        !payload.todaysSessions.some((t) => t.id === u.id),
+    ),
+  ];
+  for (const s of agendaCandidates) {
     const drafted = await proposeAgendaForSession({
       session: {
         id: s.id,
