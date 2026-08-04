@@ -75,10 +75,25 @@ export function StartOnboardingPanel({
   blockers,
   run,
   established,
+  setupFields = null,
+  schedulePanel = null,
 }: {
   engagementId: string;
   blockers: OnboardingBlocker[];
   run: OnboardingRunState;
+  /**
+   * The fee + assessment-date fields, passed in as a slot rather than
+   * built here. They are server-fed (current values, and a suggested
+   * date worked back from the first session), and this panel is a client
+   * component — a slot keeps that data on the server where it belongs
+   * instead of threading four more props through.
+   *
+   * Rendered only while onboarding is still ahead of this client: once
+   * it has run, these live on the client page proper.
+   */
+  setupFields?: React.ReactNode;
+  /** The recurring-sessions panel, same reasoning as `setupFields`. */
+  schedulePanel?: React.ReactNode;
   /**
    * This client is already up and running — they hold a real Clerk org
    * (someone invited them to the portal) or a session has already been
@@ -267,6 +282,13 @@ export function StartOnboardingPanel({
             );
           })}
         </ol>
+
+        {/* The setup a client needs before the sends make sense, right
+            where the pre-flight complains about it. The fee blocker used
+            to link to a page with no fee control on it — a refusal that
+            names a fix you cannot perform is worse than no refusal. */}
+        {!run && !established && setupFields}
+        {!run && !established && schedulePanel}
 
         {/* Pre-flight. Shown before the button, not after the click. */}
         {!run && !established && blockers.length > 0 && (

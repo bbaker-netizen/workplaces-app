@@ -257,6 +257,15 @@ export function SendForSignatureForm(props: Props) {
           autoSignAsMe: false,
           documentTitle: subject.trim(),
           bodyMarkdown: liveBody,
+          // The fee this agreement states — the tier's list price, or
+          // the override when the deal is priced off-list. It was only
+          // ever rendered into the document; recording it here is what
+          // stops onboarding asking for a number already agreed in
+          // writing.
+          monthlyFeeCents:
+            parseFeeInputToCents(feeOverrideInput) ??
+            selectedTier?.monthlyFeeCents ??
+            null,
         });
         if (!result.ok) {
           setError(result.error);

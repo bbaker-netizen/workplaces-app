@@ -13,6 +13,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
@@ -161,6 +162,9 @@ export async function setEngagementMonthlyFee(
   if (profile.role !== "master_admin" && profile.role !== "coach") {
     return { ok: false, error: "Business Builders only." };
   }
+  if (!(await canCurrentBbAccessEngagement(engagementId))) {
+    return { ok: false, error: "You don't have access to that client." };
+  }
   if (
     monthlyFeeCents !== null &&
     (!Number.isInteger(monthlyFeeCents) ||
@@ -178,6 +182,47 @@ export async function setEngagementMonthlyFee(
     });
     revalidatePath(`/business-builder/engagements/${engagementId}`);
     revalidatePath("/business-builder/engagements");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * When this client's Person Profile assessments are due back.
+ *
+ * Onboarding suggests a date worked back from the first session and the
+ * Business Builder can change it — the assessments go to real people
+ * with their own weeks, so a date the system picked is a starting point,
+ * not an instruction. Pass null to clear it.
+ *
+ * Stored as `YYYY-MM-DD`: a `date` column, and the value is a day the
+ * client works to rather than a moment, so it must not pick up a
+ * timezone on the way in.
+ */
+export async function setAssessmentDueDate(
+  engagementId: string,
+  dueDate: string | null,
+): Promise<Result> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Business Builders only." };
+  }
+  if (!(await canCurrentBbAccessEngagement(engagementId))) {
+    return { ok: false, error: "You don't have access to that client." };
+  }
+  if (dueDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    return { ok: false, error: "That date didn't parse." };
+  }
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(engagements)
+        .set({ assessmentDueDate: dueDate })
+        .where(eq(engagements.id, engagementId));
+    });
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

@@ -19,7 +19,7 @@
 
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { and, asc, count, eq, isNull, lt, ne } from "drizzle-orm";
+import { and, asc, count, eq, gte, isNull, lt, ne } from "drizzle-orm";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -74,6 +74,9 @@ import { InviteClientButton } from "@/components/business-builder/InviteClientBu
 import { InvitePortalUserForm } from "@/components/business-builder/InvitePortalUserForm";
 import { EngagementSharePanel } from "@/components/business-builder/EngagementSharePanel";
 import { getEngagementShareState } from "@/lib/db/queries/bb-access";
+import { EngagementSchedulePanel } from "@/components/business-builder/EngagementSchedulePanel";
+import { OnboardingSetupFields } from "@/components/business-builder/OnboardingSetupFields";
+import { listEngagementSeries } from "@/lib/db/queries/engagement-schedule";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
@@ -221,6 +224,37 @@ export default async function EngagementDetailPage({
   });
 
   if (!data) notFound();
+
+  // The recurring schedule, and a suggested assessment deadline worked
+  // back from the first upcoming session. The suggestion is computed
+  // here and only ever PRE-FILLS an empty field — never saved on the
+  // operator's behalf, so a date on the record is always one a person
+  // chose.
+  const engagementSeries = await listEngagementSeries(id);
+  const assessmentDueDate = data.eng.assessmentDueDate
+    ? String(data.eng.assessmentDueDate).slice(0, 10)
+    : null;
+  const suggestedAssessmentDate = await withSystemContext(async (tx) => {
+    const [next] = await tx
+      .select({ scheduledAt: bbsSessions.scheduledAt })
+      .from(bbsSessions)
+      .where(
+        and(
+          eq(bbsSessions.engagementId, id),
+          gte(bbsSessions.scheduledAt, new Date()),
+          ne(bbsSessions.status, "cancelled"),
+        ),
+      )
+      .orderBy(asc(bbsSessions.scheduledAt))
+      .limit(1);
+    if (!next) return null;
+    // Three days before the first session: enough for the results to be
+    // read before the room, and late enough that it doesn't land before
+    // the client has their portal.
+    const d = new Date(next.scheduledAt);
+    d.setUTCDate(d.getUTCDate() - 3);
+    return d.toISOString().slice(0, 10);
+  });
 
   // Who on our side works this client. Null if the read fails or the
   // caller somehow can't reach the engagement — the panel is then
@@ -513,10 +547,36 @@ export default async function EngagementDetailPage({
       {/* Start onboarding. Sits ABOVE the portal panel because the last
           of its three steps is the portal invitation — the modules below
           need to be right before that goes out. */}
+      <div id="onboarding-setup" className="scroll-mt-6" />
       <StartOnboardingPanel
         engagementId={id}
         blockers={onboardingReadiness.blockers}
         established={onboardingEstablished}
+        setupFields={
+          <OnboardingSetupFields
+            engagementId={id}
+            monthlyFeeCents={
+              data.eng.monthlyFeeCents === null
+                ? null
+                : Number(data.eng.monthlyFeeCents)
+            }
+            assessmentDueDate={assessmentDueDate}
+            suggestedAssessmentDate={suggestedAssessmentDate}
+          />
+        }
+        schedulePanel={
+          <EngagementSchedulePanel
+            engagementId={id}
+            clientName={data.eng.name ?? "this client"}
+            existing={engagementSeries.map((s) => ({
+              id: s.id,
+              title: s.title,
+              source: s.source,
+              cadence: s.cadence,
+              anchorAt: s.anchorAt ? s.anchorAt.toISOString() : null,
+            }))}
+          />
+        }
         run={
           onboardingRun
             ? {

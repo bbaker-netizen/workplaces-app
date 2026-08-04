@@ -2855,6 +2855,105 @@ Bruce shared A&M Abatement, Impactica, Jean/Dorina and KS Developments
 with Jen roughly thirty seconds apart, and the grants are in
 `bb_client_access`. Her book went 1 → 5.
 
+## What was built — onboarding asks for what it needs (2026-08-04)
+
+Bruce, onboarding a client: it blocks on a monthly fee he can't find
+anywhere to set and which the contract already states; there's no way to
+set the recurring meeting, and clients already booked in his calendar
+don't exist in the app; and the assessment deadline can't be chosen.
+Migration `0116`.
+
+### The fee blocker named a fix that could not be performed
+
+`EngagementFeeControl` existed in the codebase and was **rendered by no
+page**. The only fee input in the entire app was the new-lead form, so
+for any client created earlier there was literally nowhere to set it —
+and the pre-flight's "Set the monthly fee" link pointed at the client
+page, which has no such control. That is the whole of "I don't know
+where to set this": the answer was nowhere.
+
+**A blocker must be fixable where it is raised.** The fee and the
+assessment date now sit in the onboarding panel, above the button they
+gate, and the blocker anchors to them.
+
+**The fee was already being chosen and thrown away.** The
+send-for-signature form picks a pricing tier (with an override for a
+deal priced off-list) and renders it into the agreement as
+`{{monthly_fee}}` — then `createEnvelopeFromComposed` never stored it.
+The document named a price and the record held none. Steadfast
+Construction is the live case: null on the lead AND the engagement,
+while 17 other clients inherited theirs. The fee is now written to the
+lead, and to the engagement when it has converted, at the moment the
+agreement goes out — best-effort and non-fatal, because a bookkeeping
+write must not stop a contract being sent.
+
+### Recurring sessions: look first, then create
+
+`session_series` has been generic across any engagement since 0084, and
+`syncSeriesToGoogle` has existed just as long — but the only surface
+that could create one was the practice's own touch-base. So a client
+booked into a Business Builder's calendar every fortnight had a rhythm
+in Google and nothing in the app.
+
+Bruce's call between the three options, and the right one: **scan the
+calendar first**. Most clients are already booked, so a create-only form
+would have produced a rival series for every one of them and put a
+duplicate invitation on the calendar. The panel lists the recurring
+events on the Builder's own calendar, floats the ones whose title
+matches this client's name, and adopts the chosen one in a click.
+Nothing matches → then you set a cadence and the app creates the series
+and pushes one recurring event.
+
+An adopted series is **Google-owned**: occurrences are read and never
+written back. The calendar is where the meeting was agreed, and a second
+writer would fight the first.
+
+`linkGoogleSeriesToEngagement` is the client counterpart to the existing
+`linkGoogleSeries`, which hard-codes the internal engagement. It refuses
+a recurring event already linked to a DIFFERENT client rather than
+silently moving it — backed by the real
+`session_series_google_event_uniq` index, so the explicit check only
+buys a better sentence. The row carries the CLIENT's org, not the
+Builder's; a master-org row would be invisible to every client-bound
+read.
+
+Linking or creating also clears the first-session blocker, because
+materializing the series puts real sessions on the books — so the two
+asks are one journey rather than two pages.
+
+### The assessment deadline existed only as a sentence
+
+The onboarding checklist told the operator to schedule the first session
+"so the onboarding email carries a real assessment deadline". There was
+no column, no control, and no line in the email. 0116 adds
+`engagements.assessment_due_date`.
+
+A `date`, not a timestamp — a day the client works to, not a moment. On
+the engagement rather than per person, because it is one date quoted in
+one email; per-person dates would have to be kept in step to say the
+same thing and nothing ever wants them to differ.
+
+Suggested three days before the first session and **never saved on the
+operator's behalf** — the suggestion only pre-fills an empty field, so a
+date on the record is always one a person chose. The email omits the
+line entirely when there is none, rather than inventing one: a deadline
+the client was never given reads as one they have already missed.
+
+### Also
+
+`setEngagementMonthlyFee` had only a role gate, no per-client check.
+Fixed, along with the new `setAssessmentDueDate`.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build` at the
+recorded baseline (74 prerender failures, 148 `Missing publishableKey`,
+zero of any other cause). Migration 0116 applied against the LIVE
+database in a rolled-back transaction — column created nullable as a
+`date`, re-applied cleanly, rolled back.
+
+**Not clicked in a browser.** The acceptance tests are: open Steadfast
+Construction, see the fee and assessment fields in the onboarding panel,
+and watch the calendar scan offer the real recurring meeting to link.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.

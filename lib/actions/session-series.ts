@@ -701,6 +701,141 @@ export async function linkGoogleSeries(
   }
 }
 
+const linkToEngagementSchema = z.object({
+  engagementId: z.string().uuid(),
+  googleCalendarId: z.string().min(1),
+  googleRecurringEventId: z.string().min(1),
+  title: z.string().min(1).max(200),
+});
+
+export type LinkGoogleSeriesToEngagementInput = z.input<
+  typeof linkToEngagementSchema
+>;
+
+/**
+ * Adopt a recurring Google event as a CLIENT's session schedule.
+ *
+ * The same mechanism as `linkGoogleSeries` above, which was written for
+ * the practice's own touch-base and hard-codes the internal engagement.
+ * Clients were the case it never covered: `session_series` has been
+ * generic since 0084, but no client surface could create one, so a
+ * client already booked into a Business Builder's calendar every
+ * fortnight had no recurring schedule in the app at all.
+ *
+ * Google owns the schedule once adopted — occurrences are pulled in and
+ * never pushed back. That is the right direction for a meeting that
+ * already exists: the calendar is where it was agreed, and a second
+ * writer would fight the first.
+ *
+ * Idempotent on (calendar, recurring event) exactly as the team version
+ * is, so adopting the same event twice reactivates one series rather
+ * than creating a rival. A series already adopted by a DIFFERENT
+ * engagement is refused rather than silently stolen — one recurring
+ * meeting belongs to one client, and moving it is a decision, not a
+ * side effect of pressing a button on the wrong page.
+ */
+export async function linkGoogleSeriesToEngagement(
+  input: LinkGoogleSeriesToEngagementInput,
+): Promise<ActionResult<{ id: string; synced: number }>> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") {
+    return { ok: false, error: "Not authenticated." };
+  }
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Only a Business Builder can link a calendar." };
+  }
+  const parsed = linkToEngagementSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Check the form and try again.",
+    };
+  }
+  const data = parsed.data;
+
+  const { canCurrentBbAccessEngagement } = await import(
+    "@/lib/db/queries/bb-access"
+  );
+  if (!(await canCurrentBbAccessEngagement(data.engagementId))) {
+    return { ok: false, error: "You don't have access to that client." };
+  }
+
+  const { withSystemContext } = await import("@/lib/db/tenant");
+  try {
+    const seriesId = await withSystemContext(async (tx) => {
+      const [eng] = await tx
+        .select({ orgId: engagements.orgId })
+        .from(engagements)
+        .where(eq(engagements.id, data.engagementId))
+        .limit(1);
+      if (!eng) throw new Error("Client not found.");
+
+      const [existing] = await tx
+        .select({
+          id: sessionSeries.id,
+          engagementId: sessionSeries.engagementId,
+        })
+        .from(sessionSeries)
+        .where(
+          and(
+            eq(sessionSeries.googleCalendarId, data.googleCalendarId),
+            eq(
+              sessionSeries.googleRecurringEventId,
+              data.googleRecurringEventId,
+            ),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        if (existing.engagementId !== data.engagementId) {
+          throw new Error(
+            "That recurring meeting is already linked to another client. Unlink it there first.",
+          );
+        }
+        await tx
+          .update(sessionSeries)
+          .set({
+            active: true,
+            title: data.title,
+            linkedByUserProfileId: profile.userProfileId,
+          })
+          .where(eq(sessionSeries.id, existing.id));
+        return existing.id;
+      }
+
+      const [row] = await tx
+        .insert(sessionSeries)
+        .values({
+          // The CLIENT's org, not the Business Builder's. Every other
+          // row on this engagement carries it, and a master-org row
+          // here would be invisible to the client-bound reads.
+          orgId: eng.orgId,
+          engagementId: data.engagementId,
+          title: data.title,
+          type: "virtual",
+          source: "google",
+          googleCalendarId: data.googleCalendarId,
+          googleRecurringEventId: data.googleRecurringEventId,
+          linkedByUserProfileId: profile.userProfileId,
+          createdByUserProfileId: profile.userProfileId,
+        })
+        .returning({ id: sessionSeries.id });
+      return row.id;
+    });
+
+    const synced = await syncGoogleSeries(seriesId);
+    revalidatePath(`/business-builder/engagements/${data.engagementId}`);
+    revalidatePath(`/business-builder/sessions/${data.engagementId}`);
+    return { ok: true, data: { id: seriesId, synced } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't link the calendar.",
+    };
+  }
+}
+
 /** Stop syncing a linked Google series. Empty future sessions are removed;
  *  ones carrying agendas/notes are kept and detached. */
 export async function unlinkGoogleSeries(

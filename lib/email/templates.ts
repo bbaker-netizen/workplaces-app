@@ -1138,6 +1138,16 @@ export type ClientOnboardingEmailInput = {
   senderTitle?: string | null;
   /** Appended verbatim when the Builder has one saved. */
   signature?: string | null;
+  /**
+   * When the Person Profile assessments are due back, `YYYY-MM-DD`.
+   *
+   * Optional because it only applies once assessments are part of the
+   * engagement, and null for anyone onboarded before the field existed.
+   * The email simply omits the line rather than inventing a date — this
+   * is the first thing a new client reads, and a deadline they were
+   * never given is worse than no deadline at all.
+   */
+  assessmentDueDate?: string | null;
 };
 
 /**
@@ -1174,6 +1184,24 @@ export function clientOnboardingEmail(
   })();
 
   const subject = `Welcome aboard, ${firstName} — here's what happens next`;
+
+  // Omitted entirely when no date is set, rather than rendered empty or
+  // guessed at. A deadline the client was never actually given reads as
+  // an instruction they have already missed.
+  const assessmentDueLabel = input.assessmentDueDate
+    ? DateTime.fromISO(input.assessmentDueDate, {
+        zone: "America/Edmonton",
+      }).toFormat("EEEE, MMMM d")
+    : null;
+  const assessmentLine =
+    assessmentDueLabel && assessmentDueLabel !== "Invalid DateTime"
+      ? `<p style="margin:0 0 18px 0;">
+        One thing to put in the diary: your team's
+        <strong>Person Profile assessments</strong> need to be back with me by
+        <strong>${escapeHtml(assessmentDueLabel)}</strong>, so I can read them
+        before we sit down.
+      </p>`
+      : "";
 
   const step = (n: number, body: string) => `
     <tr>
@@ -1215,6 +1243,8 @@ export function clientOnboardingEmail(
           `<strong>An invitation to your private portal</strong>, where the whole engagement lives — sessions, action items, documents, and everything we build together. That one asks you to set up a login.`,
         )}
       </table>
+
+      ${assessmentLine}
 
       <p style="margin:0 0 24px 0;padding:16px 20px;background:#F5F1E8;border-left:4px solid #2E4057;font-size:15px;line-height:1.55;">
         If either of those doesn't turn up within the hour, reply here and

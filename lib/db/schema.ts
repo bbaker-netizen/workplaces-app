@@ -607,6 +607,12 @@ export const engagements = pgTable(
      *  was originally suggested from. Lets us show drift over time
      *  ("you set this at $1,500 but the tier is now $1,800"). */
     pricingTier: text("pricing_tier"),
+    /** The day this client's Person Profile assessments are due back
+     *  (migration 0116). Suggested from the first session at onboarding
+     *  and then editable. A `date`, not a timestamp — it is a day the
+     *  client works to, not a moment. One date for the whole client;
+     *  see the migration for why it isn't per person. */
+    assessmentDueDate: date("assessment_due_date"),
     /** Marks the practice's OWN workspace rather than a client. Holds
      *  the internal team touch-bases and the action items Business
      *  Builders task each other with. Exactly one per org (partial

@@ -455,6 +455,20 @@ export async function createEnvelopeFromComposed(input: {
   /** Markdown body — variables already resolved on the client side
    *  by the time it gets here. Server doesn't substitute. */
   bodyMarkdown: string;
+  /**
+   * The monthly fee this agreement states, in cents.
+   *
+   * The number was already being chosen here — a pricing tier, with an
+   * optional override for a deal priced off-list — and it drove
+   * `{{monthly_fee}}` in the document. It was never STORED, so the
+   * agreement named a price and the record held none, and onboarding
+   * later refused to start for want of a fee that had been agreed in
+   * writing weeks earlier. Steadfast Construction is the live case.
+   *
+   * Recorded on the lead, and on the engagement too if the lead has
+   * already been converted.
+   */
+  monthlyFeeCents?: number | null;
 }): Promise<ActionResult<{ envelopeId: string }>> {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok")
@@ -682,6 +696,39 @@ export async function createEnvelopeFromComposed(input: {
         e instanceof Error ? e.message : String(e)
       }`,
     };
+  }
+
+  // Record the fee the agreement actually states, before the envelope
+  // goes. Best-effort and deliberately non-fatal: the contract is the
+  // thing being sent, and a bookkeeping write must not stop it. If this
+  // fails the fee is still correctable in the onboarding panel.
+  if (
+    typeof input.monthlyFeeCents === "number" &&
+    Number.isFinite(input.monthlyFeeCents) &&
+    input.monthlyFeeCents > 0
+  ) {
+    try {
+      const cents = Math.round(input.monthlyFeeCents);
+      await withSystemContext(async (tx) => {
+        if (input.prospectId) {
+          await tx
+            .update(prospects)
+            .set({ monthlyFeeCents: cents })
+            .where(eq(prospects.id, input.prospectId));
+        }
+        // And on the engagement, when the lead has already converted —
+        // that is the record onboarding, the QuickBooks retainer and the
+        // Friday rollup's hourly rate all read.
+        if (resolvedEngagementId) {
+          await tx
+            .update(engagements)
+            .set({ monthlyFeeCents: cents })
+            .where(eq(engagements.id, resolvedEngagementId));
+        }
+      });
+    } catch (e) {
+      console.error("[signatures] could not record the agreed fee", e);
+    }
   }
 
   return createSignatureEnvelope({

@@ -83,7 +83,11 @@ export async function sendOnboardingEmail(
   try {
     const ctx = await withSystemContext(async (tx) => {
       const [eng] = await tx
-        .select({ id: engagements.id, name: engagements.name })
+        .select({
+          id: engagements.id,
+          name: engagements.name,
+          assessmentDueDate: engagements.assessmentDueDate,
+        })
         .from(engagements)
         .where(eq(engagements.id, engagementId))
         .limit(1);
@@ -117,6 +121,11 @@ export async function sendOnboardingEmail(
       senderName: actor.fullName,
       senderEmail: actor.email,
       signature: ctx.signature,
+      // Null until a Business Builder sets it in the onboarding panel;
+      // the template drops the line rather than inventing a date.
+      assessmentDueDate: ctx.eng.assessmentDueDate
+        ? String(ctx.eng.assessmentDueDate).slice(0, 10)
+        : null,
     });
 
     const google = await getConnectionStatus(actor.userProfileId);

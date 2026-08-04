@@ -88,9 +88,13 @@ export async function checkOnboardingReadiness(
       blockers.push({
         key: "monthly_fee",
         message:
-          "No monthly fee is set. The payment form authorizes a debit, so it needs the amount first.",
-        href: `/business-builder/engagements/${engagementId}`,
-        linkLabel: "Set the monthly fee",
+          "No monthly fee is set. The payment form authorizes a debit, so it needs the amount first — the field is just above.",
+        // Anchors to the fee field inside this very panel. It used to
+        // point at the client page, where no fee control was mounted at
+        // all: the blocker named a fix the operator could not perform,
+        // which is how "I don't know where to set this" happens.
+        href: `/business-builder/engagements/${engagementId}#onboarding-setup`,
+        linkLabel: "Set it above",
       });
     }
 
@@ -114,8 +118,13 @@ export async function checkOnboardingReadiness(
         key: "first_session",
         message:
           "No first session is scheduled. The onboarding email tells the client when they start, and the assessment deadline is worked back from that date.",
-        href: `/business-builder/sessions/${engagementId}`,
-        linkLabel: "Schedule the first session",
+        // Linking or creating a recurring schedule in the panel above
+        // materializes the upcoming sessions, which clears this — so
+        // point at that rather than at the one-off scheduling page. It
+        // is the same journey for a client who meets fortnightly, and
+        // one fewer place to visit.
+        href: `/business-builder/engagements/${engagementId}#onboarding-setup`,
+        linkLabel: "Set the schedule above",
       });
     }
 
