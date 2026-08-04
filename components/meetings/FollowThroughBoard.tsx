@@ -35,6 +35,7 @@ import {
 import {
   DELIVERABLE_TYPES,
   DELIVERABLE_TYPE_LABEL,
+  isDraftingPlaceholder,
   type DeliverableType,
 } from "@/lib/deliverables/types";
 import type { FollowThroughItem } from "@/lib/db/queries/meeting-workspace";
@@ -381,6 +382,48 @@ function ItemRow({
     if (!confirm(`Delete "${item.title}"? This can't be undone.`)) return;
     run("delete", () => deleteActionItem(item.id));
   };
+
+  // Keyed off the row's stored body rather than a status, because the
+  // background writer's only signal that it has finished IS replacing
+  // that body. Compared against the shared sentinel so the writer and
+  // this reader cannot drift.
+  const drafting = isDraftingPlaceholder(item.description);
+
+  // A document whose background draft hasn't landed yet. Rendered as a
+  // job in flight, not as something to review: it has no content to
+  // read, and an owner picker, a due date and a Publish button over a
+  // progress note invite you to publish the sentence "the drafting job
+  // didn't run — tell Bruce" to a client.
+  if (drafting) {
+    return (
+      <li className="rounded-md border border-dashed border-tbb-blue/50 bg-tbb-cream-50/40 px-3 py-2.5">
+        <div className="flex items-start gap-2">
+          <Loader2
+            className="w-3.5 h-3.5 text-tbb-blue animate-spin shrink-0 mt-0.5"
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-[14px] text-tbb-navy truncate">
+              {item.title}
+            </p>
+            <p className="mt-0.5 text-[11px] text-tbb-ink-3">
+              Writing this document from the transcript — a few minutes.
+              It will appear here on its own; nothing to do until then.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={remove}
+            disabled={isPending}
+            title="Cancel this document"
+            className="shrink-0 text-tbb-ink-3 hover:text-tbb-danger disabled:opacity-40"
+          >
+            <Trash2 className="w-3.5 h-3.5" aria-hidden />
+          </button>
+        </div>
+      </li>
+    );
+  }
 
   return (
     <li

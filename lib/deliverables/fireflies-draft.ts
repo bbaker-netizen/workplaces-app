@@ -42,6 +42,7 @@ import {
   transcriptToPlainText,
 } from "@/lib/integrations/fireflies";
 import {
+  DELIVERABLE_DRAFTING_PLACEHOLDER,
   DELIVERABLE_TYPE_LABEL,
   type DeliverableType,
 } from "@/lib/deliverables/types";
@@ -106,10 +107,9 @@ export async function createDraftPlaceholder(args: {
         // there is no separate table to put it in.
         deliverableType: args.type,
         title: args.title,
-        description:
-          "> _Reading the meeting transcript and drafting… this usually takes " +
-          "a minute or two. If this message is still here after five minutes, " +
-          "the drafting job didn't run — tell Bruce._",
+        // Shared sentinel: the review board keys off it to render this
+        // as a job in flight rather than as something to publish.
+        description: DELIVERABLE_DRAFTING_PLACEHOLDER,
         // `draft`, not `in_progress`. A machine-written document is a
         // proposal until a Business Builder has read it, and draft is
         // the status the portal filters out for every client role — so

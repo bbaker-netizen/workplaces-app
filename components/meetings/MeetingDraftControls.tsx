@@ -58,6 +58,16 @@ const WATCH_MS = 6 * 60_000;
 export type LastDraftRun = {
   status: "running" | "succeeded" | "failed";
   itemsCreated: number;
+  /**
+   * Documents queued. Counted separately from `itemsCreated` because
+   * they are separately useful and were previously conflated: a run
+   * that extracted ZERO commitments but queued one document made the
+   * follow-through count go up by one, so the watcher stopped and
+   * announced "1 draft landed below, ready for review" — over a row
+   * that was only a progress note. Bruce read that as the to-dos
+   * working. They hadn't run at all.
+   */
+  documentsQueued: number;
   errorText: string | null;
   finishedAt: string | null;
 };
@@ -98,6 +108,34 @@ export function MeetingDraftControls({
   useEffect(() => {
     if (!watching) return;
 
+    // The run's own numbers beat the row count. A document placeholder
+    // increments the rows without a single commitment having been
+    // extracted, and reporting that as drafts-ready hid the real
+    // outcome.
+    if (lastRun && lastRun.status === "succeeded") {
+      setWatching(false);
+      const { itemsCreated: n, documentsQueued: docs } = lastRun;
+      if (n === 0 && docs > 0) {
+        setMessage(
+          `No to-dos came out of this one — but ${docs} document${docs === 1 ? " is" : "s are"} being written and will appear below in a few minutes. If you expected commitments from this session, press Draft again or add them by hand.`,
+        );
+      } else if (n === 0) {
+        setMessage(
+          "It read the whole transcript and found no clear commitments in " +
+            "it. Nothing was written. Use “Add something the transcript " +
+            "missed” below if you know of one.",
+        );
+      } else {
+        setMessage(
+          `${n} to-do${n === 1 ? "" : "s"} landed below, ready for review` +
+            (docs > 0
+              ? `, and ${docs} document${docs === 1 ? "" : "s"} still being written.`
+              : "."),
+        );
+      }
+      return;
+    }
+
     if (itemCount > startCount.current) {
       setWatching(false);
       const added = itemCount - startCount.current;
@@ -119,16 +157,6 @@ export function MeetingDraftControls({
       );
       return;
     }
-    if (lastRun && lastRun.status === "succeeded" && lastRun.itemsCreated === 0) {
-      setWatching(false);
-      setMessage(
-        "It read the whole transcript and found no clear commitments in " +
-          "it. Nothing was written. Use “Add something the transcript " +
-          "missed” below if you know of one.",
-      );
-      return;
-    }
-
     const timer = setInterval(() => {
       if (Date.now() - startedAt.current > WATCH_MS) {
         setWatching(false);
@@ -242,7 +270,11 @@ export function MeetingDraftControls({
         lastRun?.status === "succeeded" &&
         lastRun.itemsCreated === 0 && (
           <p className="font-sans text-xs text-tbb-ink-3 border border-tbb-line rounded-md px-2.5 py-1.5 bg-tbb-cream-50">
-            The last run read the transcript and found no clear commitments.
+            The last run extracted{" "}
+            <span className="font-bold text-tbb-navy">no to-dos</span>
+            {lastRun.documentsQueued > 0
+              ? ` — it wrote ${lastRun.documentsQueued} document${lastRun.documentsQueued === 1 ? "" : "s"} instead. A document doesn't replace the commitments from the session; press Draft again if you expected some.`
+              : " from this transcript."}
           </p>
         )}
       {message && (

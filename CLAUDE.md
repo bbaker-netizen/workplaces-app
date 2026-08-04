@@ -2995,6 +2995,83 @@ recorded baseline (74 / 148, nothing else). **The fix is not yet proven
 against the real transcript** — the acceptance test is pressing Draft on
 that same Crown and Ember session and seeing items land.
 
+## What was built — zero to-dos, and a progress note dressed as a draft (2026-08-04)
+
+Bruce, on Perfect Auto Wholesale: pressed Draft, saw no action items,
+and then "junk" appeared. Two faults, neither the one fixed an hour
+earlier.
+
+The run record settled it immediately — **succeeded, items_created 0,
+documents_queued 1.** No truncation, no error. The extractor read a
+66-minute session dense with commitments and returned an empty `items`
+array.
+
+### The prompt let a document stand in for the commitments
+
+Documents were the more heavily specified half of the extraction prompt
+— seven rules against four — and one of the item rules actively
+suppressed output: *"items that don't move revenue or margin shouldn't
+exist."* A model reads that as permission to drop them.
+
+So on a session that clearly called for an operations guide, everything
+went into the document and nothing into `items`. The generated guide
+even carried a "First 30 Days" section listing seven owned, dated
+actions — the exact commitments that should have been extracted, written
+into prose instead.
+
+Rewritten: `items` is declared the primary output and filled FIRST and
+independently; an item that moves neither revenue nor margin is tagged
+`false/false` and `low`, never omitted ("that judgement belongs to the
+Coach, not to you"); an unclear owner is explicitly not a reason to drop
+anything; and the documents section now states plainly that a document
+NEVER replaces action items, naming the empty-items-with-a-document
+result as the single most common mistake. An empty `items` array is
+called out as almost always wrong for a business building session.
+
+### "1 draft landed below, ready for review" was a progress note
+
+`createDraftPlaceholder` writes a row the instant a document is queued,
+whose body reads *"Reading the meeting transcript and drafting… if this
+message is still here after five minutes, the drafting job didn't run —
+tell Bruce."* That row:
+
+- counted towards the follow-through total, so the watcher saw the count
+  rise and announced a draft was ready — masking that ZERO commitments
+  had been extracted;
+- rendered as a full review card, with an owner picker, a due date and a
+  **Publish** button over the words "tell Bruce".
+
+`DELIVERABLE_DRAFTING_PLACEHOLDER` + `isDraftingPlaceholder()` in
+`lib/deliverables/types.ts` are a shared sentinel — same reasoning as
+`TOMBSTONE_BODY`: two places must agree on it, the writer that creates
+it and the board that must not offer it for publication. An in-flight
+document now renders as a spinner row saying what it is doing, with
+nothing to publish and only a cancel.
+
+**The run's own numbers now beat the row count.** `documentsQueued` is
+reported alongside `itemsCreated`, and the panel distinguishes "no
+to-dos came out of this one, but a document is being written" from "N
+to-dos landed". Conflating them is what let a zero-item run read as a
+success.
+
+### The lesson
+
+An hour earlier the same button failed loudly (truncated JSON) and was
+fixed. This time it succeeded and produced nothing useful. **A run
+record that only captures success/failure is not enough — the counts
+have to be surfaced too**, because "worked, and did nothing" is a real
+outcome and it looked identical to "worked".
+
+**Verified:** `next lint` clean. `tsc --noEmit` reports two errors, BOTH
+in `app/api/leads/[token]/route.ts` — a parallel session's in-flight
+assessment-notification work sitting uncommitted in the same tree, not
+touched here and deliberately not committed. Every file in this change
+typechecks.
+
+**Not yet proven:** whether the prompt change actually yields items. The
+acceptance test is pressing Draft on that same Perfect Auto Wholesale
+session and getting commitments, not just a document.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.

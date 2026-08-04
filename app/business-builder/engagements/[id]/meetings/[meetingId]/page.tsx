@@ -138,6 +138,7 @@ export default async function MeetingWorkspacePage({
             ? {
                 status: lastRun.status,
                 itemsCreated: lastRun.itemsCreated,
+                documentsQueued: lastRun.documentsQueued,
                 errorText: lastRun.errorText,
                 finishedAt: lastRun.finishedAt?.toISOString() ?? null,
               }

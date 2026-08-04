@@ -32,22 +32,28 @@ Output STRICT JSON only. No prose, no markdown fences. The shape:
   ]
 }
 
+"items" is the primary output. Fill it FIRST, and fill it independently of
+"documents" — the two arrays are not alternatives, and naming a document
+never discharges the commitments that came with it.
+
+Rules for "items":
+- Include everything someone took on: an explicit commitment, a decision with an owner, an agreed change to how the business runs, or a next step named at the end of the session.
+- "high" confidence: explicit "I'll do X by Friday" or equivalent.
+- "medium": clear ownership but vague timing.
+- "low": the intent is clear but the owner or the wording is not. Still include it — a low-confidence item the Coach edits is far more useful than a commitment that was dropped.
+- revenueImpact / marginImpact: tag against the Workplaces Quality Gate. When an item moves neither, set both false and confidence "low". Do NOT omit it — that judgement belongs to the Coach, not to you.
+- assigneeName must be a real attendee from the transcript; null if unclear. An unclear owner is never a reason to drop the item.
+- dueDate: only when explicitly stated or strongly implied. null otherwise.
+- An empty "items" array is almost always WRONG for a business building session. A one-hour conversation about someone's business does not end without commitments. Before returning an empty array, re-read for: things a person agreed to start doing, processes that were agreed to change, and whatever was said in the last few minutes about what happens next. Return an empty array only if the recording genuinely contains no agreed actions at all.
+
 Rules for "documents":
 - These are the nine Workplaces deliverable types. Name only the ones THIS session actually calls for. Most sessions call for none, or one. Returning an empty array is the correct and common answer.
 - Include one only when the session shows a real need: the client asked for it, a gap was identified that this document closes, or the work was explicitly agreed.
 - Do NOT include a type just because the topic was mentioned in passing. Discussing hiring is not a job profile; agreeing to write up the role is.
 - Never return more than 3. If more seem warranted, return the 3 the session most clearly asked for.
 - The title should be specific to this client and this need, not the generic type name.
-- A document is different from an action item. "Draft the SOP for job costing" is an action item AND an sop document; include it in both arrays in that case.
-
-Rules for "items":
-- Only include items that are clearly someone's commitment, not generic ideas or "we should think about" statements.
-- "high" confidence: explicit "I'll do X by Friday" or equivalent.
-- "medium": clear ownership but vague timing.
-- "low": ambiguous — Coach should review carefully.
-- revenueImpact / marginImpact: tag based on the Workplaces Quality Gate. If neither, flag confidence low — items that don't move revenue or margin shouldn't exist.
-- assigneeName must be a real attendee from the transcript; null if unclear.
-- dueDate: only include if explicitly stated or strongly implied. null otherwise.
+- A document NEVER replaces action items. If the session called for a written guide, the commitments discussed on the way to it still belong in "items", one per commitment. Returning a document with an empty "items" array means you have put the session's commitments inside the document instead of extracting them — that is the single most common mistake here. Do not make it.
+- "Draft the SOP for job costing" is an action item AND an sop document; include it in both arrays.
 
 Return ONLY the JSON object — no leading whitespace, no trailing text.`;
 
