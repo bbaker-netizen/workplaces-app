@@ -2449,6 +2449,38 @@ section.
 **Verified:** `tsc --noEmit`, `next lint` and the build clean at the
 same baseline (74 / 148, nothing else).
 
+### A client's message reached nobody either (same session, same cause)
+
+Flagged while building the agenda notification, then confirmed on live
+data: **one** client message had been posted in Communication and **not
+one** engagement-message notification had ever been written to a
+Business Builder. The only Builder notifications in the database were
+prospect alerts. It sat unread, indistinguishable from a client with
+nothing to say — the identical failure shape as the silent crons.
+
+Same cause as the agenda bug, and the module's own comment said so
+without anyone noticing what it implied: *"Members live in the
+engagement's (client) org."* `createMessage` selected `user_profiles`
+under the BOUND org, and Bruce and Jen are in the master org, so the
+recipient list could never contain them. Not a filter that excluded
+them — a query that could not see them.
+
+`notifyBuildersOfMessage` runs after the bound transaction commits,
+under `withSystemContext`, writing the row with the Builder's OWN org id
+(a client-org row would be invisible to the bell) and emailing the
+engagement's assigned coach. **Client-authored messages only** — a
+Builder posting into their own client's thread must not notify
+themselves, and notifying the other Builder about a client that is not
+theirs is exactly the cross-book noise own-book-by-default exists to
+prevent.
+
+Notification feed renders `client_message` → "X sent you a message",
+linking to that engagement's coach-side thread.
+
+**Verified:** `tsc`, `next lint`, build all clean at 74 / 148. **Not
+exercised live** — the acceptance test is a client posting and the email
+landing.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.

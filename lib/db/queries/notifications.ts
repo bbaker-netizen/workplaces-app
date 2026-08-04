@@ -122,11 +122,16 @@ export async function listBusinessBuilderNotifications(): Promise<
     for (const p of pRows) nameById.set(p.id, p.companyName);
   }
 
-  // Resolve engagement names for client-acceptance notifications.
+  // Resolve engagement names for the notifications keyed by engagement:
+  // client acceptance, and a client posting in Communication.
   const engagementIds = Array.from(
     new Set(
       rows
-        .filter((r) => r.parentEntityType === "client_accepted")
+        .filter(
+          (r) =>
+            r.parentEntityType === "client_accepted" ||
+            r.parentEntityType === "client_message",
+        )
         .map((r) => r.parentEntityId),
     ),
   );
@@ -245,6 +250,14 @@ export async function listBusinessBuilderNotifications(): Promise<
         ...n,
         contextLabel: "Action item update",
         href: `/business-builder/action-items`,
+      };
+    }
+    if (n.parentEntityType === "client_message") {
+      const name = engNameById.get(n.parentEntityId) ?? "A client";
+      return {
+        ...n,
+        contextLabel: `${name} sent you a message`,
+        href: `/business-builder/communication/${n.parentEntityId}`,
       };
     }
     if (n.parentEntityType === "agenda_item_raised") {

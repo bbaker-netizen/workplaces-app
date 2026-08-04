@@ -30,6 +30,7 @@ import {
 import {
   actionItems,
   documents,
+  engagements,
   messageAttachments,
   messages,
   notifications,
@@ -39,8 +40,10 @@ import {
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
+  withSystemContext,
   withTenantContext,
 } from "@/lib/db/tenant";
+import { resolveEngagementBuilders } from "@/lib/db/queries/engagement-builders";
 import {
   THREAD_TYPE,
   canPostInThread,
@@ -52,6 +55,7 @@ import { TOMBSTONE_BODY } from "@/lib/communication/tombstone";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { mentionEmail, newMessageEmail } from "@/lib/email/templates";
 import { emitEngagementEvent } from "@/lib/realtime";
+import { sendPushToUser } from "@/lib/push/web-push";
 
 type Role = UserProfile["role"];
 
@@ -276,7 +280,14 @@ export async function createMessage(
         // Every other participant who can see this thread gets a plain
         // "new message" notification + email (per-event). Excludes the
         // author and anyone already getting a mention email so nobody is
-        // double-notified. Members live in the engagement's (client) org.
+        // double-notified.
+        //
+        // Members here are the engagement's (client) org ONLY. The
+        // Business Builders sit in the master org and are handled after
+        // this transaction commits — see `notifyBuildersOfMessage`. They
+        // cannot be folded in here: their notification row needs THEIR
+        // org id, and this transaction is bound to the client's, so the
+        // RLS WITH CHECK would reject the insert.
         const mentionSet = new Set(mentionIds);
         const orgMembers = await tx
           .select({
@@ -375,6 +386,28 @@ export async function createMessage(
       ]);
     }
 
+    // The Workplaces side of the conversation.
+    //
+    // Until now this did not exist: the recipient query above reads
+    // `user_profiles` under the BOUND org, and Business Builders live in
+    // the master org — so a client posting in Communication notified
+    // nobody at Workplaces at all. Confirmed on live data before fixing:
+    // one client message had been posted and not a single engagement
+    // message notification had ever been written to a Builder. It sat
+    // there unread, indistinguishable from a client with nothing to say.
+    //
+    // Same defect, and the same repair, as the client-raised agenda
+    // point: resolve the engagement's OWN coach and write the row with
+    // THEIR org id, after the bound transaction has committed.
+    await notifyBuildersOfMessage({
+      engagementId: data.engagementId,
+      authorUserProfileId: profile.userProfileId,
+      authorRole: profile.role,
+      threadType: data.parentEntityType,
+      body: data.body,
+      parentTitle: txResult.parentTitle,
+    });
+
     revalidateForParent(
       data.parentEntityType,
       data.parentEntityId,
@@ -387,6 +420,121 @@ export async function createMessage(
       error: e instanceof Error ? e.message : String(e),
     };
   }
+}
+
+/** Roles that sit on the client side of an engagement. */
+const CLIENT_SIDE_ROLES: ReadonlyArray<UserProfile["role"]> = [
+  "client_lead",
+  "client_manager",
+  "client_employee",
+];
+
+/**
+ * Tell the engagement's Business Builder that their client has posted.
+ *
+ * Only fires for a message authored by a CLIENT. A Builder posting into
+ * their own client's thread should not notify themselves, and notifying
+ * the OTHER Builder about a client that is not theirs is precisely the
+ * cross-book noise own-book-by-default exists to prevent.
+ *
+ * Runs under `withSystemContext` after the message transaction has
+ * committed: the row must carry the Builder's own (master) org id or the
+ * notification bell — which reads under the signed-in user's tenant —
+ * will never see it. Best-effort throughout; a failure here must not
+ * unwind a message the client has already sent and can already see.
+ */
+async function notifyBuildersOfMessage(args: {
+  engagementId: string;
+  authorUserProfileId: string;
+  authorRole: UserProfile["role"];
+  threadType: string;
+  body: string;
+  parentTitle: string | null;
+}): Promise<void> {
+  if (!(CLIENT_SIDE_ROLES as readonly string[]).includes(args.authorRole)) {
+    return;
+  }
+  try {
+    const ctx = await withSystemContext(async (tx) => {
+      const builders = (
+        await resolveEngagementBuilders(tx, args.engagementId)
+      ).filter((b) => b.userProfileId !== args.authorUserProfileId);
+      if (builders.length === 0) return null;
+
+      const [eng] = await tx
+        .select({ name: engagements.name })
+        .from(engagements)
+        .where(eq(engagements.id, args.engagementId))
+        .limit(1);
+
+      const [author] = await tx
+        .select({ fullName: userProfiles.fullName })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, args.authorUserProfileId))
+        .limit(1);
+
+      await tx.insert(notifications).values(
+        builders.map((b) => ({
+          orgId: b.orgId,
+          userProfileId: b.userProfileId,
+          type: "message" as const,
+          // Points at the ENGAGEMENT, not the message: the coach-side
+          // thread view is per engagement, and a message has no page of
+          // its own on that side.
+          parentEntityType: "client_message",
+          parentEntityId: args.engagementId,
+          sentVia: "both" as const,
+        })),
+      );
+
+      return {
+        builders,
+        engagementLabel: eng?.name?.trim() || "A client",
+        authorName: author?.fullName ?? "Someone",
+      };
+    });
+    if (!ctx) return;
+
+    const contextLabel =
+      args.threadType === THREAD_TYPE.actionItem
+        ? `${ctx.engagementLabel} — action item${args.parentTitle ? `: ${args.parentTitle}` : ""}`
+        : `${ctx.engagementLabel} — ${threadTypeLabel(args.threadType).toLowerCase()} thread`;
+    const url = `/business-builder/communication/${args.engagementId}`;
+
+    await Promise.all(
+      ctx.builders.map((b) =>
+        sendEmailQuietly(
+          newMessageEmail({
+            to: b.email,
+            recipientName: b.fullName,
+            authorName: ctx.authorName,
+            contextLabel,
+            messageBody: args.body,
+            url,
+          }),
+        ),
+      ),
+    );
+
+    await Promise.all(
+      ctx.builders.map((b) =>
+        sendPushToUser(b.userProfileId, {
+          title: `${ctx.engagementLabel} sent a message`,
+          body: `${ctx.authorName}: ${flattenForPush(args.body)}`,
+          url,
+          tag: `client-message-${args.engagementId}`,
+        }),
+      ),
+    );
+  } catch (e) {
+    console.error("[messages] Business Builder notification failed", e);
+  }
+}
+
+/** Push bodies are one line on a lock screen — strip markup, clamp. */
+function flattenForPush(body: string): string {
+  const flat = body.replace(/[#*_`>\-\[\]()]/g, " ").replace(/\s+/g, " ").trim();
+  return flat.length > 120 ? `${flat.slice(0, 117)}…` : flat;
 }
 
 async function loadAuthorName(profile: {
