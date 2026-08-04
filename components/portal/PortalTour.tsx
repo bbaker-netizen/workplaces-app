@@ -50,7 +50,7 @@ const STEPS: Step[] = [
     skipBeacon: true,
     title: "Your next Business Building Session.",
     content:
-      "We meet twice a month — one in person, one virtual. Sessions shows your next one with the date, time, and any agenda I've started, plus the history of past ones.",
+      "We meet twice a month — one in person, one virtual. Sessions shows your next one with the date, time, and the agenda, plus the history of past ones. Open the session and add anything you want covered — it goes on the agenda straight away and I'm notified, so I turn up ready for it instead of hearing it cold.",
   },
   {
     target: "body",

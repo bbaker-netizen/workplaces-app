@@ -136,7 +136,24 @@ export type SessionActionItem = {
   assigneeUserProfileId: string | null;
 };
 
-/** Action items linked to this session via `bbs_session_id`. */
+/**
+ * Action items linked to this session via `bbs_session_id`.
+ *
+ * **Drafts are excluded for everyone but a Business Builder, and that
+ * filter lives HERE rather than in the page.** This function renders on
+ * `/portal/sessions/[id]` — a client-facing page — and it had no draft
+ * filter at any layer. The portal's own action-items list does filter,
+ * but it does so in the page component, so the rule had to be
+ * remembered separately at every call site and this call site forgot.
+ *
+ * It has never leaked, purely by accident: nothing in the database
+ * currently carries a `bbs_session_id`, because both drafting paths were
+ * writing only `engagement_meeting_id`. So one bug was masking another,
+ * and repairing the link without this filter would have published every
+ * unreviewed machine-written draft straight into five clients' portals.
+ * A draft is Claude's guess until a Business Builder publishes it; that
+ * is the whole point of the status.
+ */
 export async function listSessionActionItems(
   sessionId: string,
 ): Promise<SessionActionItem[]> {
@@ -147,23 +164,32 @@ export async function listSessionActionItems(
     sessionId,
   );
   if (!engagementId) return [];
+  const isBuilder =
+    profile.role === "master_admin" || profile.role === "coach";
   try {
     return await withEngagementContext(
       profile.orgId,
       profile.role,
       engagementId,
       async (tx) => {
-    const rows = await tx
-      .select({
-        id: actionItems.id,
-        title: actionItems.title,
-        status: actionItems.status,
-        dueDate: actionItems.dueDate,
-        assigneeUserProfileId: actionItems.assigneeUserProfileId,
-      })
-      .from(actionItems)
-      .where(eq(actionItems.bbsSessionId, sessionId))
-      .orderBy(asc(actionItems.createdAt));
+        const rows = await tx
+          .select({
+            id: actionItems.id,
+            title: actionItems.title,
+            status: actionItems.status,
+            dueDate: actionItems.dueDate,
+            assigneeUserProfileId: actionItems.assigneeUserProfileId,
+          })
+          .from(actionItems)
+          .where(
+            isBuilder
+              ? eq(actionItems.bbsSessionId, sessionId)
+              : and(
+                  eq(actionItems.bbsSessionId, sessionId),
+                  ne(actionItems.status, "draft"),
+                ),
+          )
+          .orderBy(asc(actionItems.createdAt));
         return rows;
       },
     );

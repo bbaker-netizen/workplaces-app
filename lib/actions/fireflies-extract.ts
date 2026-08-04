@@ -25,7 +25,7 @@
  * controls extraction, review, and assignment; clients can't pull drafts.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -193,6 +193,13 @@ async function draftActionItemsFromRecording(args: {
     };
   }
 
+  // Resolved before the write transaction so a Fireflies-meeting lookup
+  // never sits inside it. See the helper for why every draft needs it.
+  const engagementMeetingId = await resolveEngagementMeetingId(
+    engagementId,
+    firefliesRecordingId,
+  );
+
   let created = 0;
   try {
     await withEngagementContext(
@@ -217,6 +224,7 @@ async function draftActionItemsFromRecording(args: {
             confidenceFlag: item.confidence,
             firefliesTranscriptId: firefliesRecordingId,
             bbsSessionId,
+            engagementMeetingId,
             createdBy: "claude",
           });
           created += 1;
@@ -407,6 +415,52 @@ export async function extractActionItemsFromFireflies(
   });
 }
 
+/**
+ * The `engagement_meetings` row for a transcript, if we have synced one.
+ *
+ * Every draft written here MUST carry this link, because the meeting
+ * workspace — the page a Business Builder actually reviews drafts on —
+ * queries by `engagement_meeting_id` and nothing else. Items written
+ * with only `bbs_session_id` and `fireflies_transcript_id` exist,
+ * correctly, and render nowhere. That is the same failure this codebase
+ * keeps paying for: work that completes and reports success while the
+ * surface stays empty.
+ *
+ * The pair (engagement, transcript) is the same key `getMeetingWorkspace`
+ * joins the recap on, and migration 0109 used it to backfill the link for
+ * everything written before it existed.
+ *
+ * `withSystemContext` because the caller may be mid-`withEngagementContext`
+ * or running with no session at all (the auto-attach path), and this is a
+ * read of a row already established as belonging to this engagement.
+ * Returns null rather than throwing — a missing meeting row means the
+ * Fireflies sync has not caught up yet, which must not cost the drafts.
+ */
+async function resolveEngagementMeetingId(
+  engagementId: string,
+  firefliesTranscriptId: string | null,
+): Promise<string | null> {
+  if (!firefliesTranscriptId) return null;
+  try {
+    return await withSystemContext(async (tx) => {
+      const [row] = await tx
+        .select({ id: engagementMeetings.id })
+        .from(engagementMeetings)
+        .where(
+          and(
+            eq(engagementMeetings.engagementId, engagementId),
+            eq(engagementMeetings.firefliesTranscriptId, firefliesTranscriptId),
+          ),
+        )
+        .limit(1);
+      return row?.id ?? null;
+    });
+  } catch (e) {
+    console.error("[fireflies-extract] meeting lookup failed", e);
+    return null;
+  }
+}
+
 function matchAssignee(
   name: string,
   members: Array<{ id: string; fullName: string; email: string }>,
@@ -487,6 +541,14 @@ export async function extractFromFirefliesAsSystem(
     };
   }
 
+  // Same link as the interactive path. This is the arm the auto-attach
+  // uses, so without it every draft produced by a transcript matching
+  // itself to a session would be invisible on the review page.
+  const engagementMeetingId = await resolveEngagementMeetingId(
+    ctx.session.engagementId,
+    ctx.session.firefliesRecordingId,
+  );
+
   let created = 0;
   await withSystemContext(async (tx) => {
     for (const item of parsedOutput.items) {
@@ -506,6 +568,7 @@ export async function extractFromFirefliesAsSystem(
         confidenceFlag: item.confidence,
         firefliesTranscriptId: ctx.session.firefliesRecordingId,
         bbsSessionId: ctx.session.id,
+        engagementMeetingId,
         createdBy: "claude",
       });
       created += 1;

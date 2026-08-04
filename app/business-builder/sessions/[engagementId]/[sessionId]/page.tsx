@@ -6,7 +6,9 @@ import {
   listSessionActionItems,
 } from "@/lib/db/queries/bbs-sessions";
 import { listCoachEngagements } from "@/lib/db/queries/engagements";
+import { listSessionAgenda } from "@/lib/db/queries/agenda-items";
 import { SessionDetail } from "@/components/sessions/SessionDetail";
+import { SessionAgenda } from "@/components/sessions/SessionAgenda";
 
 export default async function CoachSessionDetailPage({
   params,
@@ -26,7 +28,15 @@ export default async function CoachSessionDetailPage({
   const session = await getSession(params.sessionId);
   if (!session || session.engagementId !== engagement.id) notFound();
 
-  const actionItems = await listSessionActionItems(session.id);
+  const [actionItems, agenda] = await Promise.all([
+    listSessionActionItems(session.id),
+    listSessionAgenda(session.id),
+  ]);
+
+  // Past and cancelled sessions keep their agenda as a record, but stop
+  // accepting new points — the same rule the client side applies.
+  const sessionIsOpen =
+    session.status === "scheduled" && new Date(session.scheduledAt) >= new Date();
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-8">
@@ -53,6 +63,15 @@ export default async function CoachSessionDetailPage({
         }}
         backHref={`/business-builder/sessions/${engagement.id}`}
         canManage
+      />
+
+      <SessionAgenda
+        sessionId={session.id}
+        items={agenda}
+        currentUserProfileId={profile.userProfileId}
+        canContribute={sessionIsOpen}
+        canManage
+        audience="builder"
       />
 
       {actionItems.length > 0 && (

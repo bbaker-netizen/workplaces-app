@@ -35,10 +35,11 @@
  * not UTC's.
  */
 
-import { and, desc, eq, gte, inArray, isNull, lt, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, ne } from "drizzle-orm";
 import { DateTime } from "luxon";
 import {
   actionItems,
+  agendaItems,
   bbsSessions,
   eaTimeBlocks,
   prospects,
@@ -104,6 +105,15 @@ export type DigestSession = {
 export type DigestSessionPrep = DigestSession & {
   previousSessionAt: string | null;
   openCommitments: { id: string; title: string; assigneeName: string | null }[];
+  /**
+   * Points the CLIENT put on the agenda themselves.
+   *
+   * Separated from the drafted agenda below on purpose: one is a machine
+   * suggestion awaiting your approval, the other is a person telling you
+   * what they need. They must not read as the same kind of thing, and
+   * the client's own words come first.
+   */
+  clientRaised: { title: string; body: string | null; raisedByName: string | null }[];
   /** Filled in after the payload is gathered, by the agenda drafter.
    *  Empty when there was nothing worth proposing, or when the session
    *  already has a proposal from a previous morning. */
@@ -468,6 +478,40 @@ export async function gatherDigest(
         assigneeName: r.assigneeName ?? null,
       }));
 
+    // What the client asked for. Still `pending` only — a point already
+    // marked discussed or carried is not what you need reminding of at
+    // 07:00 on the morning of.
+    //
+    // Resolved by the raiser's role rather than a stored flag, the same
+    // rule `listSessionAgenda` uses. Business Builders live in the master
+    // org, so the join has to run under this system-context transaction;
+    // an engagement-bound read would return no names at all.
+    const raised = await tx
+      .select({
+        title: agendaItems.title,
+        body: agendaItems.body,
+        raisedByName: userProfiles.fullName,
+        raisedByRole: userProfiles.role,
+      })
+      .from(agendaItems)
+      .innerJoin(
+        userProfiles,
+        eq(userProfiles.id, agendaItems.raisedByUserProfileId),
+      )
+      .where(
+        and(
+          eq(agendaItems.bbsSessionId, s.id),
+          eq(agendaItems.status, "pending"),
+          inArray(userProfiles.role, [
+            "client_lead",
+            "client_manager",
+            "client_employee",
+          ]),
+        ),
+      )
+      .orderBy(asc(agendaItems.sortOrder))
+      .limit(12);
+
     todaysSessions.push({
       id: s.id,
       engagementId: s.engagementId,
@@ -478,6 +522,11 @@ export async function gatherDigest(
       whenLabel: whenLabel(s.scheduledAt),
       previousSessionAt: previous ? previous.scheduledAt.toISOString() : null,
       openCommitments,
+      clientRaised: raised.map((r) => ({
+        title: r.title,
+        body: r.body,
+        raisedByName: r.raisedByName,
+      })),
       proposedAgenda: null,
     });
   }

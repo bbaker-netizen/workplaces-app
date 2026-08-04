@@ -89,6 +89,16 @@ export default async function PortalWelcomePage() {
           notes from the previous one.
         </p>
         <p className="mt-3">
+          <strong>You can set the agenda too.</strong> Open your next
+          session under Sessions and add anything you want covered — a
+          decision you&apos;re stuck on, a number that doesn&apos;t look
+          right, a hire you&apos;re weighing up. It goes on the agenda
+          straight away and I&apos;m notified, so I come prepared rather
+          than hearing it for the first time in the room. Don&apos;t save
+          it up: the earlier it&apos;s on there, the more useful the two
+          hours are.
+        </p>
+        <p className="mt-3">
           After each session, the action items we agreed on appear in
           your portal automatically as drafts. I review and publish them
           within 24 hours. You&apos;ll get an email the moment each one

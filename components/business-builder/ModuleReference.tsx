@@ -41,8 +41,8 @@ export function ModuleReference() {
       <ModuleCard
         icon={<CalendarClock />}
         name="Sessions"
-        what="Every Business Building Session you run — twice a month per client, two hours each, one in person and one virtual. Each session has a date, type, agenda, and notes. Drop in a Fireflies recording ID and Claude extracts proposed action items as drafts you review and publish."
-        when="Schedule each BBS as you book it. Open the session record before, during, and after the meeting to take notes and capture commitments."
+        what="Every Business Building Session you run — twice a month per client, two hours each, one in person and one virtual. Each session has a date, type, agenda, and notes. The agenda is shared: your client can add points to an upcoming session from their own portal, and anything they raise is badged CLIENT RAISED, emails you the moment it lands, and appears under “They asked to cover” on that session in your 07:00 briefing. You can reorder, edit, or remove any of it. Drop in a Fireflies recording ID and Claude extracts proposed action items as drafts you review and publish."
+        when="Schedule each BBS as you book it. Open the session record before, during, and after the meeting to take notes, work the agenda, and capture commitments."
         replaces={`Your per-client "Business Building Session" boards in Monday. The session items + subitem action items + meeting links are all rolled into one record here.`}
         link="/business-builder/engagements"
         linkLabel="Open sessions (pick an engagement)"

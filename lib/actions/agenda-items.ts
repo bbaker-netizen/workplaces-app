@@ -27,11 +27,26 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { clientWriteBlocked, READ_ONLY_ERROR } from "@/lib/server/engagement-guard";
-import { agendaItems, bbsSessions, type UserProfile } from "@/lib/db/schema";
+import {
+  agendaItems,
+  bbsSessions,
+  engagements,
+  notifications,
+  type UserProfile,
+} from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
+  withSystemContext,
 } from "@/lib/db/tenant";
+import { resolveEngagementBuilders } from "@/lib/db/queries/engagement-builders";
+import { sendEmailQuietly } from "@/lib/email/send";
+import { agendaItemRaisedEmail } from "@/lib/email/templates";
+import { sendPushToUser } from "@/lib/push/web-push";
+// Plain module, no "use client" — the same Mountain-Time formatter the
+// session pages use, so the email and the screen never disagree about
+// when a meeting is.
+import { formatSessionTime } from "@/components/sessions/utils";
 
 type Role = UserProfile["role"];
 
@@ -75,7 +90,14 @@ const agendaStatusEnum = z.enum(["pending", "discussed", "deferred"]);
 function revalidateAgendaPaths(sessionId: string) {
   revalidatePath("/business-builder/team");
   revalidatePath(`/business-builder/team/${sessionId}`);
+  revalidatePath("/portal/sessions");
   revalidatePath(`/portal/sessions/${sessionId}`);
+  // The Business Builder's view of a CLIENT session. Its route carries
+  // the engagement id as well, which we don't have here, so the layout
+  // segment is revalidated rather than the exact path — otherwise a
+  // point a client just raised would sit behind a stale render on the
+  // one page the coach opens to prepare.
+  revalidatePath("/business-builder/sessions/[engagementId]/[sessionId]", "page");
 }
 
 /**
@@ -164,6 +186,22 @@ export async function createAgendaItem(
         return row.id;
       },
     );
+
+    // A client raising a point is the whole reason this reaches anybody.
+    // Fired AFTER the write commits and never allowed to fail the write:
+    // a point that is on the agenda but did not send an email is a small
+    // problem; a point the client thinks they raised and isn't there is
+    // a large one.
+    if (isClientRole(auth.profile.role)) {
+      await notifyBuildersOfClientAgendaItem({
+        engagementId: auth.engagementId,
+        sessionId: data.bbsSessionId,
+        raiserName: auth.profile.fullName,
+        title: data.title,
+        body: data.body ?? null,
+      });
+    }
+
     revalidateAgendaPaths(data.bbsSessionId);
     return { ok: true, data: { id } };
   } catch (err) {
@@ -171,6 +209,114 @@ export async function createAgendaItem(
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't add the agenda item.",
     };
+  }
+}
+
+/** Roles that sit on the client side of an engagement. */
+const CLIENT_ROLES: ReadonlyArray<Role> = [
+  "client_lead",
+  "client_manager",
+  "client_employee",
+];
+
+function isClientRole(role: Role): boolean {
+  return (CLIENT_ROLES as readonly string[]).includes(role);
+}
+
+/**
+ * Tell the engagement's Business Builder that their client wants to
+ * cover something.
+ *
+ * Runs under `withSystemContext`, not the engagement binding the write
+ * used, for one reason: Business Builders live in the MASTER org. A
+ * notification row written with the client's `org_id` would be invisible
+ * to the bell, which reads under the signed-in user's own tenant — the
+ * row would exist and reach nobody, which is the worst of both.
+ *
+ * Best-effort throughout. Every failure logs and returns; none of it can
+ * unwind the agenda item, which is already saved and already visible.
+ */
+async function notifyBuildersOfClientAgendaItem(args: {
+  engagementId: string;
+  sessionId: string;
+  raiserName: string;
+  title: string;
+  body: string | null;
+}): Promise<void> {
+  try {
+    const ctx = await withSystemContext(async (tx) => {
+      const builders = await resolveEngagementBuilders(tx, args.engagementId);
+      if (builders.length === 0) return null;
+
+      const [session] = await tx
+        .select({ scheduledAt: bbsSessions.scheduledAt })
+        .from(bbsSessions)
+        .where(eq(bbsSessions.id, args.sessionId))
+        .limit(1);
+
+      const [eng] = await tx
+        .select({ name: engagements.name })
+        .from(engagements)
+        .where(eq(engagements.id, args.engagementId))
+        .limit(1);
+
+      await tx.insert(notifications).values(
+        builders.map((b) => ({
+          // The Builder's OWN org — see the note above.
+          orgId: b.orgId,
+          userProfileId: b.userProfileId,
+          type: "agenda_item_raised" as const,
+          // Points at the SESSION, not the agenda item: the feed's job is
+          // to get you to the agenda, and an agenda item has no page of
+          // its own.
+          parentEntityType: "agenda_item_raised",
+          parentEntityId: args.sessionId,
+          sentVia: "both" as const,
+        })),
+      );
+
+      return {
+        builders,
+        scheduledAt: session?.scheduledAt ?? null,
+        engagementLabel: eng?.name?.trim() || "Your client",
+      };
+    });
+    if (!ctx) return;
+
+    const whenLabel = ctx.scheduledAt
+      ? formatSessionTime(ctx.scheduledAt)
+      : "an upcoming session";
+    const url = `/business-builder/sessions/${args.engagementId}/${args.sessionId}`;
+
+    await Promise.all(
+      ctx.builders.map((b) =>
+        sendEmailQuietly(
+          agendaItemRaisedEmail({
+            to: b.email,
+            recipientName: b.fullName,
+            raiserName: args.raiserName,
+            engagementLabel: ctx.engagementLabel,
+            itemTitle: args.title,
+            itemBody: args.body,
+            sessionWhenLabel: whenLabel,
+            url,
+          }),
+        ),
+      ),
+    );
+
+    await Promise.all(
+      ctx.builders.map((b) =>
+        sendPushToUser(b.userProfileId, {
+          title: `${ctx.engagementLabel} added to the agenda`,
+          body: args.title,
+          url,
+          tag: `agenda-${args.sessionId}`,
+        }),
+      ),
+    );
+  } catch (e) {
+    console.error("[agenda-items] client-raised notification failed", e);
   }
 }
 

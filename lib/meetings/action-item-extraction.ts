@@ -17,9 +17,14 @@
  * Business Builder reviews, assigns, and publishes them from the UI.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { actionItems, engagementMeetings, userProfiles } from "@/lib/db/schema";
+import {
+  actionItems,
+  bbsSessions,
+  engagementMeetings,
+  userProfiles,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { DELIVERABLE_TYPES } from "@/lib/deliverables/types";
 import { enqueueDeliverableDraft } from "@/lib/deliverables/enqueue";
@@ -133,7 +138,37 @@ export async function runMeetingActionItemExtraction(
       .select({ id: userProfiles.id, fullName: userProfiles.fullName })
       .from(userProfiles)
       .where(eq(userProfiles.orgId, m.orgId));
-    return { ...m, recordingId: m.recordingId, members };
+
+    // The BBS session this transcript belongs to, if the two have been
+    // paired. Matched on (engagement, transcript id) — the same key
+    // `getMeetingWorkspace` uses to find the recap, and the one
+    // migration 0109 backfilled with.
+    //
+    // This used to be hard-coded null, and that quietly emptied the
+    // client recap. `buildRecapBody`'s "Who is doing what" section is
+    // built from action items joined on `bbs_session_id`, so with every
+    // drafted item carrying only the meeting link, no recap could ever
+    // list a single commitment no matter what was published. Measured
+    // on live data before the fix: 36 of 37 Claude-drafted items had no
+    // session link, and every recap in the database would have listed
+    // zero.
+    const [session] = await tx
+      .select({ id: bbsSessions.id })
+      .from(bbsSessions)
+      .where(
+        and(
+          eq(bbsSessions.engagementId, m.engagementId),
+          eq(bbsSessions.firefliesRecordingId, m.recordingId),
+        ),
+      )
+      .limit(1);
+
+    return {
+      ...m,
+      recordingId: m.recordingId,
+      members,
+      bbsSessionId: session?.id ?? null,
+    };
   });
 
   const transcript = await fetchTranscript(ctx.recordingId);
@@ -180,7 +215,10 @@ export async function runMeetingActionItemExtraction(
         // appears in that meeting's workspace rather than only in the
         // flat action-items list.
         engagementMeetingId: meetingId,
-        bbsSessionId: null,
+        // Both links, always. The workspace reads by meeting, the client
+        // recap reads by session; filling only one makes the item
+        // invisible to the other.
+        bbsSessionId: ctx.bbsSessionId,
         createdBy: "claude",
       });
       created += 1;

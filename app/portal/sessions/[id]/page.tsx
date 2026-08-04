@@ -5,7 +5,10 @@ import {
   getSession,
   listSessionActionItems,
 } from "@/lib/db/queries/bbs-sessions";
+import { listSessionAgenda } from "@/lib/db/queries/agenda-items";
+import { clientWriteBlocked } from "@/lib/server/engagement-guard";
 import { SessionDetail } from "@/components/sessions/SessionDetail";
+import { SessionAgenda } from "@/components/sessions/SessionAgenda";
 
 export default async function PortalSessionDetailPage({
   params,
@@ -22,7 +25,29 @@ export default async function PortalSessionDetailPage({
   const canManage =
     profile.role === "master_admin" || profile.role === "coach";
 
-  const actionItems = await listSessionActionItems(session.id);
+  const [actionItems, agenda, writeBlocked] = await Promise.all([
+    listSessionActionItems(session.id),
+    listSessionAgenda(session.id),
+    // The same guard the write action applies, rather than a second
+    // reading of the engagement's status. Returns false for coaches.
+    clientWriteBlocked(profile.role, session.engagementId),
+  ]);
+
+  // Who may put something on this agenda.
+  //
+  // Everyone in the engagement except a prospect, which mirrors
+  // `canContribute` in lib/actions/agenda-items.ts — the server is the
+  // authority and will refuse regardless; this only decides whether the
+  // form is worth rendering.
+  //
+  // Two closures on top: a session already past or cancelled is a record
+  // rather than a plan, and a paused engagement is read-only for client
+  // roles. A form that submits into a guaranteed refusal is worse than
+  // no form.
+  const sessionIsOpen =
+    session.status === "scheduled" && new Date(session.scheduledAt) >= new Date();
+  const canContribute =
+    profile.role !== "prospect" && sessionIsOpen && !writeBlocked;
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-12 space-y-8">
@@ -37,6 +62,15 @@ export default async function PortalSessionDetailPage({
         }}
         backHref="/portal/sessions"
         canManage={canManage}
+      />
+
+      <SessionAgenda
+        sessionId={session.id}
+        items={agenda}
+        currentUserProfileId={profile.userProfileId}
+        canContribute={canContribute}
+        canManage={canManage}
+        audience={canManage ? "builder" : "client"}
       />
 
       {actionItems.length > 0 && (

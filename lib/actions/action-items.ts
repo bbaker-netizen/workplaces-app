@@ -402,6 +402,50 @@ export async function updateActionItem(
         if (data.deliverableType !== undefined)
           update.deliverableType = data.deliverableType;
 
+        // Self-heal the session link at the moment of publication.
+        //
+        // A drafted item needs BOTH links: the meeting workspace reads by
+        // `engagement_meeting_id`, the client recap's "Who is doing what"
+        // section reads by `bbs_session_id`. Until 2026-08-04 the drafting
+        // path wrote only the first, so 36 legacy rows carry a null
+        // session and would never appear in a recap however they were
+        // published.
+        //
+        // Healing HERE rather than by backfilling those rows is the
+        // deliberate choice: linking a draft to a session makes it
+        // reachable from the client-facing session page, and repairing
+        // them all in the database would have made 35 unreviewed machine
+        // drafts client-reachable the moment the statement ran, ahead of
+        // the deploy carrying the query's draft filter. Doing it on the
+        // status change means the link appears exactly when the item
+        // stops being a draft — which is exactly when it is allowed to be
+        // seen. No exposure window, no deploy ordering to remember.
+        //
+        // A no-op for anything created after this date: the drafting
+        // paths now set both links up front.
+        if (
+          data.status !== undefined &&
+          data.status !== "draft" &&
+          existing.status === "draft" &&
+          !existing.bbsSessionId &&
+          existing.firefliesTranscriptId
+        ) {
+          const [session] = await tx
+            .select({ id: bbsSessions.id })
+            .from(bbsSessions)
+            .where(
+              and(
+                eq(bbsSessions.engagementId, existing.engagementId),
+                eq(
+                  bbsSessions.firefliesRecordingId,
+                  existing.firefliesTranscriptId,
+                ),
+              ),
+            )
+            .limit(1);
+          if (session) update.bbsSessionId = session.id;
+        }
+
         if (Object.keys(update).length === 0) return null; // no-op
 
         const [updated] = await tx

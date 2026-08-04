@@ -97,6 +97,9 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   // `action_item_due_soon`, which fires BEFORE a date as a heads-up;
   // this fires after, as a chase.
   "action_item_overdue",
+  // A client raised a talking point for an upcoming session (0110).
+  // Bound to a date, unlike `message` — see the migration's note.
+  "agenda_item_raised",
 ]);
 
 export const notificationSentViaEnum = pgEnum("notification_sent_via", [

@@ -304,6 +304,69 @@ export function documentSharedEmail(
   return { to: input.to, subject, html, text };
 }
 
+/* ----------------------- agenda item raised ----------------------- */
+
+export type AgendaItemRaisedEmailInput = {
+  to: string;
+  recipientName: string;
+  /** The client person who raised it. */
+  raiserName: string;
+  engagementLabel: string;
+  itemTitle: string;
+  itemBody?: string | null;
+  /** When the session they raised it for is. */
+  sessionWhenLabel: string;
+  url: string;
+};
+
+/**
+ * A client has put something on the agenda for an upcoming session.
+ *
+ * Deliberately spare. The whole message is the one line they wrote and
+ * when the session is — those two facts are what decide whether it needs
+ * preparing for, and anything else would bury them. The point is not
+ * that an action is required; it is already on the agenda. The point is
+ * that you know before you walk in.
+ */
+export function agendaItemRaisedEmail(
+  input: AgendaItemRaisedEmailInput,
+): EmailEnvelope {
+  const url = input.url.startsWith("http") ? input.url : appUrl() + input.url;
+  const subject = `${input.engagementLabel} added to the agenda — ${input.sessionWhenLabel}`;
+
+  const html = shell({
+    preheader: `${input.raiserName}: ${input.itemTitle}`,
+    heading: "They want to cover this",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.recipientName.split(" ")[0] ?? input.recipientName)},</p>
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.raiserName)}</strong> at <strong>${escapeHtml(input.engagementLabel)}</strong> added a point to the agenda for your session on ${escapeHtml(input.sessionWhenLabel)}.</p>
+      <blockquote style="margin:16px 0;padding:12px 14px;border-left:3px solid #2E4057;background:#F5F1E8;font-size:15px;line-height:1.5;color:#1A1A1A;">
+        <strong>${escapeHtml(input.itemTitle)}</strong>${
+          input.itemBody
+            ? `<br><span style="font-size:14px;color:#666666;">${escapeHtml(flattenMarkdown(input.itemBody, 600))}</span>`
+            : ""
+        }
+      </blockquote>
+      <p style="margin:0 0 12px 0;font-size:13px;color:#666666;">It is already on the agenda. Reorder it, edit it, or take it off from the session page.</p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Open the agenda",
+  });
+
+  const text = [
+    `${input.raiserName} at ${input.engagementLabel} added a point to the agenda for your session on ${input.sessionWhenLabel}.`,
+    "",
+    input.itemTitle,
+    ...(input.itemBody ? ["", flattenMarkdown(input.itemBody, 600)] : []),
+    "",
+    "It is already on the agenda. Reorder, edit or remove it from the session page.",
+    "",
+    `Open: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
 /* ---------------------------- assigned ---------------------------- */
 
 export type ActionItemAssignedEmailInput = {
@@ -1269,6 +1332,33 @@ export function dailyDigestEmail(input: DailyDigestEmailInput): EmailEnvelope {
     <div style="font-size:12px;color:${MUTED};margin-top:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;">Still open</div>
     ${commitments}
     ${
+      // The client's own words, ABOVE the drafted agenda. A person
+      // telling you what they need outranks a model's suggestion, and
+      // putting them in the same list would flatten that difference.
+      s.clientRaised && s.clientRaised.length > 0
+        ? `
+    <div style="margin-top:16px;padding:12px 14px;border-left:3px solid ${NAVY};background:#FFFFFF;">
+      <div style="font-size:12px;color:${NAVY};font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;">They asked to cover</div>
+      <ul style="margin:8px 0 0 0;padding-left:18px;font-family:Arial,sans-serif;font-size:13px;color:${INK};line-height:1.6;">
+        ${s.clientRaised
+          .map(
+            (a) =>
+              `<li style="margin:0 0 6px 0;">${escapeHtml(a.title)}${
+                a.raisedByName
+                  ? ` <span style="color:${MUTED};">(${escapeHtml(a.raisedByName)})</span>`
+                  : ""
+              }${
+                a.body
+                  ? `<br><span style="color:${MUTED};font-size:12px;">${escapeHtml(a.body)}</span>`
+                  : ""
+              }</li>`,
+          )
+          .join("")}
+      </ul>
+    </div>`
+        : ""
+    }
+    ${
       s.proposedAgenda && s.proposedAgenda.items.length > 0
         ? `
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid ${RULE};">
@@ -1459,6 +1549,14 @@ ${b.items
       t.push(`  ${s.engagementLabel} at ${s.whenLabel} (${humanStatus(s.type)})`);
       for (const c of s.openCommitments) {
         t.push(`    still open: ${c.title}${c.assigneeName ? ` (${c.assigneeName})` : ""}`);
+      }
+      if (s.clientRaised && s.clientRaised.length > 0) {
+        t.push("    They asked to cover:");
+        for (const a of s.clientRaised) {
+          t.push(
+            `      - ${a.title}${a.raisedByName ? ` (${a.raisedByName})` : ""}${a.body ? ` — ${a.body}` : ""}`,
+          );
+        }
       }
       if (s.proposedAgenda && s.proposedAgenda.items.length > 0) {
         t.push("    Suggested agenda:");

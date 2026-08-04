@@ -122,7 +122,10 @@ export default async function MeetingWorkspacePage({
         />
       )}
 
-      <MeetingDraftControls meetingId={meetingId} />
+      {/* The count is what the control watches: the drafting job runs in
+          a background function and finishes minutes after the button
+          returns, so this is how the page knows anything landed. */}
+      <MeetingDraftControls meetingId={meetingId} itemCount={ws.items.length} />
 
       <FollowThroughBoard
         engagementId={id}

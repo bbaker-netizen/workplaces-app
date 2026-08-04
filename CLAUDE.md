@@ -2396,11 +2396,58 @@ are pressing "Draft from this meeting" and watching drafts appear
 without touching reload, and publishing an item then confirming it shows
 under "Who is doing what" in that session's recap.
 
-**Not backfilled.** The 36 existing items keep their null session link,
-so recaps already drafted stay without a commitments section. A backfill
-is derivable — (engagement, transcript id) resolves the session for every
-one — but it changes what a client-facing recap would say, so it is
-Bruce's call rather than a rider on a bug fix.
+### Repairing the legacy rows without an exposure window
+
+Bruce: "yes, complete it all." The obvious move — one UPDATE filling
+every null `bbs_session_id` — was rejected, because linking a row to a
+session is exactly what makes it reachable from the CLIENT-facing
+session page. Running it would have made 33 unreviewed machine drafts
+client-reachable the instant the statement committed, ahead of the
+deploy carrying the query's draft filter. A data migration that is only
+safe after a specific deploy is a migration waiting to be run in the
+wrong order.
+
+So the repair is split by whether the row is already client-visible:
+
+**Published rows: a backfill script.**
+`scripts/backfill-action-item-session-links.mjs` — dry run by default,
+`--apply` to write. Only fills NULLs, only links where EXACTLY ONE
+session matches the (engagement, transcript) pair, and reports ambiguous
+or unmatched rows rather than guessing. Re-runnable. It touches
+non-draft rows ONLY, by design, and says so in its output. **Applied:**
+1 row (Crown and Ember), 0 ambiguous, 0 unmatched; non-draft items still
+unlinked afterwards: 0.
+
+**Drafts: they heal themselves on publication.** A self-heal block in
+`updateActionItem` resolves and sets the session link when an item moves
+out of `draft` and has none. The link therefore appears at precisely the
+moment the item stops being a draft — which is the moment it is allowed
+to be seen. No exposure window and no deploy ordering to remember, which
+is strictly better than a backfill plus a rule someone has to follow. A
+no-op for anything created after this date, since both drafting paths
+now write both links up front.
+
+Measured after: all **33** unlinked drafts resolve a session — checked
+with an EXISTS predicate, not a LEFT JOIN count, because a join fans out
+on multiple matches and inflates the number (the first version of this
+check did exactly that and had to be redone). A client would see **1**
+item across every session page, and it is published; zero drafts are
+reachable.
+
+Proven end to end against the live database inside a transaction forced
+to roll back: a real NCF draft published → session resolved → recap's
+"Who is doing what" query returns 1 → drafts visible to the client on
+that session: 0 → ROLLBACK, database unchanged.
+
+**Recaps do not gain commitments retroactively.** Every recap in the
+database still lists zero, correctly: their sessions have no PUBLISHED
+items yet. They populate as Bruce works the 33 drafts. Two document
+placeholders carry no transcript id and so never resolve a session —
+acceptable, a document is not a commitment and does not belong in that
+section.
+
+**Verified:** `tsc --noEmit`, `next lint` and the build clean at the
+same baseline (74 / 148, nothing else).
 
 ## Active Phase
 

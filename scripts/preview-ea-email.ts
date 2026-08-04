@@ -52,6 +52,20 @@ const payload: DigestPayload = {
       type: "in_person",
       whenLabel: when(now.set({ hour: 10, minute: 0 })),
       previousSessionAt: iso(now.minus({ days: 14 })),
+      // A client-raised point, so the sample exercises the section that
+      // renders above the drafted agenda.
+      clientRaised: [
+        {
+          title: "The Peterson quote — do we walk away",
+          body: "They have come back a third time asking for a discount and I am losing patience.",
+          raisedByName: "Dave Nowak",
+        },
+        {
+          title: "Hiring a second estimator before spring",
+          body: null,
+          raisedByName: "Dave Nowak",
+        },
+      ],
       proposedAgenda: {
         proposalId: "prop-1",
         approveUrl:

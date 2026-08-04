@@ -12,6 +12,7 @@
 
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
+  bbsSessions,
   engagements,
   notifications,
   prospects,
@@ -140,6 +141,40 @@ export async function listBusinessBuilderNotifications(): Promise<
     for (const e of eRows) engNameById.set(e.id, e.name ?? "your client");
   }
 
+  // Client-raised agenda points: resolve the session's engagement so the
+  // deep link can be built with both segments, and its name so the feed
+  // says WHICH client wants to cover something.
+  const agendaSessionIds = Array.from(
+    new Set(
+      rows
+        .filter((r) => r.parentEntityType === "agenda_item_raised")
+        .map((r) => r.parentEntityId),
+    ),
+  );
+  const agendaSessionById = new Map<
+    string,
+    { engagementId: string; engagementName: string }
+  >();
+  if (agendaSessionIds.length > 0) {
+    const sRows = await withSystemContext((tx) =>
+      tx
+        .select({
+          id: bbsSessions.id,
+          engagementId: bbsSessions.engagementId,
+          engagementName: engagements.name,
+        })
+        .from(bbsSessions)
+        .innerJoin(engagements, eq(engagements.id, bbsSessions.engagementId))
+        .where(inArray(bbsSessions.id, agendaSessionIds)),
+    );
+    for (const s of sRows) {
+      agendaSessionById.set(s.id, {
+        engagementId: s.engagementId,
+        engagementName: s.engagementName?.trim() || "A client",
+      });
+    }
+  }
+
   // `notifications.parent_entity_id` carries no foreign key, so deleting
   // a prospect leaves its notifications behind. They used to render as
   // "Follow-up due: a lead" pointing at a dead link. Drop them instead —
@@ -210,6 +245,19 @@ export async function listBusinessBuilderNotifications(): Promise<
         ...n,
         contextLabel: "Action item update",
         href: `/business-builder/action-items`,
+      };
+    }
+    if (n.parentEntityType === "agenda_item_raised") {
+      // `parentEntityId` is the SESSION id. The session page needs BOTH
+      // the engagement and the session in its path, so the engagement is
+      // resolved above rather than guessed — a one-segment guess is
+      // exactly how the recap approval links 404'd on 2026-08-03.
+      const s = agendaSessionById.get(n.parentEntityId);
+      if (!s) return { ...n, contextLabel: null, href: null };
+      return {
+        ...n,
+        contextLabel: `${s.engagementName} added a point to their agenda`,
+        href: `/business-builder/sessions/${s.engagementId}/${n.parentEntityId}`,
       };
     }
     return { ...n, contextLabel: null, href: null };

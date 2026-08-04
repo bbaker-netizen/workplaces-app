@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, MessageSquarePlus } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementSessions } from "@/lib/db/queries/bbs-sessions";
@@ -7,6 +8,7 @@ import { getAvailability } from "@/lib/scheduling/availability";
 import { ScheduleSessionForm } from "@/components/sessions/ScheduleSessionForm";
 import { SessionList } from "@/components/sessions/SessionList";
 import { BookAvailability } from "@/components/sessions/BookAvailability";
+import { formatSessionTime } from "@/components/sessions/utils";
 
 export default async function PortalSessionsPage() {
   const profile = await ensureUserProfile();
@@ -34,6 +36,12 @@ export default async function PortalSessionsPage() {
     profile.role === "client_manager";
 
   const { upcoming, past } = await listEngagementSessions(engagement.id);
+  // The soonest session still ahead of us — what the agenda pointer aims
+  // at. `upcoming` is already ordered soonest-first by the query.
+  const nextSession =
+    upcoming.find(
+      (s) => s.status === "scheduled" && new Date(s.scheduledAt) >= new Date(),
+    ) ?? null;
   // Cross-Builder availability for the booking picker (only needed when the
   // viewer can book). Best-effort — if Google isn't connected we fall back
   // to the manual request form.
@@ -63,6 +71,36 @@ export default async function PortalSessionsPage() {
       </header>
 
       <div className="space-y-10">
+        {/* The agenda pointer.
+            Sits ABOVE the list, because the thing a client most often
+            arrives here wanting to do between sessions is add something
+            to the next one — and until now there was nowhere to say it
+            except a message that isn't attached to the meeting. */}
+        {nextSession && (
+          <Link
+            href={`/portal/sessions/${nextSession.id}`}
+            className="group block rounded-lg border border-tbb-line bg-white p-5 shadow-tbb-xs hover:border-tbb-blue transition-colors"
+          >
+            <div className="flex items-start gap-3">
+              <MessageSquarePlus
+                className="w-5 h-5 shrink-0 text-tbb-blue mt-0.5"
+                aria-hidden
+              />
+              <div className="space-y-1">
+                <h2 className="font-bold text-tbb-navy text-lg tracking-tight group-hover:underline underline-offset-4">
+                  Something you want to cover next session?
+                </h2>
+                <p className="font-sans text-sm text-tbb-ink-3">
+                  Add it to the agenda for{" "}
+                  <strong>{formatSessionTime(nextSession.scheduledAt)}</strong>.
+                  It goes on straight away and we&apos;ll come prepared —
+                  no need to wait for the meeting to raise it.
+                </p>
+              </div>
+            </div>
+          </Link>
+        )}
+
         <section className="space-y-3">
           <h2 className="font-mono text-xs uppercase tracking-tbb-caps text-muted-foreground">
             Your scheduled sessions
