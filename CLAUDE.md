@@ -2174,6 +2174,234 @@ is the same every time: output that is consistently the wrong SHAPE
 rather than absent.** Sessions that were always months old should have
 read as loudly as no sessions at all.
 
+**It worked.** The first sync after deploy took `bbs_sessions` from 203
+to 461 and gave 15 clients upcoming meetings where the app had none. The
+next morning's briefing drafted the **first agenda proposal in the
+app's history** (Impactica, 5 talking points off the last transcript)
+and minted the first `agenda_proposal` approval token ever.
+
+**And it broke something, which is the part worth carrying.** Importing
+258 historical sessions at once meant 180 of them rendered orange as
+"MISSED", 37 on portals real clients can see. The label was always an
+inference the server had explicitly declined to make — `held-sessions.ts`
+says a past session that was not cancelled was HELD — and it only looked
+survivable while the sync was importing a trickle. The pill now obeys
+that same rule: past and not cancelled reads "Held", neutral, never
+orange. There is no "Missed" any more. A genuinely missed meeting no
+longer flags itself, which is the accepted cost, because it never did
+reliably — it depended on a click nobody makes. **Fixing a starved
+integration can dump months of backlog into surfaces sized for a
+trickle; check what the new volume renders as before calling it done.**
+
+## What was built — the client can set the agenda (2026-08-04)
+
+Bruce's ask: let the client add agenda items they want covered in the
+next meeting. Migration `0110` (one enum value, alone in its file).
+
+**Almost none of this was new plumbing, and that is the finding.**
+`agenda_items` has been generic across ANY `bbs_session` since 0084, and
+`canContribute` in `lib/actions/agenda-items.ts` has always excluded only
+`prospect` — so every client role could already write to an agenda. What
+was missing was a surface: agendas rendered on exactly one page, the
+internal team touch-base. Neither the client portal NOR the Business
+Builder's own client-session page showed an agenda at all. **Check
+whether the permission already exists before designing a permission
+model.**
+
+### Two decisions Bruce made before anything was written
+
+**Straight on, not a request queue.** A client's point lands on the real
+agenda immediately, badged "Client raised". The rejected alternative —
+pending items the coach accepts — would have been a second inbox to work,
+and would have shown the client "awaiting review" where they expected
+their own words. It also matches what the agenda already was: a thing
+anyone in the engagement may add to.
+
+**Email now AND in the briefing.** Both, because they fail differently.
+A point raised at 8pm the night before a 9am session reaches a briefing
+three hours before the meeting, which is not enough to prepare; and an
+email read on a phone and forgotten is caught by the briefing on the day.
+
+### The notification goes to the master org, not the client's
+
+`notifyBuildersOfClientAgendaItem` runs under `withSystemContext`, not
+the engagement binding the write used. Business Builders live in the
+MASTER org, so a notification row carrying the client's `org_id` is
+invisible to the bell — which reads under the signed-in user's own
+tenant. The row would exist and reach nobody.
+
+`lib/db/queries/engagement-builders.ts` resolves the ENGAGEMENT'S OWN
+coach (`engagements.coach_id` → `coaches.user_profile_id`), falling back
+to master admins only when there is no coach. Notifying every Builder
+about every client is how own-book-by-default gets undone one
+notification at a time.
+
+`lib/actions/messages.ts` has the same shape and reads `user_profiles`
+under the BOUND org, so a client posting a message notifies their own
+colleagues and nobody on our side. Not fixed here — noting it because
+it is the same defect one module over.
+
+### The cross-org name gap, found while building
+
+`listSessionAgenda` resolved raiser names inside `withEngagementContext`,
+which binds to the CLIENT's org. Every Business Builder profile lives in
+master, so on a client session that would have rendered every
+Builder-raised point as "Raised by (nobody)" and every Builder-owned
+commitment as "Unassigned" — reading as broken data rather than as RLS
+working. Invisible until now only because agendas were shown solely on
+the internal engagement, where everyone happens to sit in the master org.
+People are now resolved in a separate `withSystemContext` pass. Not a
+leak: every id came from a row the caller could already read.
+
+### Where it renders
+
+- `/portal/sessions/[id]` — the client's agenda, with the composer.
+- `/portal/sessions` — a pointer card ABOVE the list, because "add
+  something to the next one" is the main reason a client opens this page
+  between sessions and there was previously nowhere to say it except a
+  message not attached to the meeting.
+- `/business-builder/sessions/[engagementId]/[sessionId]` — the same
+  board, full controls. This page had no agenda before.
+- The 07:00 briefing: a **"They asked to cover"** block, rendered ABOVE
+  the AI-drafted agenda. A person telling you what they need outranks a
+  model's suggestion, and one list would have flattened that difference.
+
+`components/sessions/SessionAgenda.tsx` renders both sides from one
+component so the two views cannot disagree. Deliberately NOT
+`components/team/AgendaBoard` — that one takes `InternalTeammate[]`,
+links into `/business-builder/...`, and defaults the assignee to "the
+other person", all wrong when one side is a client. They share the server
+actions and the read query, which is where drift would actually cost
+something.
+
+**Agendas close when the session starts.** A past or cancelled session
+keeps its agenda as a record and takes no new points, on both sides. The
+client composer also hides when `clientWriteBlocked` says the engagement
+is paused — calling the real guard rather than re-reading the status, so
+the form can never submit into a guaranteed refusal.
+
+**The AI drafter needed no change**: `gatherAgendaContext` already passes
+everything on the agenda as "already covered" and filters overlaps
+afterwards, so client-raised points cannot be duplicated by the 07:00
+proposal.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles with 74 prerender failures and 148 `Missing publishableKey`,
+zero errors of any other cause — the recorded baseline exactly. The
+briefing was rendered through `scripts/preview-ea-email.ts digest` and
+read end to end. Live read-only checks: five clients now hold a
+`client_lead` (A&M Abatement, Crown and Ember, North Central Farming,
+Perfect Auto Wholesale, Summit Cabinets), and every one has upcoming
+sessions — so this is usable the day it deploys. **Not yet clicked in a
+browser.** 0110 applies on next deploy; the acceptance test is a client
+adding a point and the email landing.
+
+## What was built — the drafts that had already landed (2026-08-04)
+
+Same session. Bruce, on the North Central Farming meeting workspace: "I
+don't see any suggested action items." No migration.
+
+**The drafts were there.** Eight of them, `created_by: claude`, correctly
+linked to that meeting, written at 07:59 MT — while the page in front of
+him said "Nothing waiting". Nothing was broken in the drafting at all.
+
+The work runs in a Netlify Background Function, because it must: reading
+an hour of transcript through Opus takes minutes and a synchronous
+function on this plan dies at ~26s. So the server action returns when the
+job is ENQUEUED, and `MeetingDraftControls` said **"Refresh to pick them
+up."** That reads as a completed instruction, so the natural next move is
+to look at the list below — which is still empty, because nothing has
+been written yet.
+
+**Same family as every silent-cron bug in this file, one layer up.** The
+job runs, the job succeeds, and the surface reports nothing — so it looks
+broken. The difference is that this one is a UI contract, not a cron:
+telling a human to refresh is a way of making the machine's asynchrony
+their problem, and they will read the stale screen as the answer.
+
+The control now WATCHES instead of asking. It takes the current item
+count as a prop, `router.refresh()`es every 12s while a run is in flight,
+stops the moment the count goes up and says how many landed, and gives up
+after six minutes with a message that admits it rather than spinning for
+ever. The button stays disabled and the copy says "leave this page open"
+— no instruction to refresh anywhere.
+
+**Ruled out along the way, worth recording:** the `bbs.fireflies.attached`
+Inngest event and the `firefliesExtract` function are still in
+`lib/inngest/functions.ts` and still dead — nothing consumes them,
+because Inngest is not what runs background work here.
+`lib/ea/transcript-match.ts` already knows this and calls
+`extractFromFirefliesAsSystem` directly with a comment explaining why.
+The auto-attach path is fine; only the manual button had the feedback
+gap.
+
+**A second, quieter instance found in the same sweep, and fixed.**
+`lib/actions/fireflies-extract.ts` wrote `bbs_session_id` and
+`fireflies_transcript_id` on every item it created but never
+`engagement_meeting_id` — and the meeting workspace queries by
+`engagement_meeting_id` and nothing else. So drafts produced by the
+SESSION path (the auto-attach, when `transcript-match` pairs a transcript
+to a session and drafts straight off it) landed correctly in the database
+and rendered on no page at all. Bruce's eight showed up only because the
+manual button goes through `lib/meetings/action-item-extraction.ts`,
+which does set the link.
+
+`resolveEngagementMeetingId(engagementId, transcriptId)` now fills it on
+both insert sites, resolved BEFORE the write transaction so a lookup
+never sits inside one, and returning null rather than throwing when the
+Fireflies sync has not caught up — a missing meeting row must not cost
+the drafts. The pair (engagement, transcript) is the same key
+`getMeetingWorkspace` joins the recap on and the one 0109 used to
+backfill. Not retroactive: any pre-existing session-path draft stays
+unlinked, and 0109's backfill has already run.
+
+### The mirror image, and the leak it was hiding
+
+Bruce, next question: "is 'What we decided' the action items?" It is
+not — `buildRecapBody` builds it from the model's `decisions` array, and
+the commitments live in a SEPARATE **"Who is doing what"** section built
+from the database. Answering that exposed why he had never seen the
+second section: **no recap in the database could produce one.**
+
+`lib/meetings/action-item-extraction.ts` — the path behind the workspace
+button, where drafts are actually reviewed and published — set
+`bbsSessionId: null` explicitly, while the recap's commitments query
+joins on `bbs_session_id` and excludes drafts. Measured before touching
+anything: **36 of 37** Claude-drafted items in the last 30 days had no
+session link, and `would_list` came back **0 for every recap in the
+database**. Publishing every draft would not have changed that by one
+row. The matching session existed the whole time.
+
+Exactly the same defect as the `engagement_meeting_id` one above, in the
+other direction. Two link columns, two readers, each write path filling
+only the one its own screen reads. Both paths now write BOTH links,
+resolved from (engagement, transcript id) — the same key
+`getMeetingWorkspace` joins the recap on.
+
+**One bug was masking a second, and repairing it first would have caused
+the incident.** `listSessionActionItems` — rendered on the CLIENT-facing
+`/portal/sessions/[id]` — had no draft filter at any layer. It has never
+leaked purely because nothing carried a `bbs_session_id`. Writing the
+link without fixing that would have published 35 unreviewed
+machine-written drafts into five clients' portals in one deploy. The
+filter now lives in the QUERY, not the page: the portal's action-items
+list filters in its page component, which is precisely why this call
+site forgot. **When a fix makes previously-dead data live, check what
+reads it before writing it.**
+
+**Verified:** `tsc --noEmit`, `next lint` and the build all clean against
+the same baseline (74 / 148, nothing else). Live counts above are from
+read-only queries. **Not clicked in a browser** — the acceptance tests
+are pressing "Draft from this meeting" and watching drafts appear
+without touching reload, and publishing an item then confirming it shows
+under "Who is doing what" in that session's recap.
+
+**Not backfilled.** The 36 existing items keep their null session link,
+so recaps already drafted stay without a commitments section. A backfill
+is derivable — (engagement, transcript id) resolves the session for every
+one — but it changes what a client-facing recap would say, so it is
+Bruce's call rather than a rider on a bug fix.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
