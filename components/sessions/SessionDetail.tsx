@@ -67,9 +67,9 @@ export function SessionDetail({
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(session.notes ?? "");
 
-  // "Held" rather than "Missed" when Fireflies recorded it — see
-  // sessionStatusLabel. `isOverdue` drives the alarm styling, so a
-  // recorded session loses the orange too.
+  // A past session that was not cancelled reads "Held" — see
+  // sessionStatusLabel. `isAlarm` is never true for a past session now,
+  // so the orange treatment is reserved for genuine attention states.
   const { label: statusLabel, isAlarm: isOverdue } =
     sessionStatusLabel(session);
 

@@ -94,9 +94,9 @@ function SessionRow({
   hrefBase: string;
   past?: boolean;
 }) {
-  // "Held" rather than "Missed" when Fireflies recorded it — see
-  // sessionStatusLabel. `isOverdue` drives the orange chip and pill, so
-  // a recorded session drops back to the neutral tone.
+  // A past session that was not cancelled reads "Held" — see
+  // sessionStatusLabel. `isAlarm` is never true for a past session now,
+  // so the orange chip and pill are reserved for genuine attention.
   const { label: statusLabel, isAlarm: isOverdue } = sessionStatusLabel(session);
   const isCancelled = session.status === "cancelled";
   const { month, day, weekday } = chipParts(session.scheduledAt);

@@ -58,24 +58,33 @@ export const SESSION_STATUS_LABEL: Record<
  * What the status pill should say, and whether it deserves the alarm
  * colour.
  *
- * **Why this is not just `status`.** Nothing in the app writes
+ * **The rule: a past session that was not cancelled was HELD.** This is
+ * the same definition `lib/ea/held-sessions.ts` applies on the server —
+ * `cancelled` is already the marker for a meeting that did not happen,
+ * so it carries the negative case and nothing has to be inferred.
+ *
+ * **Why the UI used to disagree, and why that mattered.** Nothing writes
  * `completed` except a person clicking "Mark complete", and almost
  * nobody does — sessions arrive from Google Calendar as `scheduled` and
- * stay that way. So every past session read as "Missed", including ones
- * that plainly went ahead. A client's record showing MISSED against a
- * session we hold a recording of is simply wrong, and it is wrong on the
- * page a Business Builder opens to review that session's recap.
+ * stay that way. The pill inferred "Missed" from the absence of that
+ * click, which the server had explicitly declined to infer.
  *
- * A transcript is evidence. If Fireflies recorded the meeting, the
- * meeting happened, whatever the status column says — so it reads
- * "Held", in the neutral tone. Only a past session with NO recording is
- * still "Missed" and still orange, because there the alarm is doing real
- * work: nothing shows the session took place.
+ * That was survivable while the calendar sync was only importing a
+ * trickle of sessions. When the sync's missing pagination was fixed and
+ * it read the whole window for the first time, 258 historical sessions
+ * arrived at once and 180 of them lit up orange as "MISSED" — 37 of
+ * those on portals real clients can see. Almost none had been missed;
+ * they were months-old meetings that went ahead and simply were not
+ * recorded by Fireflies. Telling a client they missed sixteen sessions
+ * they attended is worse than saying nothing.
  *
- * Read-side only, exactly like `sessionWasHeld` on the server. We are
- * not writing a claim we cannot verify — `completeSession()` still means
- * what it always meant, and a session someone marked complete keeps
- * saying so.
+ * So there is no "Missed" any more. A genuinely missed meeting no longer
+ * flags itself, which is the accepted cost: it never did so reliably,
+ * because it depended on a manual click. Cancel a meeting that does not
+ * happen and the record is accurate.
+ *
+ * Read-side only. `completeSession()` still means what it always meant,
+ * and a session someone marked complete keeps saying "Completed".
  *
  * One helper, imported by both the list and the detail view, so the two
  * cannot drift apart.
@@ -83,7 +92,6 @@ export const SESSION_STATUS_LABEL: Record<
 export function sessionStatusLabel(session: {
   status: "scheduled" | "completed" | "cancelled";
   scheduledAt: Date;
-  firefliesRecordingId?: string | null;
 }): { label: string; isAlarm: boolean; isPastUnmarked: boolean } {
   const isPastUnmarked =
     session.status === "scheduled" && new Date(session.scheduledAt) < new Date();
@@ -96,10 +104,6 @@ export function sessionStatusLabel(session: {
     };
   }
 
-  const wasRecorded = Boolean(session.firefliesRecordingId);
-  return {
-    label: wasRecorded ? "Held" : "Missed",
-    isAlarm: !wasRecorded,
-    isPastUnmarked: true,
-  };
+  // Past and not cancelled. Held, in the neutral tone — never orange.
+  return { label: "Held", isAlarm: false, isPastUnmarked: true };
 }
