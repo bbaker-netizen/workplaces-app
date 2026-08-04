@@ -100,6 +100,17 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   // A client raised a talking point for an upcoming session (0110).
   // Bound to a date, unlike `message` — see the migration's note.
   "agenda_item_raised",
+  // A Business Builder declared a session's agenda ready, and the same
+  // agenda changed after that (0112). Both go only to Business Builders.
+  // Two values, not one: "finalized" invites you to add points, "updated"
+  // tells you what you already read has moved.
+  "agenda_finalized",
+  "agenda_updated",
+  // A client moved their own commitment — status change or a new due
+  // date (0114). Goes only to the engagement's Business Builder. Not
+  // `action_item_assigned` reused: that means "this is now yours", this
+  // means "what you assigned has moved".
+  "action_item_progress",
 ]);
 
 export const notificationSentViaEnum = pgEnum("notification_sent_via", [
@@ -1105,6 +1116,22 @@ export const bbsSessions = pgTable(
     status: bbsSessionStatusEnum("status").notNull().default("scheduled"),
     notes: text("notes"),
     firefliesRecordingId: text("fireflies_recording_id"),
+    /** When this session's agenda was last declared ready and announced
+     *  (migration 0113). NULL = never finalized, no email has gone out.
+     *
+     *  Doubles as the watermark for "what has changed since the other
+     *  person last read this": agenda items whose created_at/updated_at
+     *  sit after it are unannounced. Re-finalizing moves it forward, so
+     *  each email describes only the delta since the previous one. One
+     *  column rather than a flag plus a revision counter, because two
+     *  can disagree and one cannot. */
+    agendaFinalizedAt: timestamp("agenda_finalized_at", { withTimezone: true }),
+    /** Who pressed Finalize. Provenance only — ON DELETE SET NULL so a
+     *  departed Builder's profile going away cannot silently
+     *  un-finalize a live agenda. */
+    agendaFinalizedByUserProfileId: uuid(
+      "agenda_finalized_by_user_profile_id",
+    ).references(() => userProfiles.id, { onDelete: "set null" }),
     createdByUserProfileId: uuid("created_by_user_profile_id")
       .notNull()
       .references(() => userProfiles.id),

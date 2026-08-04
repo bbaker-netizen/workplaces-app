@@ -13,7 +13,13 @@
  */
 
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { bbClientAccess, coaches, engagements, userProfiles } from "../schema";
+import {
+  bbClientAccess,
+  coaches,
+  engagements,
+  orgs,
+  userProfiles,
+} from "../schema";
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
 
@@ -196,6 +202,145 @@ async function isInternalEngagement(engagementId: string): Promise<boolean> {
   } catch (e) {
     console.error("[bb-access] isInternalEngagement read failed", e);
     return false;
+  }
+}
+
+/**
+ * Every engagement explicitly SHARED with this Business Builder.
+ *
+ * Reads `bb_client_access` unconditionally, which is the difference
+ * between this and `getCurrentBbAccess().grantedEngagementIds` — that
+ * one returns [] when `all_clients_access` is true, because there it is
+ * answering "what are you limited to". Here the question is different:
+ * "which of the practice's clients are also YOURS to see in your own
+ * book", and the answer must not depend on how broad your permissions
+ * happen to be. A Builder with all-clients permission who is sharing
+ * one specific client still wants that client in their default list.
+ *
+ * Errors return [] — a failed read must not widen anyone's book.
+ */
+export async function sharedEngagementIdsFor(
+  userProfileId: string,
+): Promise<string[]> {
+  try {
+    return await withSystemContext(async (tx) => {
+      const rows = await tx
+        .select({ engagementId: bbClientAccess.engagementId })
+        .from(bbClientAccess)
+        .where(eq(bbClientAccess.coachUserProfileId, userProfileId));
+      return rows.map((r) => r.engagementId);
+    });
+  } catch (e) {
+    console.error("[bb-access] sharedEngagementIdsFor read failed", e);
+    return [];
+  }
+}
+
+/**
+ * Who a specific client is shared with, plus every Business Builder who
+ * could be added. Powers the per-client Share panel.
+ *
+ * The engagement's assigned coach is returned separately and is never
+ * "shareable" — they already have it by ownership, and offering to
+ * share a client with the person who owns it is a control that can only
+ * confuse. Removing an owner's access is done by reassigning the
+ * client, not by un-ticking a box here.
+ */
+export type EngagementShareState = {
+  ownerUserProfileId: string | null;
+  ownerName: string | null;
+  builders: Array<{
+    userProfileId: string;
+    fullName: string;
+    email: string;
+    isMasterAdmin: boolean;
+    shared: boolean;
+  }>;
+};
+
+export async function getEngagementShareState(
+  engagementId: string,
+): Promise<EngagementShareState | null> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return null;
+  if (profile.role !== "master_admin" && profile.role !== "coach") return null;
+  if (!(await canCurrentBbAccessEngagement(engagementId))) return null;
+
+  try {
+    return await withSystemContext(async (tx) => {
+      const [eng] = await tx
+        .select({ orgId: engagements.orgId, coachId: engagements.coachId })
+        .from(engagements)
+        .where(eq(engagements.id, engagementId))
+        .limit(1);
+      if (!eng) return null;
+
+      let ownerUserProfileId: string | null = null;
+      if (eng.coachId) {
+        const [c] = await tx
+          .select({ userProfileId: coaches.userProfileId })
+          .from(coaches)
+          .where(eq(coaches.id, eng.coachId))
+          .limit(1);
+        ownerUserProfileId = c?.userProfileId ?? null;
+      }
+
+      // Business Builders live in the master org, never the client's.
+      const [master] = await tx
+        .select({ id: orgs.id })
+        .from(orgs)
+        .where(eq(orgs.type, "master"))
+        .limit(1);
+      if (!master) return null;
+
+      const people = await tx
+        .select({
+          userProfileId: userProfiles.id,
+          fullName: userProfiles.fullName,
+          email: userProfiles.email,
+          role: userProfiles.role,
+        })
+        .from(userProfiles)
+        .where(
+          and(
+            eq(userProfiles.orgId, master.id),
+            inArray(userProfiles.role, ["master_admin", "coach"]),
+          ),
+        );
+
+      const grants = new Set(
+        (
+          await tx
+            .select({ coachUserProfileId: bbClientAccess.coachUserProfileId })
+            .from(bbClientAccess)
+            .where(eq(bbClientAccess.engagementId, engagementId))
+        ).map((g) => g.coachUserProfileId),
+      );
+
+      const owner = people.find((p) => p.userProfileId === ownerUserProfileId);
+
+      return {
+        ownerUserProfileId,
+        ownerName: owner?.fullName ?? null,
+        builders: people
+          .filter((p) => p.userProfileId !== ownerUserProfileId)
+          .map((p) => ({
+            userProfileId: p.userProfileId,
+            fullName: p.fullName,
+            email: p.email,
+            isMasterAdmin: p.role === "master_admin",
+            shared: grants.has(p.userProfileId),
+          }))
+          .sort((a, b) =>
+            a.fullName.localeCompare(b.fullName, undefined, {
+              sensitivity: "base",
+            }),
+          ),
+      };
+    });
+  } catch (e) {
+    console.error("[bb-access] getEngagementShareState failed", e);
+    return null;
   }
 }
 

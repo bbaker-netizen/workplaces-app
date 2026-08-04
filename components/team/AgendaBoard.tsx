@@ -37,6 +37,7 @@ import {
 import { createActionItem } from "@/lib/actions/action-items";
 import type { ListedAgendaItem } from "@/lib/db/queries/agenda-items";
 import type { InternalTeammate } from "@/lib/db/queries/internal-workspace";
+import { AgendaFinalizeBar } from "@/components/sessions/AgendaFinalizeBar";
 
 type Props = {
   sessionId: string;
@@ -46,6 +47,11 @@ type Props = {
   currentUserProfileId: string;
   /** False on past/cancelled meetings — agenda becomes read-only. */
   canEdit?: boolean;
+  /** When this agenda was last announced to the other Builders. */
+  finalizedAt?: Date | string | null;
+  /** False once the meeting has started — an agenda stops being
+   *  something to prepare from and becomes a record. */
+  canFinalize?: boolean;
 };
 
 const STATUS_TONE: Record<string, string> = {
@@ -67,6 +73,8 @@ export function AgendaBoard({
   teammates,
   currentUserProfileId,
   canEdit = true,
+  finalizedAt = null,
+  canFinalize = false,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -137,6 +145,13 @@ export function AgendaBoard({
           {error}
         </p>
       )}
+
+      <AgendaFinalizeBar
+        sessionId={sessionId}
+        finalizedAt={finalizedAt}
+        items={items}
+        canFinalize={canFinalize}
+      />
 
       {items.length === 0 ? (
         <p className="rounded-xl border border-dashed border-tbb-line bg-white p-6 text-center font-sans text-sm text-muted-foreground">

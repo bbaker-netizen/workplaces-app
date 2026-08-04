@@ -28,7 +28,6 @@ import {
   agendaItems,
   bbsSessions,
   engagementMeetings,
-  notifications,
   userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
@@ -38,11 +37,29 @@ import {
   withEngagementContext,
   withTenantContext,
 } from "@/lib/db/tenant";
-import { sendEmailQuietly } from "@/lib/email/send";
-import { actionItemAssignedEmail } from "@/lib/email/templates";
+import { notifyActionItemAssigned } from "@/lib/notifications/action-item-assigned";
+import { notifyBuildersOfProgress } from "@/lib/notifications/action-item-progress";
+import type { ActionItemStatus } from "@/components/action-items/utils";
 import { syncActionItemToEa, expireInEa } from "@/lib/assistant/ea-sync";
 
 type Role = UserProfile["role"];
+
+/**
+ * Whether two due dates are the same calendar day.
+ *
+ * `due_date` is a `date` column, so Drizzle hands back midnight-anchored
+ * values and a plain `!==` on two Date objects is always true — which
+ * would report a date change on every save that merely re-posted the
+ * existing one. Compares the ISO day, and treats null-vs-null as equal.
+ */
+function sameDay(a: Date | null, b: Date | null): boolean {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+  return (
+    new Date(a).toISOString().slice(0, 10) ===
+    new Date(b).toISOString().slice(0, 10)
+  );
+}
 
 // The Business Builder controls action-item creation and assignment.
 // Clients (including client_lead) can only update the status of items
@@ -229,52 +246,25 @@ export async function createActionItem(
         })
         .returning({ id: actionItems.id });
 
-      // Notify assignee if it's not the creator.
-      let assigneeForEmail: {
-        email: string;
-        fullName: string;
-      } | null = null;
-      if (
-        data.assigneeUserProfileId &&
-        data.assigneeUserProfileId !== profile.userProfileId
-      ) {
-        await tx.insert(notifications).values({
-          orgId: boundOrgId,
-          userProfileId: data.assigneeUserProfileId,
-          type: "action_item_assigned",
-          parentEntityType: "action_item",
-          parentEntityId: item.id,
-          sentVia: "in_app",
-        });
-        const [assignee] = await tx
-          .select({
-            email: userProfiles.email,
-            fullName: userProfiles.fullName,
-          })
-          .from(userProfiles)
-          .where(eq(userProfiles.id, data.assigneeUserProfileId))
-          .limit(1);
-        if (assignee) assigneeForEmail = assignee;
-      }
-
-      return { item, assigneeForEmail };
+      return { item };
     },
     );
 
-    // Send the assignment email outside the transaction. Best-effort.
-    if (txResult.assigneeForEmail) {
-      const assignerName = await loadAuthorName(profile);
-      await sendEmailQuietly(
-        actionItemAssignedEmail({
-          to: txResult.assigneeForEmail.email,
-          recipientName: txResult.assigneeForEmail.fullName,
-          assignerName,
-          itemTitle: data.title,
-          itemDescription: data.description ?? null,
-          dueDate: data.dueDate ? new Date(data.dueDate) : null,
-          url: `/portal/action-items/${txResult.item.id}`,
-        }),
-      );
+    // Notify the assignee outside the transaction. Deliberately NOT done
+    // in here: the assignee may be a Business Builder, who lives in the
+    // master org, and this transaction is bound to the engagement's org —
+    // so both the profile read and the notification insert have to happen
+    // under withSystemContext. See lib/notifications/action-item-assigned.ts.
+    if (data.assigneeUserProfileId) {
+      await notifyActionItemAssigned({
+        actionItemId: txResult.item.id,
+        assigneeUserProfileId: data.assigneeUserProfileId,
+        assignerUserProfileId: profile.userProfileId,
+        assignerName: await loadAuthorName(profile),
+        itemTitle: data.title,
+        itemDescription: data.description ?? null,
+        dueDate: data.dueDate ?? null,
+      });
     }
 
     revalidateActionItemPaths();
@@ -340,11 +330,18 @@ export async function updateActionItem(
     if (await clientWriteBlocked(profile.role, engagementId)) {
       return { ok: false, error: READ_ONLY_ERROR };
     }
-    const reassignmentEmail = await withEngagementContext(
+    // A client working their own item is the only case that raises a
+    // progress notice. A Business Builder editing their own client's
+    // item must not ring their own bell, and telling the OTHER Builder
+    // about a client that isn't theirs is the cross-book noise
+    // own-book-by-default exists to prevent.
+    const actorIsClient = !canEditAnything(profile.role);
+
+    const outcome = await withEngagementContext(
       profile.orgId,
       profile.role,
       engagementId,
-      async (tx, boundOrgId) => {
+      async (tx) => {
         // Read existing — RLS already scopes to the engagement's org.
         const [existing] = await tx
           .select()
@@ -362,11 +359,17 @@ export async function updateActionItem(
           if (!isAssignee) {
             throw new Error("You can only update items assigned to you.");
           }
+          // `dueDate` is deliberately NOT here. An assignee owns when
+          // their own work lands — the alternative is a client staring
+          // at a date they know is wrong with no way to say so except a
+          // message that isn't attached to the item. Bruce's call, and
+          // the same "straight on, not a request queue" decision as
+          // client-raised agenda points. The Business Builder is told:
+          // see notifyBuildersOfProgress below.
           const restrictedKeys = [
             "title",
             "description",
             "assigneeUserProfileId",
-            "dueDate",
             "revenueImpact",
             "marginImpact",
             "projectId",
@@ -454,6 +457,32 @@ export async function updateActionItem(
           .where(eq(actionItems.id, id))
           .returning();
 
+        // What actually moved, measured against the row as it was.
+        // Comparing the BEFORE and AFTER rows rather than trusting the
+        // submitted payload means a save that re-posts the same date
+        // doesn't manufacture a "they changed the date" notice.
+        const statusChanged =
+          data.status !== undefined && data.status !== existing.status;
+        const dueChanged =
+          data.dueDate !== undefined &&
+          sameDay(existing.dueDate, updated.dueDate) === false;
+
+        const progress =
+          actorIsClient && (statusChanged || dueChanged)
+            ? {
+                itemTitle: updated.title,
+                statusChange: statusChanged
+                  ? {
+                      from: existing.status as ActionItemStatus,
+                      to: updated.status as ActionItemStatus,
+                    }
+                  : null,
+                dueDateChange: dueChanged
+                  ? { from: existing.dueDate, to: updated.dueDate }
+                  : null,
+              }
+            : null;
+
         // Notify on reassignment to a different user (and not self-assign).
         const newAssignee = data.assigneeUserProfileId;
         const shouldNotify =
@@ -461,50 +490,49 @@ export async function updateActionItem(
           newAssignee !== existing.assigneeUserProfileId &&
           newAssignee &&
           newAssignee !== profile.userProfileId;
-        if (!shouldNotify || !newAssignee) return null;
 
-        await tx.insert(notifications).values({
-          orgId: boundOrgId,
-          userProfileId: newAssignee,
-          type: "action_item_assigned",
-          parentEntityType: "action_item",
-          parentEntityId: updated.id,
-          sentVia: "in_app",
-        });
-
-        const [assignee] = await tx
-          .select({
-            email: userProfiles.email,
-            fullName: userProfiles.fullName,
-          })
-          .from(userProfiles)
-          .where(eq(userProfiles.id, newAssignee))
-          .limit(1);
-        if (!assignee) return null;
+        // The rows and the emails are raised outside this transaction —
+        // it is bound to the engagement's org, and a Business Builder
+        // recipient lives in the master org. See the create path above.
         return {
-          to: assignee.email,
-          recipientName: assignee.fullName,
-          itemId: updated.id,
-          itemTitle: updated.title,
-          itemDescription: updated.description,
-          dueDate: updated.dueDate,
+          progress,
+          reassignment:
+            shouldNotify && newAssignee
+              ? {
+                  assigneeUserProfileId: newAssignee,
+                  itemId: updated.id,
+                  itemTitle: updated.title,
+                  itemDescription: updated.description,
+                  dueDate: updated.dueDate,
+                }
+              : null,
         };
       },
     );
 
-    if (reassignmentEmail) {
-      const assignerName = await loadAuthorName(profile);
-      await sendEmailQuietly(
-        actionItemAssignedEmail({
-          to: reassignmentEmail.to,
-          recipientName: reassignmentEmail.recipientName,
-          assignerName,
-          itemTitle: reassignmentEmail.itemTitle,
-          itemDescription: reassignmentEmail.itemDescription,
-          dueDate: reassignmentEmail.dueDate,
-          url: `/portal/action-items/${reassignmentEmail.itemId}`,
-        }),
-      );
+    if (outcome?.reassignment) {
+      const r = outcome.reassignment;
+      await notifyActionItemAssigned({
+        actionItemId: r.itemId,
+        assigneeUserProfileId: r.assigneeUserProfileId,
+        assignerUserProfileId: profile.userProfileId,
+        assignerName: await loadAuthorName(profile),
+        itemTitle: r.itemTitle,
+        itemDescription: r.itemDescription,
+        dueDate: r.dueDate,
+      });
+    }
+
+    if (outcome?.progress) {
+      await notifyBuildersOfProgress({
+        actionItemId: id,
+        engagementId,
+        itemTitle: outcome.progress.itemTitle,
+        actorUserProfileId: profile.userProfileId,
+        actorName: await loadAuthorName(profile),
+        statusChange: outcome.progress.statusChange,
+        dueDateChange: outcome.progress.dueDateChange,
+      });
     }
 
     // Completing the item retires any focus block the assistant placed

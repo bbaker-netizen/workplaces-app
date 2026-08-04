@@ -367,6 +367,176 @@ export function agendaItemRaisedEmail(
   return { to: input.to, subject, html, text };
 }
 
+/* --------------------- agenda finalized / updated -------------------- */
+
+export type AgendaLine = {
+  title: string;
+  body?: string | null;
+  /** Who put it there. Shown so the other Builder knows whose point it
+   *  is before the room, and so a client-raised item is obvious. */
+  raisedByName?: string | null;
+};
+
+export type AgendaFinalizedEmailInput = {
+  to: string;
+  recipientName: string;
+  /** Who pressed Finalize. */
+  finalizedByName: string;
+  /** Client name, or "the team touch-base" for the internal workspace. */
+  engagementLabel: string;
+  sessionWhenLabel: string;
+  items: AgendaLine[];
+  url: string;
+};
+
+/** Shared list rendering — the two agenda emails must show a point the
+ *  same way, or the "what changed" email would look like a different
+ *  agenda rather than the same one moved on. */
+function agendaListHtml(items: AgendaLine[]): string {
+  if (items.length === 0) return "";
+  return `<ol style="margin:16px 0;padding-left:20px;font-size:15px;line-height:1.55;color:#1A1A1A;">${items
+    .map(
+      (i) =>
+        `<li style="margin:0 0 10px 0;"><strong>${escapeHtml(i.title)}</strong>${
+          i.raisedByName
+            ? `<span style="font-size:13px;color:#666666;"> — ${escapeHtml(i.raisedByName)}</span>`
+            : ""
+        }${
+          i.body
+            ? `<br><span style="font-size:14px;color:#666666;">${escapeHtml(flattenMarkdown(i.body, 400))}</span>`
+            : ""
+        }</li>`,
+    )
+    .join("")}</ol>`;
+}
+
+function agendaListText(items: AgendaLine[]): string[] {
+  return items.flatMap((i, n) => [
+    `${n + 1}. ${i.title}${i.raisedByName ? ` — ${i.raisedByName}` : ""}`,
+    ...(i.body ? [`   ${flattenMarkdown(i.body, 400)}`] : []),
+  ]);
+}
+
+/**
+ * The agenda for an upcoming session is ready — go and add anything
+ * missing.
+ *
+ * This is an invitation, not a receipt, and the copy has to earn that:
+ * the ask ("anything you want covered, put it on now") sits above the
+ * list, because a reader who stops after the first line should still know
+ * what is wanted of them. The list is there so they can answer without
+ * opening anything.
+ */
+export function agendaFinalizedEmail(
+  input: AgendaFinalizedEmailInput,
+): EmailEnvelope {
+  const url = input.url.startsWith("http") ? input.url : appUrl() + input.url;
+  const count = input.items.length;
+  const subject = `Agenda ready — ${input.engagementLabel}, ${input.sessionWhenLabel}`;
+
+  const html = shell({
+    preheader: `${count} point${count === 1 ? "" : "s"} down. Add anything you need covered.`,
+    heading: "The agenda is set",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.recipientName.split(" ")[0] ?? input.recipientName)},</p>
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.finalizedByName)}</strong> finalized the agenda for <strong>${escapeHtml(input.engagementLabel)}</strong> on ${escapeHtml(input.sessionWhenLabel)}.</p>
+      <p style="margin:0 0 12px 0;">If there is anything you want covered, add it now and finalize again — everyone gets the update.</p>
+      ${agendaListHtml(input.items)}
+    `,
+    buttonHref: url,
+    buttonLabel: "Add to the agenda",
+  });
+
+  const text = [
+    `${input.finalizedByName} finalized the agenda for ${input.engagementLabel} on ${input.sessionWhenLabel}.`,
+    "",
+    "If there is anything you want covered, add it now and finalize again.",
+    "",
+    ...agendaListText(input.items),
+    "",
+    `Open: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
+export type AgendaUpdatedEmailInput = AgendaFinalizedEmailInput & {
+  /** Points added since the last time this agenda was announced. */
+  added: AgendaLine[];
+  /** Points that existed before but have been edited or moved since. */
+  changed: AgendaLine[];
+};
+
+/**
+ * The agenda you already read has moved.
+ *
+ * The delta leads and the full agenda follows, because the reader has
+ * seen the rest — repeating everything with the new points buried inside
+ * would make them hunt for the difference, which is the one thing this
+ * email exists to show them.
+ *
+ * Orange accent: this is the "look again before you walk in" case, and
+ * under the single-accent rule that qualifies where the first email
+ * does not.
+ */
+export function agendaUpdatedEmail(
+  input: AgendaUpdatedEmailInput,
+): EmailEnvelope {
+  const url = input.url.startsWith("http") ? input.url : appUrl() + input.url;
+  const addedCount = input.added.length;
+  const changedCount = input.changed.length;
+
+  const parts: string[] = [];
+  if (addedCount > 0) {
+    parts.push(`${addedCount} new point${addedCount === 1 ? "" : "s"}`);
+  }
+  if (changedCount > 0) {
+    parts.push(`${changedCount} change${changedCount === 1 ? "" : "s"}`);
+  }
+  const deltaLabel = parts.join(" and ") || "an update";
+
+  const subject = `Agenda updated — ${input.engagementLabel}, ${input.sessionWhenLabel}`;
+
+  const html = shell({
+    preheader: `${deltaLabel} before ${input.sessionWhenLabel}.`,
+    heading: "The agenda changed",
+    accent: "#E87722",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.recipientName.split(" ")[0] ?? input.recipientName)},</p>
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.finalizedByName)}</strong> updated the agenda for <strong>${escapeHtml(input.engagementLabel)}</strong> on ${escapeHtml(input.sessionWhenLabel)} — ${escapeHtml(deltaLabel)}.</p>
+      ${
+        addedCount > 0
+          ? `<p style="margin:16px 0 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.08em;color:#E87722;">Added</p>${agendaListHtml(input.added)}`
+          : ""
+      }
+      ${
+        changedCount > 0
+          ? `<p style="margin:16px 0 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.08em;color:#E87722;">Changed</p>${agendaListHtml(input.changed)}`
+          : ""
+      }
+      <p style="margin:20px 0 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.08em;color:#666666;">The full agenda</p>
+      ${agendaListHtml(input.items)}
+    `,
+    buttonHref: url,
+    buttonLabel: "Open the agenda",
+  });
+
+  const text = [
+    `${input.finalizedByName} updated the agenda for ${input.engagementLabel} on ${input.sessionWhenLabel} — ${deltaLabel}.`,
+    ...(addedCount > 0 ? ["", "ADDED", ...agendaListText(input.added)] : []),
+    ...(changedCount > 0
+      ? ["", "CHANGED", ...agendaListText(input.changed)]
+      : []),
+    "",
+    "THE FULL AGENDA",
+    ...agendaListText(input.items),
+    "",
+    `Open: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
 /* ---------------------------- assigned ---------------------------- */
 
 export type ActionItemAssignedEmailInput = {
@@ -423,6 +593,56 @@ export function actionItemAssignedEmail(
   ]
     .filter(Boolean)
     .join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
+/* ------------------------ client made progress ------------------------ */
+
+export type ActionItemProgressEmailInput = {
+  to: string;
+  recipientName: string;
+  /** The client who moved it. */
+  actorName: string;
+  itemTitle: string;
+  /** One sentence saying what moved — built by describeProgress(). */
+  summary: string;
+  url: string;
+};
+
+/**
+ * A client moved their own commitment. Goes to the engagement's Business
+ * Builder, never to the client.
+ *
+ * The subject leads with the person and the item because this lands in a
+ * Builder's inbox beside every other client's mail, and "Craig Williams
+ * updated…" is the part that decides whether it gets opened now.
+ */
+export function actionItemProgressEmail(
+  input: ActionItemProgressEmailInput,
+): EmailEnvelope {
+  const url = input.url.startsWith("http") ? input.url : appUrl() + input.url;
+  const subject = `${input.actorName} updated: ${input.itemTitle}`;
+
+  const html = shell({
+    preheader: input.summary,
+    heading: "A client moved a commitment",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(input.recipientName.split(" ")[0] ?? input.recipientName)},</p>
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(input.actorName)}</strong> ${escapeHtml(input.summary)}.</p>
+      <p style="margin:0 0 8px 0;font-size:17px;font-weight:700;color:#1A1A1A;">${escapeHtml(input.itemTitle)}</p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Open action item",
+  });
+
+  const text = [
+    `${input.actorName} ${input.summary}.`,
+    "",
+    `Item: ${input.itemTitle}`,
+    "",
+    `Open: ${url}`,
+  ].join("\n");
 
   return { to: input.to, subject, html, text };
 }
@@ -1332,6 +1552,18 @@ export function dailyDigestEmail(input: DailyDigestEmailInput): EmailEnvelope {
     <div style="font-size:12px;color:${MUTED};margin-top:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.06em;">Still open</div>
     ${commitments}
     ${
+      // The safety net under the finalize flow. Finalizing is what sends
+      // the agenda round, so points added and never finalized reached
+      // nobody — and this is the last morning that can still be fixed.
+      s.agendaUnannounced && s.agendaUnannounced > 0
+        ? `
+    <div style="margin-top:14px;padding:10px 12px;border-left:3px solid ${ORANGE};background:#FFFFFF;font-family:Arial,sans-serif;font-size:13px;color:${INK};">
+      <strong>${s.agendaUnannounced} agenda point${s.agendaUnannounced === 1 ? "" : "s"} nobody has been sent.</strong>
+      <span style="color:${MUTED};"> Finalize the agenda to send it round, or just read it before you go in.</span>
+    </div>`
+        : ""
+    }
+    ${
       // The client's own words, ABOVE the drafted agenda. A person
       // telling you what they need outranks a model's suggestion, and
       // putting them in the same list would flatten that difference.
@@ -1549,6 +1781,11 @@ ${b.items
       t.push(`  ${s.engagementLabel} at ${s.whenLabel} (${humanStatus(s.type)})`);
       for (const c of s.openCommitments) {
         t.push(`    still open: ${c.title}${c.assigneeName ? ` (${c.assigneeName})` : ""}`);
+      }
+      if (s.agendaUnannounced && s.agendaUnannounced > 0) {
+        t.push(
+          `    ${s.agendaUnannounced} agenda point${s.agendaUnannounced === 1 ? "" : "s"} nobody has been sent — finalize the agenda, or read it before you go in.`,
+        );
       }
       if (s.clientRaised && s.clientRaised.length > 0) {
         t.push("    They asked to cover:");

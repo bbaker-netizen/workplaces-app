@@ -51,6 +51,12 @@ export default async function TeamMeetingPage({
   const isClosed =
     session.status === "cancelled" || session.status === "completed";
 
+  // Finalizing is a prep signal, so it stops at the meeting's start time
+  // — not merely when someone remembers to mark the meeting complete.
+  // Nothing writes `completed` except a person pressing the button, which
+  // is why `isClosed` alone is not enough here.
+  const canFinalize = !isClosed && session.scheduledAt.getTime() > Date.now();
+
   return (
     <main className="max-w-3xl mx-auto px-6 py-8 sm:py-12 space-y-8">
       <header className="space-y-2">
@@ -84,6 +90,8 @@ export default async function TeamMeetingPage({
         teammates={teammates}
         currentUserProfileId={profile.userProfileId}
         canEdit={!isClosed}
+        finalizedAt={session.agendaFinalizedAt}
+        canFinalize={canFinalize}
       />
 
       <SessionDetail

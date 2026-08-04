@@ -72,6 +72,8 @@ import {
 } from "@/components/business-builder/EmbeddedAppManager";
 import { InviteClientButton } from "@/components/business-builder/InviteClientButton";
 import { InvitePortalUserForm } from "@/components/business-builder/InvitePortalUserForm";
+import { EngagementSharePanel } from "@/components/business-builder/EngagementSharePanel";
+import { getEngagementShareState } from "@/lib/db/queries/bb-access";
 import { EngagementStatusControl } from "@/components/business-builder/EngagementStatusControl";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
@@ -219,6 +221,12 @@ export default async function EngagementDetailPage({
   });
 
   if (!data) notFound();
+
+  // Who on our side works this client. Null if the read fails or the
+  // caller somehow can't reach the engagement — the panel is then
+  // omitted rather than rendered empty, since an empty sharing panel
+  // reads as "shared with nobody" rather than "couldn't tell you".
+  const shareState = await getEngagementShareState(id);
 
   // Pull the originating prospect's activity log so the pre-engagement
   // history (calls, emails, meetings, diagnostic, stage changes) lives
@@ -524,6 +532,18 @@ export default async function EngagementDetailPage({
             : null
         }
       />
+
+      {/* Who on OUR side works this client. Sits above the portal
+          manager because it is about us, not about what the client
+          sees. */}
+      {shareState && (
+        <EngagementSharePanel
+          engagementId={id}
+          clientName={data.eng.name ?? "this client"}
+          ownerName={shareState.ownerName}
+          builders={shareState.builders}
+        />
+      )}
 
       {/* Client portal manager — which modules this client sees. */}
       <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">

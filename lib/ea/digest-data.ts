@@ -35,7 +35,21 @@
  * not UTC's.
  */
 
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, ne } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  ne,
+  or,
+} from "drizzle-orm";
 import { DateTime } from "luxon";
 import {
   actionItems,
@@ -114,6 +128,17 @@ export type DigestSessionPrep = DigestSession & {
    * the client's own words come first.
    */
   clientRaised: { title: string; body: string | null; raisedByName: string | null }[];
+  /**
+   * Agenda points nobody has been told about — added or edited since the
+   * agenda was last finalized, or all of them if it never was.
+   *
+   * The safety net under the finalize flow. Finalizing is what sends the
+   * email, so an agenda somebody built and never finalized notifies
+   * nobody, and the other Builder walks in cold — exactly the failure
+   * the feature exists to prevent. On the morning of the session that
+   * silence stops being survivable, so the briefing says so.
+   */
+  agendaUnannounced: number;
   /** Filled in after the payload is gathered, by the agenda drafter.
    *  Empty when there was nothing worth proposing, or when the session
    *  already has a proposal from a previous morning. */
@@ -422,6 +447,7 @@ export async function gatherDigest(
       title: bbsSessions.title,
       scheduledAt: bbsSessions.scheduledAt,
       type: bbsSessions.type,
+      agendaFinalizedAt: bbsSessions.agendaFinalizedAt,
     })
     .from(bbsSessions)
     .where(
@@ -512,6 +538,23 @@ export async function gatherDigest(
       .orderBy(asc(agendaItems.sortOrder))
       .limit(12);
 
+    // Unannounced agenda points. NULL finalize watermark means the
+    // agenda has never been sent, so everything on it is unannounced.
+    const [unannounced] = await tx
+      .select({ n: count() })
+      .from(agendaItems)
+      .where(
+        and(
+          eq(agendaItems.bbsSessionId, s.id),
+          s.agendaFinalizedAt
+            ? or(
+                gt(agendaItems.createdAt, s.agendaFinalizedAt),
+                gt(agendaItems.updatedAt, s.agendaFinalizedAt),
+              )
+            : undefined,
+        ),
+      );
+
     todaysSessions.push({
       id: s.id,
       engagementId: s.engagementId,
@@ -527,6 +570,7 @@ export async function gatherDigest(
         body: r.body,
         raisedByName: r.raisedByName,
       })),
+      agendaUnannounced: Number(unannounced?.n ?? 0),
       proposedAgenda: null,
     });
   }

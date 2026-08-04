@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getPortalViewer } from "@/lib/portal/viewer";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import {
   listEngagementEmbeddedApps,
@@ -14,8 +15,11 @@ export default async function PortalAppsPage() {
   const engagement = await getCurrentEngagement();
   if (!engagement) redirect("/portal");
 
-  const isCoach =
-    profile.role === "master_admin" || profile.role === "coach";
+  // Effective viewer, so previewing this client hides the apps that are
+  // switched off for them rather than showing the Business Builder's
+  // full list under a "this is what they see" banner.
+  const viewer = await getPortalViewer(profile, engagement.id);
+  const isCoach = viewer.role === "master_admin" || viewer.role === "coach";
   const [apps, favouriteIds] = await Promise.all([
     listEngagementEmbeddedApps(engagement.id, !isCoach),
     listMyFavouriteAppIds(),

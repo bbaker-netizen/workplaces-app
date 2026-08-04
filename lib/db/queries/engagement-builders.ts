@@ -87,6 +87,58 @@ export async function listEngagementBuilders(
   return withSystemContext((tx) => resolveEngagementBuilders(tx, engagementId));
 }
 
+/**
+ * Who hears about this engagement's AGENDA.
+ *
+ * Differs from `resolveEngagementBuilders` in exactly one case, and it is
+ * the case the agenda feature exists for. The internal workspace has a
+ * `coach_id` like any other engagement — `ensureInternalEngagementId`
+ * sets it to whichever active coach it found, because the column is NOT
+ * NULL — so resolving it the normal way would return ONE Builder and
+ * quietly drop the other. On the practice's own touch-base both Business
+ * Builders are participants, not a coach and a client, and the whole
+ * point of finalizing is to prompt the other person.
+ *
+ * Everywhere else the own-book rule stands: a client engagement's agenda
+ * is the assigned coach's business, not the whole practice's.
+ */
+export async function resolveAgendaAudience(
+  tx: Tx,
+  engagementId: string,
+): Promise<BuilderRecipient[]> {
+  const [eng] = await tx
+    .select({ isInternal: engagements.isInternal, orgId: engagements.orgId })
+    .from(engagements)
+    .where(eq(engagements.id, engagementId))
+    .limit(1);
+  if (!eng) return [];
+
+  if (!eng.isInternal) return resolveEngagementBuilders(tx, engagementId);
+
+  const rows = await tx
+    .select({
+      userProfileId: userProfiles.id,
+      orgId: userProfiles.orgId,
+      fullName: userProfiles.fullName,
+      email: userProfiles.email,
+      eaNotifyEmail: userProfiles.eaNotifyEmail,
+      role: userProfiles.role,
+    })
+    .from(userProfiles)
+    .where(eq(userProfiles.orgId, eng.orgId));
+
+  const builders = rows
+    .filter((r) => r.role === "master_admin" || r.role === "coach")
+    .map(toRecipient)
+    .filter(hasEmail);
+
+  // An internal workspace with no readable Builder shouldn't fall silent
+  // — drop back to the ordinary resolution rather than notifying nobody.
+  return builders.length > 0
+    ? builders
+    : resolveEngagementBuilders(tx, engagementId);
+}
+
 type Row = {
   userProfileId: string;
   orgId: string;

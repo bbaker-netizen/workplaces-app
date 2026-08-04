@@ -2481,6 +2481,267 @@ linking to that engagement's coach-side thread.
 exercised live** — the acceptance test is a client posting and the email
 landing.
 
+## What was built — the preview that lied, and giving the client a way to act (2026-08-04)
+
+Bruce, on the A&M portal preview: no section shows the Fireflies
+transcripts; 16 action items are in the client portal that he never
+assigned; the dashboard beside them says nothing is due; and the client
+has no way to act on any of it. Four observations, three different root
+causes, and one of them was not a bug at all. Migration `0114`.
+
+### The transcripts were already there
+
+`/portal/meetings` exists, is registered in `lib/modules.ts` with
+`visibleTo: ALL_ROLES`, and no `portal_module_assignments` row turns it
+off for anybody. A&M's client has been able to see 32 meetings, 29
+recaps and 32 recording links the whole time.
+
+What was missing was a way IN. The dashboard is the one screen every
+client lands on and it had five cards, none of them meetings — so a
+client with 32 recorded sessions saw three zeroes and no mention of the
+record. **A module reachable only from the sidebar is a module the
+person you built it for will tell you does not exist.** The card leads
+with the most recent session, because "what did we agree last time" is
+what brings someone back here between sessions.
+
+The transcripts themselves being nearly all unreleased is correct and
+deliberate (2026-08-03): 1 of 32 on A&M, 2 across the whole book.
+
+### The drafts were never client-visible; the PREVIEW was
+
+`app/portal/action-items/page.tsx` has always filtered drafts for
+non-coach roles. What it filtered on was `profile.role` — and preview
+mode set a cookie and changed nothing else, so a previewing Business
+Builder is still `master_admin`, `isCoachLike` is still true, and the
+coach view rendered underneath a banner reading "this is what they
+see". Craig never saw those 16 drafts. Bruce did, and had every reason
+to believe Craig did too.
+
+**A preview that renders with the previewer's own role is worse than no
+preview.** It is the surface whose entire job is answering "is this
+safe to expose", and it was answering about the wrong person.
+
+`lib/portal/viewer.ts` splits the two questions a portal page asks —
+WHO IS SIGNED IN (authorization, stays `profile.*`, what every server
+action re-reads for itself) and WHO IS THIS SCREEN FOR (`viewer.role`,
+`viewer.userProfileId`). Preview swaps the second for `client_lead`,
+the HIGHEST client role, so it shows the most any client could see: a
+Builder asking "is this safe" gets the worst case, which is the only
+useful answer.
+
+It can only ever narrow. The swap is gated on the signed-in role
+already being a coach one, so no cookie on a client session changes
+anything. Writes are deliberately unaffected — the server actions
+authorize on the real role, so preview hiding a control is a courtesy,
+not the boundary.
+
+**"Your open items" was the same bug wearing different clothes.** It
+counted items assigned to `profile.userProfileId` — Bruce — on a client
+engagement, which is always zero, under a heading saying "your". That
+is why the dashboard and the list beside it flatly disagreed: one was
+showing Craig's engagement, the other Bruce's workload. The viewer
+resolves the previewed client as a stand-in, so the greeting and the
+card now name the same person.
+
+Most portal pages needed no change: their leadership checks already
+include `client_lead`, so previewing renders identically. Four did —
+action items (list and detail), apps, and session detail.
+
+### The client genuinely could not act, and the form was the reason
+
+This part of Bruce's read was exactly right, and worse than he thought.
+
+`ActionItemForm` posted EVERY field on every save. `updateActionItem`
+checks its restricted-field list by asking whether a key is present —
+not whether it changed — so a client who touched nothing but the status
+still sent `title`, and got back *"Your role can update status only —
+not title."* The one action a client could theoretically take failed
+100% of the time. Rendering the rest read-only would not have fixed it;
+the PAYLOAD had to narrow, which is what `scope="assignee"` does.
+
+The status pill on the list was disabled for every client role
+outright, so the fast path did not exist either. It is now per item —
+a client owns the status of their OWN work and cannot touch anyone
+else's.
+
+**Due date moved out of the restricted list.** An assignee owns when
+their own work lands; the alternative is a client staring at a date
+they know is wrong with no way to say so except a message not attached
+to the item. Same "straight on, not a request queue" call as
+client-raised agenda points, and for the same reason — a queue is a
+second inbox for us and an "awaiting review" badge for them.
+
+A non-assignee client now gets no form at all rather than a form that
+can only be rejected.
+
+### The silence on our side was the real defect
+
+A client could always change the status of their own item, and nothing
+anywhere recorded that they had. No row, no email, no bell. So "they
+finished it last week", "they are stuck" and "they have not opened the
+portal since March" were one observation: silence. **Same failure shape
+as every dead cron in this file, except the thing going quiet is a
+paying client working the plan.**
+
+`lib/notifications/action-item-progress.ts` (0114 adds the enum value).
+Resolves under `withSystemContext` and writes the row with the
+RECIPIENT's own `org_id` — the fourth module to need that exact fix,
+after assignment, messages and agenda points. Goes to the engagement's
+own coach via `resolveEngagementBuilders`, so Jen is not told about
+Bruce's clients.
+
+Only CLIENT-driven changes notify: a Builder editing their own client's
+item must not ring their own bell. Changes are measured by comparing
+the BEFORE and AFTER rows, not by trusting the payload, so re-saving
+the same date does not manufacture a notice. `sameDay()` compares the
+ISO day because `due_date` is a `date` column and a plain `!==` on two
+Date objects is always true — that alone would have reported a date
+change on every single save.
+
+Bypasses the working-hours window, because `sendEmail` DROPS an
+out-of-hours message rather than queueing it (the queue its own header
+describes was never built), so without the bypass a client marking
+something done at 8pm would reach nobody, ever.
+
+The bell's `action_item` branch said "Action item update" and linked to
+the LIST. Now it names the item and deep-links to it — same
+one-segment vagueness that made the recap approval links useless.
+
+### Bulk transcript release
+
+Release was one click per meeting, so opening a back catalogue meant 32
+clicks. Nobody does that, which made "the client can read the
+transcripts" true in the code and false in practice.
+
+Still a deliberate act by a Business Builder who may act on that client
+— one act instead of thirty-two, never a schedule, and
+`transcript_shared_at` still defaults NULL so a newly synced meeting is
+never released by a decision taken before it existed. Two taps, with
+the count and its meaning stated before the second.
+
+Sharing loops per meeting ON PURPOSE. A single `UPDATE ... WHERE` would
+be one statement and would break the rule that makes the single-meeting
+path safe — a row marked shared with `transcript_text` NULL shows the
+client an empty transcript. Each release fetches its body first and is
+skipped, and COUNTED, if it can't be had: a run that released 28 of 32
+must not read the same as one that released all of them.
+Un-sharing takes the opposite path deliberately — it needs no body, so
+it is one statement and cannot partially fail. Taking something back
+must not be able to leave half of it published.
+
+### Also fixed
+
+`app/book/page.tsx` (untracked, from an earlier session) spread a Map
+iterator, which this tsconfig's target rejects. It failed `next build`
+outright, so nothing else could be verified until it went.
+`Array.from()` — same semantics, one line.
+
+**Verified:** `tsc --noEmit` and `next lint` clean. `next build`
+compiles: 74 prerender failures, 148 `Missing publishableKey`, zero
+errors of any other cause — the recorded baseline exactly. Live
+read-only queries confirmed the meetings/module/assignment picture
+above (32 A&M meetings, 1 released; no module row disables `meetings`
+anywhere).
+
+**Not clicked in a browser, and no email has been sent.** Migrations
+0112, 0113 and now 0114 are all still unapplied on the live database —
+0114 queues behind the other two on next deploy. The acceptance tests:
+preview A&M and see no drafts and no Draft chip; a client marks an item
+in progress and Bruce gets the email; a client moves a due date and the
+bell names the item; the dashboard shows the latest recap; and Release
+all transcripts opens A&M's remaining 31.
+
+## What was built — sharing a client, and the three lists that disagreed (2026-08-04)
+
+Bruce: "add the option to add a second Business Builder to a specific
+client — Jen and I would need to share some clients", and separately,
+"remove Workplaces from the client Portal lists". No migration; the
+`bb_client_access` table has existed since 0065.
+
+**The permission already existed. What didn't exist was presence.**
+`canCurrentBbAccessEngagement` has always honoured an explicit grant, so
+a shared client could be OPENED by the other Builder. But
+`coachScopeWhere` filtered on `engagements.coach_id` alone, so a shared
+client appeared in none of their lists, none of their cross-client
+views, and not in their morning briefing. **A client you can only reach
+by knowing its id is not shared with you in any sense that matters** —
+the exact inverse of the 2026-07-27 finding that a scoped list is not a
+boundary. Here the boundary opened and no list followed.
+
+### Three definitions of "this Builder's clients", and two were wrong
+
+- `coachScopeWhere` — `coach_id = me OR coach_id IS NULL`. Right, minus
+  shares.
+- `listCoachEngagements` — for a coach WITHOUT `all_clients_access`:
+  grants only, `return []` if none. Ownership not consulted at all.
+- `listEngagementsForRecipient` (the EA) — same shape, same omission.
+
+Migration 0093 flipped `all_clients_access` to false for every coach.
+From that deploy Jen — false, **zero grants, one client owned
+outright** — had an empty client switcher and, every weekday morning, a
+briefing covering **no engagements at all**. It ran, reported success,
+and said nothing, which is indistinguishable from a quiet week. Same
+silent-failure shape as every dead cron in this file; the cause here was
+two branches answering the same question more narrowly than the one that
+had it right.
+
+All three now read **owned ∪ shared** (∪ unclaimed, where that already
+applied). `sharedEngagementIdsFor()` is the one definition. It reads
+`bb_client_access` UNCONDITIONALLY, unlike
+`getCurrentBbAccess().grantedEngagementIds`, which returns `[]` when
+`all_clients_access` is true — that one answers "what are you limited
+to", this one answers "what is also yours", and the second must not
+depend on how broad your permissions happen to be.
+
+Measured against live data before and after: Jen 0 → 1, Bruce 17 → 17.
+
+### Sharing is organised by client, not by person
+
+`setEngagementShare` + `EngagementSharePanel` on the engagement page.
+The master-admin Team access matrix still exists and still manages the
+whole practice, but it is organised by PERSON — so sharing one client
+there means finding the right person and remembering which boxes were
+already ticked. You have the client open when you decide to share it.
+
+**Not master-admin-only.** The engagement's own coach can share their
+own client; requiring Bruce for every share would make Jen ask
+permission to hand her own client to him — a step with no decision
+behind it. What a coach cannot do is share a client that isn't theirs:
+`canCurrentBbAccessEngagement` is checked first.
+
+The owner is shown but never toggleable — they hold the client by
+ownership, and a switch that appears to remove their access while
+changing nothing is a lie. Reassignment moves ownership. The action also
+refuses a target who isn't `master_admin`/`coach`: without that check an
+arbitrary `user_profiles` id would insert happily and hand a CLIENT a
+Business Builder's view of their own engagement.
+
+**`setBbUserAccess` no longer drops grants** when the target has
+all-clients permission or is a master admin. That was right while a
+grant meant only a restriction list — pointless for someone who sees
+everything. Now a grant also means "shared with me", which is what puts
+the client in their book; under the old rule, saving that page for such
+a Builder silently un-shared every client they had been given.
+
+### The Clients page had no filter of any kind
+
+`/business-builder/engagements` — the page behind the "Switch client"
+link — did `select(...).from(engagements)` with **no where clause at
+all**. So it listed the practice's own internal workspace ("Workplaces
+Team") as a client, which is what Bruce hit, and it showed every
+Business Builder the whole practice's book regardless of scope. It was
+the one place own-book-by-default never reached, and the most visible
+one. Now scoped through `coachScopeWhere` and filtered on
+`is_internal`.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles at the recorded baseline (74 prerender failures, 148 `Missing
+publishableKey`, zero of any other cause). Old-vs-new scoping simulated
+directly against the live database per Builder, as above. **Not clicked
+in a browser** — the acceptance tests are Jen signing in and seeing her
+client (and a non-empty briefing the next weekday morning), and Bruce
+sharing one client with her and it appearing in her list.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
@@ -3111,3 +3372,140 @@ failure is fixed to REPORT, not fixed to work. The next `fireflies-sync`
 run after deploy redrafts A&M and Impactica; either a real recap arrives
 or `ea_job_runs.error_text` finally names the fault. Nothing here has
 been exercised against a live deploy.
+
+## What was built — tasking each other, and finalizing an agenda (2026-08-04)
+
+Bruce's ask: an email when he and Jen assign each other a task, an email
+when an agenda is finalized inviting the other to add points, and another
+when someone adds more and finalizes again. Migrations `0112` + `0113`.
+
+**Bruce's three decisions up front:** finalize works on every session,
+internal and client, but only Business Builders are emailed and nothing
+new appears on any client surface; emails fire on finalize, not on every
+add; all three events email on top of the existing in-app notification.
+
+### The assignment email was already broken between them
+
+Not a missing feature — a silent one. `createActionItem` and
+`updateActionItem` both read the assignee's email INSIDE the write
+transaction, which `withEngagementContext` binds to the ENGAGEMENT's org.
+Bruce and Jen live in the master org, so on any CLIENT engagement RLS
+filtered the row out: `assignee` came back undefined, the email was never
+sent, nothing logged, and the in-app notification row was written with
+the client's `org_id` into a tenant neither of their bells can read. It
+worked ONLY on the internal team engagement, where the bound org happens
+to be theirs — which is exactly why it looked fine.
+
+Reachable on purpose: `listEngagementMembers` deliberately prepends the
+Business Builders to the assignee picker on client engagements, so
+"assign Jen something on Crown and Ember" is a normal action that
+produced silence.
+
+**Fourth instance of this exact trap** (client messages, client agenda
+points, and now this, all after the `withSystemContext` cron family).
+`lib/notifications/action-item-assigned.ts` is now the single path for
+every assignee, client or Builder: resolve under `withSystemContext`,
+write the row with the RECIPIENT's own `org_id`. Moving it out of the
+transaction also removed the duplicated copy between create and update.
+
+It was also sending Builders a `/portal/...` link — the client's surface.
+Builders now get `/business-builder/action-items/<id>`.
+
+### `agenda_finalized_at` is deliberately the state AND the watermark
+
+NULL means never announced. Set means announced at that moment, and
+anything in `agenda_items` with `created_at`/`updated_at` after it is
+unannounced change. Re-finalizing moves it forward, so each email
+describes only the delta since the last one. A separate revision counter
+would have to be kept in step with the timestamp and could drift out of
+it; one column cannot disagree with itself.
+
+The watermark is stamped BEFORE the agenda is read, so a point added
+during the read-then-write window falls after it and is caught by the
+next announcement rather than vanishing between the two.
+
+What it cannot see: an item DELETED since the last finalize leaves no row
+to compare against, so a removal alone is not a change. A tombstone table
+to catch "we dropped a topic" is not worth it.
+
+A re-finalize with nothing to report is REFUSED rather than sending an
+"updated" email describing no update — that press is almost always a
+double click.
+
+### Only a Business Builder finalizes
+
+Deliberately narrower than `canManageAgenda`, which includes
+`client_lead` and `client_manager`. The emails go to Bruce and Jen, so a
+client pressing it would fire our internal prep signal. The control does
+not render on the client portal at all, and the client is never shown
+finalize state — showing "finalized" to the person you are inviting to
+add points reads as closed.
+
+`resolveAgendaAudience` differs from `resolveEngagementBuilders` in one
+case, and it is the case the feature exists for: the internal workspace
+has a `coach_id` like any other engagement (the column is NOT NULL, so
+`ensureInternalEngagementId` sets it to whichever coach it found), so
+resolving it the normal way returns ONE Builder and silently drops the
+other. On the practice's own touch-base both are participants. Everywhere
+else the own-book rule stands.
+
+The actor is excluded from their own announcement. Being emailed about a
+button you just pressed teaches you to ignore the sender.
+
+### Both new emails bypass the working-hours window
+
+`sendEmail` does not QUEUE an out-of-hours message, it DROPS it — the
+`email_pending_send_at` queue its own header describes was never built,
+which is why ~14 call sites already pass `bypassWorkingHours: true`. So
+without the bypass a task assigned or an agenda finalized after six would
+reach nobody, ever, and an agenda is often prepared the evening before.
+
+The guard exists to keep US out of a CLIENT's inbox at 9pm, so it still
+applies to them: the assignment email bypasses only when the recipient is
+a Business Builder. Client recipients keep the guard — and therefore keep
+the pre-existing silent drop, which is a queue build, not this one.
+
+### The safety net, because finalizing is a button someone can forget
+
+An agenda built and never finalized emails nobody, and the other Builder
+walks in cold — the exact failure the feature exists to prevent. The
+07:00 briefing now counts agenda points nobody has been sent for each of
+today's sessions and says so in orange. On the morning of the session
+that silence stops being survivable.
+
+### Smaller things
+
+- `AgendaFinalizeBar` is shared by BOTH boards (the client-session
+  `SessionAgenda` and the internal `AgendaBoard`) because it is the piece
+  with behaviour; the boards stay separate. Its change count is computed
+  against the same watermark the server measures from, so the button
+  never promises an email the action then refuses to send.
+- Finalize stops at the session's START time, not at `status`. Nothing
+  writes `completed` except a person clicking, so `isClosed` alone would
+  leave the button live on meetings that already happened — the same
+  reasoning as `lib/ea/held-sessions.ts`.
+- Notification deep links route the internal touch-base to
+  `/business-builder/team/<id>` and client sessions to
+  `/business-builder/sessions/<eng>/<id>`. One-segment guessing is how
+  the recap approval links 404'd on 2026-08-03.
+- `npx tsx scripts/preview-ea-email.ts agenda | agenda-updated` renders
+  either email to a file without sending, alongside the existing
+  `digest` and `rollup` modes.
+
+**Verified:** `tsc --noEmit` and `next lint` clean. `next build`
+compiles: 74 prerender failures, 148 `Missing publishableKey` and zero
+errors of any other cause — the current baseline exactly. Both emails
+and the briefing's new section were rendered through the preview script
+and read end to end. Migrations 0112 + 0113 were applied against the
+LIVE database inside a transaction forced to roll back: columns created
+nullable, FK confirmed ON DELETE SET NULL, both enum values present,
+0113 re-applied cleanly (idempotent), then rolled back — database
+unchanged.
+
+**Not yet clicked in a browser, and no email has actually been sent.**
+The acceptance tests are: Bruce assigns Jen a task on a CLIENT
+engagement and she gets the email (the case that has never once worked);
+and finalizing an agenda emails the other Builder, then adding a point
+and finalizing again emails the delta. Live data at build time: 489
+sessions, 147 upcoming, but only 3 agenda items across 1 session — the
+agenda surfaces are a day old, so this lights up as they get used.

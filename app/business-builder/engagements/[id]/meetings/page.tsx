@@ -33,6 +33,7 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { SyncMeetingsButton } from "@/components/meetings/SyncMeetingsButton";
+import { BulkTranscriptRelease } from "@/components/meetings/BulkTranscriptRelease";
 import { countDraftsByMeeting } from "@/lib/db/queries/meeting-workspace";
 import { dayPreview, groupMeetingsByDay } from "@/lib/meetings/grouping";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
@@ -74,6 +75,9 @@ export default async function EngagementMeetingsPage({
   if (!data) notFound();
 
   const newestSyncAt = data.meetings[0]?.lastSyncedAt ?? null;
+  const releasedCount = data.meetings.filter(
+    (m) => m.transcriptSharedAt !== null,
+  ).length;
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
@@ -95,6 +99,17 @@ export default async function EngagementMeetingsPage({
           its transcript, review them, and release the transcript to the
           client.
         </p>
+        {/* Releasing a whole back catalogue in one act. Per-meeting
+            release lives on each meeting's workspace and stays the
+            normal path; this exists because 32 clicks is a control
+            nobody uses, which made "the client can read them" true in
+            the code and false in practice. */}
+        <BulkTranscriptRelease
+          engagementId={id}
+          totalMeetings={data.meetings.length}
+          releasedCount={releasedCount}
+          clientName={data.eng.name ?? "this client"}
+        />
         <div className="flex items-center justify-between gap-4 flex-wrap pt-2">
           <SyncMeetingsButton engagementId={id} />
           {newestSyncAt && (

@@ -15,6 +15,7 @@ import {
   desc,
   eq,
   gte,
+  inArray,
   isNotNull,
   isNull,
   ne,
@@ -34,7 +35,7 @@ import {
 } from "../schema";
 import { withSystemContext } from "../tenant";
 import { ensureUserProfile } from "../provisioning";
-import { getCurrentBbAccess } from "./bb-access";
+import { getCurrentBbAccess, sharedEngagementIdsFor } from "./bb-access";
 
 /**
  * Cookie the "My clients / All clients" toggle sets.
@@ -120,11 +121,32 @@ export async function coachScopeWhere(
   profile: OkProfile,
 ): Promise<SQL | undefined | false> {
   if ((await getClientScope()) === "all") return undefined;
-  const cid = await coachId(profile.userProfileId);
-  if (!cid) return false;
+  const [cid, shared] = await Promise.all([
+    coachId(profile.userProfileId),
+    sharedEngagementIdsFor(profile.userProfileId),
+  ]);
+
+  const clauses: SQL[] = [];
   // Mine, plus anything not yet assigned to a Business Builder — so work
   // on an unclaimed client can't fall out of everyone's view at once.
-  return or(eq(engagements.coachId, cid), isNull(engagements.coachId));
+  if (cid) {
+    clauses.push(eq(engagements.coachId, cid));
+    clauses.push(isNull(engagements.coachId));
+  }
+  // Clients shared with me. Without this a share granted permission and
+  // nothing else: the other Builder could open the client by pasting a
+  // URL, but it appeared in none of their lists, none of their cross-
+  // client views, and not in their morning briefing. A client you can
+  // only reach by knowing its id is not shared with you in any sense
+  // that matters.
+  if (shared.length > 0) {
+    clauses.push(inArray(engagements.id, shared));
+  }
+
+  // No coach row and nothing shared — show nothing rather than
+  // everything. Errors and gaps must narrow, never widen.
+  if (clauses.length === 0) return false;
+  return clauses.length === 1 ? clauses[0] : or(...clauses);
 }
 
 export type CoachProjectRow = {

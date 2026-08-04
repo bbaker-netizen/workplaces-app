@@ -5,11 +5,12 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { desc, inArray } from "drizzle-orm";
+import { and, desc, inArray, ne } from "drizzle-orm";
 import { Briefcase, FolderSymlink } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { engagements, orgs, prospects } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { coachScopeWhere } from "@/lib/db/queries/business-builder-cross-engagement";
 import { EngagementArchiveButton } from "@/components/business-builder/EngagementArchiveButton";
 import { EngagementSearchList } from "@/components/business-builder/EngagementSearchList";
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
@@ -23,10 +24,17 @@ export default async function EngagementsListPage() {
     redirect("/portal");
   }
 
-  // Engagement list for coaches: any engagement in the org's
-  // visibility. We join with orgs and prospects so the row can show
-  // the client's company name and contact name.
-  const rows = await withSystemContext(async (tx) => {
+  // The clients this Business Builder works — own book by default, the
+  // whole practice only when they've flipped the scope toggle. Shared
+  // clients count as theirs.
+  //
+  // This page used to SELECT every engagement in the database with no
+  // filter at all, which made it the one place own-book-by-default
+  // didn't reach: the Clients page, and the destination of the "Switch
+  // client" link. It also listed the practice's own internal workspace
+  // ("Workplaces Team") as though it were a client.
+  const scope = await coachScopeWhere(profile);
+  const rows = scope === false ? [] : await withSystemContext(async (tx) => {
     const engs = await tx
       .select({
         id: engagements.id,
@@ -39,6 +47,15 @@ export default async function EngagementsListPage() {
         orgId: engagements.orgId,
       })
       .from(engagements)
+      // The internal workspace is not a client. It has its own home at
+      // /business-builder/team, and every other client-facing list has
+      // excluded it since it was introduced — this query never got the
+      // filter.
+      .where(
+        scope
+          ? and(ne(engagements.isInternal, true), scope)
+          : ne(engagements.isInternal, true),
+      )
       .orderBy(desc(engagements.createdAt));
     if (engs.length === 0) return [];
     const orgIds = Array.from(new Set(engs.map((e) => e.orgId)));

@@ -25,6 +25,7 @@ import {
   STATUS_LABEL,
   type ActionItemStatus,
 } from "./utils";
+import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 
 export type ActionItemFormMember = {
   id: string;
@@ -68,6 +69,7 @@ export function ActionItemForm({
   initialValues,
   cancelHref,
   successHref,
+  scope = "full",
 }: {
   mode: "create" | "edit";
   itemId?: string;
@@ -80,7 +82,21 @@ export function ActionItemForm({
   initialValues: ActionItemFormInitial;
   cancelHref: string;
   successHref: string;
+  /**
+   * How much of the item this viewer may change.
+   *
+   * "assignee" is a client working their OWN commitment: status and due
+   * date, nothing else. It has to change what gets SUBMITTED, not just
+   * what is rendered — the form used to post every field on every save,
+   * so `updateActionItem` saw `title` defined, hit its restricted-field
+   * check and refused with "your role can update status only". A client
+   * who changed nothing but the status still got an error. Rendering the
+   * rest read-only without narrowing the payload would leave that
+   * exactly as broken.
+   */
+  scope?: "full" | "assignee";
 }) {
+  const assigneeScope = scope === "assignee";
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -100,21 +116,30 @@ export function ActionItemForm({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const payload = {
-        title: title.trim(),
-        description: description.trim() || null,
-        status,
-        assigneeUserProfileId: assignee || null,
-        dueDate: dueDate || null,
-        revenueImpact,
-        marginImpact,
-        projectId: projectId || null,
-      };
-
-      const result =
-        mode === "create"
-          ? await createActionItem({ engagementId, ...payload })
-          : await updateActionItem(itemId!, payload);
+      // Send only what this viewer is allowed to change. Every key
+      // present is a key the server checks against the role, so an
+      // untouched field posted anyway reads as an attempted edit.
+      // Assignee scope is edit-only — a client can't create.
+      const result = assigneeScope
+        ? await updateActionItem(itemId!, {
+            status,
+            dueDate: dueDate || null,
+          })
+        : await (async () => {
+            const payload = {
+              title: title.trim(),
+              description: description.trim() || null,
+              status,
+              assigneeUserProfileId: assignee || null,
+              dueDate: dueDate || null,
+              revenueImpact,
+              marginImpact,
+              projectId: projectId || null,
+            };
+            return mode === "create"
+              ? createActionItem({ engagementId, ...payload })
+              : updateActionItem(itemId!, payload);
+          })();
 
       if (!result.ok) {
         setError(result.error);
@@ -142,38 +167,58 @@ export function ActionItemForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5 max-w-xl">
-      <div>
-        <label htmlFor="title" className={labelClass}>
-          Title
-        </label>
-        <input
-          id="title"
-          name="title"
-          type="text"
-          required
-          maxLength={500}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Ship the new pricing page"
-          className={inputClass}
-        />
-      </div>
+      {assigneeScope ? (
+        // What the item IS belongs to the Business Builder who set it.
+        // Shown, not editable — the client needs the wording in front of
+        // them to update it honestly, and hiding it would leave them
+        // marking something done with no reminder of what it was.
+        <div className="rounded-md border border-tbb-line bg-tbb-cream-50/60 px-4 py-3">
+          <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+            What was agreed
+          </p>
+          <p className="mt-1 font-bold text-foreground leading-snug">{title}</p>
+          {description.trim() && (
+            <div className="mt-1.5 text-sm text-tbb-ink-2">
+              <MarkdownBody body={description} />
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div>
+            <label htmlFor="title" className={labelClass}>
+              Title
+            </label>
+            <input
+              id="title"
+              name="title"
+              type="text"
+              required
+              maxLength={500}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ship the new pricing page"
+              className={inputClass}
+            />
+          </div>
 
-      <div>
-        <label htmlFor="description" className={labelClass}>
-          Description <span className="font-normal text-muted-foreground">(optional, markdown)</span>
-        </label>
-        <textarea
-          id="description"
-          name="description"
-          maxLength={10000}
-          rows={5}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Detail, acceptance criteria, links…"
-          className={inputClass + " font-mono text-sm leading-relaxed"}
-        />
-      </div>
+          <div>
+            <label htmlFor="description" className={labelClass}>
+              Description <span className="font-normal text-muted-foreground">(optional, markdown)</span>
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              maxLength={10000}
+              rows={5}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Detail, acceptance criteria, links…"
+              className={inputClass + " font-mono text-sm leading-relaxed"}
+            />
+          </div>
+        </>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
@@ -207,32 +252,41 @@ export function ActionItemForm({
             onChange={(e) => setDueDate(e.target.value)}
             className={inputClass}
           />
+          {assigneeScope && (
+            <p className="mt-1 font-sans text-xs text-muted-foreground">
+              Moving this date is fine — your Business Builder is told
+              when you do, so nobody is working off an old one.
+            </p>
+          )}
         </div>
       </div>
 
-      <div>
-        <label htmlFor="assignee" className={labelClass}>
-          Assignee
-        </label>
-        <select
-          id="assignee"
-          name="assignee"
-          value={assignee}
-          onChange={(e) => setAssignee(e.target.value)}
-          className={inputClass}
-        >
-          <option value="">Unassigned</option>
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.fullName}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!assigneeScope && (
+        <div>
+          <label htmlFor="assignee" className={labelClass}>
+            Assignee
+          </label>
+          <select
+            id="assignee"
+            name="assignee"
+            value={assignee}
+            onChange={(e) => setAssignee(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Unassigned</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.fullName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Part of project — nests this action item under a project
           in the engagement Workspace view. Blank means it's a
           one-off commitment, not part of a larger initiative. */}
+      {!assigneeScope && (
       <div>
         <label htmlFor="projectId" className={labelClass}>
           Part of project{" "}
@@ -265,28 +319,31 @@ export function ActionItemForm({
           the engagement Workspace view.
         </p>
       </div>
+      )}
 
-      <fieldset className="space-y-2">
-        <legend className={labelClass}>Quality gate</legend>
-        <label className="flex items-center gap-3 font-sans text-sm">
-          <input
-            type="checkbox"
-            checked={revenueImpact}
-            onChange={(e) => setRevenueImpact(e.target.checked)}
-            className="h-4 w-4 accent-[#2E4057]"
-          />
-          Moves top-line revenue
-        </label>
-        <label className="flex items-center gap-3 font-sans text-sm">
-          <input
-            type="checkbox"
-            checked={marginImpact}
-            onChange={(e) => setMarginImpact(e.target.checked)}
-            className="h-4 w-4 accent-[#2E4057]"
-          />
-          Protects margin
-        </label>
-      </fieldset>
+      {!assigneeScope && (
+        <fieldset className="space-y-2">
+          <legend className={labelClass}>Quality gate</legend>
+          <label className="flex items-center gap-3 font-sans text-sm">
+            <input
+              type="checkbox"
+              checked={revenueImpact}
+              onChange={(e) => setRevenueImpact(e.target.checked)}
+              className="h-4 w-4 accent-[#2E4057]"
+            />
+            Moves top-line revenue
+          </label>
+          <label className="flex items-center gap-3 font-sans text-sm">
+            <input
+              type="checkbox"
+              checked={marginImpact}
+              onChange={(e) => setMarginImpact(e.target.checked)}
+              className="h-4 w-4 accent-[#2E4057]"
+            />
+            Protects margin
+          </label>
+        </fieldset>
+      )}
 
       {error && (
         <p className="font-sans text-sm border-l-2 border-tbb-danger pl-3 py-1 text-tbb-danger">
@@ -308,7 +365,7 @@ export function ActionItemForm({
         >
           Cancel
         </a>
-        {mode === "edit" && itemId && (
+        {mode === "edit" && itemId && !assigneeScope && (
           <button
             type="button"
             disabled={pending}

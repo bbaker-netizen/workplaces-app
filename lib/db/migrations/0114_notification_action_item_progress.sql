@@ -1,0 +1,26 @@
+-- A client moved their own commitment: changed its status, or moved the
+-- date it is due.
+--
+-- Until now a client working an action item was silent to us. The
+-- assignee could flip a status and nothing was written anywhere, so
+-- "they finished it last week" and "they have not looked at it" were the
+-- same observation from our side — the same failure shape as every
+-- silent cron in this file, on a surface a paying client uses.
+--
+-- One value, not three. The bell says "Craig moved a date" or "Craig
+-- marked something done"; splitting per-transition would multiply enum
+-- values for a distinction the notification body already carries, and
+-- the deep link goes to the same place either way.
+--
+-- Deliberately NOT `action_item_assigned` reused. That one means "this
+-- is now yours"; this one means "the thing you assigned has moved". A
+-- Business Builder reading the bell needs to tell those apart, and
+-- reusing the value would make the feed claim we had been assigned our
+-- own client's work.
+--
+-- Alone in its own file: the deploy runner sends each migration as a
+-- single implicit transaction, and a newly added enum value cannot be
+-- used in the transaction that added it. Same reason 0112 was split from
+-- 0113, 0110 from its table, and 0089 from 0090.
+
+ALTER TYPE "public"."notification_type" ADD VALUE IF NOT EXISTS 'action_item_progress';

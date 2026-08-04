@@ -23,6 +23,13 @@ import type { ActionItemStatus } from "./utils";
 export type ActionItemListItem = ActionItemCardData & {
   // Pre-computed by the server: where to navigate for detail/edit.
   detailHref: string;
+  /**
+   * Per-item override of `pillDisabledForRoles`. A client owns the
+   * status of the items assigned to THEM and nobody else's, which the
+   * blanket prop can't express — it could only disable the pill for
+   * every client on every row.
+   */
+  pillDisabled?: boolean;
 };
 
 const ZONE = "America/Edmonton";
@@ -116,7 +123,7 @@ export function ActionItemListClient({
             item={item}
             detailHref={item.detailHref}
             statusOptions={statusOptions}
-            pillDisabled={pillDisabledForRoles}
+            pillDisabled={item.pillDisabled ?? pillDisabledForRoles}
           />
         </li>
       ))}

@@ -69,6 +69,8 @@ export default async function CoachSessionDetailPage({
         sessionId={session.id}
         items={agenda}
         currentUserProfileId={profile.userProfileId}
+        finalizedAt={session.agendaFinalizedAt}
+        canFinalize={sessionIsOpen}
         canContribute={sessionIsOpen}
         canManage
         audience="builder"

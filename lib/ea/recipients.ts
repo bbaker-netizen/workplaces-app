@@ -21,7 +21,7 @@
  * Jen's clients.
  */
 
-import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, type SQL } from "drizzle-orm";
 import {
   bbClientAccess,
   coaches,
@@ -133,36 +133,69 @@ export async function listEngagementsForRecipient(
     const mine = masterCoach
       ? or(eq(engagements.coachId, masterCoach.id), isNull(engagements.coachId))
       : isNull(engagements.coachId);
-    return tx
-      .select()
-      .from(engagements)
-      .where(and(mine, notArchived, notInternal));
-  }
-
-  if (!recipient.allClientsAccess) {
-    const grants = await tx
+    // Plus anything the other Builder has shared with them. A shared
+    // client IS your day — that is the whole point of sharing it, and
+    // the master admin is on the receiving end of a share as often as
+    // the giving end.
+    const adminShared = await tx
       .select({ engagementId: bbClientAccess.engagementId })
       .from(bbClientAccess)
       .where(eq(bbClientAccess.coachUserProfileId, recipient.userProfileId));
-    const ids = grants.map((g) => g.engagementId);
-    if (ids.length === 0) return [];
+    const scope =
+      adminShared.length > 0
+        ? or(
+            mine,
+            inArray(
+              engagements.id,
+              adminShared.map((g) => g.engagementId),
+            ),
+          )
+        : mine;
     return tx
       .select()
       .from(engagements)
-      .where(and(inArray(engagements.id, ids), notArchived, notInternal));
+      .where(and(scope, notArchived, notInternal));
   }
 
+  // Own book PLUS anything shared, for every coach — whether or not
+  // they hold all-clients permission.
+  //
+  // **This branch used to read grants INSTEAD of ownership**, and return
+  // [] when there were none. Migration 0093 flipped
+  // `all_clients_access` to false for every coach, so from that deploy
+  // Jen — false, zero grants, one client owned outright — received a
+  // briefing covering NO engagements every weekday morning. It reported
+  // success and said nothing, which is indistinguishable from a quiet
+  // week: the same silent-failure shape as every dead cron in
+  // CLAUDE.md, and the reason ownership and sharing are now one rule
+  // here rather than two branches that disagree.
   const [coach] = await tx
     .select({ id: coaches.id })
     .from(coaches)
     .where(eq(coaches.userProfileId, recipient.userProfileId))
     .limit(1);
-  if (!coach) return [];
+
+  const grants = await tx
+    .select({ engagementId: bbClientAccess.engagementId })
+    .from(bbClientAccess)
+    .where(eq(bbClientAccess.coachUserProfileId, recipient.userProfileId));
+  const sharedIds = grants.map((g) => g.engagementId);
+
+  const clauses: SQL[] = [];
+  if (coach) clauses.push(eq(engagements.coachId, coach.id));
+  if (sharedIds.length > 0) clauses.push(inArray(engagements.id, sharedIds));
+  if (clauses.length === 0) return [];
 
   return tx
     .select()
     .from(engagements)
-    .where(and(eq(engagements.coachId, coach.id), notArchived, notInternal));
+    .where(
+      and(
+        clauses.length === 1 ? clauses[0] : or(...clauses),
+        notArchived,
+        notInternal,
+      ),
+    );
 }
 
 /** Display name for an engagement — `name` is nullable in the schema. */

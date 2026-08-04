@@ -14,7 +14,7 @@
  * portal query filters on it.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -120,4 +120,126 @@ export async function setTranscriptShared(
   revalidatePath(`/business-builder/engagements/${auth.engagementId}/meetings`);
   revalidatePath("/portal/meetings");
   return { ok: true, data: { shared } };
+}
+
+const bulkSchema = z.object({
+  engagementId: z.string().uuid(),
+  shared: z.boolean(),
+});
+
+export type BulkShareResult = {
+  /** Meetings whose state actually changed. */
+  changed: number;
+  /** Already in the requested state — counted, not re-written. */
+  skipped: number;
+  /**
+   * Meetings that could not be released because the body could not be
+   * fetched. Reported rather than swallowed: a run that quietly released
+   * 28 of 32 looks identical to one that released all of them.
+   */
+  failed: number;
+};
+
+/**
+ * Release — or take back — every transcript on one engagement.
+ *
+ * Bruce's ask, and the reason it isn't a weakening of the gate: release
+ * was one click per meeting, so opening a client's back catalogue meant
+ * 32 clicks. Nobody does that, which made "the client can read the
+ * transcripts" true in the code and false in practice. This is still a
+ * deliberate act by a Business Builder who may act on this client — one
+ * act instead of thirty-two, not an automatic rule. Nothing here ever
+ * runs on a schedule, and `transcript_shared_at` still defaults NULL, so
+ * a newly synced meeting is never released by a decision taken before it
+ * existed.
+ *
+ * Per-meeting, in a loop, on purpose. A single UPDATE ... WHERE would be
+ * one statement and would break the rule that makes the single-meeting
+ * path safe: a row marked shared with `transcript_text` still NULL shows
+ * the client an empty transcript. Each release fetches its body first
+ * and is skipped — and counted — if it can't be had.
+ *
+ * Un-sharing takes the opposite path deliberately: it needs no body, so
+ * it is a single statement and cannot partially fail. Taking something
+ * back must not be able to leave half of it published.
+ */
+export async function setAllTranscriptsShared(
+  input: z.input<typeof bulkSchema>,
+): Promise<ActionResult<BulkShareResult>> {
+  const parsed = bulkSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { engagementId, shared } = parsed.data;
+
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Only a Business Builder can do that." };
+  }
+  // Honours the per-Builder client grants, same as the single-meeting
+  // path — a coach restricted to their own book cannot open another
+  // coach's client's back catalogue by pasting an engagement id.
+  if (!(await canCurrentBbAccessEngagement(engagementId))) {
+    return { ok: false, error: "You don't have access to that client." };
+  }
+
+  if (!shared) {
+    const count = await withSystemContext(async (tx) => {
+      const rows = await tx
+        .update(engagementMeetings)
+        .set({ transcriptSharedAt: null, transcriptSharedByUserProfileId: null })
+        .where(
+          and(
+            eq(engagementMeetings.engagementId, engagementId),
+            isNotNull(engagementMeetings.transcriptSharedAt),
+          ),
+        )
+        .returning({ id: engagementMeetings.id });
+      return rows.length;
+    });
+    revalidatePath(`/business-builder/engagements/${engagementId}/meetings`);
+    revalidatePath("/portal/meetings");
+    return { ok: true, data: { changed: count, skipped: 0, failed: 0 } };
+  }
+
+  const pending = await withSystemContext(async (tx) =>
+    tx
+      .select({
+        id: engagementMeetings.id,
+        sharedAt: engagementMeetings.transcriptSharedAt,
+      })
+      .from(engagementMeetings)
+      .where(eq(engagementMeetings.engagementId, engagementId)),
+  );
+
+  let changed = 0;
+  let failed = 0;
+  const skipped = pending.filter((m) => m.sharedAt !== null).length;
+
+  for (const m of pending) {
+    if (m.sharedAt !== null) continue;
+    const load = await ensureTranscriptText(m.id);
+    if (load.status !== "ok") {
+      // Usually "this meeting has no transcript" — ordinary, not an
+      // error worth aborting the whole run for. Counted so the button
+      // can say so.
+      failed += 1;
+      continue;
+    }
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(engagementMeetings)
+        .set({
+          transcriptSharedAt: new Date(),
+          transcriptSharedByUserProfileId: profile.userProfileId,
+        })
+        .where(eq(engagementMeetings.id, m.id));
+    });
+    changed += 1;
+  }
+
+  revalidatePath(`/business-builder/engagements/${engagementId}/meetings`);
+  revalidatePath("/portal/meetings");
+  return { ok: true, data: { changed, skipped, failed } };
 }

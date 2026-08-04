@@ -14,7 +14,7 @@
  * orgs; Coach session is in master org). Uses withSystemContext.
  */
 
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { coaches, engagements, type Engagement } from "../schema";
 import { withSystemContext, withTenantContext } from "../tenant";
@@ -22,6 +22,7 @@ import { ensureUserProfile } from "../provisioning";
 import {
   canCurrentBbAccessEngagement,
   getCurrentBbAccess,
+  sharedEngagementIdsFor,
 } from "./bb-access";
 import { getClientScope } from "./business-builder-cross-engagement";
 
@@ -204,15 +205,33 @@ export async function listCoachEngagements(
     let rows: Engagement[];
 
     if (!access.allClientsAccess) {
-      // Restricted Business Builder: only explicitly-granted clients.
-      // The scope toggle isn't offered to them, so it doesn't apply.
-      if (access.grantedEngagementIds.length === 0) return [];
+      // Restricted Business Builder: the clients they OWN, plus any
+      // shared with them.
+      //
+      // Ownership used to be missing here, and it is the main route
+      // since 2026-07-27 — access follows `engagements.coach_id`. So a
+      // coach with `all_clients_access=false` and no explicit grants
+      // got an EMPTY client list while owning clients outright. That is
+      // exactly Jen's state after migration 0093 (false, 0 grants, 1
+      // owned): her switcher listed nothing. `coachScopeWhere` had the
+      // rule right the whole time; this branch was a second, narrower
+      // definition of the same question.
+      const [Coach] = await tx
+        .select({ id: coaches.id })
+        .from(coaches)
+        .where(eq(coaches.userProfileId, profile.userProfileId))
+        .limit(1);
+      const shared = await sharedEngagementIdsFor(profile.userProfileId);
+      const clauses: SQL[] = [];
+      if (Coach) clauses.push(eq(engagements.coachId, Coach.id));
+      if (shared.length > 0) clauses.push(inArray(engagements.id, shared));
+      if (clauses.length === 0) return [];
       rows = await tx
         .select()
         .from(engagements)
         .where(
           and(
-            inArray(engagements.id, access.grantedEngagementIds),
+            clauses.length === 1 ? clauses[0] : or(...clauses),
             isNull(engagements.archivedAt),
           ),
         );
@@ -233,19 +252,18 @@ export async function listCoachEngagements(
         .from(coaches)
         .where(eq(coaches.userProfileId, profile.userProfileId))
         .limit(1);
-      if (!Coach) return [];
+      const shared = await sharedEngagementIdsFor(profile.userProfileId);
+      const clauses: SQL[] = [isNull(engagements.coachId)];
+      if (Coach) clauses.push(eq(engagements.coachId, Coach.id));
+      // Shared clients belong in your own book too — that is what
+      // sharing means. Applies to the master admin as much as anyone:
+      // Bruce defaults to "mine" like everybody else since 2026-07-26.
+      if (shared.length > 0) clauses.push(inArray(engagements.id, shared));
+      if (!Coach && shared.length === 0) return [];
       rows = await tx
         .select()
         .from(engagements)
-        .where(
-          and(
-            or(
-              eq(engagements.coachId, Coach.id),
-              isNull(engagements.coachId),
-            ),
-            isNull(engagements.archivedAt),
-          ),
-        );
+        .where(and(or(...clauses), isNull(engagements.archivedAt)));
     }
 
     if (!opts.includeInternal) {

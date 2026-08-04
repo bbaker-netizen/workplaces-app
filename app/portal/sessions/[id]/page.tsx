@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getPortalViewer } from "@/lib/portal/viewer";
 import {
   getSession,
   listSessionActionItems,
@@ -22,8 +23,11 @@ export default async function PortalSessionDetailPage({
   if (!session) notFound();
 
   // Only Business Builders manage sessions; clients view read-only.
+  // Reads the effective viewer so preview shows the read-only version a
+  // client actually gets, not the management controls.
+  const viewer = await getPortalViewer(profile, session.engagementId);
   const canManage =
-    profile.role === "master_admin" || profile.role === "coach";
+    viewer.role === "master_admin" || viewer.role === "coach";
 
   const [actionItems, agenda, writeBlocked] = await Promise.all([
     listSessionActionItems(session.id),

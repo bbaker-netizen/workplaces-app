@@ -8,6 +8,8 @@
  * Usage:
  *   npx tsx scripts/preview-ea-email.ts digest [outputPath]
  *   npx tsx scripts/preview-ea-email.ts rollup [outputPath]
+ *   npx tsx scripts/preview-ea-email.ts agenda [outputPath]
+ *   npx tsx scripts/preview-ea-email.ts agenda-updated [outputPath]
  *
  * The sample data below is representative, not real — invented clients
  * and commitments shaped like a normal Tuesday, so every section of the
@@ -23,7 +25,12 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DateTime } from "luxon";
-import { dailyDigestEmail, fridayRollupEmail } from "../lib/email/templates";
+import {
+  agendaFinalizedEmail,
+  agendaUpdatedEmail,
+  dailyDigestEmail,
+  fridayRollupEmail,
+} from "../lib/email/templates";
 import type { DigestPayload } from "../lib/ea/digest-data";
 import type { JobHeartbeat } from "../lib/ea/job-runs";
 
@@ -52,6 +59,9 @@ const payload: DigestPayload = {
       type: "in_person",
       whenLabel: when(now.set({ hour: 10, minute: 0 })),
       previousSessionAt: iso(now.minus({ days: 14 })),
+      // Points added since the agenda was last finalized — the safety
+      // net that catches an agenda somebody built and never sent round.
+      agendaUnannounced: 2,
       // A client-raised point, so the sample exercises the section that
       // renders above the drafted agenda.
       clientRaised: [
@@ -443,8 +453,54 @@ const heartbeatSample: JobHeartbeat[] = [
 const which = (process.argv[2] ?? "digest").toLowerCase();
 const outArg = process.argv[3];
 
+/* ------------------------------ agendas ------------------------------ */
+
+/** A mixed agenda: two points Bruce raised, one the client did, one
+ *  carried over. Enough to see how the raiser attribution reads. */
+const agendaSample = [
+  {
+    title: "Second shift start date",
+    body: "Left unresolved last session pending the job-costing numbers.",
+    raisedByName: "Bruce Baker",
+  },
+  {
+    title: "The Peterson quote — do we walk away",
+    body: "They have come back a third time asking for a discount.",
+    raisedByName: "Dave Nowak",
+  },
+  {
+    title: "Shop-floor org chart sign-off",
+    body: null,
+    raisedByName: "Bruce Baker",
+  },
+  {
+    title: "Hiring a second estimator before spring",
+    body: null,
+    raisedByName: "Jen Garrison",
+  },
+];
+
+const agendaCommon = {
+  to: "jgarrison@4workplaces.com",
+  recipientName: "Jen Garrison",
+  finalizedByName: "Bruce Baker",
+  engagementLabel: "Summit Cabinets",
+  sessionWhenLabel: "Tue Jul 28, 10:00 AM MT",
+  items: agendaSample,
+  url: "/business-builder/sessions/e1/s1",
+};
+
 const envelope =
-  which === "rollup"
+  which === "agenda"
+    ? agendaFinalizedEmail(agendaCommon)
+    : which === "agenda-updated"
+      ? agendaUpdatedEmail({
+          ...agendaCommon,
+          // One added and one edited, so both delta blocks render.
+          added: [agendaSample[3]],
+          changed: [agendaSample[1]],
+        })
+      : which === "rollup"
     ? fridayRollupEmail({
         to: "bbaker@4workplaces.com",
         recipientName: payload.recipientName,

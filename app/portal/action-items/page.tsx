@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { getPortalViewer } from "@/lib/portal/viewer";
 import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementActionItems } from "@/lib/db/queries/action-items";
 import { sortActionItems } from "@/components/action-items/sort";
@@ -29,12 +30,19 @@ export default async function PortalActionItemsPage() {
     );
   }
 
+  // Everything below is a PRESENTATION decision, so it reads the
+  // effective viewer, not the signed-in profile. On a Business Builder
+  // previewing this client that swaps master_admin for client_lead —
+  // without it the preview rendered the coach view (drafts, the Draft
+  // chip) under a banner promising "this is what they see".
+  const viewer = await getPortalViewer(profile, engagement.id);
   const isCoachLike =
-    profile.role === "master_admin" || profile.role === "coach";
+    viewer.role === "master_admin" || viewer.role === "coach";
   const allItems = await listEngagementActionItems(engagement.id);
   const sorted = sortActionItems(allItems);
 
-  // Hide drafts from non-Coach roles.
+  // Hide drafts from non-Coach roles. An item a Business Builder has not
+  // published is a proposal, not a commitment.
   const visibleItems = isCoachLike
     ? sorted
     : sorted.filter((i) => i.status !== "draft");
@@ -46,13 +54,11 @@ export default async function PortalActionItemsPage() {
   // The Business Builder controls action-item creation and assignment, so
   // only master_admin / Coach get the New button. Clients update status on
   // items assigned to them.
-  const canCreate =
-    profile.role === "master_admin" || profile.role === "coach";
+  const canCreate = isCoachLike;
 
   // Full edit (content/assignee) is Business-Builder-only too; clients are
   // limited to status updates on their own items.
-  const fullEditor =
-    profile.role === "master_admin" || profile.role === "coach";
+  const fullEditor = isCoachLike;
 
   const items = visibleItems.map((it) => ({
     id: it.id,
@@ -64,6 +70,17 @@ export default async function PortalActionItemsPage() {
     revenueImpact: it.revenueImpact,
     marginImpact: it.marginImpact,
     detailHref: `/portal/action-items/${it.id}`,
+    // A client owns the status of their OWN work. The pill used to be
+    // disabled for every client role, which left "mark it in progress"
+    // — the one thing an assignee does between sessions — reachable
+    // only by opening the item. Per item, because a client must not be
+    // able to flip somebody else's.
+    pillDisabled:
+      !fullEditor &&
+      !(
+        viewer.userProfileId !== null &&
+        it.assigneeUserProfileId === viewer.userProfileId
+      ),
   }));
 
   return (

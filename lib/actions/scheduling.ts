@@ -297,6 +297,13 @@ export async function createBooking(
             companyName: data.bookerCompany ?? data.bookerName,
             contactName: data.bookerName,
             contactEmail: data.bookerEmail,
+            // Whoever's link they booked owns the lead. Ownership drives
+            // every downstream notification — the assessment coming back,
+            // the gone-quiet nudge, the follow-up due — and an unowned
+            // prospect routes to the triage inbox instead, which is how
+            // bookings on a second Business Builder's link ended up
+            // alerting the master admin and nobody else.
+            ownerUserProfileId: link.coachUserProfileId,
             status: "meeting_scheduled",
             leadSource: "Discovery booking",
             source: data.source,

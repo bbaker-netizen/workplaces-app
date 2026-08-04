@@ -8,7 +8,6 @@
  */
 
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DateTime } from "luxon";
 import {
@@ -18,18 +17,18 @@ import {
   FileText,
   Briefcase,
   Clock,
+  Video,
 } from "lucide-react";
 import { ensureUserProfile } from "@/lib/db/provisioning";
-import {
-  getCurrentEngagement,
-  PORTAL_PREVIEW_COOKIE,
-} from "@/lib/db/queries/engagements";
+import { getCurrentEngagement } from "@/lib/db/queries/engagements";
 import { listEngagementActionItems } from "@/lib/db/queries/action-items";
 import { getNextSession } from "@/lib/db/queries/bbs-sessions";
 import { listEngagementRecentActivity } from "@/lib/db/queries/messages";
 import { listEngagementDocuments } from "@/lib/db/queries/documents";
 import { listEngagementProjects } from "@/lib/db/queries/projects";
-import { listEngagementMembers } from "@/lib/db/queries/user-profiles";
+import { listEngagementMeetings } from "@/lib/db/queries/meetings";
+import { getPortalViewer } from "@/lib/portal/viewer";
+import { formatMeetingSummary } from "@/lib/meetings/format";
 import { TOMBSTONE_BODY } from "@/lib/communication/tombstone";
 import {
   formatSessionTime,
@@ -41,8 +40,6 @@ const INACTIVE_PROJECT = new Set(["done", "closed", "cancelled"]);
 export default async function PortalDashboard() {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
-
-  const isPreview = cookies().get(PORTAL_PREVIEW_COOKIE)?.value === "1";
 
   const engagement = await getCurrentEngagement();
   if (!engagement) {
@@ -59,23 +56,33 @@ export default async function PortalDashboard() {
     );
   }
 
-  // Five batched reads — all independent, overlapped with Promise.all.
-  const [allItems, nextSession, recent, documents, projectList] =
+  // Who this screen is FOR. In preview that's the client, not the
+  // Business Builder — otherwise "Your open items" measured Bruce's
+  // workload on a client engagement, which is always zero, and the
+  // dashboard flatly contradicted the action-items list beside it.
+  const viewer = await getPortalViewer(profile, engagement.id);
+  const isPreview = viewer.isPreview;
+
+  // Six batched reads — all independent, overlapped with Promise.all.
+  const [allItems, nextSession, recent, documents, projectList, meetings] =
     await Promise.all([
       listEngagementActionItems(engagement.id),
       getNextSession(engagement.id),
       listEngagementRecentActivity(engagement.id, 5),
       listEngagementDocuments(engagement.id),
       listEngagementProjects(engagement.id),
+      listEngagementMeetings(engagement.id),
     ]);
 
   const now = new Date();
   const myOpenAll = allItems.filter(
     (i) =>
-      i.assigneeUserProfileId === profile.userProfileId &&
+      viewer.userProfileId !== null &&
+      i.assigneeUserProfileId === viewer.userProfileId &&
       i.status !== "done" &&
       i.status !== "draft",
   );
+  const latestMeeting = meetings[0] ?? null;
   const myOpen = [...myOpenAll]
     .sort((a, b) => {
       const aOverdue = a.dueDate && a.dueDate < now ? 0 : 1;
@@ -96,18 +103,10 @@ export default async function PortalDashboard() {
   const recentDocs = documents.slice(0, 3);
   const greeting = greetingFor(new Date());
 
-  let greetingName = profile.fullName.split(" ")[0] ?? profile.fullName;
-  if (isPreview) {
-    const members = await listEngagementMembers(engagement.id);
-    const client =
-      members.find((m) => m.role === "client_lead") ??
-      members.find(
-        (m) => m.role === "client_manager" || m.role === "client_employee",
-      );
-    greetingName = client?.fullName
-      ? (client.fullName.split(" ")[0] ?? client.fullName)
-      : (engagement.name ?? "there");
-  }
+  // The viewer already resolved the previewed client's first name — the
+  // same stand-in whose items "Your open items" now measures, so the
+  // greeting and the card can't name two different people.
+  const greetingName = viewer.displayName;
 
   // Warm, adaptive hero line — a brand-new portal gets a welcome instead
   // of a bare "here's where things stand" over empty cards.
@@ -277,6 +276,65 @@ export default async function PortalDashboard() {
                 );
               })}
             </ul>
+          )}
+        </Card>
+
+        {/* Meeting notes.
+            A&M had 32 recorded sessions and 29 recaps while this
+            dashboard said nothing about any of them — the module was
+            reachable only from the sidebar, so the one screen every
+            client lands on made the whole record look absent. The card
+            leads with the most recent session because "what did we
+            agree last time" is the question that brings someone back
+            here between sessions. */}
+        <Card
+          tourId="meetings"
+          icon={<Video className="w-4 h-4" aria-hidden />}
+          title="Meeting notes"
+          href="/portal/meetings"
+          ctaLabel={
+            meetings.length > 1 ? `All ${meetings.length} meetings` : "All meetings"
+          }
+        >
+          {latestMeeting ? (
+            <div className="space-y-1">
+              <Link href="/portal/meetings" className="group block">
+                <p className="font-sans text-sm font-bold text-foreground group-hover:underline underline-offset-4">
+                  {latestMeeting.title}
+                </p>
+                <p className="mt-0.5 font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground">
+                  {DateTime.fromJSDate(new Date(latestMeeting.occurredAt))
+                    .setZone("America/Edmonton")
+                    .toFormat("ccc LLL d, yyyy")}
+                  {latestMeeting.durationMin
+                    ? ` · ${latestMeeting.durationMin} min`
+                    : ""}
+                </p>
+              </Link>
+              {(() => {
+                // The Fireflies overview if there is one, else the
+                // bullets. Flattened to a plain excerpt — this is a
+                // teaser, and the module page renders the real thing.
+                const body =
+                  latestMeeting.summaryOverview ??
+                  (latestMeeting.summaryBullets
+                    ? formatMeetingSummary(latestMeeting.summaryBullets)
+                    : null);
+                return body ? (
+                  <p className="mt-1.5 font-sans text-sm text-muted-foreground line-clamp-3">
+                    {body.replace(/[#*_`>\-]/g, " ").replace(/\s+/g, " ").trim()}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 font-sans text-sm text-muted-foreground italic">
+                    Recap coming soon.
+                  </p>
+                );
+              })()}
+            </div>
+          ) : (
+            <EmptyLine>
+              No recorded sessions yet — recaps show up here automatically.
+            </EmptyLine>
           )}
         </Card>
 

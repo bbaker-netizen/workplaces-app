@@ -45,11 +45,16 @@ import {
   updateAgendaItem,
 } from "@/lib/actions/agenda-items";
 import type { ListedAgendaItem } from "@/lib/db/queries/agenda-items";
+import { AgendaFinalizeBar } from "@/components/sessions/AgendaFinalizeBar";
 
 type Props = {
   sessionId: string;
   items: ListedAgendaItem[];
   currentUserProfileId: string;
+  /** When this agenda was last announced. Business Builder side only —
+   *  the client is never shown finalize state, and never sends it. */
+  finalizedAt?: Date | string | null;
+  canFinalize?: boolean;
   /** Raise a point / edit / retract your own. False on a past or
    *  cancelled session, and on a paused engagement. */
   canContribute: boolean;
@@ -77,6 +82,8 @@ export function SessionAgenda({
   sessionId,
   items,
   currentUserProfileId,
+  finalizedAt = null,
+  canFinalize = false,
   canContribute,
   canManage,
   audience,
@@ -170,6 +177,18 @@ export function SessionAgenda({
         >
           {error}
         </p>
+      )}
+
+      {/* Business Builder side only. A client never sees finalize state:
+          it is our prep signal, not theirs, and showing "finalized" to
+          the person we are inviting to add points would read as closed. */}
+      {audience === "builder" && (
+        <AgendaFinalizeBar
+          sessionId={sessionId}
+          finalizedAt={finalizedAt}
+          items={items}
+          canFinalize={canFinalize}
+        />
       )}
 
       {items.length === 0 ? (

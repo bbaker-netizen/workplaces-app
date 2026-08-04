@@ -32,14 +32,18 @@ import {
   bbsSessions,
   engagements,
   notifications,
+  userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import {
   resolveEngagementIdFromRecord,
   withEngagementContext,
   withSystemContext,
+  withTenantContext,
 } from "@/lib/db/tenant";
 import { resolveEngagementBuilders } from "@/lib/db/queries/engagement-builders";
+import { listSessionAgenda } from "@/lib/db/queries/agenda-items";
+import { notifyAgendaFinalized } from "@/lib/notifications/agenda-finalized";
 import { sendEmailQuietly } from "@/lib/email/send";
 import { agendaItemRaisedEmail } from "@/lib/email/templates";
 import { sendPushToUser } from "@/lib/push/web-push";
@@ -659,5 +663,176 @@ export async function carryForwardAgenda(
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't carry items forward.",
     };
+  }
+}
+
+/* ------------------------------ finalize ------------------------------ */
+
+/**
+ * Declaring an agenda ready, and announcing it.
+ *
+ * Business Builders only — deliberately narrower than `canManageAgenda`,
+ * which includes `client_lead` and `client_manager`. The emails this
+ * sends go to Bruce and Jen, so a client pressing it would be firing our
+ * internal prep signal; and the control does not render on the client
+ * portal at all. Finalizing is our declaration that the agenda is ready
+ * to prepare from, not a client's.
+ *
+ * First press announces the agenda and invites additions. Every press
+ * after that announces only what has changed since the previous one —
+ * `bbs_sessions.agenda_finalized_at` is both the state and the watermark
+ * the delta is measured from.
+ */
+const BUILDER_ROLES: ReadonlyArray<Role> = ["master_admin", "coach"];
+
+export type FinalizeAgendaResult = {
+  /** How many people were emailed. Zero is legitimate — a solo Builder
+   *  finalizing their own agenda has nobody else to tell. */
+  notified: number;
+  isUpdate: boolean;
+};
+
+export async function finalizeAgenda(
+  sessionId: string,
+): Promise<ActionResult<FinalizeAgendaResult>> {
+  try {
+    const profile = await ensureUserProfile();
+    if (profile.status !== "ok") {
+      return { ok: false, error: "Not authenticated." };
+    }
+    if (!(BUILDER_ROLES as readonly string[]).includes(profile.role)) {
+      return { ok: false, error: "Only a Business Builder can finalize an agenda." };
+    }
+    const engagementId = await resolveEngagementIdFromRecord(
+      "bbs_sessions",
+      sessionId,
+    );
+    if (!engagementId) return { ok: false, error: "Meeting not found." };
+    if (await clientWriteBlocked(profile.role, engagementId)) {
+      return { ok: false, error: READ_ONLY_ERROR };
+    }
+
+    // Stamped BEFORE the agenda is read, so anything added during the
+    // read-then-write window falls after the watermark and is caught by
+    // the next announcement rather than vanishing between the two.
+    const finalizedAt = new Date();
+
+    const session = await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        const [row] = await tx
+          .select({
+            id: bbsSessions.id,
+            scheduledAt: bbsSessions.scheduledAt,
+            status: bbsSessions.status,
+            previousFinalizedAt: bbsSessions.agendaFinalizedAt,
+          })
+          .from(bbsSessions)
+          .where(eq(bbsSessions.id, sessionId))
+          .limit(1);
+        return row ?? null;
+      },
+    );
+    if (!session) return { ok: false, error: "Meeting not found." };
+    if (session.status === "cancelled") {
+      return { ok: false, error: "This session was cancelled." };
+    }
+    if (session.scheduledAt.getTime() <= Date.now()) {
+      return {
+        ok: false,
+        error: "This session has already started — its agenda is a record now.",
+      };
+    }
+
+    // Read through the normal query so raiser names resolve the same way
+    // they do on screen. It does its own cross-org name pass, which a
+    // read inside the engagement-bound transaction above cannot do.
+    const items = await listSessionAgenda(sessionId);
+    if (items.length === 0) {
+      return {
+        ok: false,
+        error: "There is nothing on this agenda yet — add a point first.",
+      };
+    }
+
+    const prev = session.previousFinalizedAt;
+    const isUpdate = prev !== null;
+    const added = prev ? items.filter((i) => i.createdAt > prev) : [];
+    const changed = prev
+      ? items.filter((i) => i.createdAt <= prev && i.updatedAt > prev)
+      : [];
+
+    // A second press that announces nothing is almost always a double
+    // click, and it would send an "updated" email describing no update.
+    if (isUpdate && added.length === 0 && changed.length === 0) {
+      return {
+        ok: false,
+        error: "Nothing has changed since you last finalized this agenda.",
+      };
+    }
+
+    await withEngagementContext(
+      profile.orgId,
+      profile.role,
+      engagementId,
+      async (tx) => {
+        await tx
+          .update(bbsSessions)
+          .set({
+            agendaFinalizedAt: finalizedAt,
+            agendaFinalizedByUserProfileId: profile.userProfileId,
+            updatedAt: new Date(),
+          })
+          .where(eq(bbsSessions.id, sessionId));
+      },
+    );
+
+    const toLine = (i: (typeof items)[number]) => ({
+      title: i.title,
+      body: i.body,
+      raisedByName: i.raisedByName,
+    });
+
+    const notified = await notifyAgendaFinalized({
+      sessionId,
+      engagementId,
+      actorUserProfileId: profile.userProfileId,
+      actorName: await loadActorName(profile.orgId, profile.userProfileId),
+      sessionWhenLabel: formatSessionTime(session.scheduledAt),
+      items: items.map(toLine),
+      added: added.map(toLine),
+      changed: changed.map(toLine),
+      isUpdate,
+    });
+
+    revalidateAgendaPaths(sessionId);
+    return { ok: true, data: { notified, isUpdate } };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't finalize the agenda.",
+    };
+  }
+}
+
+/** The finalizer's own name, read under their own tenant. */
+async function loadActorName(
+  orgId: string,
+  userProfileId: string,
+): Promise<string> {
+  try {
+    const name = await withTenantContext(orgId, async (tx) => {
+      const [row] = await tx
+        .select({ fullName: userProfiles.fullName })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, userProfileId))
+        .limit(1);
+      return row?.fullName ?? null;
+    });
+    return name ?? "Someone";
+  } catch {
+    return "Someone";
   }
 }
