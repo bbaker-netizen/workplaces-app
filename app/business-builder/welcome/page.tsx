@@ -221,9 +221,9 @@ export default async function CoachWelcomePage() {
         </p>
         <p className="text-tbb-ink-2 max-w-prose">
           A <strong>Just mine / All clients</strong> toggle sits on the
-          Console home, the Pipeline and the Deliverables tracker — but
-          only for people allowed the whole practice. If you don&apos;t
-          see the toggle, that&apos;s deliberate, not a bug.
+          Console home and the Pipeline — but only for people allowed the
+          whole practice. If you don&apos;t see the toggle, that&apos;s
+          deliberate, not a bug.
         </p>
         <p className="text-tbb-ink-2 max-w-prose">
           Who owns a client comes from the <strong>Owner</strong> field on
@@ -869,18 +869,32 @@ export default async function CoachWelcomePage() {
             <li>Stages of Growth assessments</li>
           </ol>
           <p className="mt-2">
-            Each deliverable carries a status (not started, in progress,
-            review, delivered, archived), a type, and the same revenue
-            / margin impact flags as action items.
+            <strong>These are not a separate module.</strong> Each one is
+            an action item carrying a document type, so a session
+            produces one list rather than two. They ride the same
+            lifecycle — draft, open, in progress, done — and carry the
+            same revenue / margin impact flags as any other commitment.
           </p>
           <p className="mt-2">
             <strong>Draft one straight from a meeting.</strong> Open the
-            client&apos;s Meetings page, expand a recorded meeting, hit{" "}
-            <strong>Draft from this meeting</strong> and pick the type.
-            It reads the whole transcript, not just the Fireflies
-            highlights, and runs in the background — a long-form document
-            off a two-hour session takes minutes, not seconds. The draft
-            lands under Deliverables for you to edit.
+            client&apos;s Meetings page, hit{" "}
+            <strong>Open workspace</strong> on a recorded meeting, then{" "}
+            <strong>Draft from this meeting</strong>. You don&apos;t pick
+            a type — it reads the whole transcript, not just the
+            Fireflies highlights, and decides from what was actually
+            said, writing both the commitments people made and any
+            documents the session called for. It runs in the background
+            because a long-form document off a two-hour session takes
+            minutes, not seconds; the page watches for the drafts and
+            shows them when they land, so there&apos;s nothing to
+            refresh.
+          </p>
+          <p className="mt-2">
+            Everything arrives under <strong>Needs your review</strong> on
+            that same page. Fix the wording and the detail, set an owner
+            and a date, then <strong>Publish</strong> — nothing is
+            visible to the client until you do. Tick the checkboxes to
+            select several and bin them in one go.
           </p>
           <p className="mt-2">
             If a draft ever comes back thin, it will say so in its own
@@ -1023,8 +1037,8 @@ export default async function CoachWelcomePage() {
             Owner later moves that client — its deliverables, notifications, and
             My Work — to the new Business Builder. As master admin you get an{" "}
             <strong>All clients / Just mine</strong> toggle on the Console home
-            and Deliverables tracker to switch between oversight and your own
-            book; standard Business Builders always see only their own.
+            and the Pipeline to switch between oversight and your own book;
+            standard Business Builders always see only their own.
           </p>
           <p className="text-tbb-ink-2 max-w-prose">
             One-time cleanup: clients set up before ownership followed the Owner

@@ -104,6 +104,13 @@ export default async function PortalWelcomePage() {
           within 24 hours. You&apos;ll get an email the moment each one
           lands on your plate.
         </p>
+        <p className="mt-3">
+          Under <strong>Meeting notes</strong> you&apos;ll find a written
+          recap of a session, and sometimes the full transcript. Those are
+          two separate things and I release each one deliberately — so
+          some sessions will have both, some just one. If there&apos;s a
+          session you want the notes or the recording for, just ask.
+        </p>
       </Section>
 
       <Section

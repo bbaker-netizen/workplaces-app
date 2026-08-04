@@ -18,6 +18,7 @@ import {
   MessagesSquare,
   PenSquare,
   Puzzle,
+  ScrollText,
   UserCheck,
   Users,
   Filter,
@@ -48,6 +49,15 @@ export function ModuleReference() {
         linkLabel="Open sessions (pick an engagement)"
       />
       <ModuleCard
+        icon={<ScrollText />}
+        name="Meeting workspace"
+        what={`One page per recorded session — Meetings → Open workspace. Three things live there. (1) The RECAP: the client-facing write-up. Edit it in place, then "Email the recap" — the button states how many people it will actually reach before you press it. Not every session needs one, so "Discard" bins the write-up and leaves the transcript exactly as it is. (2) The TRANSCRIPT, with "Show in their portal" — this sends nobody anything, it just makes the words readable to everyone on that client's team, and nothing is readable until you press it. (3) Everything the session produced: drafts under Needs your review, published items below.`}
+        when="After every recorded session. Draft from the transcript, work the drafts down to nothing, decide whether the recap is worth sending, and decide separately whether the client should be able to read the transcript."
+        replaces="Copying action items out of Fireflies by hand, writing the follow-up email from memory, and having no record of which clients can see which recordings."
+        link="/business-builder/engagements"
+        linkLabel="Open meetings (pick an engagement)"
+      />
+      <ModuleCard
         icon={<Users />}
         name="Team touch-bases"
         what="Your own internal workspace — the recurring touch-bases you run with the rest of the practice, the agenda for each one, and the commitments you and your fellow Business Builders make to each other. Clients never see any of it. Set a cadence once and the meetings generate forward; add talking points to any meeting; hit Task it on a point to turn it into an assigned action item with a due date."
@@ -59,7 +69,7 @@ export function ModuleReference() {
       <ModuleCard
         icon={<CheckSquare />}
         name="Action items"
-        what="The one follow-through list: the commitments coming out of every session, the ones you create between sessions, AND the nine big documents (which are action items carrying a document type — there is no separate Deliverables module). Each item has a title, description, owner, due date, status, and revenue/margin flags. To draft from a session: Meetings → Open workspace → Draft from this meeting. It reads the whole transcript and writes both the to-dos and any documents the session called for — you don't pick a type. Everything lands there as drafts to edit, assign and publish; nothing reaches the client until you publish."
+        what="The one follow-through list: the commitments coming out of every session, the ones you create between sessions, AND the nine big documents (which are action items carrying a document type — there is no separate Deliverables module). Each item has a title, description, owner, due date, status, and revenue/margin flags. To draft from a session: Meetings → Open workspace → Draft from this meeting. It reads the whole transcript and writes both the to-dos and any documents the session called for — you don't pick a type. It runs in the background and the drafts appear on their own; there's no need to refresh. Everything lands under Needs your review to edit, assign and publish — including the detail, not just the title. Tick the checkboxes to select several and bin them in one go. Nothing reaches the client until you publish."
         when="During and after every BBS. Whenever the client agrees to do something. Whenever you spot a gap that needs fixing."
         replaces={`The Monday BBS subitems with the Pending / In progress / Waiting / Completed status track. Action items roll up to a session and live on each assignee's portal automatically.`}
         link="/business-builder/action-items"
