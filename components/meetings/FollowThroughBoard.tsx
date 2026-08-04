@@ -61,21 +61,161 @@ export function FollowThroughBoard({
   items: FollowThroughItem[];
   members: Member[];
 }) {
+  const router = useRouter();
   const drafts = items.filter((i) => i.status === "draft");
   const live = items.filter((i) => i.status !== "draft");
 
+  /**
+   * Bulk selection, for clearing a drafting run you don't want.
+   *
+   * A pass over a long transcript can produce twenty drafts, and binning
+   * them one confirm at a time is twenty dialogs. Selection is held here
+   * rather than per-row so the count and the action live together.
+   *
+   * Ids are pruned against the current list on every render pass, so a
+   * selected item that has since been deleted or published elsewhere
+   * cannot linger in the set and inflate the count.
+   */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  const liveIds = new Set(items.map((i) => i.id));
+  const chosen = Array.from(selected).filter((id) => liveIds.has(id));
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = (ids: string[], on: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const deleteSelected = () => {
+    if (chosen.length === 0) return;
+    const publishedCount = chosen.filter(
+      (id) => items.find((i) => i.id === id)?.status !== "draft",
+    ).length;
+    // The published count is stated separately. Binning drafts is
+    // housekeeping; binning something the client can already see is a
+    // different act, and the confirm should not let the two blur.
+    const warning =
+      publishedCount > 0
+        ? `\n\n${publishedCount} of them ${publishedCount === 1 ? "is" : "are"} already published and visible to the client.`
+        : "";
+    if (
+      !confirm(
+        `Delete ${chosen.length} item${chosen.length === 1 ? "" : "s"}? This can't be undone.${warning}`,
+      )
+    ) {
+      return;
+    }
+    setBulkError(null);
+    setBulkBusy(true);
+    void (async () => {
+      try {
+        // Sequential, not Promise.all. Each delete is its own
+        // authorization pass and transaction, and firing twenty at once
+        // at a serverless database is how you exhaust the pool for
+        // everything else on the page.
+        const failures: string[] = [];
+        for (const id of chosen) {
+          const r = await deleteActionItem(id);
+          if (!r.ok) failures.push(r.error);
+        }
+        setSelected(new Set());
+        // Report the count, not just the first failure: a partial result
+        // silently reported as success is how you think something is gone
+        // when it is not.
+        if (failures.length > 0) {
+          setBulkError(
+            `${failures.length} of ${chosen.length} could not be deleted. ${failures[0]}`,
+          );
+        }
+        router.refresh();
+      } finally {
+        setBulkBusy(false);
+      }
+    })();
+  };
+
   return (
     <div className="space-y-5">
+      {chosen.length > 0 && (
+        <div className="sticky top-2 z-10 flex items-center gap-3 flex-wrap rounded-md border border-tbb-blue/50 bg-tbb-cream-50 px-3 py-2 shadow-tbb-xs">
+          <span className="text-[11px] font-bold text-tbb-navy">
+            {chosen.length} selected
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            disabled={bulkBusy}
+            className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-navy disabled:opacity-50"
+          >
+            Clear
+          </button>
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={deleteSelected}
+            disabled={bulkBusy}
+            className="inline-flex items-center gap-1.5 rounded-pill border border-tbb-danger px-3 py-1 text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-danger hover:bg-tbb-danger hover:text-white disabled:opacity-50 transition-colors"
+          >
+            {bulkBusy ? (
+              <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+            ) : (
+              <Trash2 className="w-3 h-3" aria-hidden />
+            )}
+            Delete selected
+          </button>
+        </div>
+      )}
+      {bulkError && (
+        <p role="alert" className="text-[11px] text-tbb-danger">
+          {bulkError}
+        </p>
+      )}
+
       <section className="space-y-2">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
             Needs your review
           </h2>
-          {drafts.length > 0 && (
-            <span className="font-mono text-[11px] text-tbb-blue font-bold">
-              {drafts.length} waiting
-            </span>
-          )}
+          <div className="flex items-baseline gap-3">
+            {drafts.length > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  toggleAll(
+                    drafts.map((d) => d.id),
+                    !drafts.every((d) => selected.has(d.id)),
+                  )
+                }
+                className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-blue"
+              >
+                {drafts.every((d) => selected.has(d.id))
+                  ? "Deselect all"
+                  : "Select all"}
+              </button>
+            )}
+            {drafts.length > 0 && (
+              <span className="font-mono text-[11px] text-tbb-blue font-bold">
+                {drafts.length} waiting
+              </span>
+            )}
+          </div>
         </div>
         {drafts.length === 0 ? (
           <p className="text-xs text-tbb-ink-3 italic border border-dashed border-tbb-line rounded-md px-3 py-3">
@@ -90,6 +230,8 @@ export function FollowThroughBoard({
                 item={item}
                 members={members}
                 isDraft
+                selected={selected.has(item.id)}
+                onToggleSelected={() => toggle(item.id)}
               />
             ))}
           </ul>
@@ -97,9 +239,27 @@ export function FollowThroughBoard({
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-          Published from this session
-        </h2>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+            Published from this session
+          </h2>
+          {live.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                toggleAll(
+                  live.map((l) => l.id),
+                  !live.every((l) => selected.has(l.id)),
+                )
+              }
+              className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-blue"
+            >
+              {live.every((l) => selected.has(l.id))
+                ? "Deselect all"
+                : "Select all"}
+            </button>
+          )}
+        </div>
         {live.length === 0 ? (
           <p className="text-xs text-tbb-ink-3 italic">
             Nothing published from this session yet.
@@ -111,6 +271,8 @@ export function FollowThroughBoard({
                 key={item.id}
                 item={item}
                 members={members}
+                selected={selected.has(item.id)}
+                onToggleSelected={() => toggle(item.id)}
               />
             ))}
           </ul>
@@ -130,10 +292,14 @@ function ItemRow({
   item,
   members,
   isDraft,
+  selected = false,
+  onToggleSelected,
 }: {
   item: FollowThroughItem;
   members: Member[];
   isDraft?: boolean;
+  selected?: boolean;
+  onToggleSelected?: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -143,35 +309,77 @@ function ItemRow({
   const [kind, setKind] = useState<string>(item.deliverableType ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * The body of the item — the plan, not just its name.
+   *
+   * The row edited title, owner, date and type but never the
+   * description, so the substance of anything Claude drafted was
+   * read-only on the one page built for reviewing it. For a plain to-do
+   * that is survivable; for a drafted document it means the entire
+   * artefact could be published or binned but not corrected. Collapsed
+   * by default so the list still scans, opened automatically when there
+   * is already a body worth seeing.
+   */
+  const [body, setBody] = useState(item.description ?? "");
+  const [showBody, setShowBody] = useState(false);
+
+  /**
+   * WHICH action is running, not merely whether one is.
+   *
+   * Every button in this row shared a single `isPending`, so pressing
+   * Delete swapped the PUBLISH button's tick for a spinner — the one
+   * control on this page that puts something in front of a client. It
+   * read as "publishing now" at the exact moment you had asked to throw
+   * the item away. Bruce reported it as that, and he was right to.
+   *
+   * Everything still disables together while any write is in flight —
+   * concurrent mutations on one row are not wanted. Only the spinner is
+   * narrowed, so the feedback lands on the button you actually pressed.
+   */
+  const [busy, setBusy] = useState<
+    null | "save" | "publish" | "delete" | "status"
+  >(null);
+
+  const run = (
+    kindOfWork: "save" | "publish" | "delete" | "status",
+    fn: () => Promise<{ ok: boolean; error?: string }>,
+  ) => {
+    setError(null);
+    setBusy(kindOfWork);
+    startTransition(async () => {
+      try {
+        const r = await fn();
+        if (!r.ok) setError(r.error ?? "Something went wrong.");
+        else router.refresh();
+      } finally {
+        setBusy(null);
+      }
+    });
+  };
+
   const dirty =
     title !== item.title ||
+    body !== (item.description ?? "") ||
     owner !== (item.assigneeUserProfileId ?? "") ||
     due !== toDateInput(item.dueDate) ||
     kind !== (item.deliverableType ?? "");
 
   const save = (extra?: { status?: (typeof STATUSES)[number] | "open" }) => {
-    setError(null);
-    startTransition(async () => {
-      const r = await updateActionItem(item.id, {
+    run(extra?.status === "open" ? "publish" : "save", () =>
+      updateActionItem(item.id, {
         title,
+        description: body,
         assigneeUserProfileId: owner === "" ? null : owner,
         dueDate: due === "" ? null : due,
         deliverableType: kind === "" ? null : (kind as DeliverableType),
         ...(extra?.status ? { status: extra.status } : {}),
-      });
-      if (!r.ok) setError(r.error);
-      else router.refresh();
-    });
+      }),
+    );
   };
 
   const remove = () => {
     if (!confirm(`Delete "${item.title}"? This can't be undone.`)) return;
-    setError(null);
-    startTransition(async () => {
-      const r = await deleteActionItem(item.id);
-      if (!r.ok) setError(r.error);
-      else router.refresh();
-    });
+    run("delete", () => deleteActionItem(item.id));
   };
 
   return (
@@ -182,6 +390,15 @@ function ItemRow({
       }
     >
       <div className="flex items-start gap-2">
+        {onToggleSelected && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelected}
+            aria-label={`Select "${item.title}"`}
+            className="mt-1.5 shrink-0 accent-tbb-blue"
+          />
+        )}
         {item.createdBy === "claude" && (
           <span
             title={
@@ -210,6 +427,30 @@ function ItemRow({
           </Link>
         )}
       </div>
+
+      {/* The plan itself. Kept behind a toggle so a list of twenty items
+          still scans, but one press away rather than on another page —
+          this is the screen where a draft is decided on, and deciding
+          means reading what it actually says. */}
+      {showBody || body ? (
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          disabled={isPending}
+          rows={body.length > 400 ? 10 : 4}
+          aria-label="Details"
+          placeholder="The detail — what this involves, what done looks like, anything the client needs to know."
+          className="w-full rounded-sm border border-tbb-line bg-white px-2 py-1.5 text-[12px] leading-relaxed text-tbb-navy placeholder:text-tbb-ink-3 focus:border-tbb-blue focus:outline-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowBody(true)}
+          className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-blue"
+        >
+          + Add detail
+        </button>
+      )}
 
       <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
         <select
@@ -254,13 +495,11 @@ function ItemRow({
           <select
             value={item.status}
             onChange={(e) =>
-              startTransition(async () => {
-                const r = await updateActionItem(item.id, {
+              run("status", () =>
+                updateActionItem(item.id, {
                   status: e.target.value as (typeof STATUSES)[number],
-                });
-                if (!r.ok) setError(r.error);
-                else router.refresh();
-              })
+                }),
+              )
             }
             disabled={isPending}
             aria-label="Status"
@@ -283,7 +522,7 @@ function ItemRow({
             disabled={isPending}
             className="inline-flex items-center gap-1 rounded-pill bg-tbb-blue text-white font-bold uppercase tracking-tbb-caps px-2.5 py-1 hover:bg-tbb-blue-700 disabled:opacity-50"
           >
-            {isPending ? (
+            {busy === "publish" ? (
               <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
             ) : (
               <Check className="w-3 h-3" aria-hidden />
@@ -298,7 +537,7 @@ function ItemRow({
               disabled={isPending}
               className="inline-flex items-center gap-1 rounded-pill border border-tbb-blue text-tbb-navy font-bold uppercase tracking-tbb-caps px-2.5 py-1 hover:bg-tbb-cream-50 disabled:opacity-50"
             >
-              {isPending ? (
+              {busy === "save" ? (
                 <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
               ) : (
                 <Check className="w-3 h-3" aria-hidden />
@@ -314,7 +553,11 @@ function ItemRow({
           aria-label="Delete"
           className="text-tbb-ink-3 hover:text-tbb-danger disabled:opacity-50 p-1"
         >
-          <Trash2 className="w-3.5 h-3.5" aria-hidden />
+          {busy === "delete" ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Trash2 className="w-3.5 h-3.5" aria-hidden />
+          )}
         </button>
       </div>
 

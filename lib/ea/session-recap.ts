@@ -51,6 +51,7 @@ import { THREAD_TYPE } from "@/lib/communication/audience";
 import {
   signatureLooksLikeHtml,
   signatureToEmailHtml,
+  signatureToMarkdown,
   signatureToPlainText,
 } from "@/lib/templates/markdown-to-html";
 import { EA_TIMEZONE } from "./digest-data";
@@ -580,6 +581,8 @@ export function buildRecapBody(args: {
   const sigRaw = args.signature?.trim() ?? "";
   const sigIsHtml = sigRaw.length > 0 && signatureLooksLikeHtml(sigRaw);
   const sigPlain = sigIsHtml ? signatureToPlainText(sigRaw) : sigRaw;
+  // Markdown keeps real links; the plain-text alternative cannot.
+  const sigMarkdown = sigIsHtml ? signatureToMarkdown(sigRaw) : sigRaw;
 
   if (sigRaw.length > 0) {
     h.push(
@@ -626,8 +629,8 @@ export function buildRecapBody(args: {
   // Plain text, not the raw HTML: the portal renders this through
   // react-markdown with raw HTML stripped, so tags would either vanish
   // or show as escaped noise on the client's own record of the session.
-  if (sigPlain.length > 0) {
-    m.push("", "---", "", sigPlain);
+  if (sigMarkdown.length > 0) {
+    m.push("", "---", "", sigMarkdown);
   }
 
   /* ---- plain text ---- */

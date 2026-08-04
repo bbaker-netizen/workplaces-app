@@ -278,6 +278,53 @@ export function signatureToPlainText(html: string): string {
   return stripHtmlForPlainText(html);
 }
 
+/**
+ * Markdown version of an HTML signature — links stay LINKS.
+ *
+ * `signatureToPlainText` renders `<a href="u">Meet Me</a>` as
+ * `Meet Me (u)`, which is the right answer for the plain-text alternative
+ * of an email: there is nowhere for a link to live, so the URL has to be
+ * spelled out. It is the wrong answer everywhere markdown is the format,
+ * and the recap was using it for both. The result was a signature reading
+ * `Meet Me (https://calendar.app.google/q1vmovzk…)` in the portal copy
+ * and in the recap editor — the full URL sitting in the middle of a
+ * sign-off, in a document a client reads.
+ *
+ * Here a link becomes `[Meet Me](https://…)`, so it renders as a
+ * clickable "Meet Me" in the portal and shows as a proper link in a
+ * WYSIWYG editor rather than as naked URL text.
+ */
+export function signatureToMarkdown(html: string): string {
+  return (
+    html
+      .replace(/<\/(p|div|h1|h2|h3|h4|h5|h6|blockquote)>/gi, "\n\n")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      .replace(/<br\s*\/?\s*>/gi, "\n")
+      // The one line that differs from the plain-text version.
+      .replace(
+        /<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi,
+        (_m, href: string, text: string) => {
+          const label = text.replace(/<[^>]+>/g, "").trim();
+          // A bare URL as its own label reads better unwrapped than as
+          // [https://x](https://x), which is noise in any editor.
+          if (!label || label === href) return href;
+          // Markdown link syntax breaks on unescaped brackets/parens.
+          return `[${label.replace(/[[\]]/g, "")}](${href.replace(/[()]/g, encodeURIComponent)})`;
+        },
+      )
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
 function looksLikeHtml(s: string): boolean {
   return s.trim().startsWith("<");
 }

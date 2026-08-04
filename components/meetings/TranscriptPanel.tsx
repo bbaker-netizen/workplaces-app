@@ -104,7 +104,15 @@ export function TranscriptPanel({
           }
         >
           {sharing && <Loader2 className="w-3 h-3 animate-spin" aria-hidden />}
-          {sharedAt ? "Make internal again" : "Release to client"}
+          {/* "Show in their portal", not "Release to client".
+              The recap panel at the top of this page had "Send to
+              client", so the page carried two buttons whose labels
+              differed only in a verb while doing different things.
+              Nothing here is sent: this makes the transcript readable in
+              the portal and emails nobody, and saying so is the whole
+              difference. The recap's button now says "Email the recap"
+              for the same reason. */}
+          {sharedAt ? "Hide from their portal" : "Show in their portal"}
         </button>
       </div>
 

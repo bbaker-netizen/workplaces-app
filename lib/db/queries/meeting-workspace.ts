@@ -46,7 +46,9 @@ export type FollowThroughItem = {
  */
 export type WorkspaceRecap = {
   id: string;
-  status: "draft" | "approved" | "sent";
+  /** `discarded` — decided against. The row is kept so the hourly sweep
+   *  does not draft the same recap again; the transcript is unaffected. */
+  status: "draft" | "approved" | "sent" | "discarded";
   subject: string;
   /** What the editor edits. Markdown is the source of truth for an
    *  edited recap; the HTML and plain-text bodies are derived from it. */

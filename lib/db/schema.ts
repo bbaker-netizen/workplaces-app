@@ -3386,6 +3386,9 @@ export const sessionRecapStatusEnum = pgEnum("session_recap_status", [
   "draft",
   "approved",
   "sent",
+  // Decided against (0111). The row stays so the hourly sweep does not
+  // draft the same recap again; the client still gets the transcript.
+  "discarded",
 ]);
 
 export const eaApprovalSubjectEnum = pgEnum("ea_approval_subject", [

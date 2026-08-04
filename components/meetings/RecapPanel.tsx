@@ -20,9 +20,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Mail, Pencil, Send, X } from "lucide-react";
+import { Check, Loader2, Mail, Pencil, Send, Trash2, X } from "lucide-react";
 import { MarkdownBody } from "@/components/markdown/MarkdownBody";
-import { sendRecapNow, updateRecapDraft } from "@/lib/actions/session-recaps";
+import { RichTextEditor } from "@/components/communication/RichTextEditor";
+import {
+  discardRecapDraft,
+  sendRecapNow,
+  updateRecapDraft,
+} from "@/lib/actions/session-recaps";
 import type { WorkspaceRecap } from "@/lib/db/queries/meeting-workspace";
 
 const TZ = "America/Edmonton";
@@ -53,13 +58,19 @@ export function RecapPanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  /** Which action is running. Same reason as FollowThroughBoard: one
+   *  shared flag made Discard light up the Send button's spinner, on the
+   *  one control that puts something in a client's inbox. */
+  const [busy, setBusy] = useState<null | "save" | "discard" | "send">(null);
 
   const isDraft = recap.status === "draft";
   const isSent = recap.status === "sent";
 
   const onSave = () => {
     setError(null);
+    setBusy("save");
     startTransition(async () => {
+      try {
       const result = await updateRecapDraft({
         recapId: recap.id,
         engagementId,
@@ -73,6 +84,7 @@ export function RecapPanel({
       setEditing(false);
       setNotice("Saved. Nothing has been sent.");
       router.refresh();
+      } finally { setBusy(null); }
     });
   };
 
@@ -81,6 +93,34 @@ export function RecapPanel({
     setBody(recap.bodyMarkdown);
     setEditing(false);
     setError(null);
+  };
+
+  const onDiscard = () => {
+    if (
+      !confirm(
+        `Discard the written recap for this session?\n\n` +
+          `${clientLabel} will get no session notes from this meeting. ` +
+          `The Fireflies transcript is NOT affected — if you have shared ` +
+          `it, they can still read it.\n\n` +
+          `This can't be undone, and no new recap will be drafted for ` +
+          `this session.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setBusy("discard");
+    startTransition(async () => {
+      try {
+      const result = await discardRecapDraft({ recapId: recap.id, engagementId });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setNotice("Discarded. The transcript is untouched.");
+      router.refresh();
+      } finally { setBusy(null); }
+    });
   };
 
   const onSend = () => {
@@ -94,7 +134,9 @@ export function RecapPanel({
     if (!window.confirm(question)) return;
 
     setError(null);
+    setBusy("send");
     startTransition(async () => {
+      try {
       const result = await sendRecapNow({ recapId: recap.id, engagementId });
       if (!result.ok) {
         setError(result.error);
@@ -106,6 +148,7 @@ export function RecapPanel({
           : `Filed on ${result.clientLabel}'s portal thread. Nobody was emailed — no one there has a portal account yet.`,
       );
       router.refresh();
+      } finally { setBusy(null); }
     });
   };
 
@@ -129,18 +172,44 @@ export function RecapPanel({
             >
               <Pencil className="w-3 h-3" aria-hidden /> Edit
             </button>
+            {/* Not every session warrants written notes. Discarding
+                leaves the transcript exactly as it is — the confirm says
+                so, because "delete the recap" could otherwise reasonably
+                be read as "delete what the client gets". */}
+            <button
+              type="button"
+              onClick={onDiscard}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps text-tbb-ink-3 hover:text-tbb-danger disabled:opacity-50"
+            >
+              {busy === "discard" ? (
+                <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+              ) : (
+                <Trash2 className="w-3 h-3" aria-hidden />
+              )}{" "}
+              Discard
+            </button>
             <button
               type="button"
               onClick={onSend}
               disabled={isPending}
               className="inline-flex items-center gap-1.5 rounded-pill bg-tbb-navy px-3 py-1.5 text-xs font-bold uppercase tracking-tbb-caps text-white hover:bg-tbb-blue disabled:opacity-50"
             >
-              {isPending ? (
+              {busy === "send" ? (
                 <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
               ) : (
                 <Send className="w-3 h-3" aria-hidden />
               )}
-              {recap.recipientCount > 0 ? "Send to client" : "File it"}
+              {/* "Email the recap", not "Send to client".
+                  The transcript panel further down this same page had a
+                  "Release to client" button, so the page offered two
+                  controls whose labels differed only in a verb while
+                  doing entirely different things — one emails a written
+                  summary, the other makes a word-for-word transcript
+                  readable in the portal. Each label now names WHAT moves
+                  and HOW, which is the only way to tell them apart at a
+                  glance. Same failure as the two rival draft buttons. */}
+              {recap.recipientCount > 0 ? "Email the recap" : "File it"}
             </button>
           </div>
         )}
@@ -183,17 +252,29 @@ export function RecapPanel({
               className="w-full rounded-md border border-tbb-line px-3 py-2 text-sm"
             />
           </label>
-          <label className="block space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
-              Body — Markdown
+          {/* WYSIWYG, not a markdown textarea.
+              This is a letter to a client, and it was being edited as
+              source: headings as `###`, and a signature link rendering
+              as the full `https://calendar.app.google/q1vmovzk…` in the
+              middle of the sign-off. Nobody proofreads a client email
+              well while mentally stripping syntax out of it.
+
+              Storage is unchanged — the editor round-trips Markdown, so
+              `bodyMarkdown` stays the source of truth and the emailed
+              HTML and portal copies are still derived from it. richMode
+              enables H1–H3, which the recap's own structure needs. */}
+          <div className="space-y-1">
+            <span className="block text-[10px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Body
             </span>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={20}
-              className="w-full rounded-md border border-tbb-line px-3 py-2 font-mono text-[13px] leading-relaxed"
+            <RichTextEditor
+              richMode
+              initialMarkdown={recap.bodyMarkdown}
+              onChange={setBody}
+              ariaLabel="Recap body"
+              placeholder="Write the recap…"
             />
-          </label>
+          </div>
           <p className="text-[11px] text-tbb-ink-3">
             The emailed copy and the copy filed on the client&rsquo;s portal are
             both built from this, so they cannot end up saying different things.
@@ -245,6 +326,14 @@ function StatusLine({ recap }: { recap: WorkspaceRecap }) {
     return (
       <p className="text-xs text-tbb-blue font-bold">
         Sent {stamp(recap.sentAt)}
+      </p>
+    );
+  }
+  if (recap.status === "discarded") {
+    return (
+      <p className="text-xs text-tbb-ink-3">
+        Discarded — no written recap for this session. The transcript is
+        unaffected.
       </p>
     );
   }

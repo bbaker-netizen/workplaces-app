@@ -120,6 +120,80 @@ export async function updateRecapDraft(
   return { ok: true };
 }
 
+const discardSchema = z.object({
+  recapId: z.string().uuid(),
+  engagementId: z.string().uuid(),
+});
+
+/**
+ * Decide against sending a recap, without touching the transcript.
+ *
+ * Bruce's ask: not every session warrants written notes, but the client
+ * should still get the Fireflies transcript. Those were welded together
+ * before — the recap was the only client-facing artefact you could act
+ * on, and leaving it as an unsent draft meant a permanent "waiting for
+ * review" against a session you had already decided about.
+ *
+ * **Marked, not deleted.** `lib/ea/recap-sweep.ts` decides what to draft
+ * by asking whether a `session_recaps` row exists for the session, so a
+ * hard delete frees the slot and the next hourly run drafts the same
+ * recap again. The row stays and records the decision.
+ *
+ * Deliberately does NOT touch `engagement_meetings.transcript_shared_at`.
+ * Sharing the transcript is a separate, separately-confirmed act, and
+ * discarding notes must never quietly retract something the client can
+ * already read — nor grant them something they cannot.
+ *
+ * Drafts only. A sent recap is the record of what a client was told; an
+ * approved one is mid-flight. Neither is discardable.
+ */
+export async function discardRecapDraft(
+  input: z.infer<typeof discardSchema>,
+): Promise<RecapActionResult> {
+  const parsed = discardSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That recap could not be found." };
+
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok") return { ok: false, error: "Not signed in." };
+  if (profile.role !== "master_admin" && profile.role !== "coach") {
+    return { ok: false, error: "Only a Business Builder can discard a recap." };
+  }
+  if (!(await canCurrentBbAccessEngagement(parsed.data.engagementId))) {
+    return { ok: false, error: "That client is not in your book." };
+  }
+
+  const { recapId, engagementId } = parsed.data;
+
+  const discarded = await withSystemContext(async (tx) => {
+    // and(), never `&&`. Drizzle conditions combined with `&&` collapse
+    // to the LAST operand, which here would have discarded every draft
+    // recap in the database. Nothing in tsc catches it — the types line
+    // up perfectly. See the 2026-08-03 note in CLAUDE.md.
+    const rows = await tx
+      .update(sessionRecaps)
+      .set({ status: "discarded", updatedAt: new Date() })
+      .where(
+        and(
+          eq(sessionRecaps.id, recapId),
+          eq(sessionRecaps.engagementId, engagementId),
+          eq(sessionRecaps.status, "draft"),
+        ),
+      )
+      .returning({ id: sessionRecaps.id });
+    return rows.length > 0;
+  });
+
+  if (!discarded) {
+    return {
+      ok: false,
+      error: "That recap is no longer a draft — it may already have been sent.",
+    };
+  }
+
+  revalidatePath(`/business-builder/engagements/${engagementId}`, "layout");
+  return { ok: true };
+}
+
 const sendSchema = z.object({
   recapId: z.string().uuid(),
   engagementId: z.string().uuid(),
