@@ -66,3 +66,63 @@ ${input.transcriptText}
 Extract the action items, and name any of the nine documents this session
 calls for. JSON only.`;
 }
+
+/**
+ * How much room the extractor gets to answer.
+ *
+ * Was 4,000, and that is what killed Jen's press on Crown and Ember's
+ * 30 July session: an 81-minute conversation produced more commitments
+ * than fitted, the model stopped mid-string, and `JSON.parse` failed
+ * with `Unterminated string in JSON at position 2888`. The whole run
+ * died — not one of the items it HAD written was kept, and nothing said
+ * why.
+ *
+ * Exactly the fault the deliverable drafter hit on 2026-07-27, fixed
+ * there and never applied here. Both paths now run inside a Netlify
+ * Background Function with a 15-minute budget, so the wall-clock that
+ * once justified a small cap is gone. 16,000 is roughly ten times the
+ * longest real output measured (14 items ≈ 2,900 characters).
+ */
+export const ACTION_ITEM_EXTRACT_MAX_TOKENS = 16000;
+
+/**
+ * Unwrap the model's JSON and parse it, saying plainly when the reply
+ * was cut off rather than letting a character offset stand in for a
+ * diagnosis.
+ *
+ * Truncation is CHECKED, not inferred from the parse failing: a reply
+ * stopped at the cap can still happen to be valid JSON, in which case
+ * silently accepting it would drop the tail of the meeting without
+ * anybody noticing — the worse of the two failures.
+ *
+ * Callers keep their own Zod schema; this only handles the fence and
+ * the JSON, which is the part that was duplicated and identical.
+ */
+export function parseExtractorJson(
+  text: string,
+  stopReason: string | null,
+): unknown {
+  if (stopReason === "max_tokens") {
+    throw new Error(
+      "This session produced more than the extractor could return in one go, " +
+        "so the reply was cut off and nothing was saved. Long sessions can do " +
+        "this — press Draft again, and if it keeps happening the meeting may " +
+        "need splitting.",
+    );
+  }
+  const cleaned = text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```/, "")
+    .replace(/```$/, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    throw new Error(
+      `The extractor's reply wasn't valid JSON (${
+        e instanceof Error ? e.message : String(e)
+      }). Nothing was saved — press Draft to try again.`,
+    );
+  }
+}

@@ -32,8 +32,10 @@ import { enqueueDeliverableDraft } from "@/lib/deliverables/enqueue";
 import { createDraftPlaceholder } from "@/lib/deliverables/fireflies-draft";
 import { complete } from "@/lib/ai/anthropic";
 import {
+  ACTION_ITEM_EXTRACT_MAX_TOKENS,
   ACTION_ITEM_EXTRACT_SYSTEM,
   actionItemExtractUserPrompt,
+  parseExtractorJson,
 } from "@/lib/ai/prompts/action-item-extract";
 import {
   fetchTranscript,
@@ -75,14 +77,11 @@ const llmOutputSchema = z.object({
 });
 
 /** Strip any stray code fences the model added and parse to the schema. */
-function parseExtractorOutput(text: string): z.infer<typeof llmOutputSchema> {
-  const cleaned = text
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```/, "")
-    .replace(/```$/, "")
-    .trim();
-  return llmOutputSchema.parse(JSON.parse(cleaned));
+function parseExtractorOutput(
+  text: string,
+  stopReason: string | null,
+): z.infer<typeof llmOutputSchema> {
+  return llmOutputSchema.parse(parseExtractorJson(text, stopReason));
 }
 
 /** Best-effort match of an LLM-supplied name to an org member's profile id. */
@@ -236,11 +235,11 @@ export async function runMeetingActionItemExtraction(
       transcriptText,
     }),
     model: "claude-sonnet-5",
-    maxTokens: 4000,
+    maxTokens: ACTION_ITEM_EXTRACT_MAX_TOKENS,
     temperature: 0.1,
   });
 
-  const parsed = parseExtractorOutput(result.text);
+  const parsed = parseExtractorOutput(result.text, result.stopReason);
 
   let created = 0;
   await withSystemContext(async (tx) => {

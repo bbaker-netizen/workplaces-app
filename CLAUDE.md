@@ -2954,6 +2954,47 @@ database in a rolled-back transaction — column created nullable as a
 Construction, see the fee and assessment fields in the onboarding panel,
 and watch the calendar scan offer the real recurring meeting to link.
 
+## The drafting record earned its keep in forty minutes (2026-08-04)
+
+`meeting_draft_runs` deployed, and the first thing it caught was the
+fault it had been built to expose.
+
+Jen pressed Draft on Crown and Ember's 30 July session at 16:49 MT.
+Recorded verdict: **failed — `Unterminated string in JSON at position
+2888`**. Not a Fireflies problem, not a permissions problem: the
+model's reply was cut off mid-string and `JSON.parse` died.
+
+**`maxTokens: 4000` at three call sites, `stopReason` never checked, and
+a bare `JSON.parse`.** An 81-minute session produced more commitments
+than fitted in the cap, and the run threw away every item it HAD
+written. This is precisely the fault the deliverable drafter hit on
+2026-07-27 — fixed there, and never applied to the action-item
+extractor, which is the path used far more often.
+
+Raised to 16,000 (roughly ten times the longest real output measured:
+14 items ≈ 2,900 characters). Both paths now run inside a background
+function with a 15-minute budget, so the wall-clock that once justified
+a small cap is gone.
+
+**Truncation is checked, not inferred from the parse failing.** A reply
+stopped at the cap can still happen to BE valid JSON, and silently
+accepting that would drop the tail of the meeting with nobody noticing —
+the worse of the two failures. `parseExtractorJson` in
+`lib/ai/prompts/action-item-extract.ts` now owns the fence-stripping and
+both checks; the two files that had identical copies of that parser call
+it instead.
+
+**The lesson is about the record, not the cap.** The cap had been
+failing silently for as long as it had existed; nothing in the app could
+say so. Forty minutes of a run-history table turned "the drafts don't
+work" into a one-line diagnosis. Any background job whose only symptom
+is an absence needs the same.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; build at the
+recorded baseline (74 / 148, nothing else). **The fix is not yet proven
+against the real transcript** — the acceptance test is pressing Draft on
+that same Crown and Ember session and seeing items land.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.

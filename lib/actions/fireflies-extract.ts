@@ -44,8 +44,10 @@ import {
 } from "@/lib/db/tenant";
 import { complete } from "@/lib/ai/anthropic";
 import {
+  ACTION_ITEM_EXTRACT_MAX_TOKENS,
   ACTION_ITEM_EXTRACT_SYSTEM,
   actionItemExtractUserPrompt,
+  parseExtractorJson,
 } from "@/lib/ai/prompts/action-item-extract";
 import {
   fetchTranscript,
@@ -92,14 +94,9 @@ const llmOutputSchema = z.object({
  */
 function parseExtractorOutput(
   text: string,
+  stopReason: string | null,
 ): z.infer<typeof llmOutputSchema> {
-  const cleaned = text
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```/, "")
-    .replace(/```$/, "")
-    .trim();
-  return llmOutputSchema.parse(JSON.parse(cleaned));
+  return llmOutputSchema.parse(parseExtractorJson(text, stopReason));
 }
 
 /**
@@ -164,7 +161,7 @@ async function draftActionItemsFromRecording(args: {
         transcriptText,
       }),
       model: "claude-sonnet-5",
-      maxTokens: 4000,
+      maxTokens: ACTION_ITEM_EXTRACT_MAX_TOKENS,
       temperature: 0.1,
     });
   } catch (e) {
@@ -176,7 +173,7 @@ async function draftActionItemsFromRecording(args: {
 
   let parsedOutput: z.infer<typeof llmOutputSchema>;
   try {
-    parsedOutput = parseExtractorOutput(result.text);
+    parsedOutput = parseExtractorOutput(result.text, result.stopReason);
   } catch (e) {
     return {
       ok: false,
@@ -540,13 +537,13 @@ export async function extractFromFirefliesAsSystem(
       transcriptText,
     }),
     model: "claude-sonnet-5",
-    maxTokens: 4000,
+    maxTokens: ACTION_ITEM_EXTRACT_MAX_TOKENS,
     temperature: 0.1,
   });
 
   let parsedOutput: z.infer<typeof llmOutputSchema>;
   try {
-    parsedOutput = parseExtractorOutput(result.text);
+    parsedOutput = parseExtractorOutput(result.text, result.stopReason);
   } catch (e) {
     return {
       ok: false,
