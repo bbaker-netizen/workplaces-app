@@ -28,6 +28,7 @@ import { MarkdownBody } from "@/components/markdown/MarkdownBody";
 import { FollowThroughBoard } from "@/components/meetings/FollowThroughBoard";
 import { TranscriptPanel } from "@/components/meetings/TranscriptPanel";
 import { MeetingDraftControls } from "@/components/meetings/MeetingDraftControls";
+import { latestDraftRun } from "@/lib/meetings/draft-runs";
 import { RecapPanel } from "@/components/meetings/RecapPanel";
 import { cleanMeetingTitle, formatMeetingSummary } from "@/lib/meetings/format";
 
@@ -64,6 +65,10 @@ export default async function MeetingWorkspacePage({
         return u?.name ?? null;
       })
     : null;
+
+  // What the last drafting run did, so a failure names itself instead
+  // of reading as "this session produced nothing".
+  const lastRun = await latestDraftRun(meetingId);
 
   const attendees = Array.isArray(ws.meeting.attendees)
     ? (ws.meeting.attendees as Array<{ email: string | null; name: string | null }>)
@@ -125,7 +130,20 @@ export default async function MeetingWorkspacePage({
       {/* The count is what the control watches: the drafting job runs in
           a background function and finishes minutes after the button
           returns, so this is how the page knows anything landed. */}
-      <MeetingDraftControls meetingId={meetingId} itemCount={ws.items.length} />
+      <MeetingDraftControls
+        meetingId={meetingId}
+        itemCount={ws.items.length}
+        lastRun={
+          lastRun
+            ? {
+                status: lastRun.status,
+                itemsCreated: lastRun.itemsCreated,
+                errorText: lastRun.errorText,
+                finishedAt: lastRun.finishedAt?.toISOString() ?? null,
+              }
+            : null
+        }
+      />
 
       <FollowThroughBoard
         engagementId={id}

@@ -138,7 +138,32 @@ export type BulkShareResult = {
    * 28 of 32 looks identical to one that released all of them.
    */
   failed: number;
+  /**
+   * Meetings left untouched because this press ran out of budget — see
+   * FETCH_BUDGET_MS. Non-zero means "press again to continue", and the
+   * button says so. Never silently dropped.
+   */
+  remaining: number;
 };
+
+/**
+ * How long one press may spend pulling transcript bodies from Fireflies.
+ *
+ * This is a synchronous server action, and Netlify kills those at ~26s
+ * on this plan — the same ceiling that forced transcript drafting into a
+ * background function. A transcript already cached in `transcript_text`
+ * costs nothing, but an uncached one is a Fireflies round trip of a
+ * second or several, and A&M alone has 31 uncached. Releasing them all
+ * in one press would reliably die mid-run, and a killed server action
+ * returns `undefined` to the browser — the operator would see a generic
+ * failure with an unknown number actually released.
+ *
+ * So each press releases everything free, spends a bounded slice on
+ * fetches, and REPORTS what is left rather than truncating quietly.
+ */
+const FETCH_BUDGET_MS = 15_000;
+/** Belt to the budget's braces, in case fetches come back instantly. */
+const MAX_FETCHES_PER_RUN = 12;
 
 /**
  * Release — or take back — every transcript on one engagement.
@@ -200,7 +225,10 @@ export async function setAllTranscriptsShared(
     });
     revalidatePath(`/business-builder/engagements/${engagementId}/meetings`);
     revalidatePath("/portal/meetings");
-    return { ok: true, data: { changed: count, skipped: 0, failed: 0 } };
+    return {
+      ok: true,
+      data: { changed: count, skipped: 0, failed: 0, remaining: 0 },
+    };
   }
 
   const pending = await withSystemContext(async (tx) =>
@@ -208,6 +236,9 @@ export async function setAllTranscriptsShared(
       .select({
         id: engagementMeetings.id,
         sharedAt: engagementMeetings.transcriptSharedAt,
+        // Whether the body is already cached decides whether releasing
+        // this one costs a Fireflies round trip or nothing at all.
+        hasText: engagementMeetings.transcriptText,
       })
       .from(engagementMeetings)
       .where(eq(engagementMeetings.engagementId, engagementId)),
@@ -215,10 +246,31 @@ export async function setAllTranscriptsShared(
 
   let changed = 0;
   let failed = 0;
+  let fetches = 0;
+  let remaining = 0;
+  const startedAt = Date.now();
   const skipped = pending.filter((m) => m.sharedAt !== null).length;
 
-  for (const m of pending) {
-    if (m.sharedAt !== null) continue;
+  // Cached bodies first, so a press always makes every free release it
+  // can before spending any of its budget on the network. Otherwise a
+  // run could burn the whole budget on slow fetches and leave instant
+  // ones unreleased for no reason.
+  const todo = pending
+    .filter((m) => m.sharedAt === null)
+    .sort((a, b) => Number(Boolean(b.hasText)) - Number(Boolean(a.hasText)));
+
+  for (const m of todo) {
+    const needsFetch = !m.hasText;
+    if (
+      needsFetch &&
+      (fetches >= MAX_FETCHES_PER_RUN ||
+        Date.now() - startedAt > FETCH_BUDGET_MS)
+    ) {
+      remaining += 1;
+      continue;
+    }
+    if (needsFetch) fetches += 1;
+
     const load = await ensureTranscriptText(m.id);
     if (load.status !== "ok") {
       // Usually "this meeting has no transcript" — ordinary, not an
@@ -241,5 +293,5 @@ export async function setAllTranscriptsShared(
 
   revalidatePath(`/business-builder/engagements/${engagementId}/meetings`);
   revalidatePath("/portal/meetings");
-  return { ok: true, data: { changed, skipped, failed } };
+  return { ok: true, data: { changed, skipped, failed, remaining } };
 }

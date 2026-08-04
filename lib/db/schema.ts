@@ -3145,6 +3145,56 @@ export const engagementMeetings = pgTable(
   }),
 );
 
+/**
+ * One row per "Draft from this meeting" run (migration 0115).
+ *
+ * Drafting happens in a Netlify Background Function, so every failure
+ * inside it used to reach a log line and nothing else — leaving "no
+ * commitments in this transcript", "the model call failed" and "the job
+ * never started" indistinguishable from the page's point of view. Same
+ * doctrine as `ea_job_runs`: a job whose only symptom is an absence
+ * needs somewhere to say what happened.
+ */
+export const meetingDraftRuns = pgTable(
+  "meeting_draft_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    engagementMeetingId: uuid("engagement_meeting_id")
+      .notNull()
+      .references(() => engagementMeetings.id, { onDelete: "cascade" }),
+    /** running | succeeded | failed */
+    status: text("status").notNull().default("running"),
+    itemsCreated: integer("items_created").notNull().default(0),
+    documentsQueued: integer("documents_queued").notNull().default(0),
+    errorText: text("error_text"),
+    /** Null when the hourly auto-attach path drafted it — no signed-in user. */
+    startedByUserProfileId: uuid("started_by_user_profile_id").references(
+      () => userProfiles.id,
+      { onDelete: "set null" },
+    ),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    meetingIdx: index("meeting_draft_runs_meeting_idx").on(
+      t.engagementMeetingId,
+      t.startedAt,
+    ),
+    orgIdx: index("meeting_draft_runs_org_idx").on(t.orgId),
+  }),
+);
+
 // ---------- Inferred TypeScript types ----------
 
 export type Org = typeof orgs.$inferSelect;

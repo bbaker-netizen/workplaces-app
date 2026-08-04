@@ -15,7 +15,7 @@
  */
 
 import type { Context } from "@netlify/functions";
-import { runMeetingActionItemExtraction } from "../../lib/meetings/action-item-extraction";
+import { runAndRecordMeetingExtraction } from "../../lib/meetings/action-item-extraction";
 
 export default async (req: Request, _context: Context) => {
   const secret = process.env.CRON_SECRET;
@@ -28,9 +28,14 @@ export default async (req: Request, _context: Context) => {
   }
 
   let meetingId: string | undefined;
+  let startedBy: string | null = null;
   try {
-    const body = (await req.json()) as { meetingId?: string };
+    const body = (await req.json()) as {
+      meetingId?: string;
+      startedByUserProfileId?: string | null;
+    };
     meetingId = body.meetingId;
+    startedBy = body.startedByUserProfileId ?? null;
   } catch {
     return new Response("Bad request", { status: 400 });
   }
@@ -39,10 +44,15 @@ export default async (req: Request, _context: Context) => {
   }
 
   // Background functions return 202 immediately; the work continues here and
-  // its result is ignored by the platform, so log outcomes for observability.
+  // its result is ignored by the platform. The outcome is now RECORDED as
+  // well as logged — a log line here is invisible to the person who
+  // pressed the button, which is why a failed run used to look exactly
+  // like a session with nothing in it.
   try {
-    const { created, meetingTitle } =
-      await runMeetingActionItemExtraction(meetingId);
+    const { created, meetingTitle } = await runAndRecordMeetingExtraction(
+      meetingId,
+      startedBy,
+    );
     console.log(
       `extract-meeting-action-items: ${created} draft(s) from "${meetingTitle}" (meeting ${meetingId}).`,
     );

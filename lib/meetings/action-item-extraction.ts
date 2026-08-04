@@ -26,6 +26,7 @@ import {
   userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { finishDraftRun, startDraftRun } from "./draft-runs";
 import { DELIVERABLE_TYPES } from "@/lib/deliverables/types";
 import { enqueueDeliverableDraft } from "@/lib/deliverables/enqueue";
 import { createDraftPlaceholder } from "@/lib/deliverables/fireflies-draft";
@@ -114,6 +115,54 @@ export type MeetingExtractionResult = {
  * Throws on any hard failure (meeting missing, no transcript id, Fireflies
  * or Claude error) — the background function logs it.
  */
+/**
+ * Run the extraction and RECORD the outcome, whatever it is.
+ *
+ * The inner function throws on every failure, which inside a background
+ * function means a log line nobody reads and a page that goes on saying
+ * nothing landed. This wrapper is what makes a failure answerable: the
+ * row is opened before the work and closed either way, so "no
+ * commitments in this transcript" and "Fireflies returned nothing" stop
+ * looking the same.
+ *
+ * Re-throws after recording, so the caller's own logging is unchanged.
+ */
+export async function runAndRecordMeetingExtraction(
+  meetingId: string,
+  startedByUserProfileId?: string | null,
+): Promise<MeetingExtractionResult> {
+  const orgId = await withSystemContext(async (tx) => {
+    const [m] = await tx
+      .select({ orgId: engagementMeetings.orgId })
+      .from(engagementMeetings)
+      .where(eq(engagementMeetings.id, meetingId))
+      .limit(1);
+    return m?.orgId ?? null;
+  });
+  // No meeting, no run row to hang off. Fall through so the inner
+  // function raises the real "meeting not found" rather than a
+  // bookkeeping error standing in for it.
+  const runId = orgId
+    ? await startDraftRun({ meetingId, orgId, startedByUserProfileId })
+    : null;
+
+  try {
+    const result = await runMeetingActionItemExtraction(meetingId);
+    await finishDraftRun(runId, {
+      status: "succeeded",
+      itemsCreated: result.created,
+      documentsQueued: result.documentsQueued,
+    });
+    return result;
+  } catch (e) {
+    await finishDraftRun(runId, {
+      status: "failed",
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
+}
+
 export async function runMeetingActionItemExtraction(
   meetingId: string,
 ): Promise<MeetingExtractionResult> {

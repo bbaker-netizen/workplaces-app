@@ -55,15 +55,34 @@ const POLL_MS = 12_000;
  *  waiting for. */
 const WATCH_MS = 6 * 60_000;
 
+export type LastDraftRun = {
+  status: "running" | "succeeded" | "failed";
+  itemsCreated: number;
+  errorText: string | null;
+  finishedAt: string | null;
+};
+
 export function MeetingDraftControls({
   meetingId,
   itemCount,
+  lastRun = null,
 }: {
   meetingId: string;
   /** How many follow-through items the page rendered with. The poll
    *  stops as soon as this goes up — the only honest signal that the
    *  background job has actually written something. */
   itemCount: number;
+  /**
+   * The outcome of the most recent run, if there has been one.
+   *
+   * Before this existed the component could only ever say "still
+   * working, or it finished with nothing to add" — the two states it
+   * genuinely could not tell apart. A run that DIED (Fireflies returned
+   * nothing, the model call failed) looked exactly like a session with
+   * no commitments in it, which is how Crown and Ember's 30 July
+   * session read: pressed, waited, nothing, no reason.
+   */
+  lastRun?: LastDraftRun | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -88,20 +107,42 @@ export function MeetingDraftControls({
       return;
     }
 
+    // The run reported back. Stop watching and say what it said — this
+    // is the whole point of recording the run: a failure now names
+    // itself instead of hiding behind "still working, or nothing to add".
+    if (lastRun && lastRun.status === "failed") {
+      setWatching(false);
+      setError(
+        lastRun.errorText
+          ? `The drafting job failed: ${lastRun.errorText}`
+          : "The drafting job failed without saying why. Try again.",
+      );
+      return;
+    }
+    if (lastRun && lastRun.status === "succeeded" && lastRun.itemsCreated === 0) {
+      setWatching(false);
+      setMessage(
+        "It read the whole transcript and found no clear commitments in " +
+          "it. Nothing was written. Use “Add something the transcript " +
+          "missed” below if you know of one.",
+      );
+      return;
+    }
+
     const timer = setInterval(() => {
       if (Date.now() - startedAt.current > WATCH_MS) {
         setWatching(false);
         setMessage(
-          "Still working, or it finished with nothing to add. Reload the " +
-            "page in a few minutes — if it is still empty, the transcript " +
-            "may not have contained any clear commitments.",
+          "Still running after six minutes. Long documents can take that " +
+            "long — reload in a few minutes. If nothing has appeared and " +
+            "no error is shown here, press Draft again.",
         );
         return;
       }
       router.refresh();
     }, POLL_MS);
     return () => clearInterval(timer);
-  }, [watching, itemCount, router]);
+  }, [watching, itemCount, router, lastRun]);
 
   const run = () => {
     setError(null);
@@ -184,6 +225,26 @@ export function MeetingDraftControls({
           Nothing is visible to the client until you publish it.
         </p>
       </div>
+      {/* The last run's verdict, shown whether or not this person was
+          watching when it finished. A failure that happened overnight,
+          or on somebody else's press, would otherwise be invisible —
+          which is exactly the state this whole record exists to end. */}
+      {!watching && !message && !error && lastRun?.status === "failed" && (
+        <p className="font-sans text-xs text-tbb-danger border border-tbb-danger/40 rounded-md px-2.5 py-1.5 bg-tbb-danger/5">
+          <span className="font-bold">The last drafting run failed.</span>{" "}
+          {lastRun.errorText ?? "No reason was recorded."} Press Draft to try
+          again.
+        </p>
+      )}
+      {!watching &&
+        !message &&
+        !error &&
+        lastRun?.status === "succeeded" &&
+        lastRun.itemsCreated === 0 && (
+          <p className="font-sans text-xs text-tbb-ink-3 border border-tbb-line rounded-md px-2.5 py-1.5 bg-tbb-cream-50">
+            The last run read the transcript and found no clear commitments.
+          </p>
+        )}
       {message && (
         <p className="font-sans text-xs text-tbb-navy border border-tbb-line rounded-md px-2.5 py-1.5 bg-tbb-cream-50">
           {message}

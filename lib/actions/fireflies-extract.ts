@@ -29,6 +29,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
+import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import {
   actionItems,
   bbsSessions,
@@ -278,12 +279,16 @@ export async function extractActionItemsFromMeeting(
   // Fast pre-flight: confirm the meeting exists and has a transcript before we
   // spend a background invocation on it. Meetings live in the client org, so a
   // system read resolves it.
-  let meeting: { firefliesTranscriptId: string | null } | null;
+  let meeting: {
+    firefliesTranscriptId: string | null;
+    engagementId: string;
+  } | null;
   try {
     meeting = await withSystemContext(async (tx) => {
       const [m] = await tx
         .select({
           firefliesTranscriptId: engagementMeetings.firefliesTranscriptId,
+          engagementId: engagementMeetings.engagementId,
         })
         .from(engagementMeetings)
         .where(eq(engagementMeetings.id, meetingId))
@@ -297,6 +302,13 @@ export async function extractActionItemsFromMeeting(
     };
   }
   if (!meeting) return { ok: false, error: "Meeting not found." };
+  // Per-client access, not just the role gate. Without this any coach
+  // could spend Claude credits drafting off another coach's client's
+  // transcript by pasting a meeting id — the only check here was
+  // "are you a Business Builder".
+  if (!(await canCurrentBbAccessEngagement(meeting.engagementId))) {
+    return { ok: false, error: "You don't have access to that client." };
+  }
   if (!meeting.firefliesTranscriptId) {
     return {
       ok: false,
@@ -328,7 +340,10 @@ export async function extractActionItemsFromMeeting(
           Authorization: `Bearer ${secret}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ meetingId }),
+        body: JSON.stringify({
+          meetingId,
+          startedByUserProfileId: profile.userProfileId,
+        }),
       },
     );
     // Background functions answer 202 Accepted. Anything else means the job

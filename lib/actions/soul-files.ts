@@ -29,12 +29,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import {
-  coaches,
   engagements,
   soulFiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import { withEngagementContext, withSystemContext } from "@/lib/db/tenant";
+import { coachScopeWhere } from "@/lib/db/queries/business-builder-cross-engagement";
 import { complete } from "@/lib/ai/anthropic";
 
 type Role = UserProfile["role"];
@@ -202,36 +202,43 @@ export async function searchSoulFiles(
     return { ok: false, error: "Business Builders only." };
   if (!query.trim()) return { ok: true, data: [] };
 
-  // Load every Soul File for engagements this Coach owns.
+  // Load every Soul File for engagements in scope.
+  //
+  // This used to filter on `coachId === my coach row` in JS, which
+  // ignored BOTH the mine/all toggle and master_admin. So flipping to
+  // "All clients" changed every other cross-client surface and left this
+  // one searching only your own book — the master admin included, even
+  // though they can open any of those engagements directly. Reusing
+  // `coachScopeWhere` means one definition governs the toggle, ownership
+  // and shared clients together, instead of this call site having its
+  // own narrower idea of whose clients are whose.
+  const scope = await coachScopeWhere(profile);
   type Candidate = {
     engagementId: string;
     engagementName: string | null;
     body: string;
   };
-  const candidates: Candidate[] = await withSystemContext(async (tx) => {
-    const [Coach] = await tx
-      .select({ id: coaches.id })
-      .from(coaches)
-      .where(eq(coaches.userProfileId, profile.userProfileId))
-      .limit(1);
-    if (!Coach) return [];
-    const rows = await tx
-      .select({
-        engagementId: soulFiles.engagementId,
-        engagementName: engagements.name,
-        body: soulFiles.body,
-        coachId: engagements.coachId,
-      })
-      .from(soulFiles)
-      .innerJoin(engagements, eq(engagements.id, soulFiles.engagementId));
-    return rows
-      .filter((r) => r.coachId === Coach.id && r.body.trim().length > 0)
-      .map((r) => ({
-        engagementId: r.engagementId,
-        engagementName: r.engagementName,
-        body: r.body,
-      }));
-  });
+  const candidates: Candidate[] =
+    scope === false
+      ? []
+      : await withSystemContext(async (tx) => {
+          const rows = await tx
+            .select({
+              engagementId: soulFiles.engagementId,
+              engagementName: engagements.name,
+              body: soulFiles.body,
+            })
+            .from(soulFiles)
+            .innerJoin(engagements, eq(engagements.id, soulFiles.engagementId))
+            .where(scope);
+          return rows
+            .filter((r) => r.body.trim().length > 0)
+            .map((r) => ({
+              engagementId: r.engagementId,
+              engagementName: r.engagementName,
+              body: r.body,
+            }));
+        });
 
   if (candidates.length === 0) return { ok: true, data: [] };
 

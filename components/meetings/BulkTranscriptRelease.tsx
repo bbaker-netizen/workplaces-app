@@ -51,7 +51,7 @@ export function BulkTranscriptRelease({
         setError(result.error);
         return;
       }
-      const { changed, failed } = result.data;
+      const { changed, failed, remaining } = result.data;
       if (!shared) {
         setMessage(
           changed === 0
@@ -69,6 +69,13 @@ export function BulkTranscriptRelease({
         if (failed > 0) {
           parts.push(
             `${failed} had no transcript to release and ${failed === 1 ? "was" : "were"} skipped.`,
+          );
+        }
+        // Bounded by design — pulling bodies from Fireflies has to fit
+        // inside one request. Say so plainly and invite another press.
+        if (remaining > 0) {
+          parts.push(
+            `${remaining} still need${remaining === 1 ? "s" : ""} pulling from Fireflies — press again to carry on.`,
           );
         }
         setMessage(parts.join(" "));

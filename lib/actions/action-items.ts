@@ -385,6 +385,16 @@ export async function updateActionItem(
               );
             }
           }
+          // Publishing is a Business Builder's act, and so is un-doing
+          // it. `STATUSES_VISIBLE_TO_CLIENT` already omits `draft` from
+          // the picker, but that is the UI — a crafted request could
+          // otherwise send a client's own item back to draft, which
+          // would drop it out of every client list (drafts are filtered
+          // there) and surface it to us as something awaiting review
+          // that nobody wrote.
+          if (data.status === "draft") {
+            throw new Error("Only a Business Builder can un-publish an item.");
+          }
         }
 
         // Build the partial update payload.

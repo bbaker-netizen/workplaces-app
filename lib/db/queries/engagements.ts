@@ -222,9 +222,20 @@ export async function listCoachEngagements(
         .where(eq(coaches.userProfileId, profile.userProfileId))
         .limit(1);
       const shared = await sharedEngagementIdsFor(profile.userProfileId);
+      // Exactly `coachScopeWhere`'s rule, clause for clause: own book
+      // plus unclaimed (both only when there IS a coach row), plus
+      // anything shared. Keeping the two identical is the whole point —
+      // divergence between them is what made this branch return an
+      // empty list while the same person's My Work showed their
+      // clients.
       const clauses: SQL[] = [];
-      if (Coach) clauses.push(eq(engagements.coachId, Coach.id));
+      if (Coach) {
+        clauses.push(eq(engagements.coachId, Coach.id));
+        clauses.push(isNull(engagements.coachId));
+      }
       if (shared.length > 0) clauses.push(inArray(engagements.id, shared));
+      // No coach row and nothing shared: show nothing rather than
+      // everything, and never call or() with no arguments.
       if (clauses.length === 0) return [];
       rows = await tx
         .select()

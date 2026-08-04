@@ -2742,6 +2742,119 @@ in a browser** — the acceptance tests are Jen signing in and seeing her
 client (and a non-empty briefing the next weekday morning), and Bruce
 sharing one client with her and it appearing in her list.
 
+## What was built — the drafting run that said nothing, and QC (2026-08-04)
+
+Bruce: "All clients" doesn't give him the same reach as the assigned
+Builder; Jen presses Draft on Crown and Ember and nothing comes up.
+Migration `0115`.
+
+### "All clients" didn't reach Soul File search
+
+`searchSoulFiles` loaded candidates and then filtered them in JS on
+`coachId === my coach row` — ignoring the mine/all toggle AND
+master_admin. So flipping to All clients changed every other
+cross-client surface and left this one searching your own book only,
+even for the master admin, who can open any of those engagements
+directly. It now uses `coachScopeWhere`, so one definition governs the
+toggle, ownership and shared clients together instead of this call site
+holding its own narrower idea of whose clients are whose.
+
+Audited the rest: `calendar/sync.ts` is correctly per-person, and the
+MCP bridge is scoped to the caller's own clients by design (Cowork has
+no scope cookie to read).
+
+`extractActionItemsFromMeeting` had NO per-client check — only "are you
+a Business Builder" — so any coach could spend Claude credits drafting
+off another coach's client's transcript by pasting a meeting id. Now
+gated on `canCurrentBbAccessEngagement` like every other per-client
+action.
+
+### A failed drafting run left no trace anywhere
+
+Crown and Ember's 30 July session: synced, 66 minutes, summary present,
+**zero drafts, and no record of why**. Drafting runs in a Netlify
+Background Function, which answers 202 the instant it is queued and then
+runs alone. Every failure inside it — Fireflies returning nothing, the
+Claude call erroring, the extractor's JSON failing to parse — went to
+`console.error` in a log nobody reads.
+
+So "this session produced no commitments", "the model call failed" and
+"the job died" were ONE observation from the Business Builder's side:
+press, wait, nothing. The UI could only say *"Still working, or it
+finished with nothing to add"* — an honest sentence, and a useless one,
+because it names the exact ambiguity it cannot resolve.
+
+`meeting_draft_runs` (0115) is the receipt: opened before the work,
+closed either way, carrying the error text. Same doctrine as
+`ea_job_runs`, but tenant-scoped with the standard RLS policy because
+this one IS client data and renders on that client's workspace.
+
+`runAndRecordMeetingExtraction` wraps the existing function and
+re-throws after recording, so the caller's logging is unchanged. Writes
+never throw — a bookkeeping failure must not break the drafting it only
+observes, the same rule `withHeartbeat` follows.
+
+A run still `running` after 20 minutes is REPORTED as failed: the
+background function's own ceiling is 15, so past that it died without
+reaching its own error handler. Without that the page would spin for
+ever on precisely the failures that never got to speak.
+
+The panel now distinguishes three outcomes it previously collapsed:
+the job failed *and here is why*, it succeeded and found nothing, or it
+is still going. The last run's verdict shows even to someone who wasn't
+watching when it finished — a failure overnight, or on the other
+Builder's press, was otherwise invisible.
+
+**The cause of Crown and Ember's empty run is still unknown**, and that
+is deliberate: this fixes it to REPORT, not to work. The next press
+either drafts or finally names the fault.
+
+### Caught in QC, in my own work from earlier today
+
+**Bulk transcript release would have timed out.** It is a synchronous
+server action, and a transcript with no cached body costs a Fireflies
+round trip — A&M has 31 uncached. Thirty-one sequential fetches blows
+straight through Netlify's ~26s ceiling, and a killed server action
+returns `undefined`, so the operator would have seen a generic failure
+with an unknown number actually released. Each press now releases every
+CACHED body first (free), spends a bounded 15s / 12-fetch slice on the
+network, and reports what is left: "N still need pulling from Fireflies
+— press again to carry on." Bounded and stated, never silently short.
+
+**A client could have un-published their own item.**
+`STATUSES_VISIBLE_TO_CLIENT` omits `draft` from the picker, but that is
+the UI — the server accepted any value in the enum. A crafted request
+would have dropped the item out of every client list (drafts are
+filtered there) and surfaced it to us as something awaiting review that
+nobody wrote. Refused server-side now.
+
+**`listCoachEngagements` and `coachScopeWhere` had drifted again** — the
+restricted branch omitted the unclaimed arm the other one has. Currently
+moot (zero coachless engagements) and now identical clause for clause,
+because divergence between those two is exactly what caused the empty
+switcher this morning.
+
+### Verified
+
+`tsc --noEmit` and `next lint` clean; `next build` at the recorded
+baseline (74 prerender failures, 148 `Missing publishableKey`, zero of
+any other cause). Migration 0115 applied against the LIVE database
+inside a rolled-back transaction: columns, RLS policy, all three foreign
+keys (cascade on meeting and org, set-null on user), re-applied cleanly
+to prove idempotency, then rolled back.
+
+Six live QC assertions all pass: no draft is reachable from any client
+session page (0), no transcript is marked shared without a stored body
+(2 shared, 2 cached), the internal workspace is the only `is_internal`
+row, every Builder resolves a non-empty book, the notification enum
+covers every type the code writes, and 0115 is correctly absent until
+deploy.
+
+**Sharing was confirmed working in production, not by reading code** —
+Bruce shared A&M Abatement, Impactica, Jean/Dorina and KS Developments
+with Jen roughly thirty seconds apart, and the grants are in
+`bb_client_access`. Her book went 1 → 5.
+
 ## Active Phase
 
 **Phase 5 kickoff — TBD.** All intended infrastructure from CLAUDE.md is in place. Next pass per Bruce's direction is the **design system refresh** + end-to-end testing — purely visual/UX work and verification rather than new functionality.
