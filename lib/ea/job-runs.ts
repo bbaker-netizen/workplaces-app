@@ -45,6 +45,14 @@ export const EA_JOBS: { id: string; label: string; cadence: string }[] = [
   // scheduled job whose only failure mode is silence. It had never fired
   // at all until 2026-07-28, and nothing surfaced that — a series quietly
   // running out of dates looks identical to a series nobody uses.
+  // Also not an EA job, and on the list for the same reason twice over:
+  // its failure is mail that never arrives, out of a queue nobody looks
+  // at. If this stops, the only symptom is clients going quiet.
+  {
+    id: "email-outbox",
+    label: "Held mail queue",
+    cadence: "Every 15 min, working hours",
+  },
   {
     id: "session-series-top-up",
     label: "Recurring meeting horizon",

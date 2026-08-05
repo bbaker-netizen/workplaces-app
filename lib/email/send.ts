@@ -132,6 +132,8 @@ export type EmailEnvelope = {
    * doesn't double-check.
    */
   bypassWorkingHours?: boolean;
+  /** Free-text tag stored on a queued row, for diagnosis only. */
+  purpose?: string;
 };
 
 export type SendEmailResult =
@@ -204,5 +206,47 @@ export async function sendEmailQuietly(
   if (!result.delivered && result.reason === "error") {
     console.error("[email] send failed:", result.error, "to:", envelope.to);
   }
+  // Held back by the working-hours window: queue it rather than lose it.
+  //
+  // This is what the guard always claimed to do. Before migration 0117
+  // there was no queue, so `nextSendAt` was returned to a caller that
+  // ignored it and the message was simply dropped — silently, because
+  // only the `error` branch logs. Publishing an action item at 6:30pm or
+  // releasing a transcript at the weekend told the client nothing, ever.
+  if (!result.delivered && result.reason === "outside_working_hours") {
+    await enqueueForWorkingHours(envelope, result.nextSendAt);
+  }
   return result;
+}
+
+/**
+ * Park an envelope until the window opens.
+ *
+ * Best-effort: a queue failure must not break the action that raised the
+ * email, so this swallows and logs. The body is stored as RENDERED, not
+ * re-derived at flush time — what eventually lands should say what was
+ * true when the thing happened, not describe a record that has since
+ * moved on.
+ */
+async function enqueueForWorkingHours(
+  envelope: EmailEnvelope,
+  sendAfter: Date,
+): Promise<void> {
+  try {
+    const { emailOutbox } = await import("@/lib/db/schema");
+    const { withSystemContext } = await import("@/lib/db/tenant");
+    await withSystemContext(async (tx) => {
+      await tx.insert(emailOutbox).values({
+        toEmail: envelope.to,
+        subject: envelope.subject,
+        html: envelope.html,
+        textBody: envelope.text,
+        attachments: envelope.attachments ?? null,
+        sendAfter,
+        purpose: envelope.purpose ?? null,
+      });
+    });
+  } catch (e) {
+    console.error("[email] could not queue out-of-hours message", e);
+  }
 }

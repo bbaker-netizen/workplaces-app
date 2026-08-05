@@ -493,13 +493,36 @@ export async function updateActionItem(
               }
             : null;
 
-        // Notify on reassignment to a different user (and not self-assign).
+        // Who to tell, and why.
+        //
+        // Two triggers, not one. Reassignment was the only one, and it
+        // missed the case that matters most: the extractor PRE-ASSIGNS
+        // drafts (`matchAssignee` resolves the name from the transcript),
+        // so the everyday flow — Claude drafts it with an owner, a
+        // Business Builder reviews and publishes — changed only the
+        // status. The assignee never "changed", so nobody was told, and
+        // the commitment simply appeared in the client's portal.
+        //
+        // Publication is the moment an item becomes someone's, which is
+        // exactly when they should hear about it.
         const newAssignee = data.assigneeUserProfileId;
-        const shouldNotify =
+        const assigneeAfter =
+          newAssignee !== undefined
+            ? newAssignee
+            : existing.assigneeUserProfileId;
+        const reassigned =
           newAssignee !== undefined &&
-          newAssignee !== existing.assigneeUserProfileId &&
-          newAssignee &&
-          newAssignee !== profile.userProfileId;
+          newAssignee !== existing.assigneeUserProfileId;
+        const published =
+          data.status !== undefined &&
+          data.status !== "draft" &&
+          existing.status === "draft";
+        const shouldNotify =
+          (reassigned || published) &&
+          assigneeAfter &&
+          // Never tell someone about a commitment they just gave
+          // themselves.
+          assigneeAfter !== profile.userProfileId;
 
         // The rows and the emails are raised outside this transaction —
         // it is bound to the engagement's org, and a Business Builder
@@ -507,9 +530,9 @@ export async function updateActionItem(
         return {
           progress,
           reassignment:
-            shouldNotify && newAssignee
+            shouldNotify && assigneeAfter
               ? {
-                  assigneeUserProfileId: newAssignee,
+                  assigneeUserProfileId: assigneeAfter,
                   itemId: updated.id,
                   itemTitle: updated.title,
                   itemDescription: updated.description,

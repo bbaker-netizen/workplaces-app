@@ -22,6 +22,7 @@ import { canCurrentBbAccessEngagement } from "@/lib/db/queries/bb-access";
 import { engagementMeetings } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { ensureTranscriptText, type TranscriptLoad } from "@/lib/meetings/transcript";
+import { notifyClientTranscriptReleased } from "@/lib/notifications/transcript-released";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -116,6 +117,13 @@ export async function setTranscriptShared(
       })
       .where(eq(engagementMeetings.id, meetingId));
   });
+
+  // Tell the client it's there. Only on release, never on take-back —
+  // "we have withdrawn something you may not have known you had" is not
+  // an email anyone needs.
+  if (shared) {
+    await notifyClientTranscriptReleased(meetingId);
+  }
 
   revalidatePath(`/business-builder/engagements/${auth.engagementId}/meetings`);
   revalidatePath("/portal/meetings");
@@ -248,6 +256,7 @@ export async function setAllTranscriptsShared(
   let failed = 0;
   let fetches = 0;
   let remaining = 0;
+  const released: string[] = [];
   const startedAt = Date.now();
   const skipped = pending.filter((m) => m.sharedAt !== null).length;
 
@@ -289,6 +298,15 @@ export async function setAllTranscriptsShared(
         .where(eq(engagementMeetings.id, m.id));
     });
     changed += 1;
+    released.push(m.id);
+  }
+
+  // ONE email for the whole release, not one per meeting. A&M's back
+  // catalogue is 31 transcripts — thirty-one near-identical notices
+  // about sessions the client already sat through is a mailbox full of
+  // noise. The thing being announced is "your history is open now".
+  if (released.length > 0) {
+    await notifyClientTranscriptReleased(released[released.length - 1]);
   }
 
   revalidatePath(`/business-builder/engagements/${engagementId}/meetings`);

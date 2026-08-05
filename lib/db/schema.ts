@@ -3779,6 +3779,47 @@ export const eaJobRuns = pgTable(
   }),
 );
 
+/**
+ * Mail held back by the working-hours window (migration 0117).
+ *
+ * `sendEmail` refuses out-of-hours sends and returns a `nextSendAt`
+ * nobody ever consumed, so the message was dropped and
+ * `sendEmailQuietly` reported nothing. This is the queue its own header
+ * always claimed existed.
+ *
+ * Not tenant-scoped: RLS is on with NO policy, so it is reachable only
+ * through `withSystemContext`. Same reasoning as `ea_job_runs`.
+ */
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    toEmail: text("to_email").notNull(),
+    subject: text("subject").notNull(),
+    html: text("html").notNull(),
+    textBody: text("text_body").notNull(),
+    /** Resend attachments, verbatim. */
+    attachments: jsonb("attachments"),
+    replyTo: text("reply_to"),
+    sendAfter: timestamp("send_after", { withTimezone: true }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    /** What raised it, for diagnosis only. */
+    purpose: text("purpose"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    dueIdx: index("email_outbox_due_idx").on(t.sendAfter),
+  }),
+);
+
+
 export type EaJobRun = typeof eaJobRuns.$inferSelect;
 export type NewEaJobRun = typeof eaJobRuns.$inferInsert;
 

@@ -2477,3 +2477,62 @@ ${bulletproofButton({ href: input.prospectUrl, label: "Open their record", width
     ].join("\n"),
   };
 }
+
+/* --------------------- transcript released to client --------------------- */
+
+export type TranscriptReleasedEmailInput = {
+  to: string;
+  recipientName: string;
+  meetingTitle: string;
+  occurredAt: Date;
+  engagementName: string | null;
+};
+
+/**
+ * A session recording has been opened up in the client's portal.
+ *
+ * Deliberately does NOT include any of the transcript. It is a verbatim
+ * record of a private business conversation; email is forwarded, quoted
+ * and sat in inboxes for years, and the portal is the place we control
+ * who can read it. The email's job is to say it is there.
+ */
+export function transcriptReleasedEmail(
+  input: TranscriptReleasedEmailInput,
+): EmailEnvelope {
+  const url = appUrl() + "/portal/meetings";
+  const when = DateTime.fromJSDate(new Date(input.occurredAt))
+    .setZone("America/Edmonton")
+    .toFormat("EEEE, MMMM d");
+  const firstName =
+    input.recipientName.split(" ")[0] ?? input.recipientName;
+  const subject = `The notes from ${when} are in your portal`;
+
+  const html = shell({
+    preheader: `${input.meetingTitle} — full transcript and recap now available.`,
+    heading: "Your session notes are ready",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
+      <p style="margin:0 0 12px 0;">
+        The full record of our session on
+        <strong>${escapeHtml(when)}</strong> is now in your portal — the
+        recap, and the complete transcript if you want to go back over
+        anything that was said.
+      </p>
+      <p style="margin:0 0 12px 0;color:#666666;font-size:14px;">
+        ${escapeHtml(input.meetingTitle)}
+      </p>
+    `,
+    buttonHref: url,
+    buttonLabel: "Read the notes",
+  });
+
+  const text = [
+    `The full record of our session on ${when} is now in your portal.`,
+    "",
+    input.meetingTitle,
+    "",
+    `Open: ${url}`,
+  ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
