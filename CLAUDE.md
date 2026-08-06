@@ -4129,8 +4129,31 @@ and `person_profile_assessment_url` to `orgs`. **Numbered 0118, not
 0114** — it was authored as 0114 and collided with the already-committed
 `0114_notification_action_item_progress.sql`. The deploy runner keys
 `_app_migrations` on filename so both would have applied, but two files
-sharing a number is unreadable to anyone auditing the directory. Renamed
-before it was applied anywhere.
+sharing a number is unreadable to anyone auditing the directory.
+
+**The rename was made on the belief it had not been applied anywhere, and
+that was wrong — which is the useful part.** `_app_migrations` now holds
+the same migration under BOTH filenames: the old name at 15:41:57Z and
+the new one at 16:14:51Z. 15:41 is a minute after the branch was first
+pushed. **A branch deploy runs `migrate-on-deploy.mjs` against the
+PRODUCTION database**, because the script skips only when `DATABASE_URL`
+is unset or `SKIP_DB_MIGRATE=1`, and a branch build on this site has the
+real one. So a migration reaches the live schema when the branch is
+pushed, not when it is merged — and renaming a migration file after any
+push makes the runner treat it as new and apply it a second time under
+the new name.
+
+Harmless here only because the file is `ADD COLUMN IF NOT EXISTS`
+throughout: the second run was a no-op and the columns exist once. A
+migration with a non-idempotent statement — an `INSERT`, an `UPDATE`, a
+counter, a `DROP` — would have executed twice against production, and
+the audit table would have said nothing was wrong. **Renaming an already-
+pushed migration is only safe when the file is idempotent line by line.**
+The stale `0114_onboarding_person_profile.sql` row is cosmetic (the
+runner only ever asks whether a filename is present, so a row naming a
+file that no longer exists is never consulted) and is left in place
+rather than deleted, because a hand-edit of the audit table is a bigger
+risk than an unused row.
 
 **Caught in review, worth remembering:** the assessment alert's guard was
 written as `"orgId" in result`. TypeScript normalises the transaction's
@@ -4146,8 +4169,10 @@ rather than inferring it.
 compiles with 74 prerender failures and 148 `Missing publishableKey`,
 zero errors of any other cause — the recorded baseline exactly.
 
-**Not clicked in a browser, and no email has been sent.** 0118 applies on
-next deploy. The acceptance tests: a lead booking Jen's discovery link
+**Deployed as `89743e2` on 2026-08-06; 0118 is applied and its three
+columns are confirmed present on the live database. Not clicked in a
+browser, and no email has been sent.** The acceptance tests: a lead
+booking Jen's discovery link
 shows Jen as Owner and alerts her alone; a website submission naming a
 Business Builder claims the lead for them while a second submission
 naming the other one leaves it alone; an assessment landing on an
