@@ -213,6 +213,11 @@ export async function runFridayRollup(
         data.slipped.length === 0 &&
         payload.deliverablesByStatus.length === 0 &&
         payload.clientOverdue.length === 0 &&
+        // A week whose only outstanding item sits with the other Builder
+        // is not a quiet week. Omitting this would suppress the rollup in
+        // exactly the case where it is the only thing that surfaces it —
+        // there is no nudge for a Business Builder.
+        (payload.builderOverdue?.length ?? 0) === 0 &&
         payload.quietEngagements.length === 0;
       if (nothingToSay) continue;
 
@@ -228,6 +233,7 @@ export async function runFridayRollup(
           deliverablesByStatus: payload.deliverablesByStatus,
           deliverablesPastTarget: payload.deliverablesPastTarget,
           clientOverdue: payload.clientOverdue,
+          builderOverdue: payload.builderOverdue,
           quietEngagements: payload.quietEngagements,
           engagementHours,
           heartbeats,

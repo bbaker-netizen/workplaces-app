@@ -19,7 +19,9 @@
  *     buckets that change what Bruce does before lunch.
  *   - **Client-owned overdue items.** Visibility only — chasing the
  *     client is a separate, client-addressed nudge, because being the
- *     chase mechanism by hand is unpaid labour.
+ *     chase mechanism by hand is unpaid labour. Split by the assignee's
+ *     ROLE, so the other Business Builder's overdue work on a shared
+ *     client is reported as theirs and never as the client's.
  *   - **Deliverables by state**, with how long they have sat there, plus
  *     anything past its promised date. Slippage is invisible until it is
  *     counted.
@@ -193,6 +195,13 @@ export type DigestPayload = {
     thisWeek: DigestItem[];
   };
   clientOverdue: DigestItem[];
+  /**
+   * Overdue items held by the OTHER Business Builder, on a client in your
+   * book. Optional because payloads stored before 2026-08-06 do not carry
+   * it — `ea_digests.payload` is a permanent record of what was sent, so
+   * readers must tolerate its absence rather than back-fill a guess.
+   */
+  builderOverdue?: DigestItem[];
   deliverablesByStatus: { status: string; items: DigestDeliverable[] }[];
   deliverablesPastTarget: DigestDeliverable[];
   upcomingSessions: DigestSession[];
@@ -283,6 +292,7 @@ export async function gatherDigest(
     todaysSessions: [],
     myItems: { overdue: [], today: [], thisWeek: [] },
     clientOverdue: [],
+    builderOverdue: [],
     deliverablesByStatus: [],
     deliverablesPastTarget: [],
     upcomingSessions: [],
@@ -318,6 +328,9 @@ export async function gatherDigest(
       estimatedMinutes: actionItems.estimatedMinutes,
       assigneeUserProfileId: actionItems.assigneeUserProfileId,
       assigneeName: userProfiles.fullName,
+      // Needed to tell "the client owes you this" from "the other
+      // Business Builder owes you this" — see the split below.
+      assigneeRole: userProfiles.role,
       updatedAt: actionItems.updatedAt,
     })
     .from(actionItems)
@@ -347,10 +360,35 @@ export async function gatherDigest(
   const mine = itemRows.filter(
     (r) => r.assigneeUserProfileId === recipient.userProfileId,
   );
-  const theirs = itemRows.filter(
+
+  // Split by the assignee's ROLE, not by "isn't me". This section is
+  // headed "What your clients owe you" and its own subtitle has always
+  // said "held by client-side people" — but the filter was identity-based,
+  // so on a shared client an item assigned to the other Business Builder
+  // was reported to you as a client debt. The role is what the weekly
+  // client nudge already keys off (lib/ea/client-nudge.ts), which is why
+  // no client was ever actually chased for a Builder's work; only the
+  // briefing said so.
+  //
+  // Both lists are named explicitly rather than one being "everything
+  // else": an assignee in neither set (a `prospect`-role profile, or a
+  // role added later) is dropped rather than silently filed under
+  // whichever bucket happened to be the default. Same conservatism as the
+  // nudge, and for the same reason — the cost of a wrong bucket here is a
+  // sentence to a client about work they do not owe.
+  const others = itemRows.filter(
     (r) =>
       r.assigneeUserProfileId !== null &&
       r.assigneeUserProfileId !== recipient.userProfileId,
+  );
+  const theirs = others.filter(
+    (r) =>
+      r.assigneeRole === "client_lead" ||
+      r.assigneeRole === "client_manager" ||
+      r.assigneeRole === "client_employee",
+  );
+  const builders = others.filter(
+    (r) => r.assigneeRole === "master_admin" || r.assigneeRole === "coach",
   );
 
   const myOverdue = mine
@@ -375,6 +413,11 @@ export async function gatherDigest(
     .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
 
   const clientOverdue = theirs
+    .filter((r) => r.dueDate !== null && r.dueDate < startOfToday)
+    .map(toItem)
+    .sort((a, b) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0));
+
+  const builderOverdue = builders
     .filter((r) => r.dueDate !== null && r.dueDate < startOfToday)
     .map(toItem)
     .sort((a, b) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0));
@@ -669,6 +712,7 @@ export async function gatherDigest(
     todaysSessions,
     myItems: { overdue: myOverdue, today: myToday, thisWeek: myThisWeek },
     clientOverdue,
+    builderOverdue,
     deliverablesByStatus,
     deliverablesPastTarget,
     upcomingSessions,
@@ -718,16 +762,29 @@ export function escalationNotice(missCount: number): {
  * Prospects in a live conversation with no next step on the calendar.
  * The close protocol depends on booking the next step before hanging up;
  * this is the only place the system notices when that did not happen.
+ *
+ * Scoped to the recipient's OWN leads, master admin included — the same
+ * rule `prospectScopeWhere` applies on the Pipeline page, and the same
+ * rule `listEngagementsForRecipient` applies to engagements one function
+ * up. The master-admin exemption that used to sit here was the survivor
+ * of the fix made on 2026-07-29: the engagement branch was scoped and
+ * this one, three lines of the same shape, was not. Every lead in Bruce's
+ * "no next step booked" list on 2026-08-06 was Jen's.
+ *
+ * Unowned leads go to BOTH Builders, deliberately. The lead webhooks
+ * (`/api/leads`, `/api/leads/[token]`) never set an owner, so a strict
+ * `owner = me` would hide every inbound lead from everyone until somebody
+ * claimed it — and nobody would, because nobody could see it.
  */
 async function gatherProspects(
   tx: Tx,
   recipient: EaRecipient,
   now: Date,
 ): Promise<DigestProspect[]> {
-  const ownerScope =
-    recipient.role === "master_admin"
-      ? undefined
-      : eq(prospects.ownerUserProfileId, recipient.userProfileId);
+  const ownerScope = or(
+    eq(prospects.ownerUserProfileId, recipient.userProfileId),
+    isNull(prospects.ownerUserProfileId),
+  );
 
   const rows = await tx
     .select({
@@ -741,12 +798,7 @@ async function gatherProspects(
     })
     .from(prospects)
     .where(
-      ownerScope
-        ? and(
-            inArray(prospects.status, [...LIVE_PROSPECT_STATUSES]),
-            ownerScope,
-          )
-        : inArray(prospects.status, [...LIVE_PROSPECT_STATUSES]),
+      and(inArray(prospects.status, [...LIVE_PROSPECT_STATUSES]), ownerScope),
     );
 
   return rows

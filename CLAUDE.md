@@ -3920,3 +3920,123 @@ client now showing its blockers and its fix controls.
 Steadfast Construction, pressing Show on the onboarding line, seeing
 "Start onboarding — blocked" with "No monthly fee is set" and the fee
 field directly above it, setting the fee, and the button going live.
+
+## What was built — the leads in the briefing that were Jen's (2026-08-06)
+
+Bruce, on the 07:00 email: "gives me Jen's clients and action items as
+well — this just needs to be mine and Jen's hers unless we share a
+client." No migration; one function.
+
+**The engagement scoping was right, and that is what made this hard to
+see.** Replayed against the live book: Bruce's briefing covered 18
+engagements — his own 17 plus Steadfast Construction, which Jen shared
+with him. Crown and Ember, Jen's own unshared client, was correctly
+absent. Jen's covered 6: her two plus the four Bruce shared. Owned ∪
+shared, exactly as asked, on both sides.
+
+**One section below it was still practice-wide.** `gatherProspects` in
+`lib/ea/digest-data.ts` read
+
+    recipient.role === "master_admin" ? undefined : eq(owner, me)
+
+— so the master admin's "No next step booked" list was every live lead
+in the practice. All **six** entries in Bruce's list that morning
+(Amala Raveendran, Karen Andrichuk, Ali Choudhry, Jhaira Mae Humber,
+Dar, Terry M) were Jen's, and his own single lead was the one thing the
+section was for. Those are the "clients and action items" — a lead with
+an overdue next action reads as both.
+
+**It is the survivor of the 2026-07-29 fix.** That pass rewrote
+`listEngagementsForRecipient`'s master-admin branch for precisely this
+reason and did not touch the prospect gatherer three lines further
+down, which had the same exemption in the same shape for the same
+stated reason. Scoping one query in a module does not scope the module.
+
+Now `or(owner = me, owner IS NULL)` for everyone, master admin
+included — the identical clause `prospectScopeWhere` uses on the
+Pipeline page and `coachScopeWhere` uses on engagements. The unclaimed
+arm is load-bearing, not defensive tidiness: the lead webhooks never set
+an owner, so a strict `owner = me` would hide every inbound lead from
+both Builders until somebody claimed it, and nobody would, because
+nobody could see it.
+
+Fixing the gatherer fixes the Friday rollup too — it renders the same
+`gatherDigest` payload rather than re-deriving it, which is why the two
+emails cannot disagree about the same book.
+
+**Left alone, and worth naming.** `clientOverdue` is "assigned to
+someone who isn't you", so an item assigned to Jen on a client Bruce
+owns lands in his "waiting on the client" list attributed to a Business
+Builder. Zero rows today, and it is his client either way — but the
+label is wrong for that case and it will look wrong the first time it
+happens.
+
+**Verified:** `tsc --noEmit` reports only the two pre-existing errors in
+a parallel session's uncommitted `app/api/leads/[token]/route.ts`;
+`next lint` clean; `next build` compiles successfully and then stops
+type-checking on that same uncommitted file, so the prerender baseline
+could not be re-measured this pass. Old-vs-new scoping was replayed
+directly against the live database, read-only: Bruce **7 → 1** (his own
+Delize Inc.), Jen **6 → 6**, unchanged.
+
+**Not yet seen in a delivered email.** The acceptance test is tomorrow
+morning's briefing carrying only Bruce's own leads.
+
+## What was built — the client debt that was the other Builder's (2026-08-06)
+
+Same session, the item flagged when the prospect leak was fixed. No
+migration.
+
+**The section's own subtitle had been right all along.** "What your
+clients owe you" renders under *"overdue commitments held by client-side
+people"* — but the filter was `assignee !== me`, so on any client where
+both Builders work, an item assigned to the other one was reported to you
+as a client debt. Identity where the copy promised a role.
+
+**Nothing was ever sent to a client on the strength of it**, and that is
+worth stating precisely because it is the part that could have been bad.
+`runClientNudge` — the Monday email that actually chases people — already
+filters on `assigneeRole` being one of the three client roles, with the
+comment *"Client-side owners only. Business Builders have the digest."*
+So the correct rule existed one file over the whole time; the briefing
+simply did not use it. The blast radius was a wrong sentence in an
+internal email, not a client chased for their coach's homework.
+
+The digest now splits `others` by role the same way, into `clientOverdue`
+and a new `builderOverdue`, and renders them as two sections — "Overdue
+with the other Business Builder" in the daily, "Waiting on the other
+Business Builder" in the Friday rollup. Two conversations, two lists: one
+you raise with a client, one you raise with a colleague.
+
+**Both buckets are named explicitly rather than one being "everything
+else."** An assignee in neither set — a `prospect`-role profile, or a
+role added later — is dropped rather than silently filed under whichever
+bucket happened to be the default. Same conservatism the nudge already
+applies, and for the same reason: the cost of a wrong bucket is a
+sentence to somebody about work they do not owe.
+
+`builderOverdue` is OPTIONAL on `DigestPayload`. `ea_digests.payload` is
+a permanent record of what was actually sent, so every reader tolerates
+its absence on rows written before today rather than back-filling a guess
+about an email that has already gone.
+
+**The rollup's "nothing to report, skip the email" check counts it.** A
+week whose only outstanding item sits with the other Builder is not a
+quiet week — and unlike a client, a Business Builder gets no nudge, so
+this is the only place it ever surfaces. Omitting it from that check
+would have suppressed the email in exactly the case it exists for. Same
+reasoning as the stale-heartbeat carve-out immediately above it.
+
+**Verified:** `tsc --noEmit` reports only the two pre-existing errors in
+the parallel session's uncommitted `app/api/leads/[token]/route.ts`;
+`next lint` clean; `next build` compiles successfully and then stops
+type-checking on that same uncommitted file. Both emails were rendered
+through `npx tsx scripts/preview-ea-email.ts digest | rollup` and read —
+the sample data gained a `builderOverdue` row (Jen, on shared A&M
+Abatement) so the new section is exercised in HTML and plain text on both.
+
+**Reclassifies nothing today, and the live check says why:** there are
+currently **zero** overdue action items anywhere in the practice — not
+one held by a client, a Builder, or nobody. Both buckets are empty for
+both Builders. This is prevention, and the first overdue item assigned
+across a shared client is the acceptance test.

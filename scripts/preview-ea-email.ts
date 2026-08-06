@@ -193,6 +193,23 @@ const payload: DigestPayload = {
     },
   ],
 
+  // A shared client where the other Business Builder is the one holding
+  // things up. Before 2026-08-06 this row rendered under "What your
+  // clients owe you", which read as the client being late.
+  builderOverdue: [
+    {
+      id: "bb1",
+      title: "Send the revised scope for the second phase",
+      engagementId: "e5",
+      engagementLabel: "A&M Abatement",
+      dueDate: iso(now.minus({ days: 5 })),
+      status: "in_progress",
+      estimatedMinutes: 90,
+      assigneeName: "Jen Garrison",
+      daysOverdue: 5,
+    },
+  ],
+
   deliverablesByStatus: [
     {
       status: "in_progress",
@@ -551,6 +568,7 @@ const envelope =
         deliverablesByStatus: payload.deliverablesByStatus,
         deliverablesPastTarget: payload.deliverablesPastTarget,
         clientOverdue: payload.clientOverdue,
+        builderOverdue: payload.builderOverdue,
         quietEngagements: payload.quietEngagements,
         // Heartbeat. Deliberately seeded with one healthy-but-idle job
         // (zero items, which must NOT read as a fault), one stale job
