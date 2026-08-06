@@ -96,6 +96,12 @@ export type SweepResult = {
  * precedence would hand every Builder in the practice the same booking
  * page, which is the exact single-user assumption this build had to
  * remove elsewhere.
+ *
+ * Restricted to a LIVE DISCOVERY link. Any row would do while a Builder
+ * could only ever have one; now that links can be created, retired and
+ * made for a named client, "any row" could hand a stranger a link that
+ * has been turned off (dead page) or a client's Business Building
+ * session link (wrong meeting entirely).
  */
 async function resolveBookingUrl(recipient: EaRecipient): Promise<string | null> {
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
@@ -106,7 +112,13 @@ async function resolveBookingUrl(recipient: EaRecipient): Promise<string | null>
     tx
       .select({ slug: schedulingLinks.slug })
       .from(schedulingLinks)
-      .where(eq(schedulingLinks.coachUserProfileId, recipient.userProfileId))
+      .where(
+        and(
+          eq(schedulingLinks.coachUserProfileId, recipient.userProfileId),
+          eq(schedulingLinks.isActive, true),
+          eq(schedulingLinks.meetingType, "discovery"),
+        ),
+      )
       .limit(1),
   );
   if (link) return `${base}/book/${link.slug}`;

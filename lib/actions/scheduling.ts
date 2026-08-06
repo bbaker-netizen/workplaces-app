@@ -17,7 +17,7 @@
  *   matches Bruce's working window)
  */
 
-import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -25,6 +25,7 @@ import {
   bookings,
   prospects,
   schedulingLinks,
+  userProfiles,
   type UserProfile,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -36,6 +37,43 @@ const TIMEZONE = "America/Edmonton";
 type Role = UserProfile["role"];
 function canManage(role: Role): boolean {
   return role === "master_admin" || role === "coach";
+}
+
+/**
+ * Slugs are globally UNIQUE on the table, so a collision is the one
+ * failure a Business Builder will actually hit — "discovery" is the
+ * obvious name and the second person to reach for it loses. Postgres
+ * answers with `duplicate key value violates unique constraint
+ * "scheduling_links_slug_unique"`, which is not a sentence to put in
+ * front of a coach. Checked before the insert AND caught after it: the
+ * pre-check gives the good message, the catch covers the race between
+ * two people typing the same slug at once.
+ */
+const SLUG_TAKEN = "That web address is already in use. Try another.";
+
+function isSlugConflict(e: unknown): boolean {
+  const s = e instanceof Error ? e.message : String(e);
+  return /duplicate key|unique constraint/i.test(s) && /slug/i.test(s);
+}
+
+/**
+ * An availability window narrower than the meeting itself produces a link
+ * that renders zero slots for ever, and nothing on the public page says
+ * why — it just looks broken to the prospect. Refused at the boundary.
+ */
+function availabilityProblem(input: {
+  weekdays: number[];
+  startMinute: number;
+  endMinute: number;
+  durationMinutes: number;
+}): string | null {
+  if (input.weekdays.length === 0)
+    return "Pick at least one day of the week.";
+  if (input.endMinute <= input.startMinute)
+    return "The end of the day has to be after the start.";
+  if (input.endMinute - input.startMinute < input.durationMinutes)
+    return "The daily window is shorter than the meeting, so no times would ever show. Widen it or shorten the meeting.";
+  return null;
 }
 
 export type ActionResult<T = void> =
@@ -63,7 +101,55 @@ const createLinkSchema = z.object({
   /** Day-window in MT minutes-of-day (0–1440). Default 8:30am → 6:00pm. */
   startMinute: z.number().int().min(0).max(1440).default(510),
   endMinute: z.number().int().min(0).max(1440).default(1080),
+  isActive: z.boolean().default(true),
+  /**
+   * Whose link this is. Omitted, it is the caller's own. A master_admin
+   * may name another Business Builder — someone has to be able to set a
+   * teammate up before that teammate has ever signed in, and the link
+   * decides who a booked prospect belongs to (`createBooking` stamps the
+   * link's coach as the lead's owner), so getting it wrong routes their
+   * leads to the wrong person.
+   */
+  coachUserProfileId: z.string().uuid().nullable().optional(),
 });
+
+/**
+ * Resolve the owner for a link the caller is creating or moving.
+ *
+ * Only a master_admin may name someone else, and only a Business Builder
+ * in the caller's own org may be named — without that second check an
+ * arbitrary user_profiles id would insert happily and hand a CLIENT a
+ * booking link that claims prospects in their name.
+ */
+async function resolveOwner(
+  callerRole: Role,
+  callerOrgId: string,
+  callerUserProfileId: string,
+  requested: string | null | undefined,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!requested || requested === callerUserProfileId)
+    return { ok: true, id: callerUserProfileId };
+  if (callerRole !== "master_admin")
+    return {
+      ok: false,
+      error: "Only a master admin can create a link for someone else.",
+    };
+  const [target] = await withSystemContext((tx) =>
+    tx
+      .select({ id: userProfiles.id, role: userProfiles.role })
+      .from(userProfiles)
+      .where(
+        and(
+          eq(userProfiles.id, requested),
+          eq(userProfiles.orgId, callerOrgId),
+        ),
+      )
+      .limit(1),
+  );
+  if (!target || !canManage(target.role))
+    return { ok: false, error: "That isn't a Business Builder on this account." };
+  return { ok: true, id: target.id };
+}
 
 export async function createSchedulingLink(
   input: z.input<typeof createLinkSchema>,
@@ -80,13 +166,31 @@ export async function createSchedulingLink(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   const data = parsed.data;
+  const problem = availabilityProblem(data);
+  if (problem) return { ok: false, error: problem };
+
+  const owner = await resolveOwner(
+    profile.role,
+    profile.orgId,
+    profile.userProfileId,
+    data.coachUserProfileId,
+  );
+  if (!owner.ok) return owner;
+
   try {
     const created = await withSystemContext(async (tx) => {
+      const [clash] = await tx
+        .select({ id: schedulingLinks.id })
+        .from(schedulingLinks)
+        .where(eq(schedulingLinks.slug, data.slug))
+        .limit(1);
+      if (clash) throw new Error(SLUG_TAKEN);
+
       const [row] = await tx
         .insert(schedulingLinks)
         .values({
           orgId: profile.orgId,
-          coachUserProfileId: profile.userProfileId,
+          coachUserProfileId: owner.id,
           slug: data.slug,
           name: data.name,
           description: data.description ?? null,
@@ -97,13 +201,156 @@ export async function createSchedulingLink(
             startMinute: data.startMinute,
             endMinute: data.endMinute,
           },
+          isActive: data.isActive,
         })
         .returning({ id: schedulingLinks.id, slug: schedulingLinks.slug });
       return row;
     });
     revalidatePath("/business-builder/scheduling");
+    revalidatePath("/book");
     return { ok: true, data: created };
   } catch (e) {
+    if (isSlugConflict(e)) return { ok: false, error: SLUG_TAKEN };
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+const updateLinkSchema = createLinkSchema.partial().extend({
+  id: z.string().uuid(),
+});
+
+/**
+ * A Business Builder owns their own links; a master_admin may edit any of
+ * them. Without this, every coach could edit or delete every other
+ * coach's booking page by id — the console lists those ids.
+ */
+async function loadManageableLink(
+  id: string,
+  profile: { role: Role; orgId: string; userProfileId: string },
+): Promise<
+  | { ok: true; link: { id: string; coachUserProfileId: string; availability: unknown; durationMinutes: number } }
+  | { ok: false; error: string }
+> {
+  const [link] = await withSystemContext((tx) =>
+    tx
+      .select({
+        id: schedulingLinks.id,
+        coachUserProfileId: schedulingLinks.coachUserProfileId,
+        availability: schedulingLinks.availability,
+        durationMinutes: schedulingLinks.durationMinutes,
+        orgId: schedulingLinks.orgId,
+      })
+      .from(schedulingLinks)
+      .where(eq(schedulingLinks.id, id))
+      .limit(1),
+  );
+  if (!link || link.orgId !== profile.orgId)
+    return { ok: false, error: "That booking link no longer exists." };
+  if (
+    profile.role !== "master_admin" &&
+    link.coachUserProfileId !== profile.userProfileId
+  )
+    return { ok: false, error: "That booking link belongs to someone else." };
+  return { ok: true, link };
+}
+
+export async function updateSchedulingLink(
+  input: z.input<typeof updateLinkSchema>,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (!canManage(profile.role))
+    return { ok: false, error: "Business Builders only." };
+  const parsed = updateLinkSchema.safeParse(input);
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  const data = parsed.data;
+
+  const found = await loadManageableLink(data.id, profile);
+  if (!found.ok) return found;
+
+  // Availability is validated against the WHOLE window after the edit is
+  // applied, not against the fields that happen to be in this payload —
+  // lengthening the meeting alone can be what makes the window too short.
+  const current = (found.link.availability as {
+    weekdays?: number[];
+    startMinute?: number;
+    endMinute?: number;
+  }) ?? {};
+  const merged = {
+    weekdays: data.weekdays ?? current.weekdays ?? [1, 2, 3, 4, 5],
+    startMinute: data.startMinute ?? current.startMinute ?? 510,
+    endMinute: data.endMinute ?? current.endMinute ?? 1080,
+    durationMinutes:
+      data.durationMinutes ?? Number(found.link.durationMinutes),
+  };
+  const problem = availabilityProblem(merged);
+  if (problem) return { ok: false, error: problem };
+
+  let ownerId: string | undefined;
+  if (data.coachUserProfileId !== undefined) {
+    const owner = await resolveOwner(
+      profile.role,
+      profile.orgId,
+      profile.userProfileId,
+      data.coachUserProfileId,
+    );
+    if (!owner.ok) return owner;
+    ownerId = owner.id;
+  }
+
+  try {
+    await withSystemContext(async (tx) => {
+      if (data.slug) {
+        const [clash] = await tx
+          .select({ id: schedulingLinks.id })
+          .from(schedulingLinks)
+          .where(
+            and(
+              eq(schedulingLinks.slug, data.slug),
+              ne(schedulingLinks.id, data.id),
+            ),
+          )
+          .limit(1);
+        if (clash) throw new Error(SLUG_TAKEN);
+      }
+      await tx
+        .update(schedulingLinks)
+        .set({
+          ...(data.slug !== undefined ? { slug: data.slug } : {}),
+          ...(data.name !== undefined ? { name: data.name } : {}),
+          ...(data.description !== undefined
+            ? { description: data.description ?? null }
+            : {}),
+          ...(data.meetingType !== undefined
+            ? { meetingType: data.meetingType }
+            : {}),
+          ...(data.durationMinutes !== undefined
+            ? { durationMinutes: data.durationMinutes }
+            : {}),
+          ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+          ...(ownerId ? { coachUserProfileId: ownerId } : {}),
+          availability: {
+            weekdays: merged.weekdays,
+            startMinute: merged.startMinute,
+            endMinute: merged.endMinute,
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(schedulingLinks.id, data.id));
+    });
+    revalidatePath("/business-builder/scheduling");
+    revalidatePath("/book");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    if (isSlugConflict(e)) return { ok: false, error: SLUG_TAKEN };
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -119,11 +366,27 @@ export async function deleteSchedulingLink(
     return { ok: false, error: "Not authenticated." };
   if (!canManage(profile.role))
     return { ok: false, error: "Business Builders only." };
+  const found = await loadManageableLink(id, profile);
+  if (!found.ok) return found;
   try {
     await withSystemContext(async (tx) => {
+      // `bookings.scheduling_link_id` is ON DELETE CASCADE, so deleting a
+      // link that has been used takes the record of every meeting booked
+      // through it with it. Deactivating retires the link and keeps the
+      // history, which is what someone tidying up actually wants.
+      const [used] = await tx
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.schedulingLinkId, id))
+        .limit(1);
+      if (used)
+        throw new Error(
+          "Someone has booked through this link, so deleting it would erase those bookings. Turn it off instead.",
+        );
       await tx.delete(schedulingLinks).where(eq(schedulingLinks.id, id));
     });
     revalidatePath("/business-builder/scheduling");
+    revalidatePath("/book");
     return { ok: true, data: undefined };
   } catch (e) {
     return {
