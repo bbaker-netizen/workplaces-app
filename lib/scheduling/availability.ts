@@ -120,6 +120,18 @@ export function overlaps(
   return false;
 }
 
+/**
+ * Why a window came back the way it did. A bare boolean collapsed three
+ * very different faults — nobody has connected Google, the grant is
+ * dead, the database read failed — into one indistinguishable "no", and
+ * the person who has to fix it cannot act on "no".
+ */
+export type BusyReason =
+  | "ok"
+  | "not-connected"
+  | "calendar-error"
+  | "session-read-error";
+
 export type BuilderBusy = {
   /** Everything blocking this Builder in the window. */
   intervals: BusyInterval[];
@@ -128,6 +140,9 @@ export type BuilderBusy = {
    * then a single block covering the whole window — fully busy.
    */
   calendarReadable: boolean;
+  reason: BusyReason;
+  /** Provider error text when there is one. Operator-facing only. */
+  error?: string;
 };
 
 /**
@@ -219,7 +234,13 @@ export async function getBuilderBusy(
     rangeStart,
     rangeEnd,
   );
-  if (!sessions.ok) return { intervals: wholeWindow, calendarReadable: false };
+  if (!sessions.ok)
+    return {
+      intervals: wholeWindow,
+      calendarReadable: false,
+      reason: "session-read-error",
+      error: "The app's own session list could not be read.",
+    };
 
   let connected = false;
   try {
@@ -231,13 +252,19 @@ export async function getBuilderBusy(
     console.error(
       `[availability] ${userProfileId}: Google Calendar not connected — treating as fully busy`,
     );
-    return { intervals: wholeWindow, calendarReadable: false };
+    return {
+      intervals: wholeWindow,
+      calendarReadable: false,
+      reason: "not-connected",
+      error: "No Google account is connected.",
+    };
   }
 
   try {
     const events = await listExternalEvents(userProfileId, rangeStart, rangeEnd);
     return {
       calendarReadable: true,
+      reason: "ok",
       intervals: [
         ...events.map((e) => ({
           start: e.start.getTime(),
@@ -251,7 +278,12 @@ export async function getBuilderBusy(
       `[availability] ${userProfileId}: calendar read failed — treating as fully busy:`,
       e,
     );
-    return { intervals: wholeWindow, calendarReadable: false };
+    return {
+      intervals: wholeWindow,
+      calendarReadable: false,
+      reason: "calendar-error",
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 

@@ -2740,6 +2740,17 @@ export const schedulingLinks = pgTable(
      * JSONB so we can iterate without a schema migration. */
     availability: jsonb("availability").notNull().default(sql`'{}'::jsonb`),
     isActive: boolean("is_active").notNull().default(true),
+    /** Outcome of the last availability read behind the PUBLIC booking
+     *  page — the run record for a failure that is otherwise silent to
+     *  the Builder whose page it is. Null means nobody has loaded the
+     *  page since these columns existed, which is a real state and is
+     *  reported as such rather than dressed up as healthy. */
+    lastAvailabilityCheckedAt: timestamp("last_availability_checked_at", {
+      withTimezone: true,
+    }),
+    lastAvailabilityOk: boolean("last_availability_ok"),
+    lastAvailabilityReason: text("last_availability_reason"),
+    lastAvailabilityError: text("last_availability_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

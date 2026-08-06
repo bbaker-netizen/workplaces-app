@@ -29,6 +29,13 @@ export type SchedulingLinkRow = {
    *  retired but not deleted, and the count is what explains why. */
   bookingCount: number;
   upcomingCount: number;
+  /** How the last PUBLIC load of this page went. Null throughout means
+   *  nobody has opened it since we started recording, which is reported
+   *  as "not checked yet" rather than as healthy. */
+  lastAvailabilityCheckedAt: Date | null;
+  lastAvailabilityOk: boolean | null;
+  lastAvailabilityReason: string | null;
+  lastAvailabilityError: string | null;
 };
 
 export type SchedulingLinksView = {
@@ -67,6 +74,10 @@ export async function listManageableSchedulingLinks(): Promise<SchedulingLinksVi
         isActive: schedulingLinks.isActive,
         coachUserProfileId: schedulingLinks.coachUserProfileId,
         coachName: userProfiles.fullName,
+        lastAvailabilityCheckedAt: schedulingLinks.lastAvailabilityCheckedAt,
+        lastAvailabilityOk: schedulingLinks.lastAvailabilityOk,
+        lastAvailabilityReason: schedulingLinks.lastAvailabilityReason,
+        lastAvailabilityError: schedulingLinks.lastAvailabilityError,
         bookingCount: sql<number>`(
           select count(*) from ${bookings}
           where ${bookings.schedulingLinkId} = ${schedulingLinks.id}
@@ -126,6 +137,10 @@ export async function listManageableSchedulingLinks(): Promise<SchedulingLinksVi
         // comparison use of it needs the explicit Number().
         bookingCount: Number(r.bookingCount ?? 0),
         upcomingCount: Number(r.upcomingCount ?? 0),
+        lastAvailabilityCheckedAt: r.lastAvailabilityCheckedAt ?? null,
+        lastAvailabilityOk: r.lastAvailabilityOk ?? null,
+        lastAvailabilityReason: r.lastAvailabilityReason ?? null,
+        lastAvailabilityError: r.lastAvailabilityError ?? null,
       };
     }),
   };
