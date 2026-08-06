@@ -19,7 +19,7 @@ export default async function PublicBookingPage({
 }) {
   const result = await listAvailableSlots(params.slug, 21);
   if (!result.ok) notFound();
-  const { link, slots } = result.data;
+  const { link, slots, calendarReadable } = result.data;
 
   return (
     <main className="min-h-screen bg-background py-12 px-6">
@@ -40,7 +40,11 @@ export default async function PublicBookingPage({
             </p>
           )}
         </header>
-        <BookingForm slug={params.slug} slots={slots} />
+        <BookingForm
+          slug={params.slug}
+          slots={slots}
+          calendarReadable={calendarReadable}
+        />
         <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground text-center">
           Workplaces · Build what compounds.
         </p>
