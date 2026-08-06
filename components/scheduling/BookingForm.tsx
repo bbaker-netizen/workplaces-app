@@ -14,9 +14,12 @@ type Slot = { startsAt: string; startsAtLocal: string };
 export function BookingForm({
   slug,
   slots,
+  calendarReadable = true,
 }: {
   slug: string;
   slots: Slot[];
+  /** False when we could not read the Builder's calendar — see below. */
+  calendarReadable?: boolean;
 }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -32,7 +35,13 @@ export function BookingForm({
     return (
       <div className="border border-tbb-line rounded-md bg-white p-6">
         <p className="font-sans text-sm text-muted-foreground italic">
-          No times available in the next three weeks. Try again later or reach out to{" "}
+          {/* Two different facts that would otherwise look identical: a
+              genuinely full calendar, and one we could not read at all.
+              Saying "no times available" in the second case is a claim we
+              have not earned. */}
+          {!calendarReadable
+            ? "Live availability can't be shown right now. Email us and we'll find a time by hand: "
+            : "No times available in the next three weeks. Try again later or reach out to "}
           <a
             href="mailto:notifications@4workplaces.com"
             className="text-tbb-navy underline underline-offset-4"

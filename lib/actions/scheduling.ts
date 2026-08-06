@@ -30,6 +30,11 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { LEAD_SOURCE_CHANNELS } from "@/lib/pipeline/lead-source";
+import {
+  getBuilderBusy,
+  overlaps,
+  type BusyInterval,
+} from "@/lib/scheduling/availability";
 import { DateTime } from "luxon";
 
 const TIMEZONE = "America/Edmonton";
@@ -406,7 +411,19 @@ export type AvailableSlot = {
 export async function listAvailableSlots(
   slug: string,
   daysAhead = 14,
-): Promise<ActionResult<{ link: { name: string; durationMinutes: number; description: string | null }; slots: AvailableSlot[] }>> {
+): Promise<
+  ActionResult<{
+    link: { name: string; durationMinutes: number; description: string | null };
+    slots: AvailableSlot[];
+    /**
+     * False when the Builder's calendar could not be read, so the empty
+     * list means "we can't tell" rather than "they are booked solid".
+     * Without it those two render identically and a dead Google
+     * connection looks like a busy fortnight.
+     */
+    calendarReadable: boolean;
+  }>
+> {
   const link = await withSystemContext(async (tx) => {
     const [row] = await tx
       .select()
@@ -430,23 +447,61 @@ export async function listAvailableSlots(
 
   const now = DateTime.now().setZone(TIMEZONE);
   const horizon = now.plus({ days: daysAhead });
+  const rangeStart = now.toJSDate();
+  // To the END of the last day, not to `horizon` itself. The slot loop
+  // below walks whole days, so on the final day it emits slots running
+  // past the horizon's clock time — and a busy window that stopped at
+  // `horizon` would neither fetch the events covering them nor, when the
+  // calendar is unreadable, block them. That gap showed up as a lone
+  // 17:30 slot surviving on a Builder marked fully busy.
+  const rangeEnd = horizon.endOf("day").toJSDate();
 
-  // Existing bookings to exclude.
+  // What the Business Builder is already committed to: their Google
+  // Calendar plus any session held in the app. Until this landed the page
+  // consulted neither, so every weekday rendered wide open and a visitor
+  // could book straight over a client session.
+  const busy = await getBuilderBusy(
+    link.coachUserProfileId,
+    rangeStart,
+    rangeEnd,
+  );
+
+  // Bookings already taken through ANY of this Builder's links, not just
+  // this one. A discovery booking creates a prospect and a booking row —
+  // it never reaches Google — so a second link on the same calendar was
+  // invisible to the first and both could sell the same half hour.
   const existing = await withSystemContext(async (tx) =>
     tx
-      .select({ bookedAt: bookings.bookedAt })
+      .select({
+        bookedAt: bookings.bookedAt,
+        durationMinutes: bookings.durationMinutes,
+      })
       .from(bookings)
+      .innerJoin(
+        schedulingLinks,
+        eq(schedulingLinks.id, bookings.schedulingLinkId),
+      )
       .where(
         and(
-          eq(bookings.schedulingLinkId, link.id),
-          gte(bookings.bookedAt, now.toJSDate()),
+          eq(schedulingLinks.coachUserProfileId, link.coachUserProfileId),
+          // A day back, not `now`: a meeting already under way still
+          // blocks the slot that starts ten minutes from now.
+          gte(bookings.bookedAt, new Date(rangeStart.getTime() - 86_400_000)),
           isNull(bookings.cancelledAt),
         ),
       ),
   );
-  const taken = new Set(
-    existing.map((b) => new Date(b.bookedAt).getTime()),
-  );
+
+  const blocked: BusyInterval[] = [
+    ...busy.intervals,
+    ...existing.map((b) => {
+      const start = new Date(b.bookedAt).getTime();
+      return {
+        start,
+        end: start + Number(b.durationMinutes ?? 0) * 60_000,
+      };
+    }),
+  ];
 
   const slots: AvailableSlot[] = [];
   let cursor = now.startOf("day");
@@ -460,7 +515,9 @@ export async function listAvailableSlots(
           second: 0,
           millisecond: 0,
         });
-        if (slot > now && !taken.has(slot.toJSDate().getTime())) {
+        const slotStartMs = slot.toMillis();
+        const slotEndMs = slot.plus({ minutes: dur }).toMillis();
+        if (slot > now && !overlaps(slotStartMs, slotEndMs, blocked)) {
           slots.push({
             startsAt: slot.toUTC().toISO() ?? "",
             startsAtLocal: slot.toFormat(
@@ -483,6 +540,7 @@ export async function listAvailableSlots(
         description: link.description,
       },
       slots,
+      calendarReadable: busy.calendarReadable,
     },
   };
 }
@@ -512,6 +570,51 @@ export async function createBooking(
       error: parsed.error.issues[0]?.message ?? "Invalid input",
     };
   const data = parsed.data;
+
+  // Re-check the calendar at the WRITE boundary, not just when the page
+  // rendered. Filtering the picker is a courtesy — a tab left open since
+  // this morning still holds slots that have since been taken, and it is
+  // this call that would put a stranger on top of a client session.
+  //
+  // Deliberately OUTSIDE the transaction below: a Google round trip
+  // inside one pins a pooled Postgres connection for its whole duration.
+  const requestedStart = new Date(data.startsAtUtc);
+  if (!Number.isNaN(requestedStart.getTime())) {
+    const [preLink] = await withSystemContext((tx) =>
+      tx
+        .select({
+          coachUserProfileId: schedulingLinks.coachUserProfileId,
+          durationMinutes: schedulingLinks.durationMinutes,
+        })
+        .from(schedulingLinks)
+        .where(eq(schedulingLinks.slug, data.slug))
+        .limit(1),
+    );
+    if (preLink) {
+      const requestedEnd = new Date(
+        requestedStart.getTime() +
+          Number(preLink.durationMinutes ?? 0) * 60_000,
+      );
+      const busy = await getBuilderBusy(
+        preLink.coachUserProfileId,
+        requestedStart,
+        requestedEnd,
+      );
+      if (
+        overlaps(
+          requestedStart.getTime(),
+          requestedEnd.getTime(),
+          busy.intervals,
+        )
+      ) {
+        return {
+          ok: false,
+          error: "That time is no longer free. Pick another slot.",
+        };
+      }
+    }
+  }
+
   try {
     const created = await withSystemContext(async (tx) => {
       const [link] = await tx

@@ -11,8 +11,14 @@
  */
 
 import { DateTime } from "luxon";
-import { and, eq, or } from "drizzle-orm";
-import { orgs, userProfiles } from "@/lib/db/schema";
+import { and, eq, lt, ne, or, sql } from "drizzle-orm";
+import {
+  bbsSessions,
+  coaches,
+  engagements,
+  orgs,
+  userProfiles,
+} from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
   getConnectionStatus,
@@ -98,13 +104,155 @@ async function getConnectedBuilders(): Promise<AvailBuilder[]> {
   return connected;
 }
 
-type Interval = { start: number; end: number };
+/* --------------------------- Busy intervals --------------------------- */
 
-function overlaps(slotStart: number, slotEnd: number, busy: Interval[]): boolean {
+/** Half-open [start, end) in epoch milliseconds. */
+export type BusyInterval = { start: number; end: number };
+
+export function overlaps(
+  slotStart: number,
+  slotEnd: number,
+  busy: BusyInterval[],
+): boolean {
   for (const b of busy) {
     if (slotStart < b.end && slotEnd > b.start) return true;
   }
   return false;
+}
+
+export type BuilderBusy = {
+  /** Everything blocking this Builder in the window. */
+  intervals: BusyInterval[];
+  /**
+   * False when the Builder's calendar could not be read. `intervals` is
+   * then a single block covering the whole window — fully busy.
+   */
+  calendarReadable: boolean;
+};
+
+/**
+ * Sessions this Builder is committed to that live in OUR database.
+ *
+ * Needed alongside Google because a session booked in the app does not
+ * necessarily reach the calendar — of the sessions on the books for the
+ * coming week, nearly all carry no Google id at all. A session that DID
+ * sync shows up in both sources, which costs nothing: two overlapping
+ * intervals answer the same question twice.
+ *
+ * Internal engagements count for EVERY Business Builder. The practice's
+ * own touch-base carries a single `coach_id` like any other engagement,
+ * so resolving it by ownership alone would silently leave the other
+ * Builder bookable during a meeting they are sitting in — the same trap
+ * `resolveAgendaAudience` documents.
+ */
+export async function listSessionIntervals(
+  userProfileId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<{ ok: true; intervals: BusyInterval[] } | { ok: false }> {
+  try {
+    const rows = await withSystemContext((tx) =>
+      tx
+        .select({
+          scheduledAt: bbsSessions.scheduledAt,
+          durationMin: bbsSessions.durationMin,
+        })
+        .from(bbsSessions)
+        .innerJoin(engagements, eq(engagements.id, bbsSessions.engagementId))
+        .innerJoin(coaches, eq(coaches.id, engagements.coachId))
+        .where(
+          and(
+            ne(bbsSessions.status, "cancelled"),
+            lt(bbsSessions.scheduledAt, rangeEnd),
+            // Overlap, not "starts after the window opens" — a session
+            // already under way when the window starts still blocks it.
+            sql`${bbsSessions.scheduledAt} + (${bbsSessions.durationMin} * interval '1 minute') > ${rangeStart.toISOString()}::timestamptz`,
+            or(
+              eq(coaches.userProfileId, userProfileId),
+              eq(engagements.isInternal, true),
+            ),
+          ),
+        ),
+    );
+    return {
+      ok: true,
+      intervals: rows.map((r) => {
+        const start = new Date(r.scheduledAt).getTime();
+        return {
+          start,
+          end: start + Number(r.durationMin ?? 0) * 60_000,
+        };
+      }),
+    };
+  } catch (e) {
+    console.error("[availability] in-app session read failed:", e);
+    return { ok: false };
+  }
+}
+
+/**
+ * Everything that makes ONE Business Builder unavailable in a window.
+ *
+ * FAILURE POSTURE: if we cannot see a Builder's commitments, they are
+ * treated as FULLY BUSY, never fully free. A booking page that shows no
+ * times is recoverable — the visitor emails instead. One that offers a
+ * slot on top of a client session is not, and nobody finds out until two
+ * people join the same call.
+ *
+ * The connection is checked before the read for a specific reason:
+ * `listExternalEvents` returns `[]` when there is no token at all rather
+ * than throwing, so a bare try/catch would read "never connected" as
+ * "completely free" — the exact inversion this function exists to
+ * prevent. Only a revoked token or a network fault throws.
+ */
+export async function getBuilderBusy(
+  userProfileId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<BuilderBusy> {
+  const wholeWindow: BusyInterval[] = [
+    { start: rangeStart.getTime(), end: rangeEnd.getTime() },
+  ];
+
+  const sessions = await listSessionIntervals(
+    userProfileId,
+    rangeStart,
+    rangeEnd,
+  );
+  if (!sessions.ok) return { intervals: wholeWindow, calendarReadable: false };
+
+  let connected = false;
+  try {
+    connected = (await getConnectionStatus(userProfileId)).connected;
+  } catch {
+    connected = false;
+  }
+  if (!connected) {
+    console.error(
+      `[availability] ${userProfileId}: Google Calendar not connected — treating as fully busy`,
+    );
+    return { intervals: wholeWindow, calendarReadable: false };
+  }
+
+  try {
+    const events = await listExternalEvents(userProfileId, rangeStart, rangeEnd);
+    return {
+      calendarReadable: true,
+      intervals: [
+        ...events.map((e) => ({
+          start: e.start.getTime(),
+          end: e.end.getTime(),
+        })),
+        ...sessions.intervals,
+      ],
+    };
+  } catch (e) {
+    console.error(
+      `[availability] ${userProfileId}: calendar read failed — treating as fully busy:`,
+      e,
+    );
+    return { intervals: wholeWindow, calendarReadable: false };
+  }
 }
 
 export async function getAvailability(
@@ -119,23 +267,13 @@ export async function getAvailability(
   const rangeEnd = now.plus({ days }).toJSDate();
   const earliest = now.plus({ hours: LEAD_HOURS }).toMillis();
 
-  // Busy intervals per connected Builder.
-  const busyByBuilder = new Map<string, Interval[]>();
+  // Busy intervals per connected Builder. Shared with the public booking
+  // page so the two surfaces cannot drift on what "busy" means — and so
+  // this one picks up in-app sessions that never reached Google.
+  const busyByBuilder = new Map<string, BusyInterval[]>();
   for (const b of builders) {
-    try {
-      const events = await listExternalEvents(b.id, rangeStart, rangeEnd);
-      busyByBuilder.set(
-        b.id,
-        events.map((e) => ({
-          start: e.start.getTime(),
-          end: e.end.getTime(),
-        })),
-      );
-    } catch {
-      // If we can't read this Builder's calendar, don't offer them (we'd
-      // risk double-booking). Empty = treated as fully busy below.
-      busyByBuilder.set(b.id, [{ start: rangeStart.getTime(), end: rangeEnd.getTime() }]);
-    }
+    const busy = await getBuilderBusy(b.id, rangeStart, rangeEnd);
+    busyByBuilder.set(b.id, busy.intervals);
   }
 
   const out: AvailDay[] = [];
