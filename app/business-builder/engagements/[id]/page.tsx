@@ -60,6 +60,7 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { checkOnboardingReadiness } from "@/lib/onboarding/preflight";
 import { StartOnboardingPanel } from "@/components/business-builder/StartOnboardingPanel";
+import { ProspectAssessmentTracker } from "@/components/pipeline/ProspectAssessmentTracker";
 import { ALL_MODULES } from "@/lib/modules";
 import {
   PortalModuleManager,
@@ -196,6 +197,16 @@ export default async function EngagementDetailPage({
             id: prospects.id,
             companyName: prospects.companyName,
             contactEmail: prospects.contactEmail,
+            // Person Profile completion. Still stored on the prospect row
+            // (that is where the participants and their emails live), but
+            // read and shown here, because the assessment happens after
+            // they sign, not while they are deciding.
+            contactFirstName: prospects.contactFirstName,
+            contactName: prospects.contactName,
+            contact2FirstName: prospects.contact2FirstName,
+            contact2Email: prospects.contact2Email,
+            assessment1CompletedAt: prospects.assessment1CompletedAt,
+            assessment2CompletedAt: prospects.assessment2CompletedAt,
           })
           .from(prospects)
           .where(eq(prospects.convertedEngagementId, id))
@@ -220,6 +231,31 @@ export default async function EngagementDetailPage({
       clientEmail: prospectRow[0]?.contactEmail ?? null,
       prospectId: prospectRow[0]?.id ?? null,
       prospectCompany: prospectRow[0]?.companyName ?? null,
+      // Person Profile participants, built here so the tracker can sit
+      // beside onboarding rather than back on the prospect card.
+      assessmentParticipants: prospectRow[0]
+        ? [
+            {
+              n: 1 as const,
+              name:
+                prospectRow[0].contactFirstName ??
+                prospectRow[0].contactName ??
+                "Primary contact",
+              completedAt: prospectRow[0].assessment1CompletedAt,
+            },
+            ...(prospectRow[0].contact2FirstName ||
+            prospectRow[0].contact2Email
+              ? [
+                  {
+                    n: 2 as const,
+                    name:
+                      prospectRow[0].contact2FirstName ?? "Business partner",
+                    completedAt: prospectRow[0].assessment2CompletedAt,
+                  },
+                ]
+              : []),
+          ]
+        : [],
     };
   });
 
@@ -548,8 +584,34 @@ export default async function EngagementDetailPage({
           of its three steps is the portal invitation — the modules below
           need to be right before that goes out. */}
       <div id="onboarding-setup" className="scroll-mt-6" />
+
+      {/* Person Profile completion, beside onboarding rather than on the
+          prospect card. Sending the invitation is step 4 of the run;
+          nothing can observe completion (one shared TTI link, no
+          per-person identity, no API), so it stays a hand tick. */}
+      {data.prospectId && data.assessmentParticipants.length > 0 && (
+        <section className="border border-tbb-line rounded-lg bg-white shadow-tbb-sm overflow-hidden">
+          <header className="border-b border-tbb-line-soft px-5 py-3">
+            <h2 className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+              Person Profile assessments
+            </h2>
+          </header>
+          <ProspectAssessmentTracker
+            prospectId={data.prospectId}
+            participants={data.assessmentParticipants}
+            dueDate={assessmentDueDate ? new Date(assessmentDueDate) : null}
+          />
+        </section>
+      )}
+
+      {/* Not on the practice's own workspace. There is no client behind
+          it to email, so every check fails and the panel offers a
+          sequence that can never legitimately run. */}
+      {!data.eng.isInternal && (
       <StartOnboardingPanel
         engagementId={id}
+        clientName={onboardingReadiness.clientName ?? data.eng.name ?? "this client"}
+        clientEmail={onboardingReadiness.clientEmail}
         blockers={onboardingReadiness.blockers}
         established={onboardingEstablished}
         setupFields={
@@ -587,11 +649,14 @@ export default async function EngagementDetailPage({
                 padError: onboardingRun.padError,
                 portalInviteSentAt: onboardingRun.portalInviteSentAt,
                 portalInviteError: onboardingRun.portalInviteError,
+                assessmentSentAt: onboardingRun.assessmentSentAt,
+                assessmentError: onboardingRun.assessmentError,
                 completedAt: onboardingRun.completedAt,
               }
             : null
         }
       />
+      )}
 
       {/* Who on OUR side works this client. Sits above the portal
           manager because it is about us, not about what the client

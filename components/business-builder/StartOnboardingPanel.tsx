@@ -21,6 +21,22 @@
  * rather than disappears: "established" is inferred (see `established`
  * below), and an inference that is wrong must still leave the operator a
  * way through. Nothing is ever hidden outright.
+ *
+ * **What `established` must NOT do — the 2026-08-05 fault.** It used to
+ * also ungate the button and hide the blocker list and the fields that
+ * fix them. The server has no such exemption: `startOnboarding` runs the
+ * same pre-flight for every client and refuses. So on an established
+ * client with a blocker the panel showed an enabled button, no blockers,
+ * and no fee or schedule control — press it, confirm the three
+ * irreversible sends, and get back "One thing needs sorting" with no
+ * indication of what or where. Measured against the live book at the
+ * time: 15 of 21 engagements were in exactly that state.
+ *
+ * The rule now: the button is gated on the SAME blockers the server
+ * checks, always, and whatever fixes them renders beside them. What
+ * `established` still decides is presentation — whether the panel opens
+ * collapsed, and whether the copy frames onboarding as a task or as
+ * history.
  */
 
 import { useState, useTransition } from "react";
@@ -49,6 +65,8 @@ export type OnboardingRunState = {
   padError: string | null;
   portalInviteSentAt: Date | null;
   portalInviteError: string | null;
+  assessmentSentAt: Date | null;
+  assessmentError: string | null;
   completedAt: Date | null;
 } | null;
 
@@ -68,10 +86,18 @@ const STEPS = [
     label: "Portal invitation",
     detail: "Creates their login and drops them into their workspace.",
   },
+  {
+    key: "assessment" as const,
+    label: "Person Profile assessment",
+    detail:
+      "The link, to every participant. Last because it is the only step that asks them for time.",
+  },
 ];
 
 export function StartOnboardingPanel({
   engagementId,
+  clientName,
+  clientEmail,
   blockers,
   run,
   established,
@@ -79,6 +105,16 @@ export function StartOnboardingPanel({
   schedulePanel = null,
 }: {
   engagementId: string;
+  /** For the confirm dialog, so it names who is about to be emailed. */
+  clientName: string;
+  /**
+   * The address all three steps go to, or null when there isn't one (in
+   * which case `blockers` carries the contact_email blocker and the
+   * button is gated anyway). A confirm that says "this cannot be
+   * recalled" without saying who receives it is alarming and
+   * uncheckable — the recipient is the one fact that makes it either.
+   */
+  clientEmail: string | null;
   blockers: OnboardingBlocker[];
   run: OnboardingRunState;
   /**
@@ -109,6 +145,15 @@ export function StartOnboardingPanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Blockers the SERVER refused on. Normally identical to the ones
+   * rendered from props, but the page is a snapshot: another Builder can
+   * change the record in the meantime, and the fee can be cleared from
+   * the contact profile in another tab. When the refusal disagrees with
+   * what is on screen, the refusal is the truth — so it is rendered
+   * rather than reduced to a count.
+   */
+  const [serverBlockers, setServerBlockers] = useState<OnboardingBlocker[]>([]);
   const [expanded, setExpanded] = useState(false);
 
   const sentAt = (k: (typeof STEPS)[number]["key"]) =>
@@ -116,14 +161,22 @@ export function StartOnboardingPanel({
       ? run?.welcomeEmailSentAt
       : k === "pad"
         ? run?.padSentAt
-        : run?.portalInviteSentAt;
+        : k === "invite"
+          ? run?.portalInviteSentAt
+          : run?.assessmentSentAt;
   const errorFor = (k: (typeof STEPS)[number]["key"]) =>
     k === "welcome"
       ? run?.welcomeEmailError
       : k === "pad"
         ? run?.padError
-        : run?.portalInviteError;
+        : k === "invite"
+          ? run?.portalInviteError
+          : run?.assessmentError;
 
+  // The assessment step is deliberately absent from this list. It records
+  // a message on `assessmentError` when it SKIPS for want of a configured
+  // link, and a skip is not a failure — treating it as one would put a
+  // completed run permanently in the red.
   const anyFailure = Boolean(
     run &&
       !run.completedAt &&
@@ -136,24 +189,31 @@ export function StartOnboardingPanel({
    * needs the operator's eyes. Everything else can be collapsed.
    */
   const needsAttention = Boolean(run && !run.completedAt);
-  // An established client's readiness blockers are not blockers —
-  // they are checks on a sequence that should not run for this client
-  // at all. Treating them as such is what made a two-year client read
-  // as "not ready", and pointed the operator at scheduling a session
-  // they had already been holding for two years.
-  const gatingBlockers = established ? [] : blockers;
   const collapsible = !needsAttention && (Boolean(run?.completedAt) || established);
   const showFull = !collapsible || expanded;
+
+  /**
+   * Onboarding is still ahead of this client, so the setup it needs —
+   * and the reasons it can't start yet — belong on screen. Keyed off the
+   * run and NOT off `established`: an established client is one we don't
+   * expect to onboard, not one whose fee and schedule stop existing.
+   */
+  const preRun = !run;
 
   const go = (fn: (id: string) => Promise<unknown>, confirmText: string) => {
     if (!window.confirm(confirmText)) return;
     setError(null);
+    setServerBlockers([]);
     startTransition(async () => {
       const r = (await fn(engagementId)) as {
         ok: boolean;
         error?: string;
+        blockers?: OnboardingBlocker[];
       };
-      if (!r.ok) setError(r.error ?? "Couldn't start onboarding.");
+      if (!r.ok) {
+        setError(r.error ?? "Couldn't start onboarding.");
+        setServerBlockers(r.blockers ?? []);
+      }
       router.refresh();
     });
   };
@@ -286,17 +346,24 @@ export function StartOnboardingPanel({
         {/* The setup a client needs before the sends make sense, right
             where the pre-flight complains about it. The fee blocker used
             to link to a page with no fee control on it — a refusal that
-            names a fix you cannot perform is worse than no refusal. */}
-        {!run && !established && setupFields}
-        {!run && !established && schedulePanel}
+            names a fix you cannot perform is worse than no refusal, and
+            excluding established clients here recreated exactly that. */}
+        {preRun && setupFields}
+        {preRun && schedulePanel}
 
-        {/* Pre-flight. Shown before the button, not after the click. */}
-        {!run && !established && blockers.length > 0 && (
+        {/* Pre-flight. Shown before the button, not after the click, and
+            for every client the button is offered to. */}
+        {preRun && blockers.length > 0 && (
           <div className="rounded-md border border-tbb-blue/50 bg-tbb-blue/5 p-3 space-y-2">
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-blue">
               <AlertTriangle className="w-3.5 h-3.5" aria-hidden />
-              Not ready yet — {blockers.length}{" "}
-              {blockers.length === 1 ? "thing" : "things"} to fix first
+              {established
+                ? `Onboarding can't run — ${blockers.length} ${
+                    blockers.length === 1 ? "thing" : "things"
+                  } missing`
+                : `Not ready yet — ${blockers.length} ${
+                    blockers.length === 1 ? "thing" : "things"
+                  } to fix first`}
             </p>
             <ul className="space-y-2">
               {blockers.map((b) => (
@@ -313,17 +380,36 @@ export function StartOnboardingPanel({
               ))}
             </ul>
             <p className="text-[11px] text-tbb-ink-3">
-              These can&apos;t be skipped. Once the first two emails have gone
-              they can&apos;t be recalled, so a blocked start is safer than a
-              half-finished one.
+              {established
+                ? "These are only needed to run the welcome sequence. If this client is already going, nothing here is outstanding — leave it."
+                : "These can't be skipped. Once the first two emails have gone they can't be recalled, so a blocked start is safer than a half-finished one."}
             </p>
           </div>
         )}
 
         {error && (
-          <p className="text-sm text-tbb-danger" role="alert">
-            {error}
-          </p>
+          <div className="rounded-md border border-tbb-danger/50 bg-tbb-danger/5 p-3 space-y-2" role="alert">
+            <p className="text-sm text-tbb-danger">{error}</p>
+            {/* The server refused on something the page didn't know
+                about. Show it with its fix rather than leaving the
+                operator to guess which of four checks it meant. */}
+            {serverBlockers.length > 0 && (
+              <ul className="space-y-2">
+                {serverBlockers.map((b) => (
+                  <li key={b.key} className="text-xs text-tbb-ink-2">
+                    {b.message}{" "}
+                    <Link
+                      href={b.href}
+                      className="inline-flex items-center gap-0.5 font-bold text-tbb-blue hover:underline whitespace-nowrap"
+                    >
+                      {b.linkLabel}
+                      <ArrowRight className="w-3 h-3" aria-hidden />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         {run?.completedAt ? (
@@ -363,9 +449,9 @@ export function StartOnboardingPanel({
              above is understood as the cause rather than as decoration. */
           <button
             type="button"
-            disabled={isPending || gatingBlockers.length > 0}
+            disabled={isPending || blockers.length > 0}
             title={
-              gatingBlockers.length > 0
+              blockers.length > 0
                 ? `Blocked: ${blockers.length} ${
                     blockers.length === 1 ? "thing" : "things"
                   } listed above must be fixed first.`
@@ -374,24 +460,26 @@ export function StartOnboardingPanel({
             onClick={() =>
               go(
                 startOnboarding,
-                "Start onboarding? This emails the client three times over the next few minutes — the onboarding note, the payment authorization form, and their portal invitation. None of them can be recalled.",
+                `Start onboarding for ${clientName}?\n\nThis emails ${
+                  clientEmail ?? "the client"
+                } three times over the next few minutes — the onboarding note, the payment authorization form, and their portal invitation. None of them can be recalled.`,
               )
             }
             className={
               "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill disabled:cursor-not-allowed " +
-              (gatingBlockers.length > 0
+              (blockers.length > 0
                 ? "border border-tbb-line bg-tbb-cream-50 text-tbb-ink-3"
                 : "bg-tbb-blue text-white hover:bg-tbb-blue-700 disabled:opacity-40")
             }
           >
             {isPending ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-            ) : gatingBlockers.length > 0 ? (
+            ) : blockers.length > 0 ? (
               <Lock className="w-3.5 h-3.5" aria-hidden />
             ) : (
               <Rocket className="w-3.5 h-3.5" aria-hidden />
             )}
-            {gatingBlockers.length > 0
+            {blockers.length > 0
               ? "Start onboarding — blocked"
               : "Start onboarding"}
           </button>

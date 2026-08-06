@@ -1516,6 +1516,22 @@ function clientOwedHtml(items: DigestPayload["clientOverdue"]): string {
     .join("");
 }
 
+/**
+ * Overdue work held by the other Business Builder on a client in your
+ * book. Rendered apart from the client list because it is a different
+ * conversation — you raise this with a colleague, not with a client.
+ */
+function builderOwedHtml(items: DigestPayload["clientOverdue"]): string {
+  return items
+    .map((i) =>
+      eaRow(
+        i.title,
+        `${i.engagementLabel} &middot; ${i.assigneeName ?? "unassigned"} &middot; ${i.daysOverdue} day${i.daysOverdue === 1 ? "" : "s"} overdue`,
+      ),
+    )
+    .join("");
+}
+
 function quietEngagementsHtml(
   items: DigestPayload["quietEngagements"],
 ): string {
@@ -1777,6 +1793,15 @@ ${b.items
     }),
   );
   parts.push(
+    eaSection(
+      "Overdue with the other Business Builder",
+      builderOwedHtml(p.builderOverdue ?? []),
+      {
+        subtitle: "on clients you own or share — raise it with them, not the client",
+      },
+    ),
+  );
+  parts.push(
     eaSection("Gone quiet", quietEngagementsHtml(p.quietEngagements), {
       accent: ORANGE,
     }),
@@ -1890,6 +1915,13 @@ ${b.items
   if (p.clientOverdue.length) {
     t.push("WHAT YOUR CLIENTS OWE YOU");
     for (const i of p.clientOverdue) {
+      t.push(`  ${i.title} (${i.engagementLabel}) - ${i.assigneeName ?? "unassigned"}, ${i.daysOverdue} days overdue`);
+    }
+    t.push("");
+  }
+  if (p.builderOverdue?.length) {
+    t.push("OVERDUE WITH THE OTHER BUSINESS BUILDER");
+    for (const i of p.builderOverdue) {
       t.push(`  ${i.title} (${i.engagementLabel}) - ${i.assigneeName ?? "unassigned"}, ${i.daysOverdue} days overdue`);
     }
     t.push("");
@@ -2082,6 +2114,7 @@ export type FridayRollupEmailInput = {
   deliverablesByStatus: DigestPayload["deliverablesByStatus"];
   deliverablesPastTarget: DigestPayload["deliverablesPastTarget"];
   clientOverdue: DigestPayload["clientOverdue"];
+  builderOverdue?: DigestPayload["builderOverdue"];
   quietEngagements: DigestPayload["quietEngagements"];
   /** Hours spent per engagement, and what they are earning. */
   engagementHours: EngagementHoursReport;
@@ -2300,6 +2333,7 @@ export function fridayRollupEmail(input: FridayRollupEmailInput): EmailEnvelope 
     input.deliverablesPastTarget,
   );
   const clientHtml = clientOwedHtml(input.clientOverdue);
+  const builderHtml = builderOwedHtml(input.builderOverdue ?? []);
   const quietHtml = quietEngagementsHtml(input.quietEngagements);
 
   const bodyHtml = `
@@ -2313,6 +2347,7 @@ ${
 }
 ${eaSection("Deliverables in flight", delivHtml)}
 ${eaSection("Waiting on the client", clientHtml, { subtitle: "they get their own nudge on Monday, this is so you know" })}
+${eaSection("Waiting on the other Business Builder", builderHtml, { subtitle: "nobody nudges them — this is the only place it surfaces" })}
 ${eaSection("Gone quiet", quietHtml, { accent: ORANGE, subtitle: "the earliest signal of a renewal at risk" })}
 ${eaSection("Hours and what they earn", hoursTable(input.engagementHours), { subtitle: "worst rate first" })}
 ${eaSection("Your assistant", heartbeatTable(input.heartbeats), { subtitle: "proof it actually ran" })}`;
@@ -2362,6 +2397,16 @@ ${eaSection("Your assistant", heartbeatTable(input.heartbeats), { subtitle: "pro
       ? [
           "WAITING ON THE CLIENT",
           ...input.clientOverdue.map(
+            (i) =>
+              `  ${i.title} (${i.engagementLabel}) - ${i.assigneeName ?? "unassigned"}, ${i.daysOverdue} days overdue`,
+          ),
+          "",
+        ]
+      : []),
+    ...(input.builderOverdue?.length
+      ? [
+          "WAITING ON THE OTHER BUSINESS BUILDER",
+          ...input.builderOverdue.map(
             (i) =>
               `  ${i.title} (${i.engagementLabel}) - ${i.assigneeName ?? "unassigned"}, ${i.daysOverdue} days overdue`,
           ),
@@ -2533,6 +2578,84 @@ export function transcriptReleasedEmail(
     "",
     `Open: ${url}`,
   ].join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
+export type PersonProfileInviteEmailInput = {
+  to: string;
+  recipientName: string;
+  assessmentUrl: string;
+  /** ISO date, or null when no first session is scheduled yet. */
+  dueDate: string | null;
+  senderName: string;
+  senderEmail: string;
+  signature: string | null;
+};
+
+/**
+ * Step 4 of onboarding: the Person Profile assessment invitation.
+ *
+ * Sent to each participant individually. The instructions matter as much
+ * as the link — answered quickly, in one sitting, somewhere quiet — because
+ * a Person Profile answered in five sittings over a fortnight measures the
+ * fortnight rather than the person.
+ *
+ * The deadline is omitted entirely when there is no first session on the
+ * calendar yet, for the same reason it is omitted from the onboarding
+ * email: a date the client was never given reads as one already missed.
+ */
+export function personProfileInviteEmail(
+  input: PersonProfileInviteEmailInput,
+): EmailEnvelope {
+  const firstName = input.recipientName.split(" ")[0] ?? input.recipientName;
+  const dueLabel = input.dueDate
+    ? DateTime.fromISO(input.dueDate, { zone: "America/Edmonton" }).toFormat(
+        "EEEE, MMMM d",
+      )
+    : null;
+  const showDue = dueLabel && dueLabel !== "Invalid DateTime";
+
+  const subject = "Your Person Profile assessment";
+
+  const html = shell({
+    preheader: showDue
+      ? `About 45 minutes, and I need it back by ${dueLabel}.`
+      : "About 45 minutes, in one sitting.",
+    heading: "Your Person Profile",
+    bodyHtml: `
+      <p style="margin:0 0 14px 0;">Hi ${escapeHtml(firstName)},</p>
+      <p style="margin:0 0 14px 0;">This is the assessment I mentioned. It takes about 45 minutes and there are no right or wrong answers.</p>
+      <p style="margin:0 0 14px 0;">It works best if you answer quickly rather than weighing each one up, and if you do it in one sitting somewhere quiet. Answered in pieces over two weeks, it measures the two weeks instead of you.</p>
+      ${
+        showDue
+          ? `<p style="margin:0 0 18px 0;">Please have it done by <strong>${escapeHtml(dueLabel)}</strong>, so I can read it before we sit down.</p>`
+          : ""
+      }
+      <p style="margin:0 0 12px 0;font-size:13px;color:#5A6470;">If the button does not work, paste this into your browser:<br>${escapeHtml(input.assessmentUrl)}</p>
+      ${input.signature ? `<div style="margin-top:18px;font-size:14px;line-height:1.6;">${input.signature}</div>` : `<p style="margin:18px 0 0 0;">${escapeHtml(input.senderName)}</p>`}
+    `,
+    buttonHref: input.assessmentUrl,
+    buttonLabel: "Start the assessment",
+  });
+
+  const text = [
+    `Hi ${firstName},`,
+    "",
+    "This is the assessment I mentioned. It takes about 45 minutes and there are no right or wrong answers.",
+    "",
+    "It works best if you answer quickly rather than weighing each one up, and if you do it in one sitting somewhere quiet.",
+    showDue ? `` : null,
+    showDue
+      ? `Please have it done by ${dueLabel}, so I can read it before we sit down.`
+      : null,
+    "",
+    `Start here: ${input.assessmentUrl}`,
+    "",
+    input.senderName,
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
 
   return { to: input.to, subject, html, text };
 }

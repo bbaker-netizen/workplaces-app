@@ -3839,3 +3839,317 @@ and finalizing an agenda emails the other Builder, then adding a point
 and finalizing again emails the delta. Live data at build time: 489
 sessions, 147 upcoming, but only 3 agenda items across 1 session — the
 agenda surfaces are a day old, so this lights up as they get used.
+
+## What was built — the onboarding button that refused itself (2026-08-05)
+
+Jen, onboarding a client: pressed Start onboarding, got the pop-up
+warning that this emails the client three times and none of it can be
+recalled, hit OK — and got back *"One thing needs sorting before
+onboarding can start"* with no indication of what, and nothing on the
+page to act on. No migration; this is client/server agreement.
+
+**The button and the server disagreed about who the rules applied to.**
+`StartOnboardingPanel` had `gatingBlockers = established ? [] : blockers`
+— an established client (one holding a real Clerk org, or with a session
+or synced meeting already behind them) was exempted from the pre-flight
+entirely: button enabled, blocker list not rendered, and the fee and
+schedule controls that fix the blockers not rendered either, all three
+guarded on `!established`. `startOnboarding` has no such exemption. It
+runs `checkOnboardingReadiness` for every client and refuses.
+
+So the panel offered a live button, said nothing about why it wouldn't
+work, and put the refusal behind an irreversible-sends confirmation.
+Measured against the live book: **15 of 21 engagements were in exactly
+that state.** Jen's was Steadfast Construction — established, one
+blocker, no monthly fee — which is precisely the "one thing" wording.
+
+**The exemption was defensible reasoning applied to the wrong thing.**
+Every check guards a real send: no fee means the payment form authorizes
+an unstated amount, no first session means the welcome email invents a
+start date, no contact email means nothing can go anywhere. None of that
+becomes safe because the client is established. What `established`
+legitimately buys is that we don't *nag* a two-year client with an orange
+"not ready" box — a presentation decision. It was quietly doing a
+permission one as well.
+
+The rule now: **the button is gated on the same blockers the server
+checks, always, and whatever fixes them renders beside them.**
+`established` still decides whether the panel opens collapsed and whether
+the copy frames onboarding as a task or as history ("these are only
+needed to run the welcome sequence — if this client is already going,
+nothing here is outstanding").
+
+**The fix controls existed nowhere else, which is the second half of "I
+don't know what to do from there."** `OnboardingSetupFields` and
+`EngagementSchedulePanel` are mounted ONLY as slots inside this panel, so
+for those 15 clients the monthly fee had no control anywhere in the app —
+the 2026-08-04 finding that "a blocker must be fixable where it is
+raised" returning through a door it had not been checked against. Both
+now render whenever onboarding hasn't run, established or not.
+
+**The server names the blockers instead of counting them.** "One thing
+needs sorting" is a sentence that reports a problem and withholds it.
+Now: "Onboarding can't start yet — no monthly fee is set."
+
+**The returned blockers are rendered, not discarded.** `startOnboarding`
+has always returned `blockers` on refusal and `go()` read only `.error`.
+The page is a snapshot — another Builder can change the record, and the
+fee is editable from the contact profile in another tab — so when the
+refusal disagrees with what is on screen, the refusal is the truth and it
+now renders with its fix links.
+
+**The confirm names the recipient.** "This emails the client three times
+and none of it can be recalled" is alarming and uncheckable. It now says
+which client and which address, which is the one fact that makes it
+either verifiable or obviously wrong before you press OK.
+
+**No onboarding panel on the practice's own workspace.** "Workplaces
+Team" is `is_internal` — no client behind it, so every check fails and
+the panel offered a sequence that can never legitimately run.
+
+**Verified:** `tsc --noEmit` clean for every file touched (the two
+remaining errors are a parallel session's uncommitted
+`app/api/leads/[token]` work, untouched here); `next lint` clean;
+`next build` at the recorded baseline — 74 prerender failures, 148
+`Missing publishableKey`, zero errors of any other cause. The pre-flight
+and the new gating were replayed against the LIVE database for all 21
+engagements, read-only: 15 traps before, **0 after**, with every blocked
+client now showing its blockers and its fix controls.
+
+**Not clicked in a browser.** The acceptance test is Jen opening
+Steadfast Construction, pressing Show on the onboarding line, seeing
+"Start onboarding — blocked" with "No monthly fee is set" and the fee
+field directly above it, setting the fee, and the button going live.
+
+## What was built — the leads in the briefing that were Jen's (2026-08-06)
+
+Bruce, on the 07:00 email: "gives me Jen's clients and action items as
+well — this just needs to be mine and Jen's hers unless we share a
+client." No migration; one function.
+
+**The engagement scoping was right, and that is what made this hard to
+see.** Replayed against the live book: Bruce's briefing covered 18
+engagements — his own 17 plus Steadfast Construction, which Jen shared
+with him. Crown and Ember, Jen's own unshared client, was correctly
+absent. Jen's covered 6: her two plus the four Bruce shared. Owned ∪
+shared, exactly as asked, on both sides.
+
+**One section below it was still practice-wide.** `gatherProspects` in
+`lib/ea/digest-data.ts` read
+
+    recipient.role === "master_admin" ? undefined : eq(owner, me)
+
+— so the master admin's "No next step booked" list was every live lead
+in the practice. All **six** entries in Bruce's list that morning
+(Amala Raveendran, Karen Andrichuk, Ali Choudhry, Jhaira Mae Humber,
+Dar, Terry M) were Jen's, and his own single lead was the one thing the
+section was for. Those are the "clients and action items" — a lead with
+an overdue next action reads as both.
+
+**It is the survivor of the 2026-07-29 fix.** That pass rewrote
+`listEngagementsForRecipient`'s master-admin branch for precisely this
+reason and did not touch the prospect gatherer three lines further
+down, which had the same exemption in the same shape for the same
+stated reason. Scoping one query in a module does not scope the module.
+
+Now `or(owner = me, owner IS NULL)` for everyone, master admin
+included — the identical clause `prospectScopeWhere` uses on the
+Pipeline page and `coachScopeWhere` uses on engagements. The unclaimed
+arm is load-bearing, not defensive tidiness: the lead webhooks never set
+an owner, so a strict `owner = me` would hide every inbound lead from
+both Builders until somebody claimed it, and nobody would, because
+nobody could see it.
+
+Fixing the gatherer fixes the Friday rollup too — it renders the same
+`gatherDigest` payload rather than re-deriving it, which is why the two
+emails cannot disagree about the same book.
+
+**Left alone, and worth naming.** `clientOverdue` is "assigned to
+someone who isn't you", so an item assigned to Jen on a client Bruce
+owns lands in his "waiting on the client" list attributed to a Business
+Builder. Zero rows today, and it is his client either way — but the
+label is wrong for that case and it will look wrong the first time it
+happens.
+
+**Verified:** `tsc --noEmit` reports only the two pre-existing errors in
+a parallel session's uncommitted `app/api/leads/[token]/route.ts`;
+`next lint` clean; `next build` compiles successfully and then stops
+type-checking on that same uncommitted file, so the prerender baseline
+could not be re-measured this pass. Old-vs-new scoping was replayed
+directly against the live database, read-only: Bruce **7 → 1** (his own
+Delize Inc.), Jen **6 → 6**, unchanged.
+
+**Not yet seen in a delivered email.** The acceptance test is tomorrow
+morning's briefing carrying only Bruce's own leads.
+
+## What was built — the client debt that was the other Builder's (2026-08-06)
+
+Same session, the item flagged when the prospect leak was fixed. No
+migration.
+
+**The section's own subtitle had been right all along.** "What your
+clients owe you" renders under *"overdue commitments held by client-side
+people"* — but the filter was `assignee !== me`, so on any client where
+both Builders work, an item assigned to the other one was reported to you
+as a client debt. Identity where the copy promised a role.
+
+**Nothing was ever sent to a client on the strength of it**, and that is
+worth stating precisely because it is the part that could have been bad.
+`runClientNudge` — the Monday email that actually chases people — already
+filters on `assigneeRole` being one of the three client roles, with the
+comment *"Client-side owners only. Business Builders have the digest."*
+So the correct rule existed one file over the whole time; the briefing
+simply did not use it. The blast radius was a wrong sentence in an
+internal email, not a client chased for their coach's homework.
+
+The digest now splits `others` by role the same way, into `clientOverdue`
+and a new `builderOverdue`, and renders them as two sections — "Overdue
+with the other Business Builder" in the daily, "Waiting on the other
+Business Builder" in the Friday rollup. Two conversations, two lists: one
+you raise with a client, one you raise with a colleague.
+
+**Both buckets are named explicitly rather than one being "everything
+else."** An assignee in neither set — a `prospect`-role profile, or a
+role added later — is dropped rather than silently filed under whichever
+bucket happened to be the default. Same conservatism the nudge already
+applies, and for the same reason: the cost of a wrong bucket is a
+sentence to somebody about work they do not owe.
+
+`builderOverdue` is OPTIONAL on `DigestPayload`. `ea_digests.payload` is
+a permanent record of what was actually sent, so every reader tolerates
+its absence on rows written before today rather than back-filling a guess
+about an email that has already gone.
+
+**The rollup's "nothing to report, skip the email" check counts it.** A
+week whose only outstanding item sits with the other Builder is not a
+quiet week — and unlike a client, a Business Builder gets no nudge, so
+this is the only place it ever surfaces. Omitting it from that check
+would have suppressed the email in exactly the case it exists for. Same
+reasoning as the stale-heartbeat carve-out immediately above it.
+
+**Verified:** `tsc --noEmit` reports only the two pre-existing errors in
+the parallel session's uncommitted `app/api/leads/[token]/route.ts`;
+`next lint` clean; `next build` compiles successfully and then stops
+type-checking on that same uncommitted file. Both emails were rendered
+through `npx tsx scripts/preview-ea-email.ts digest | rollup` and read —
+the sample data gained a `builderOverdue` row (Jen, on shared A&M
+Abatement) so the new section is exercised in HTML and plain text on both.
+
+**Reclassifies nothing today, and the live check says why:** there are
+currently **zero** overdue action items anywhere in the practice — not
+one held by a client, a Builder, or nobody. Both buckets are empty for
+both Builders. This is prevention, and the first overdue item assigned
+across a shared client is the acceptance test.
+
+## What was built — a lead arrives already owned (2026-08-06)
+
+Same session as the two above. Migration `0118_onboarding_person_profile`.
+
+**Ownership decides who hears about a lead, and nothing was setting
+it.** `recipientsForProspect` has routed prospect notifications by owner
+since the own-book work — owner alone, or the master admin triage inbox
+when nobody owns it. But the only thing that ever wrote
+`prospects.owner_user_profile_id` was a person creating a lead by hand.
+Every inbound lead — website form, Meta, Google, and every booking —
+arrived unowned, so every alert about every lead went to triage
+regardless of whose link or whose name produced it. The routing rule was
+correct and had almost nothing to route.
+
+Three write points now, one rule between them:
+
+1. **A discovery booking takes the link's Business Builder.** Whoever
+   owns the `scheduling_links` row owns the lead that books through it.
+2. **The Make.com bridge reads a `builder` field off the submission** and
+   resolves it to a `user_profiles` row.
+3. **An assessment coming back alerts the owner**, through
+   `lib/pipeline/notify-assessment.ts` and the same
+   `recipientsForProspect`.
+
+**Name matching is exact and case-insensitive, deliberately not fuzzy.**
+Restricted to `master_admin` / `coach` inside the org, and no match means
+no owner. The asymmetry is the whole reason: assigning the WRONG owner is
+worse than assigning none, because ownership *silences* everyone else's
+alerts about that lead. A near-miss would not merely mislabel the card —
+it would route the lead into a black hole where the person who should be
+working it never hears about it and the person who does hear has no idea
+who they are. An unowned lead still reaches triage, which is a visible,
+recoverable state.
+
+**An existing owner is never reassigned**, at all three write points.
+Booking someone else's link, or a second form submission naming somebody
+else, must not move a lead off the Business Builder already working
+them — that is a live conversation, and the record following the most
+recent web request rather than the relationship is how it gets dropped.
+Claiming only ever fills a NULL.
+
+**Bookings now match an existing lead by email** before inserting, the
+way the intake webhook always has. They did not, so a lead already in the
+pipeline who booked a call got a second card and their history split
+across the two. Archived prospects are ignored, so a deliberately
+archived lead who comes back is genuinely new.
+
+**The assessment alert is the one that had never fired at all.** The
+pre-meeting assessment normally lands on a lead that already exists —
+someone was sent the link because a conversation was already booked — and
+that path notified nobody. `notifyNewLead` only fires for a genuinely NEW
+prospect, so the answers went into the database and the person about to
+walk into the meeting was never told.
+
+It does NOT fire on the webhook's booking branch, and that is deliberate
+rather than an oversight: the booking branch is selected by the payload
+carrying a `calendar_event_id`, and the pre-meeting assessment posts
+without one, so nothing reaches that branch carrying an assessment.
+
+### Person Profile becomes step 4 of onboarding
+
+It used to be a hand-ticked panel on the PROSPECT, which put it in the
+wrong half of the relationship — nobody sits a Person Profile while still
+deciding whether to hire you. It belongs to the client who has signed,
+and it belongs inside the onboarding run so it cannot be the one step
+that gets forgotten. The tracker moved to the engagement page with it.
+
+Last in the sequence because it is the only step that asks the client to
+DO something (about 45 minutes) rather than to receive something; ahead
+of the portal invite it would land the biggest ask before they have
+anywhere to log in. Sent per participant rather than once to the primary
+contact — the second participant has their own email on the record, and
+forwarding is how a step gets quietly dropped.
+
+**A missing `orgs.person_profile_assessment_url` SKIPS the step, it does
+not fail the run.** TTI issues one survey link per context with no
+per-person identity in it, so the link is practice-level configuration;
+absent configuration is not a broken onboarding, and mailing a new client
+a dead link on day one is worse than mailing nothing. The skip writes its
+reason into `assessment_error` and stamps `completed_at`, so it is
+visible on the record rather than silent — same reasoning as every other
+step's error column.
+
+0118 adds `assessment_sent_at` + `assessment_error` to `onboarding_runs`
+and `person_profile_assessment_url` to `orgs`. **Numbered 0118, not
+0114** — it was authored as 0114 and collided with the already-committed
+`0114_notification_action_item_progress.sql`. The deploy runner keys
+`_app_migrations` on filename so both would have applied, but two files
+sharing a number is unreadable to anyone auditing the directory. Renamed
+before it was applied anywhere.
+
+**Caught in review, worth remembering:** the assessment alert's guard was
+written as `"orgId" in result`. TypeScript normalises the transaction's
+union so every branch declares the key — the booking branches as
+`orgId?: undefined` — which means `in` cannot narrow any member out and
+the value stayed `string | undefined`. **`in` narrowing does nothing on a
+union whose members all declare the property**, however they declare it.
+Narrowing on the value works. The same normalisation is why
+`recordError`'s hand-written field union had to gain `assessmentError`
+rather than inferring it.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles with 74 prerender failures and 148 `Missing publishableKey`,
+zero errors of any other cause — the recorded baseline exactly.
+
+**Not clicked in a browser, and no email has been sent.** 0118 applies on
+next deploy. The acceptance tests: a lead booking Jen's discovery link
+shows Jen as Owner and alerts her alone; a website submission naming a
+Business Builder claims the lead for them while a second submission
+naming the other one leaves it alone; an assessment landing on an
+existing lead emails its owner; and an onboarding run with no assessment
+URL set completes with the skip recorded rather than failing.

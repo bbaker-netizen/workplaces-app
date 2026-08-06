@@ -24,6 +24,7 @@ import { withSystemContext } from "@/lib/db/tenant";
 import {
   sendOnboardingEmail,
   sendPaymentAuthorization,
+  sendPersonProfileAssessment,
   sendPortalInvite,
   type OnboardingActor,
 } from "./steps";
@@ -41,6 +42,7 @@ export type SequenceOutcome = {
   welcomeEmail: "sent" | "failed" | "skipped";
   pad: "sent" | "failed" | "skipped";
   portalInvite: "sent" | "failed" | "skipped";
+  assessment: "sent" | "failed" | "skipped";
 };
 
 export async function runOnboardingSequence(
@@ -50,6 +52,7 @@ export async function runOnboardingSequence(
     welcomeEmail: "skipped",
     pad: "skipped",
     portalInvite: "skipped",
+    assessment: "skipped",
   };
 
   const loaded = await withSystemContext(async (tx) => {
@@ -129,11 +132,40 @@ export async function runOnboardingSequence(
       await stamp(engagementId, {
         portalInviteSentAt: new Date(),
         portalInviteError: null,
-        completedAt: new Date(),
       });
     } else {
       outcome.portalInvite = "failed";
       await recordError(engagementId, "portalInviteError", r.error);
+      return outcome;
+    }
+  }
+
+  // ---- step 4: Person Profile assessment ----
+  // A missing assessment URL is a skip, not a failure: the run still
+  // completes, and the reason is on the record so it is visible rather
+  // than silent. Everything else here matches steps one to three.
+  if (!run.assessmentSentAt) {
+    await sleep(STEP_GAP_MS);
+    const r = await sendPersonProfileAssessment(engagementId, actor);
+    if (r.ok && r.skipped) {
+      outcome.assessment = "skipped";
+      await stamp(engagementId, {
+        assessmentError:
+          "No Person Profile link is set for the practice, so this step was skipped.",
+        completedAt: new Date(),
+      });
+      return outcome;
+    }
+    if (r.ok) {
+      outcome.assessment = "sent";
+      await stamp(engagementId, {
+        assessmentSentAt: new Date(),
+        assessmentError: null,
+        completedAt: new Date(),
+      });
+    } else {
+      outcome.assessment = "failed";
+      await recordError(engagementId, "assessmentError", r.error);
       return outcome;
     }
   }
@@ -162,7 +194,11 @@ async function stamp(
 
 async function recordError(
   engagementId: string,
-  field: "welcomeEmailError" | "padError" | "portalInviteError",
+  field:
+    | "welcomeEmailError"
+    | "padError"
+    | "portalInviteError"
+    | "assessmentError",
   message: string,
 ): Promise<void> {
   console.error(`[onboarding] ${engagementId} ${field}: ${message}`);

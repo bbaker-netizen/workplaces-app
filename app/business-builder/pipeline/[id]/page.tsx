@@ -50,7 +50,6 @@ import { listForProspect } from "@/lib/db/queries/client-communications";
 import { listBusinessBuilders } from "@/lib/db/queries/user-profiles";
 import {
   availabilityRequests,
-  bbsSessions,
   documentTemplates,
   pricingTiers,
   emailTemplates,
@@ -61,6 +60,7 @@ import { withSystemContext } from "@/lib/db/tenant";
 import { ProspectStatusSelect } from "@/components/pipeline/ProspectStatusSelect";
 import { ProspectLeadEssentials } from "@/components/pipeline/ProspectLeadEssentials";
 import { ProspectAssessmentPanel } from "@/components/pipeline/ProspectAssessmentPanel";
+import { BeforeWeMeetStep } from "@/components/pipeline/BeforeWeMeetStep";
 import { ProspectDealCard } from "@/components/pipeline/ProspectDealCard";
 import { ProspectActivityTimeline } from "@/components/pipeline/ProspectActivityTimeline";
 import { ProspectComments } from "@/components/pipeline/ProspectComments";
@@ -68,7 +68,6 @@ import { ProspectDocuments } from "@/components/pipeline/ProspectDocuments";
 import { ProspectEnvelopeSection } from "@/components/pipeline/ProspectEnvelopeSection";
 import { ProspectAvailabilityPanel } from "@/components/pipeline/ProspectAvailabilityPanel";
 import { RequestPaymentAuthorizationPanel } from "@/components/pipeline/RequestPaymentAuthorizationPanel";
-import { ProspectAssessmentTracker } from "@/components/pipeline/ProspectAssessmentTracker";
 import { ProspectInlineEdit } from "@/components/pipeline/ProspectInlineEdit";
 import { QboRecurringInvoiceButton } from "@/components/business-builder/QboRecurringInvoiceButton";
 import { ProspectQboCustomerPicker } from "@/components/pipeline/ProspectQboCustomerPicker";
@@ -129,7 +128,6 @@ export default async function ProspectDetailPage({
     comments,
     prospectDocs,
     availabilityRequest,
-    firstSessionAt,
   ] = await Promise.all([
     listProspectActivities(prospect.id),
     listEnvelopesForProspect(prospect.id),
@@ -218,45 +216,10 @@ export default async function ProspectDetailPage({
         null
       );
     }),
-    // First session date is DERIVED, not a second field to keep in step —
-    // the earliest scheduled session on the engagement this lead converted
-    // into. Null before conversion, which is the normal case at onboarding;
-    // the email then uses its "one week before our first session" wording.
-    withSystemContext(async (tx) => {
-      if (!prospect.convertedEngagementId) return null;
-      const rows = await tx
-        .select({ scheduledAt: bbsSessions.scheduledAt })
-        .from(bbsSessions)
-        .where(eq(bbsSessions.engagementId, prospect.convertedEngagementId))
-        .orderBy(asc(bbsSessions.scheduledAt))
-        .limit(1);
-      return rows[0]?.scheduledAt ?? null;
-    }),
   ]);
 
-  // The assessments are due a week before that first session.
-  const assessmentDueDate = firstSessionAt
-    ? new Date(firstSessionAt.getTime() - 7 * 24 * 60 * 60 * 1000)
-    : null;
-  const assessmentParticipants = [
-    {
-      n: 1 as const,
-      name:
-        prospect.contactFirstName ??
-        prospect.contactName ??
-        "Primary contact",
-      completedAt: prospect.assessment1CompletedAt,
-    },
-    ...(prospect.contact2FirstName || prospect.contact2Email
-      ? [
-          {
-            n: 2 as const,
-            name: prospect.contact2FirstName ?? "Business partner",
-            completedAt: prospect.assessment2CompletedAt,
-          },
-        ]
-      : []),
-  ];
+  // Person Profile due dates and participants moved to the engagement
+  // page with the tracker itself. Nothing on a prospect card needs them.
 
   // Booking follow-through row, if this prospect came in via a booked
   // session. Drives the three-email NDA/paperwork panel.
@@ -541,29 +504,62 @@ export default async function ProspectDetailPage({
             storageKey="climb-prep"
             icon={<Mountain className="w-3.5 h-3.5" aria-hidden />}
           >
-            <div className="p-5 space-y-4">
-              {/* What they told us before we spoke. This lives inside the prep
-                  drawer rather than as its own block on the page: it IS the
-                  prep for the Climb session, and the page already carries
-                  enough top-level boxes. */}
-              {assessment && (
-                <ProspectAssessmentPanel
-                  assessment={assessment}
-                  takenAt={prospect.assessmentAt ?? null}
+            {/* Three steps, in the order they happen, and all three ALWAYS
+                render. The assessment panel used to be conditional, so a
+                brand-new lead opened this drawer to a single button and
+                nothing explaining what came before it. An empty state that
+                names the missing work is the point of a sequence. */}
+            <ol className="p-5 space-y-5">
+              <li className="space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Step 1 &middot; Send the before-we-meet link
+                </p>
+                <BeforeWeMeetStep
+                  firstName={
+                    prospect.contactFirstName ??
+                    prospect.contactName?.split(" ")[0] ??
+                    null
+                  }
+                  companyName={prospect.companyName}
+                  contactEmail={prospect.contactEmail}
+                  builderName={prospect.ownerName}
                 />
-              )}
-              <p className="text-sm text-tbb-ink-2">
-                Open the meeting-prep kit — the Map of the Mountain, the four
-                Building Blocks, and the companion tools.
-              </p>
-              <Link
-                href={`/business-builder/the-climb?prospectId=${prospect.id}&company=${encodeURIComponent(prospect.companyName)}`}
-                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
-              >
-                <Mountain className="w-3.5 h-3.5" aria-hidden />
-                Open the prep kit
-              </Link>
-            </div>
+              </li>
+
+              <li className="space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Step 2 &middot; Read what they said
+                </p>
+                {assessment ? (
+                  <ProspectAssessmentPanel
+                    assessment={assessment}
+                    takenAt={prospect.assessmentAt ?? null}
+                  />
+                ) : (
+                  <p className="text-sm text-tbb-ink-3">
+                    Nothing back yet. Their answers land here the moment they
+                    submit, and you get an email when they do.
+                  </p>
+                )}
+              </li>
+
+              <li className="space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-tbb-caps text-tbb-ink-3">
+                  Step 3 &middot; Prep the session
+                </p>
+                <p className="text-sm text-tbb-ink-2">
+                  The Map of the Mountain, the four Building Blocks, and the
+                  companion tools.
+                </p>
+                <Link
+                  href={`/business-builder/the-climb?prospectId=${prospect.id}&company=${encodeURIComponent(prospect.companyName)}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-4 py-2 rounded-pill bg-tbb-blue text-white hover:bg-tbb-blue-700"
+                >
+                  <Mountain className="w-3.5 h-3.5" aria-hidden />
+                  Open the prep kit
+                </Link>
+              </li>
+            </ol>
           </CollapsibleSection>
 
           {/* Schedule a follow-up — collapsible. Sets the next-action date. */}
@@ -800,17 +796,12 @@ export default async function ProspectDetailPage({
           {/* Communications timeline — every email / SMS / WhatsApp / call
               note attached to this prospect. Lives in the left column so it
               lines up with the sections above it. Collapsed by default. */}
-          <CollapsibleSection
-            title="Person Profile assessments"
-            storageKey="assessments"
-            icon={<Zap className="w-3.5 h-3.5" aria-hidden />}
-          >
-            <ProspectAssessmentTracker
-              prospectId={prospect.id}
-              participants={assessmentParticipants}
-              dueDate={assessmentDueDate}
-            />
-          </CollapsibleSection>
+          {/* The Person Profile tracker used to live here. It moved to the
+              engagement, beside onboarding: nobody sits a 45-minute
+              assessment while they are still deciding whether to hire you,
+              so tracking it against a PROSPECT put it in the wrong half of
+              the relationship. Sending it is now step 4 of the onboarding
+              sequence and completion is ticked on the client. */}
 
           <CollapsibleSection
             title="Meeting availability"
