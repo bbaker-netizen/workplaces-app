@@ -372,6 +372,11 @@ export const orgs = pgTable("orgs", {
   /** Hosted payment page (QuickBooks Payments / Stripe) for card
    *  authorizations. Card numbers are never collected by this app. */
   cardPaymentUrl: text("card_payment_url"),
+  /** The practice's Person Profile survey link. One shared URL with no
+   *  per-person identity (TTI issues nothing finer), which is why
+   *  completion is ticked by hand. Null disables the onboarding step
+   *  rather than sending a new client a broken link. */
+  personProfileAssessmentUrl: text("person_profile_assessment_url"),
   type: orgTypeEnum("type").notNull().default("client"),
   // Lead-capture webhook secret (migration 0068). Secures the public
   // /api/leads/<token> endpoint that external channels POST leads to.
@@ -3965,6 +3970,14 @@ export const onboardingRuns = pgTable(
       withTimezone: true,
     }),
     portalInviteError: text("portal_invite_error"),
+    /** Step 4 — the Person Profile assessment invitation. Last because it
+     *  is the only step the client does rather than receives, and asking
+     *  for 45 minutes of their time before they have their portal makes
+     *  no sense. Skipped, not failed, when the org has no assessment URL. */
+    assessmentSentAt: timestamp("assessment_sent_at", {
+      withTimezone: true,
+    }),
+    assessmentError: text("assessment_error"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

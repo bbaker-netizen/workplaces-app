@@ -14,12 +14,13 @@
  */
 
 import { NextResponse } from "next/server";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   bookingFollowThrough,
   orgs,
   prospectActivities,
   prospects,
+  userProfiles,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
@@ -30,6 +31,7 @@ import {
 import { extractLeadNote, mergeLeadNote } from "@/lib/pipeline/lead-notes";
 import { assessmentSummary, parseAssessment } from "@/lib/pipeline/assessment";
 import { notifyNewLead } from "@/lib/pipeline/notify-new-lead";
+import { notifyAssessmentReceived } from "@/lib/pipeline/notify-assessment";
 import { parseWebhookBody } from "@/lib/pipeline/parse-webhook-body";
 
 export const runtime = "nodejs";
@@ -119,6 +121,12 @@ export async function POST(
   // most of them. Nested deliberately — extractLeadNote skips objects, so the
   // scores ride along without also being smeared into the free-text Notes.
   const assessment = parseAssessment(body.assessment);
+  // Which Business Builder sent the link this was filled in from. The
+  // pre-meeting assessment is personalised per sender, so the answers can
+  // be routed to the person who booked the meeting instead of the practice
+  // inbox. Matched by full name below — the public page has no user ids and
+  // never should, since anything it carries is visible to the prospect.
+  const builderName = pick(body, ["builder", "business_builder", "bb"]);
   const source =
     pick(body, ["source", "lead_source", "channel", "utm_source", "platform"]) ??
     "Webhook";
@@ -235,6 +243,27 @@ export async function POST(
         .limit(1);
       if (!org) return { status: 401 as const };
 
+      // Resolve the sending Business Builder, when the payload named one.
+      // Exact match, case-insensitive, and restricted to internal roles.
+      // Deliberately NOT fuzzy: assigning the wrong owner is worse than
+      // assigning none, because ownership silences everyone else's alerts
+      // about this lead, so a near-miss would route it into a black hole.
+      let builderOwnerId: string | null = null;
+      if (builderName) {
+        const [u] = await tx
+          .select({ id: userProfiles.id })
+          .from(userProfiles)
+          .where(
+            and(
+              eq(userProfiles.orgId, org.id),
+              inArray(userProfiles.role, ["master_admin", "coach"]),
+              sql`lower(${userProfiles.fullName}) = lower(${builderName})`,
+            ),
+          )
+          .limit(1);
+        builderOwnerId = u?.id ?? null;
+      }
+
       // ---- Booking branch --------------------------------------------
       // A calendar event became a booked session. calendar_event_id is the
       // idempotency key: if we've seen it, do nothing (no double emails).
@@ -349,7 +378,13 @@ export async function POST(
 
       // De-dupe by email within the org (ignore archived).
       const [existing] = await tx
-        .select({ id: prospects.id, notes: prospects.notes })
+        .select({
+          id: prospects.id,
+          notes: prospects.notes,
+          // Needed after the transaction: an assessment landing on an
+          // already-owned lead has to reach its owner, not the inbox.
+          ownerUserProfileId: prospects.ownerUserProfileId,
+        })
         .from(prospects)
         .where(
           and(
@@ -377,6 +412,14 @@ export async function POST(
             ...(assessment
               ? { assessment, assessmentAt: new Date() }
               : {}),
+            // Claim an unowned lead for the Business Builder whose link
+            // this came from. Never reassigns one that already has an
+            // owner: a prospect can fill in a second tool from anyone's
+            // link, and that must not move them off the person working
+            // them.
+            ...(builderOwnerId && !existing.ownerUserProfileId
+              ? { ownerUserProfileId: builderOwnerId }
+              : {}),
             // Fold this submission's note into the profile Notes,
             // non-destructively — a returning lead's new words reach the
             // profile without clobbering earlier notes.
@@ -403,6 +446,7 @@ export async function POST(
             firstSeenAt: new Date(),
             assessment: assessment ?? undefined,
             assessmentAt: assessment ? new Date() : undefined,
+            ownerUserProfileId: builderOwnerId ?? undefined,
             status: "new_lead",
             notes: leadNote ?? undefined,
             // NOT setting lastContactAt — see the matching note in
@@ -428,7 +472,14 @@ export async function POST(
         body: leadNote ?? message ?? null,
       });
 
-      return { status: 200 as const, prospectId, deduped: !!existing };
+      return {
+        status: 200 as const,
+        prospectId,
+        deduped: !!existing,
+        orgId: org.id,
+        ownerUserProfileId:
+          existing?.ownerUserProfileId ?? builderOwnerId ?? null,
+      };
     });
 
     if (result.status === 401) {
@@ -452,6 +503,28 @@ export async function POST(
         phone,
         leadSource: leadSourceLabel,
         message: leadNote,
+      });
+    }
+
+    // An assessment came back. Tell the Business Builder who owns this
+    // lead — including (especially) when the submission landed on an
+    // existing prospect, which is the normal case for the pre-meeting
+    // assessment and the one that previously notified nobody.
+    // Narrowed on the VALUE, not on `"orgId" in result`. TypeScript
+    // normalises the transaction's union so the booking branches declare
+    // `orgId?: undefined`, which means the key is present on every member
+    // and `in` cannot narrow any of them out. Truthiness can, and the
+    // branch that carries an orgId is exactly the one this guard wanted.
+    if (assessment && result.prospectId && result.orgId) {
+      await notifyAssessmentReceived({
+        prospectId: result.prospectId,
+        orgId: result.orgId,
+        ownerUserProfileId: result.ownerUserProfileId ?? null,
+        companyName: (company ?? name ?? email).slice(0, 200),
+        contactName: name,
+        contactEmail: email,
+        toolLabel: source,
+        summary: assessmentSummary(assessment),
       });
     }
 

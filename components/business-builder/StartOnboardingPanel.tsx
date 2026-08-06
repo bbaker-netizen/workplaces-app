@@ -65,6 +65,8 @@ export type OnboardingRunState = {
   padError: string | null;
   portalInviteSentAt: Date | null;
   portalInviteError: string | null;
+  assessmentSentAt: Date | null;
+  assessmentError: string | null;
   completedAt: Date | null;
 } | null;
 
@@ -83,6 +85,12 @@ const STEPS = [
     key: "invite" as const,
     label: "Portal invitation",
     detail: "Creates their login and drops them into their workspace.",
+  },
+  {
+    key: "assessment" as const,
+    label: "Person Profile assessment",
+    detail:
+      "The link, to every participant. Last because it is the only step that asks them for time.",
   },
 ];
 
@@ -153,14 +161,22 @@ export function StartOnboardingPanel({
       ? run?.welcomeEmailSentAt
       : k === "pad"
         ? run?.padSentAt
-        : run?.portalInviteSentAt;
+        : k === "invite"
+          ? run?.portalInviteSentAt
+          : run?.assessmentSentAt;
   const errorFor = (k: (typeof STEPS)[number]["key"]) =>
     k === "welcome"
       ? run?.welcomeEmailError
       : k === "pad"
         ? run?.padError
-        : run?.portalInviteError;
+        : k === "invite"
+          ? run?.portalInviteError
+          : run?.assessmentError;
 
+  // The assessment step is deliberately absent from this list. It records
+  // a message on `assessmentError` when it SKIPS for want of a configured
+  // link, and a skip is not a failure — treating it as one would put a
+  // completed run permanently in the red.
   const anyFailure = Boolean(
     run &&
       !run.completedAt &&

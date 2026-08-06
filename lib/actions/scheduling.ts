@@ -17,7 +17,7 @@
  *   matches Bruce's working window)
  */
 
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/db/provisioning";
@@ -290,6 +290,44 @@ export async function createBooking(
         // shares the link in context. Phase 4 will allow per-engagement
         // booking links.
       } else if (link.meetingType === "discovery") {
+        // Match an existing lead on email before creating one. The public
+        // intake webhook has always de-duplicated this way; bookings did
+        // not, so a lead already in the pipeline who booked a call got a
+        // second card and their history split across the two. Archived
+        // prospects are ignored so a deliberately archived lead who comes
+        // back is a genuinely new one.
+        const [existingProspect] = await tx
+          .select({
+            id: prospects.id,
+            ownerUserProfileId: prospects.ownerUserProfileId,
+          })
+          .from(prospects)
+          .where(
+            and(
+              eq(prospects.orgId, link.orgId),
+              isNull(prospects.archivedAt),
+              sql`lower(${prospects.contactEmail}) = lower(${data.bookerEmail})`,
+            ),
+          )
+          .limit(1);
+
+        if (existingProspect) {
+          await tx
+            .update(prospects)
+            .set({
+              status: "meeting_scheduled",
+              bookedSessionAt: new Date(),
+              lastContactAt: new Date(),
+              // Same rule as the intake webhook: claim it only if nobody
+              // owns it. Booking someone else's link must not move a lead
+              // off the Business Builder already working them.
+              ...(existingProspect.ownerUserProfileId
+                ? {}
+                : { ownerUserProfileId: link.coachUserProfileId }),
+            })
+            .where(eq(prospects.id, existingProspect.id));
+          prospectId = existingProspect.id;
+        } else {
         const [pr] = await tx
           .insert(prospects)
           .values({
@@ -314,6 +352,7 @@ export async function createBooking(
           })
           .returning({ id: prospects.id });
         prospectId = pr.id;
+        }
       }
 
       const [row] = await tx

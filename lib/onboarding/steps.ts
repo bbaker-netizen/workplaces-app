@@ -42,6 +42,7 @@ import { sendEmailQuietly } from "@/lib/email/send";
 import {
   clientOnboardingEmail,
   engagementWelcomeEmail,
+  personProfileInviteEmail,
 } from "@/lib/email/templates";
 import { getConnectionStatus } from "@/lib/integrations/google-calendar";
 
@@ -451,6 +452,139 @@ export async function sendPortalInvite(
     }
 
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errText(e) };
+  }
+}
+
+/* ------------------------------ step 4 ------------------------------ */
+
+/**
+ * The Person Profile assessment invitation, to both participants.
+ *
+ * Last in the sequence because it is the only step that asks the client
+ * to DO something (about 45 minutes, in one sitting) rather than to
+ * receive something. Putting that ahead of the portal invite would land
+ * the biggest ask before they have anywhere to log in.
+ *
+ * Sent per participant, not once to the primary contact, because the
+ * second participant is a real person with their own email on the record
+ * and forwarding is how a step gets quietly dropped.
+ *
+ * SKIPS rather than fails when the practice has no assessment URL set.
+ * A missing configuration value is not a broken onboarding, and mailing
+ * a new client a dead link on day one is worse than mailing nothing.
+ */
+export async function sendPersonProfileAssessment(
+  engagementId: string,
+  actor: OnboardingActor,
+): Promise<StepResult & { skipped?: true }> {
+  try {
+    const ctx = await withSystemContext(async (tx) => {
+      const [eng] = await tx
+        .select({
+          id: engagements.id,
+          orgId: engagements.orgId,
+          assessmentDueDate: engagements.assessmentDueDate,
+        })
+        .from(engagements)
+        .where(eq(engagements.id, engagementId))
+        .limit(1);
+      if (!eng) return null;
+      const [p] = await tx
+        .select({
+          contactName: prospects.contactName,
+          contactEmail: prospects.contactEmail,
+          contact2FirstName: prospects.contact2FirstName,
+          contact2Email: prospects.contact2Email,
+        })
+        .from(prospects)
+        .where(eq(prospects.convertedEngagementId, engagementId))
+        .limit(1);
+      const [o] = await tx
+        .select({ url: orgs.personProfileAssessmentUrl })
+        .from(orgs)
+        .where(eq(orgs.id, eng.orgId))
+        .limit(1);
+      const [me] = await tx
+        .select({ signature: userProfiles.emailSignature })
+        .from(userProfiles)
+        .where(eq(userProfiles.id, actor.userProfileId))
+        .limit(1);
+      return {
+        eng,
+        prospect: p ?? null,
+        url: o?.url ?? null,
+        signature: me?.signature ?? null,
+      };
+    });
+
+    if (!ctx) return { ok: false, error: "Client record not found." };
+    if (!ctx.url) return { ok: true, skipped: true };
+
+    const due = ctx.eng.assessmentDueDate
+      ? String(ctx.eng.assessmentDueDate).slice(0, 10)
+      : null;
+
+    const recipients: { email: string; name: string }[] = [];
+    if (ctx.prospect?.contactEmail?.trim()) {
+      recipients.push({
+        email: ctx.prospect.contactEmail.trim(),
+        name: ctx.prospect.contactName?.split(" ")[0] ?? "there",
+      });
+    }
+    if (ctx.prospect?.contact2Email?.trim()) {
+      recipients.push({
+        email: ctx.prospect.contact2Email.trim(),
+        name: ctx.prospect.contact2FirstName ?? "there",
+      });
+    }
+    if (recipients.length === 0) {
+      return { ok: false, error: "No participant email on the client." };
+    }
+
+    const google = await getConnectionStatus(actor.userProfileId);
+    let anyDelivered = false;
+
+    for (const r of recipients) {
+      const envelope = personProfileInviteEmail({
+        to: r.email,
+        recipientName: r.name,
+        assessmentUrl: ctx.url,
+        dueDate: due,
+        senderName: actor.fullName,
+        senderEmail: actor.email,
+        signature: ctx.signature,
+      });
+
+      if (google.connected && google.email) {
+        try {
+          const { sendGmailMessage } = await import("@/lib/integrations/gmail");
+          await sendGmailMessage(actor.userProfileId, google.email, {
+            to: [r.email],
+            subject: envelope.subject,
+            body: envelope.text,
+            bodyHtml: envelope.html,
+          });
+          anyDelivered = true;
+          continue;
+        } catch (e) {
+          console.error(
+            "[onboarding] Gmail send failed for the assessment invite, falling back:",
+            e,
+          );
+        }
+      }
+      const sent = await sendEmailQuietly({
+        ...envelope,
+        bypassWorkingHours: true,
+      });
+      if (sent.delivered) anyDelivered = true;
+    }
+
+    return anyDelivered
+      ? { ok: true }
+      : { ok: false, error: "The assessment invitation could not be delivered." };
   } catch (e) {
     return { ok: false, error: errText(e) };
   }
