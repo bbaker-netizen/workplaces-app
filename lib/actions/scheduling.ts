@@ -408,6 +408,63 @@ export type AvailableSlot = {
   startsAtLocal: string; // pretty MT
 };
 
+/**
+ * Record how the last PUBLIC read of this link went.
+ *
+ * Written from the visitor's page load rather than probed from the
+ * console, so what a Builder is shown is the outcome a real prospect
+ * actually got. A probe run later, from a different function instance
+ * with a freshly refreshed token, can easily disagree with what the
+ * stranger saw — and the stranger's experience is the thing that
+ * matters.
+ *
+ * Throttled: a write on every pageview would be pure cost, so it only
+ * writes when the OUTCOME CHANGED or the last note is over an hour old.
+ * That keeps the transition (working → broken) always recorded, which is
+ * the event worth having, while a steady state costs one write an hour.
+ *
+ * Never throws. This is bookkeeping about a booking page; it must not be
+ * able to take the booking page down. Same rule as `withHeartbeat`.
+ */
+async function recordAvailabilityOutcome(
+  linkId: string,
+  busy: { calendarReadable: boolean; reason: string; error?: string },
+): Promise<void> {
+  try {
+    await withSystemContext(async (tx) => {
+      const [prev] = await tx
+        .select({
+          ok: schedulingLinks.lastAvailabilityOk,
+          reason: schedulingLinks.lastAvailabilityReason,
+          at: schedulingLinks.lastAvailabilityCheckedAt,
+        })
+        .from(schedulingLinks)
+        .where(eq(schedulingLinks.id, linkId))
+        .limit(1);
+
+      const changed =
+        prev?.ok !== busy.calendarReadable || prev?.reason !== busy.reason;
+      const stale =
+        !prev?.at || Date.now() - new Date(prev.at).getTime() > 3_600_000;
+      if (!changed && !stale) return;
+
+      await tx
+        .update(schedulingLinks)
+        .set({
+          lastAvailabilityCheckedAt: new Date(),
+          lastAvailabilityOk: busy.calendarReadable,
+          lastAvailabilityReason: busy.reason,
+          // Bounded: a provider can return a very long body, and this is
+          // read on a console page, not stored for forensics.
+          lastAvailabilityError: busy.error?.slice(0, 2000) ?? null,
+        })
+        .where(eq(schedulingLinks.id, linkId));
+    });
+  } catch (e) {
+    console.error("[availability] could not record link health:", e);
+  }
+}
+
 export async function listAvailableSlots(
   slug: string,
   daysAhead = 14,
@@ -465,6 +522,7 @@ export async function listAvailableSlots(
     rangeStart,
     rangeEnd,
   );
+  await recordAvailabilityOutcome(link.id, busy);
 
   // Bookings already taken through ANY of this Builder's links, not just
   // this one. A discovery booking creates a prospect and a booking row —

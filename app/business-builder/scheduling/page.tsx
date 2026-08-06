@@ -12,9 +12,14 @@
  * who has not signed in yet cannot make their own.
  */
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import {
+  BookingPageHealth,
+  BookingPageHealthFallback,
+} from "@/components/scheduling/BookingPageHealth";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listManageableSchedulingLinks } from "@/lib/db/queries/scheduling-links";
 import { listBusinessBuilders } from "@/lib/db/queries/user-profiles";
@@ -64,6 +69,12 @@ export default async function SchedulingSettingsPage() {
           .
         </p>
       </header>
+
+      <Suspense fallback={<BookingPageHealthFallback />}>
+        {/* Streamed: the credential probe reaches Google when something
+            is wrong, and the list of links must not wait on it. */}
+        <BookingPageHealth links={view.links} />
+      </Suspense>
 
       <SchedulingLinksManager
         links={view.links}
