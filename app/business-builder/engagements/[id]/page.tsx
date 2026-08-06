@@ -548,8 +548,14 @@ export default async function EngagementDetailPage({
           of its three steps is the portal invitation — the modules below
           need to be right before that goes out. */}
       <div id="onboarding-setup" className="scroll-mt-6" />
+      {/* Not on the practice's own workspace. There is no client behind
+          it to email, so every check fails and the panel offers a
+          sequence that can never legitimately run. */}
+      {!data.eng.isInternal && (
       <StartOnboardingPanel
         engagementId={id}
+        clientName={onboardingReadiness.clientName ?? data.eng.name ?? "this client"}
+        clientEmail={onboardingReadiness.clientEmail}
         blockers={onboardingReadiness.blockers}
         established={onboardingEstablished}
         setupFields={
@@ -592,6 +598,7 @@ export default async function EngagementDetailPage({
             : null
         }
       />
+      )}
 
       {/* Who on OUR side works this client. Sits above the portal
           manager because it is about us, not about what the client

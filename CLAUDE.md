@@ -3839,3 +3839,84 @@ and finalizing an agenda emails the other Builder, then adding a point
 and finalizing again emails the delta. Live data at build time: 489
 sessions, 147 upcoming, but only 3 agenda items across 1 session — the
 agenda surfaces are a day old, so this lights up as they get used.
+
+## What was built — the onboarding button that refused itself (2026-08-05)
+
+Jen, onboarding a client: pressed Start onboarding, got the pop-up
+warning that this emails the client three times and none of it can be
+recalled, hit OK — and got back *"One thing needs sorting before
+onboarding can start"* with no indication of what, and nothing on the
+page to act on. No migration; this is client/server agreement.
+
+**The button and the server disagreed about who the rules applied to.**
+`StartOnboardingPanel` had `gatingBlockers = established ? [] : blockers`
+— an established client (one holding a real Clerk org, or with a session
+or synced meeting already behind them) was exempted from the pre-flight
+entirely: button enabled, blocker list not rendered, and the fee and
+schedule controls that fix the blockers not rendered either, all three
+guarded on `!established`. `startOnboarding` has no such exemption. It
+runs `checkOnboardingReadiness` for every client and refuses.
+
+So the panel offered a live button, said nothing about why it wouldn't
+work, and put the refusal behind an irreversible-sends confirmation.
+Measured against the live book: **15 of 21 engagements were in exactly
+that state.** Jen's was Steadfast Construction — established, one
+blocker, no monthly fee — which is precisely the "one thing" wording.
+
+**The exemption was defensible reasoning applied to the wrong thing.**
+Every check guards a real send: no fee means the payment form authorizes
+an unstated amount, no first session means the welcome email invents a
+start date, no contact email means nothing can go anywhere. None of that
+becomes safe because the client is established. What `established`
+legitimately buys is that we don't *nag* a two-year client with an orange
+"not ready" box — a presentation decision. It was quietly doing a
+permission one as well.
+
+The rule now: **the button is gated on the same blockers the server
+checks, always, and whatever fixes them renders beside them.**
+`established` still decides whether the panel opens collapsed and whether
+the copy frames onboarding as a task or as history ("these are only
+needed to run the welcome sequence — if this client is already going,
+nothing here is outstanding").
+
+**The fix controls existed nowhere else, which is the second half of "I
+don't know what to do from there."** `OnboardingSetupFields` and
+`EngagementSchedulePanel` are mounted ONLY as slots inside this panel, so
+for those 15 clients the monthly fee had no control anywhere in the app —
+the 2026-08-04 finding that "a blocker must be fixable where it is
+raised" returning through a door it had not been checked against. Both
+now render whenever onboarding hasn't run, established or not.
+
+**The server names the blockers instead of counting them.** "One thing
+needs sorting" is a sentence that reports a problem and withholds it.
+Now: "Onboarding can't start yet — no monthly fee is set."
+
+**The returned blockers are rendered, not discarded.** `startOnboarding`
+has always returned `blockers` on refusal and `go()` read only `.error`.
+The page is a snapshot — another Builder can change the record, and the
+fee is editable from the contact profile in another tab — so when the
+refusal disagrees with what is on screen, the refusal is the truth and it
+now renders with its fix links.
+
+**The confirm names the recipient.** "This emails the client three times
+and none of it can be recalled" is alarming and uncheckable. It now says
+which client and which address, which is the one fact that makes it
+either verifiable or obviously wrong before you press OK.
+
+**No onboarding panel on the practice's own workspace.** "Workplaces
+Team" is `is_internal` — no client behind it, so every check fails and
+the panel offered a sequence that can never legitimately run.
+
+**Verified:** `tsc --noEmit` clean for every file touched (the two
+remaining errors are a parallel session's uncommitted
+`app/api/leads/[token]` work, untouched here); `next lint` clean;
+`next build` at the recorded baseline — 74 prerender failures, 148
+`Missing publishableKey`, zero errors of any other cause. The pre-flight
+and the new gating were replayed against the LIVE database for all 21
+engagements, read-only: 15 traps before, **0 after**, with every blocked
+client now showing its blockers and its fix controls.
+
+**Not clicked in a browser.** The acceptance test is Jen opening
+Steadfast Construction, pressing Show on the onboarding line, seeing
+"Start onboarding — blocked" with "No monthly fee is set" and the fee
+field directly above it, setting the fee, and the button going live.

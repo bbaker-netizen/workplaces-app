@@ -32,6 +32,26 @@ export type StartOnboardingResult =
   | { ok: true }
   | { ok: false; error: string; blockers?: OnboardingBlocker[] };
 
+/**
+ * Short name per blocker, for the one-line refusal. The blocker's own
+ * `message` is the full sentence with the fix in it; this is the phrase
+ * that goes in "can't start yet — X and Y".
+ *
+ * Not exported: a `"use server"` module may only export async functions.
+ */
+const BLOCKER_SUMMARY: Record<OnboardingBlocker["key"], string> = {
+  monthly_fee: "no monthly fee is set",
+  first_session: "no first session is scheduled",
+  contact_email: "there's no contact email",
+  portal_modules: "the portal modules haven't been reviewed",
+};
+
+function listSentence(parts: string[]): string {
+  if (parts.length === 0) return "the pre-flight didn't pass";
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 export async function startOnboarding(
   engagementId: string,
 ): Promise<StartOnboardingResult> {
@@ -49,12 +69,14 @@ export async function startOnboarding(
   // half-run sequence cannot be undone; a blocked one costs a minute.
   const readiness = await checkOnboardingReadiness(engagementId);
   if (!readiness.ready) {
+    // Name them. A count ("One thing needs sorting") tells the operator
+    // there is a problem and nothing about which one — and the caller
+    // renders `blockers` underneath this sentence, so the summary should
+    // agree with the list rather than replace it with arithmetic.
+    const named = readiness.blockers.map((b) => BLOCKER_SUMMARY[b.key]);
     return {
       ok: false,
-      error:
-        readiness.blockers.length === 1
-          ? "One thing needs sorting before onboarding can start."
-          : `${readiness.blockers.length} things need sorting before onboarding can start.`,
+      error: `Onboarding can't start yet — ${listSentence(named)}.`,
       blockers: readiness.blockers,
     };
   }
