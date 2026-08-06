@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import {
   Bell,
   Building2,
+  CalendarClock,
   CreditCard,
   DollarSign,
   FileText,
@@ -78,6 +79,14 @@ const CARDS: SettingsCard[] = [
     description:
       "One place for all connections: your Google (Calendar + Gmail), QuickBooks, and text messaging (SMS) — plus account-wide service status.",
     icon: Plug,
+    status: "ready",
+  },
+  {
+    href: "/business-builder/scheduling",
+    title: "Booking links",
+    description:
+      "Your own Calendly — public pages where a prospect picks a time. Set the days, hours and length; a discovery booking becomes a lead you own.",
+    icon: CalendarClock,
     status: "ready",
   },
   {

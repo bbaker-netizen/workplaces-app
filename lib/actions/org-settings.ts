@@ -86,3 +86,49 @@ export async function updateOrgSettings(
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+const assessmentUrlSchema = z.object({
+  url: z.string().trim().max(500),
+});
+
+/**
+ * The TTI survey link used by onboarding step 4 (Person Profile).
+ *
+ * Practice-level rather than per-person because TTI issues one survey
+ * link per context with no per-participant identity in it — there is no
+ * finer thing to store. Blank clears it, which SKIPS the onboarding step
+ * with the reason recorded rather than failing the run: a new client
+ * mailed a dead link on day one is worse than a step that didn't fire.
+ */
+export async function savePersonProfileAssessmentUrl(
+  input: z.input<typeof assessmentUrlSchema>,
+): Promise<ActionResult> {
+  const profile = await ensureUserProfile();
+  if (profile.status !== "ok")
+    return { ok: false, error: "Not authenticated." };
+  if (profile.role !== "master_admin")
+    return { ok: false, error: "Only the practice owner can set this." };
+  const parsed = assessmentUrlSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input." };
+  const url = parsed.data.url;
+  // Same rule as the card payment link: blank clears, anything else must
+  // be a real https link. A malformed URL emailed to a new client is a
+  // step that looks done and isn't.
+  if (url && !/^https:\/\/\S+$/.test(url))
+    return { ok: false, error: "Enter a full https:// link, or leave blank." };
+  try {
+    await withSystemContext(async (tx) => {
+      await tx
+        .update(orgs)
+        .set({
+          personProfileAssessmentUrl: url || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(orgs.id, profile.orgId));
+    });
+    revalidatePath("/business-builder/settings/quickbooks-billing");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}

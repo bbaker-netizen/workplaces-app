@@ -4178,3 +4178,106 @@ Business Builder claims the lead for them while a second submission
 naming the other one leaves it alone; an assessment landing on an
 existing lead emails its owner; and an onboarding run with no assessment
 URL set completes with the skip recorded rather than failing.
+
+## What was built — the two settings screens nothing could reach (2026-08-06)
+
+Two features that were finished and deployed and had no way in. No
+migration — both columns and both tables already existed.
+
+### Booking links had a public page and no create form
+
+`scheduling_links`, `/book/<slug>` and the `/book` chooser have all
+shipped since Phase 3.8. `createSchedulingLink` and
+`deleteSchedulingLink` existed in `lib/actions/scheduling.ts` and were
+called by nothing; all three revalidated `/business-builder/scheduling`,
+a route that 404'd. So the only way to make a booking link was to write
+the row by hand, and neither Builder had one — `/book` was showing its
+"online booking is unavailable, email us" fallback to every visitor who
+reached it. **A revalidatePath pointing at a route that does not exist is
+a fair sign the surface was planned and never built.**
+
+`/business-builder/scheduling` + `SchedulingLinksManager`: list, create,
+edit, turn on and off, copy the address, delete. A card on the Settings
+hub is the way in.
+
+**A master_admin can create a link for another Business Builder, and
+that is not a convenience.** The link decides who a booked lead belongs
+to — `createBooking` stamps the link's coach as the prospect's owner, and
+ownership is what routes every downstream alert — so a teammate cannot
+be left to make their own the first time they sign in. `resolveOwner`
+gates it: only a master_admin may name someone else, and only a
+master_admin/coach **in the caller's own org** may be named. Without that
+second check an arbitrary `user_profiles` id would insert happily and
+hand a CLIENT a booking link claiming leads in their name. Same shape as
+the guard `setEngagementShare` needed.
+
+**A master_admin's list is the practice's, not their own.** A link they
+just made for Jen vanishing from their list would read as the save
+having failed.
+
+**Slug collisions get a sentence, not a constraint name.** Slugs are
+globally UNIQUE and "discovery" is the obvious thing to type, so the
+second person to reach for it loses. Checked before the insert AND caught
+after (`isSlugConflict`): the pre-check gives the good message, the catch
+covers two people typing the same slug at once.
+
+**An availability window narrower than the meeting is refused.** It
+produces a link that renders zero slots for ever and looks broken to the
+prospect with nothing saying why. On EDIT the check runs against the
+merged state rather than the submitted fields — lengthening the meeting
+alone can be what makes the window too short.
+
+**`deleteSchedulingLink` had no ownership check at all**, which was
+survivable only while nothing could call it. Any coach could delete any
+other coach's booking page by id, and the console lists those ids. Now
+owner-or-master_admin, and scoped to the caller's org.
+
+**Deleting a link that has been used is refused outright.**
+`bookings.scheduling_link_id` is ON DELETE CASCADE, so deleting a link
+that has taken bookings erases the record of every meeting booked through
+it. Turning it off retires the link and keeps the history, which is what
+tidying up actually means. Same doctrine as the prospect-delete work on
+2026-07-30 — look at what cascades before offering the button.
+
+**One correctness fix this made live.** `resolveBookingUrl` in the EA
+inbox sweep took ANY `scheduling_links` row for the recipient. Fine while
+a Builder could only have one; now that links can be retired and made
+per-client, "any row" could put a turned-off link (dead page) or a
+client's BBS link (wrong meeting entirely) into a draft reply to a
+stranger. Restricted to a live discovery link.
+
+### The Person Profile survey link had a column and no field
+
+`orgs.person_profile_assessment_url` shipped with migration 0118 two
+commits earlier and there was nowhere to type it, so onboarding step 4
+skipped on every run. `PersonProfileSurveyUrlEditor` sits beside the card
+payment link on Settings → QuickBooks billing (per Bruce's direction —
+the two are the practice's outbound links, even though the page is named
+for QuickBooks). `savePersonProfileAssessmentUrl` lives in
+`lib/actions/org-settings.ts`, master_admin only, same https-or-blank
+rule as the payment link. The copy states plainly that blank skips the
+step rather than failing the run, because that is a legitimate state and
+a field that looks required teaches you to paste something.
+
+### Seeded
+
+`scripts/setup-booking-links.mjs` (dry-run by default, `--apply` to
+write) set the survey URL to `https://us.survey.ttisi.com/393358CAU` and
+created a live 30-minute discovery link for each Builder —
+`/book/bruce-baker` and `/book/jen-garrison`, Mon–Fri 8:30am–6:00pm MT,
+the same defaults the create form offers and Bruce's stated working
+window. Idempotent: a Builder with a live discovery link is skipped and a
+taken slug is reported, never overwritten. Everything after this is done
+in the app; the script exists because the rows had to come first.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles with 74 prerender failures and 148 `Missing publishableKey`,
+zero errors of any other cause — the recorded baseline exactly. The seed
+was run against the live database and re-run to prove idempotency; `/book`
+now lists both Builders where it listed nobody.
+
+**Not clicked in a browser.** The acceptance tests: open
+`/business-builder/scheduling` and see both links (Jen sees only her
+own); create a second link and have the slug clash refuse with the plain
+sentence; visit `/book` and see both Builders; and run an onboarding
+where step 4 now sends the survey rather than recording a skip.
