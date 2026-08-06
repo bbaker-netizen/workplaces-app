@@ -4040,3 +4040,116 @@ currently **zero** overdue action items anywhere in the practice — not
 one held by a client, a Builder, or nobody. Both buckets are empty for
 both Builders. This is prevention, and the first overdue item assigned
 across a shared client is the acceptance test.
+
+## What was built — a lead arrives already owned (2026-08-06)
+
+Same session as the two above. Migration `0118_onboarding_person_profile`.
+
+**Ownership decides who hears about a lead, and nothing was setting
+it.** `recipientsForProspect` has routed prospect notifications by owner
+since the own-book work — owner alone, or the master admin triage inbox
+when nobody owns it. But the only thing that ever wrote
+`prospects.owner_user_profile_id` was a person creating a lead by hand.
+Every inbound lead — website form, Meta, Google, and every booking —
+arrived unowned, so every alert about every lead went to triage
+regardless of whose link or whose name produced it. The routing rule was
+correct and had almost nothing to route.
+
+Three write points now, one rule between them:
+
+1. **A discovery booking takes the link's Business Builder.** Whoever
+   owns the `scheduling_links` row owns the lead that books through it.
+2. **The Make.com bridge reads a `builder` field off the submission** and
+   resolves it to a `user_profiles` row.
+3. **An assessment coming back alerts the owner**, through
+   `lib/pipeline/notify-assessment.ts` and the same
+   `recipientsForProspect`.
+
+**Name matching is exact and case-insensitive, deliberately not fuzzy.**
+Restricted to `master_admin` / `coach` inside the org, and no match means
+no owner. The asymmetry is the whole reason: assigning the WRONG owner is
+worse than assigning none, because ownership *silences* everyone else's
+alerts about that lead. A near-miss would not merely mislabel the card —
+it would route the lead into a black hole where the person who should be
+working it never hears about it and the person who does hear has no idea
+who they are. An unowned lead still reaches triage, which is a visible,
+recoverable state.
+
+**An existing owner is never reassigned**, at all three write points.
+Booking someone else's link, or a second form submission naming somebody
+else, must not move a lead off the Business Builder already working
+them — that is a live conversation, and the record following the most
+recent web request rather than the relationship is how it gets dropped.
+Claiming only ever fills a NULL.
+
+**Bookings now match an existing lead by email** before inserting, the
+way the intake webhook always has. They did not, so a lead already in the
+pipeline who booked a call got a second card and their history split
+across the two. Archived prospects are ignored, so a deliberately
+archived lead who comes back is genuinely new.
+
+**The assessment alert is the one that had never fired at all.** The
+pre-meeting assessment normally lands on a lead that already exists —
+someone was sent the link because a conversation was already booked — and
+that path notified nobody. `notifyNewLead` only fires for a genuinely NEW
+prospect, so the answers went into the database and the person about to
+walk into the meeting was never told.
+
+It does NOT fire on the webhook's booking branch, and that is deliberate
+rather than an oversight: the booking branch is selected by the payload
+carrying a `calendar_event_id`, and the pre-meeting assessment posts
+without one, so nothing reaches that branch carrying an assessment.
+
+### Person Profile becomes step 4 of onboarding
+
+It used to be a hand-ticked panel on the PROSPECT, which put it in the
+wrong half of the relationship — nobody sits a Person Profile while still
+deciding whether to hire you. It belongs to the client who has signed,
+and it belongs inside the onboarding run so it cannot be the one step
+that gets forgotten. The tracker moved to the engagement page with it.
+
+Last in the sequence because it is the only step that asks the client to
+DO something (about 45 minutes) rather than to receive something; ahead
+of the portal invite it would land the biggest ask before they have
+anywhere to log in. Sent per participant rather than once to the primary
+contact — the second participant has their own email on the record, and
+forwarding is how a step gets quietly dropped.
+
+**A missing `orgs.person_profile_assessment_url` SKIPS the step, it does
+not fail the run.** TTI issues one survey link per context with no
+per-person identity in it, so the link is practice-level configuration;
+absent configuration is not a broken onboarding, and mailing a new client
+a dead link on day one is worse than mailing nothing. The skip writes its
+reason into `assessment_error` and stamps `completed_at`, so it is
+visible on the record rather than silent — same reasoning as every other
+step's error column.
+
+0118 adds `assessment_sent_at` + `assessment_error` to `onboarding_runs`
+and `person_profile_assessment_url` to `orgs`. **Numbered 0118, not
+0114** — it was authored as 0114 and collided with the already-committed
+`0114_notification_action_item_progress.sql`. The deploy runner keys
+`_app_migrations` on filename so both would have applied, but two files
+sharing a number is unreadable to anyone auditing the directory. Renamed
+before it was applied anywhere.
+
+**Caught in review, worth remembering:** the assessment alert's guard was
+written as `"orgId" in result`. TypeScript normalises the transaction's
+union so every branch declares the key — the booking branches as
+`orgId?: undefined` — which means `in` cannot narrow any member out and
+the value stayed `string | undefined`. **`in` narrowing does nothing on a
+union whose members all declare the property**, however they declare it.
+Narrowing on the value works. The same normalisation is why
+`recordError`'s hand-written field union had to gain `assessmentError`
+rather than inferring it.
+
+**Verified:** `tsc --noEmit` and `next lint` clean; `next build`
+compiles with 74 prerender failures and 148 `Missing publishableKey`,
+zero errors of any other cause — the recorded baseline exactly.
+
+**Not clicked in a browser, and no email has been sent.** 0118 applies on
+next deploy. The acceptance tests: a lead booking Jen's discovery link
+shows Jen as Owner and alerts her alone; a website submission naming a
+Business Builder claims the lead for them while a second submission
+naming the other one leaves it alone; an assessment landing on an
+existing lead emails its owner; and an onboarding run with no assessment
+URL set completes with the skip recorded rather than failing.
