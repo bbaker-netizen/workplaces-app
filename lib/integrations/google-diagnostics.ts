@@ -34,7 +34,16 @@ import { eq } from "drizzle-orm";
 import { googleCalendarTokens } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import { decryptSecret, isEncrypted } from "@/lib/crypto/secret-vault";
-import { getValidAccessToken } from "@/lib/integrations/google-calendar";
+import {
+  GOOGLE_CALENDAR_SCOPE,
+  getValidAccessToken,
+} from "@/lib/integrations/google-calendar";
+import {
+  assessCapabilities,
+  isRecoverableByReconnect,
+  normalizeScopes,
+  type CapabilityStatus,
+} from "@/lib/integrations/google-scopes";
 
 export type StoredTokenShape = {
   /** How it sits in the database, before any decryption. */
@@ -62,16 +71,28 @@ export type GoogleCredentialDiagnostic = {
   connectedAt: Date | null;
   accessToken?: StoredTokenShape;
   refreshToken?: StoredTokenShape;
+  /** Scope recorded at exchange time, straight from our column. */
+  storedScope?: string | null;
+  /** Required capabilities that grant does not cover. */
+  missing?: CapabilityStatus[];
+  capabilities?: CapabilityStatus[];
   /**
-   * A real call to Google with the CACHED token, then — if that is
-   * refused — a second with a force-refreshed one. Two 401s in a row
-   * means the fault is the grant itself, not a stale token, and that is
-   * the distinction that decides whether reconnecting will help.
+   * A real call to Google with the CACHED token, then — if refused — a
+   * second with a force-refreshed one, which separates a stale token
+   * from a grant problem. `events` is the call the app actually makes;
+   * `calendarList` is a control the app never uses, kept only so its
+   * expected 403 is never mistaken for the fault again.
    */
   probe?: {
-    cached: { ok: boolean; status?: number; message?: string };
-    afterForceRefresh?: { ok: boolean; status?: number; message?: string };
+    events: { ok: boolean; status?: number; message?: string };
+    eventsAfterForceRefresh?: { ok: boolean; status?: number; message?: string };
+    calendarListControl?: { ok: boolean; status?: number; message?: string };
+    liveScope?: string;
+    audience?: string;
+    scopeMatchesStored?: boolean;
     verdict: string;
+    /** True only when reconnecting can actually change the outcome. */
+    reconnectWouldHelp: boolean;
   };
 };
 
@@ -102,20 +123,86 @@ function describeStored(
   }
 }
 
-async function callGoogle(
+async function get(
+  url: string,
   token: string,
 ): Promise<{ ok: boolean; status?: number; message?: string }> {
   try {
-    // The cheapest authenticated Calendar call there is: one entry from
-    // the calendar list. Enough to prove the Authorization header is
-    // accepted without reading anyone's schedule.
-    const res = await fetch(
-      "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1",
-      { headers: { authorization: `Bearer ${token}` } },
-    );
+    const res = await fetch(url, {
+      headers: { authorization: `Bearer ${token}` },
+    });
     if (res.ok) return { ok: true, status: res.status };
     const text = await res.text().catch(() => "");
     return { ok: false, status: res.status, message: text.slice(0, 400) };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * The call the app ACTUALLY makes.
+ *
+ * The first version of this probe used `calendarList.list` because it
+ * was the cheapest authenticated call to hand. That was a mistake worth
+ * recording: `calendar.events` — the scope we request and hold — does
+ * not authorize calendarList, so the probe returned 403 "insufficient
+ * authentication scopes" on a connection whose real calls might be
+ * perfectly fine, and sent the diagnosis down a false trail. A probe
+ * must exercise the failing capability, not a nearby one.
+ *
+ * `listExternalEvents` calls events.list against a known calendar id;
+ * so does everything else in this codebase (there is no freebusy or
+ * calendarList caller anywhere). This mirrors it exactly, with a
+ * one-hour window and a single result so it costs nothing.
+ */
+async function probeEventsList(
+  token: string,
+  calendarId: string,
+): Promise<{ ok: boolean; status?: number; message?: string }> {
+  const now = new Date();
+  const params = new URLSearchParams({
+    timeMin: now.toISOString(),
+    timeMax: new Date(now.getTime() + 3_600_000).toISOString(),
+    singleEvents: "true",
+    maxResults: "1",
+  });
+  return get(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calendarId,
+    )}/events?${params.toString()}`,
+    token,
+  );
+}
+
+/**
+ * What Google says the token carries, which beats what we stored.
+ *
+ * `google_calendar_tokens.scope` records what came back at exchange
+ * time; tokeninfo reports what is on the bearer token being sent right
+ * now, plus its audience. If those two ever disagree — a token minted
+ * under a different OAuth client, say — no amount of reading our own
+ * column would show it.
+ */
+async function tokenInfo(token: string): Promise<{
+  ok: boolean;
+  scope?: string;
+  audience?: string;
+  expiresIn?: string;
+  message?: string;
+}> {
+  try {
+    const res = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`,
+    );
+    const body = (await res.json().catch(() => ({}))) as Record<string, string>;
+    if (!res.ok)
+      return { ok: false, message: JSON.stringify(body).slice(0, 300) };
+    return {
+      ok: true,
+      scope: body.scope,
+      audience: body.aud,
+      expiresIn: body.expires_in,
+    };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
@@ -135,6 +222,7 @@ export async function diagnoseGoogleCredentials(
     googleEmail: string | null;
     accessTokenExpiresAt: Date | null;
     createdAt: Date;
+    scope: string | null;
   } | null = null;
 
   try {
@@ -146,6 +234,7 @@ export async function diagnoseGoogleCredentials(
           googleEmail: googleCalendarTokens.googleEmail,
           accessTokenExpiresAt: googleCalendarTokens.accessTokenExpiresAt,
           createdAt: googleCalendarTokens.createdAt,
+          scope: googleCalendarTokens.scope,
         })
         .from(googleCalendarTokens)
         .where(eq(googleCalendarTokens.userProfileId, userProfileId))
@@ -168,6 +257,9 @@ export async function diagnoseGoogleCredentials(
   const access = describeStored(row.accessTokenEncrypted, "access");
   const refresh = describeStored(row.refreshTokenEncrypted, "refresh");
 
+  const capabilities = assessCapabilities(row.scope);
+  const missing = capabilities.filter((c) => c.required && !c.granted);
+
   const base: GoogleCredentialDiagnostic = {
     connected: true,
     googleEmail: row.googleEmail,
@@ -175,49 +267,120 @@ export async function diagnoseGoogleCredentials(
     connectedAt: row.createdAt,
     accessToken: access,
     refreshToken: refresh,
+    storedScope: row.scope,
+    capabilities,
+    missing,
   };
   if (!opts.probe) return base;
 
-  // Probe with whatever the app would actually send.
-  let cached: { ok: boolean; status?: number; message?: string };
+  const call = async (force: boolean) => {
+    const t = await getValidAccessToken(userProfileId, { forceRefresh: force });
+    if (!t) return null;
+    return t;
+  };
+
+  let events: { ok: boolean; status?: number; message?: string };
+  let live: Awaited<ReturnType<typeof tokenInfo>> | null = null;
+  let control: { ok: boolean; status?: number; message?: string } | undefined;
   try {
-    const t = await getValidAccessToken(userProfileId);
-    cached = t
-      ? await callGoogle(t.token)
-      : { ok: false, message: "No usable access token could be produced." };
+    const t = await call(false);
+    if (!t) {
+      events = { ok: false, message: "No usable access token could be produced." };
+    } else {
+      events = await probeEventsList(t.token, t.calendarId);
+      live = await tokenInfo(t.token);
+      control = await get(
+        "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1",
+        t.token,
+      );
+    }
   } catch (e) {
-    cached = { ok: false, message: e instanceof Error ? e.message : String(e) };
+    events = { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 
-  if (cached.ok) {
-    return { ...base, probe: { cached, verdict: "Google accepts our credentials." } };
+  const shared = {
+    calendarListControl: control,
+    liveScope: live?.scope,
+    audience: live?.audience,
+    // Our column records the grant at exchange time; tokeninfo reports
+    // what the bearer token carries now. Disagreement would mean the
+    // token came from somewhere other than the grant we recorded.
+    scopeMatchesStored:
+      live?.scope != null && row.scope != null
+        ? new Set(normalizeScopes(live.scope)).size ===
+            new Set(normalizeScopes(row.scope)).size &&
+          normalizeScopes(live.scope).every((s) =>
+            new Set(normalizeScopes(row.scope)).has(s),
+          )
+        : undefined,
+  };
+
+  if (events.ok) {
+    return {
+      ...base,
+      probe: {
+        events,
+        ...shared,
+        reconnectWouldHelp: false,
+        verdict:
+          "Google accepts the call this app actually makes (events.list). Reading the calendar works.",
+      },
+    };
   }
 
-  // Refused. Force a brand-new token and try once more — that separates
-  // "the stored token went stale" from "the grant is dead".
+  // Refused. A brand-new token separates a stale one from a grant fault.
   let fresh: { ok: boolean; status?: number; message?: string };
   try {
-    const t = await getValidAccessToken(userProfileId, { forceRefresh: true });
+    const t = await call(true);
     fresh = t
-      ? await callGoogle(t.token)
+      ? await probeEventsList(t.token, t.calendarId)
       : { ok: false, message: "Refresh produced no access token." };
   } catch (e) {
     fresh = { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 
+  const recoverable = isRecoverableByReconnect(missing, GOOGLE_CALENDAR_SCOPE);
   let verdict: string;
+  let reconnectWouldHelp = false;
+
   if (fresh.ok) {
     verdict =
-      "The stored access token was stale but refreshing fixed it — the grant is fine.";
+      "The stored access token was stale; a refreshed one works. The grant and its scopes are fine.";
   } else if (!access.decrypts || !refresh.decrypts) {
     verdict =
-      "Stored credentials will not decrypt. TOKEN_ENCRYPTION_KEY no longer matches what encrypted them.";
+      "Stored credentials will not decrypt — TOKEN_ENCRYPTION_KEY no longer matches what encrypted them. Reconnecting will not help until the key is restored.";
   } else if (access.storage === "plaintext-passthrough") {
     verdict =
-      "The stored access token was never encrypted, so it is being sent to Google verbatim. Reconnect to write a proper one.";
-  } else {
+      "The stored access token was never encrypted, so it is sent to Google verbatim. Reconnect to write a proper one.";
+    reconnectWouldHelp = true;
+  } else if (missing.length > 0 && recoverable) {
+    verdict = `The grant is missing ${missing
+      .map((m) => m.label)
+      .join(", ")}. We DO ask for it, so it was declined on the consent screen — reconnect and leave every permission ticked.`;
+    reconnectWouldHelp = true;
+  } else if (missing.length > 0) {
+    verdict = `The grant is missing ${missing
+      .map((m) => m.label)
+      .join(
+        ", ",
+      )}, and we never ask for it. RECONNECTING WILL NOT HELP — the requested scope list has to be fixed and deployed first.`;
+  } else if (fresh.status === 403) {
     verdict =
-      "Credentials decrypt cleanly and are well formed, and a freshly refreshed token is still refused. The grant itself is being rejected — reconnect Google.";
+      "Every scope this app needs is granted, and a freshly refreshed token is still refused with 403. That is a Google project or API-enablement problem, not a consent one — reconnecting will not change it.";
+  } else {
+    verdict = `Credentials are well formed and every required scope is granted, yet events.list is refused (${
+      fresh.status ?? "no status"
+    }). Not a scope problem; do not reconnect on the strength of this.`;
   }
-  return { ...base, probe: { cached, afterForceRefresh: fresh, verdict } };
+
+  return {
+    ...base,
+    probe: {
+      events,
+      eventsAfterForceRefresh: fresh,
+      ...shared,
+      verdict,
+      reconnectWouldHelp,
+    },
+  };
 }
