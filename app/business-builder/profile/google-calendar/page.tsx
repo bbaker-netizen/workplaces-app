@@ -30,7 +30,13 @@ import { GmailSyncControls } from "@/components/integrations/GmailSyncControls";
 export default async function GoogleCalendarConnectPage({
   searchParams,
 }: {
-  searchParams: Promise<{ connected?: string; error?: string }>;
+  searchParams: Promise<{
+    connected?: string;
+    error?: string;
+    partial?: string;
+    missing?: string;
+    recoverable?: string;
+  }>;
 }) {
   const profile = await ensureUserProfile();
   if (profile.status !== "ok") redirect("/no-invitation");
@@ -41,6 +47,9 @@ export default async function GoogleCalendarConnectPage({
   const params = await searchParams;
   const justConnected = params.connected === "1";
   const error = params.error ?? null;
+  const partial = params.partial === "1";
+  const missingLabels = params.missing ?? "one or more permissions";
+  const recoverable = params.recoverable !== "0";
 
   // Pull Gmail sync state to render on the page. Wrapped in try/catch so
   // a transient DB error doesn't take the page out — degrade to "Off".
@@ -97,6 +106,37 @@ export default async function GoogleCalendarConnectPage({
             Connected. Sessions you schedule will appear in your Google
             Calendar; client emails will start appearing in the Inbox over
             the next 10 minutes.
+          </span>
+        </div>
+      )}
+
+      {/* A partial grant. The account IS attached, so calling this an
+          error would be wrong, and calling it connected is the bug this
+          replaced — Google lets a permission be unticked and returns the
+          reduced set, and nothing used to read it. */}
+      {partial && (
+        <div className="border border-tbb-orange-600 bg-tbb-cream-50 rounded-md px-4 py-3 text-sm flex items-start gap-2">
+          <AlertTriangle
+            className="w-4 h-4 mt-0.5 shrink-0 text-tbb-orange-700"
+            aria-hidden
+          />
+          <span className="text-tbb-ink-2">
+            <strong>Connected, but not usable yet.</strong> Google did not
+            grant: {missingLabels}.
+            {recoverable ? (
+              <>
+                {" "}
+                Click Connect again and leave <em>every</em> permission
+                ticked on Google&apos;s consent screen.
+              </>
+            ) : (
+              <>
+                {" "}
+                This app never requests that permission, so reconnecting
+                cannot grant it — it needs a code change first. Nothing you
+                can do here will fix it.
+              </>
+            )}
           </span>
         </div>
       )}

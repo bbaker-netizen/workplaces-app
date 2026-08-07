@@ -76,7 +76,7 @@ export async function BookingPageHealth({
   );
 
   const anyTrouble = rows.some(
-    (r) => r.troubled || !r.diag.connected || r.diag.probe?.cached.ok === false,
+    (r) => r.troubled || !r.diag.connected || r.diag.probe?.events.ok === false,
   );
 
   return (
@@ -95,7 +95,7 @@ export async function BookingPageHealth({
       <div className="space-y-3">
         {rows.map((r) => {
           const bad =
-            r.troubled || !r.diag.connected || r.diag.probe?.cached.ok === false;
+            r.troubled || !r.diag.connected || r.diag.probe?.events.ok === false;
           return (
             <div
               key={r.id}
@@ -181,6 +181,30 @@ export async function BookingPageHealth({
                   <p className="font-sans text-xs font-bold text-tbb-navy">
                     {r.diag.probe.verdict}
                   </p>
+                  {/* The sentence a person acts on. "Reconnect Google" is
+                      wrong whenever consent cannot change the outcome —
+                      it sends them round a loop that must fail — so it
+                      is shown only when it would genuinely help. */}
+                  <p className="font-sans text-xs text-tbb-ink-2">
+                    {r.diag.probe.reconnectWouldHelp ? (
+                      <>
+                        <strong>Do this:</strong> reconnect at{" "}
+                        <Link
+                          href="/business-builder/settings/integrations"
+                          className="underline"
+                        >
+                          Settings → Integrations
+                        </Link>{" "}
+                        and leave every permission ticked.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Do not reconnect</strong> — it would produce
+                        the same grant and the same failure. This needs a fix
+                        in the app or the Google project.
+                      </>
+                    )}
+                  </p>
                   <dl className="font-mono text-[11px] text-tbb-ink-3 space-y-0.5">
                     <div>
                       stored access token:{" "}
@@ -207,25 +231,73 @@ export async function BookingPageHealth({
                         : `DOES NOT DECRYPT — ${r.diag.refreshToken?.decryptError ?? ""}`}
                     </div>
                     <div>
-                      probe with stored token:{" "}
-                      {r.diag.probe.cached.ok
+                      events.list (the call this app makes), stored token:{" "}
+                      {r.diag.probe.events.ok
                         ? "accepted"
-                        : `refused ${r.diag.probe.cached.status ?? ""} ${
-                            r.diag.probe.cached.message ?? ""
+                        : `refused ${r.diag.probe.events.status ?? ""} ${
+                            r.diag.probe.events.message ?? ""
                           }`}
                     </div>
-                    {r.diag.probe.afterForceRefresh && (
+                    {r.diag.probe.eventsAfterForceRefresh && (
                       <div>
-                        probe after forced refresh:{" "}
-                        {r.diag.probe.afterForceRefresh.ok
+                        events.list after forced refresh:{" "}
+                        {r.diag.probe.eventsAfterForceRefresh.ok
                           ? "accepted"
-                          : `refused ${r.diag.probe.afterForceRefresh.status ?? ""} ${
-                              r.diag.probe.afterForceRefresh.message ?? ""
+                          : `refused ${
+                              r.diag.probe.eventsAfterForceRefresh.status ?? ""
+                            } ${r.diag.probe.eventsAfterForceRefresh.message ?? ""}`}
+                      </div>
+                    )}
+                    {r.diag.probe.calendarListControl && (
+                      <div>
+                        calendarList.list (control — this app never calls it;
+                        calendar.events does not authorize it, so a 403 here is
+                        EXPECTED and is not the fault):{" "}
+                        {r.diag.probe.calendarListControl.ok
+                          ? "accepted"
+                          : `refused ${
+                              r.diag.probe.calendarListControl.status ?? ""
                             }`}
                       </div>
                     )}
+                    <div>
+                      scope on the live token:{" "}
+                      {r.diag.probe.liveScope ?? "(tokeninfo unavailable)"}
+                    </div>
+                    <div>
+                      matches the scope we stored at consent:{" "}
+                      {r.diag.probe.scopeMatchesStored === undefined
+                        ? "unknown"
+                        : r.diag.probe.scopeMatchesStored
+                          ? "yes"
+                          : "NO — the token came from a different grant"}
+                    </div>
+                    <div>OAuth client (aud): {r.diag.probe.audience ?? "?"}</div>
                   </dl>
                 </div>
+              )}
+
+              {/* Per-capability, from the stored grant. This is what
+                  makes "which permission is missing" a fact rather than
+                  an inference from an error string. */}
+              {r.diag.capabilities && r.diag.capabilities.length > 0 && (
+                <details className="font-sans text-xs text-tbb-ink-3">
+                  <summary className="cursor-pointer">
+                    Permissions granted at consent
+                    {r.diag.missing && r.diag.missing.length > 0
+                      ? ` — ${r.diag.missing.length} required one(s) MISSING`
+                      : " — all required ones present"}
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
+                    {r.diag.capabilities.map((c) => (
+                      <li key={c.key}>
+                        {c.granted ? "yes" : c.required ? "MISSING" : "no"} ·{" "}
+                        {c.endpoint} · {c.label}
+                        {!c.required && " · not needed"}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </div>
           );

@@ -20,10 +20,15 @@ import { eq } from "drizzle-orm";
 import { userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
+  GOOGLE_CALENDAR_SCOPE,
   exchangeCodeForTokens,
   fetchGoogleEmail,
   storeUserTokens,
 } from "@/lib/integrations/google-calendar";
+import {
+  isRecoverableByReconnect,
+  missingRequired,
+} from "@/lib/integrations/google-scopes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -107,6 +112,50 @@ export async function GET(req: Request): Promise<Response> {
       scope: tokens.scope,
       googleEmail: email,
     });
+
+    /**
+     * Check what Google ACTUALLY granted before calling this connected.
+     *
+     * Google's consent screen lets a user untick individual permissions
+     * and returns the reduced set in `scope`. Nothing read it, so a
+     * partial grant stored cleanly, reported "connected", and then
+     * failed at the first API call — with the failure surfacing days
+     * later somewhere unrelated (a booking page quietly offering no
+     * times, an inbox sweep 401ing into a log). A connection that says
+     * "connected" while missing calendar permission is exactly how this
+     * stayed invisible.
+     *
+     * The tokens are stored FIRST and deliberately kept: a partial grant
+     * still carries a usable refresh token, and throwing it away would
+     * also throw away the evidence of what was granted. The redirect
+     * carries the shortfall instead, so the page can say which
+     * permission is missing rather than a generic failure.
+     */
+    const missing = missingRequired(tokens.scope);
+    if (missing.length > 0) {
+      console.error(
+        `[google-calendar] partial grant for ${userProfileId}: missing ${missing
+          .map((m) => m.key)
+          .join(", ")}; granted "${tokens.scope}"`,
+      );
+      const recoverable = isRecoverableByReconnect(
+        missing,
+        GOOGLE_CALENDAR_SCOPE,
+      );
+      const params = new URLSearchParams({
+        // Never `connected=1`. The account is attached but not usable,
+        // and reporting success here is the whole bug.
+        partial: "1",
+        missing: missing.map((m) => m.label).join("; "),
+        // Whether ticking everything on a second attempt can fix it, or
+        // whether we never asked and the request has to change first.
+        recoverable: recoverable ? "1" : "0",
+      });
+      return NextResponse.redirect(
+        `${appUrl()}${profilePath}?${params.toString()}`,
+      );
+    }
+
     return NextResponse.redirect(`${appUrl()}${profilePath}?connected=1`);
   } catch (e) {
     console.error("[google-calendar] callback failed:", e);

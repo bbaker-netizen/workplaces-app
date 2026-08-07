@@ -425,6 +425,77 @@ async function api<T>(
  */
 const MAX_EVENT_PAGES = 12;
 
+/**
+ * Google rejected a token we still believed was valid.
+ *
+ * Both API wrappers throw `"<API> API 401: ..."`, so one matcher covers
+ * Calendar and Gmail.
+ */
+export function isGoogleAuthRejection(e: unknown): boolean {
+  return e instanceof Error && / 401:/.test(e.message);
+}
+
+/**
+ * Run a Google call, and if the token is rejected mint a fresh one and
+ * try exactly once more.
+ *
+ * **Why this exists rather than a third hand-written copy.** An access
+ * token can be superseded server-side — revoked, or invalidated when a
+ * new grant is issued — long before it clock-expires, and
+ * `getValidAccessToken` hands back the cached one right up to its stated
+ * expiry. So the cache check cannot catch it and the call comes back
+ * 401. `lib/calendar/sync.ts` and the Gmail SEND path each already
+ * carried their own copy of this retry, with near-identical comments;
+ * every path that did NOT was quietly broken whenever it happened.
+ *
+ * That is exactly how the public booking pages went dark: the hourly
+ * calendar sync kept working (it has the retry) while
+ * `listExternalEvents` — the call behind every /book page and the EA's
+ * free-time search — did not, so it 401'd, was treated as fully busy,
+ * and offered no times. The Gmail READ path had the same gap, which is
+ * why the inbox sweep 401'd while sending worked.
+ *
+ * Returns null when there is no connection at all, so callers can keep
+ * distinguishing "not connected" from "refused".
+ *
+ * NOT yet applied everywhere, and saying so rather than leaving it to be
+ * discovered: the read paths that were demonstrably failing now use it
+ * (`listExternalEvents`, and the Gmail list/get behind the EA sweep),
+ * alongside the two that already had their own copies. The write paths
+ * in this file, and every caller in `lib/integrations/google-drive.ts`
+ * and `lib/actions/calendar-import.ts`, still take a bare token and will
+ * fail the same way on a superseded one. They are lower-frequency and
+ * user-initiated, so they surface as a visible error rather than as
+ * silence — which is why they are not the urgent case, not why they are
+ * fine.
+ */
+export async function withGoogleTokenRetry<T>(
+  userProfileId: string,
+  run: (auth: {
+    token: string;
+    calendarId: string;
+    orgId: string;
+  }) => Promise<T>,
+): Promise<T | null> {
+  const token = await getValidAccessToken(userProfileId);
+  if (!token) return null;
+  try {
+    return await run(token);
+  } catch (e) {
+    if (!isGoogleAuthRejection(e)) throw e;
+    const fresh = await getValidAccessToken(userProfileId, {
+      forceRefresh: true,
+    });
+    if (!fresh)
+      throw new GoogleReconnectRequiredError(
+        "Google rejected the stored token and no refreshed one could be minted.",
+      );
+    // A second 401 is a real authorization problem, not a stale token —
+    // let it propagate rather than looping.
+    return await run(fresh);
+  }
+}
+
 async function listAllEventPages<T>(
   token: string,
   calendarId: string,
@@ -851,8 +922,6 @@ export async function listExternalEvents(
   rangeStart: Date,
   rangeEnd: Date,
 ): Promise<ExternalEvent[]> {
-  const token = await getValidAccessToken(userProfileId);
-  if (!token) return [];
   const params = new URLSearchParams({
     timeMin: rangeStart.toISOString(),
     timeMax: rangeEnd.toISOString(),
@@ -864,14 +933,21 @@ export async function listExternalEvents(
   // free-time search, where a truncated read is worse than useless: the
   // missing events look like FREE time, so a focus block gets proposed
   // on top of a meeting.
-  const items = await listAllEventPages<{
-    id: string;
-    summary?: string;
-    start?: { dateTime?: string; date?: string };
-    end?: { dateTime?: string; date?: string };
-    location?: string;
-    htmlLink?: string;
-  }>(token.token, token.calendarId, params, "listExternalEvents");
+  // Retries once on a 401. Without this a token superseded server-side
+  // reads as "no events", which the booking page correctly refuses to
+  // treat as "free" — so the page goes dark for a reason no reconnect
+  // fixes and nothing here could name.
+  const items = await withGoogleTokenRetry(userProfileId, (auth) =>
+    listAllEventPages<{
+      id: string;
+      summary?: string;
+      start?: { dateTime?: string; date?: string };
+      end?: { dateTime?: string; date?: string };
+      location?: string;
+      htmlLink?: string;
+    }>(auth.token, auth.calendarId, params, "listExternalEvents"),
+  );
+  if (!items) return [];
   return items
     .map((e) => {
       const startStr = e.start?.dateTime ?? e.start?.date;

@@ -38,6 +38,7 @@ import {
 import {
   getConnectionStatus,
   getValidAccessToken,
+  withGoogleTokenRetry,
 } from "@/lib/integrations/google-calendar";
 import { EA_TIMEZONE } from "./digest-data";
 import { listEaRecipients, type EaRecipient } from "./recipients";
@@ -306,7 +307,16 @@ async function sweepForRecipient(
   const since = now.getTime() - LOOKBACK_MINUTES * 60 * 1000;
 
   // List first — this returns thread ids without fetching message bodies.
-  const refs = await listMessageRefsSince(token.token, since, 500);
+  //
+  // Wrapped in the 401 retry for the same reason the calendar read is:
+  // an access token can be superseded server-side before it clock-
+  // expires, and the cached-token check cannot see that. Gmail's SEND
+  // path already retried; this READ path did not, which is why the sweep
+  // failed with a Gmail 401 on 29 consecutive runs while sending worked.
+  const refs =
+    (await withGoogleTokenRetry(recipient.userProfileId, (auth) =>
+      listMessageRefsSince(auth.token, since, 500),
+    )) ?? [];
   if (refs.length === 0) return result;
 
   // Threads already SETTLED in the ledger are done — drafted, or
@@ -359,7 +369,12 @@ async function sweepForRecipient(
     if (fresh.length >= MAX_THREADS_PER_RUN) break;
     let parsed: ParsedGmailMessage;
     try {
-      parsed = parseGmailMessage(await getMessage(token.token, messageId));
+      const msg = await withGoogleTokenRetry(
+        recipient.userProfileId,
+        (auth) => getMessage(auth.token, messageId),
+      );
+      if (!msg) continue;
+      parsed = parseGmailMessage(msg);
     } catch {
       continue;
     }
