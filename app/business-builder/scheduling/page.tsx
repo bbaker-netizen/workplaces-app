@@ -16,10 +16,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { BookingAttempts } from "@/components/scheduling/BookingAttempts";
 import {
   BookingPageHealth,
   BookingPageHealthFallback,
 } from "@/components/scheduling/BookingPageHealth";
+import { listRecentBookingAttempts } from "@/lib/booking/attempts";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listManageableSchedulingLinks } from "@/lib/db/queries/scheduling-links";
 import { listBusinessBuilders } from "@/lib/db/queries/user-profiles";
@@ -38,6 +40,14 @@ export default async function SchedulingSettingsPage() {
     listManageableSchedulingLinks(),
     listBusinessBuilders(),
   ]);
+
+  // Scoped to the links this Builder manages, so one Builder's funnel
+  // does not appear in the other's console. `listManageableSchedulingLinks`
+  // has already applied the own-book rule.
+  const attempts = await listRecentBookingAttempts({
+    linkIds: view.links.map((l) => l.id),
+    sinceDays: 14,
+  });
 
   // Resolved server-side rather than from window.location so the address
   // shown here is the one a prospect would actually receive — a link
@@ -84,6 +94,8 @@ export default async function SchedulingSettingsPage() {
         canAssign={profile.role === "master_admin"}
         baseUrl={baseUrl}
       />
+
+      <BookingAttempts attempts={attempts} />
     </main>
   );
 }

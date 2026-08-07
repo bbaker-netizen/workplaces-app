@@ -21,6 +21,8 @@ import {
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
+  GoogleGrantRefusedError,
+  GoogleReconnectRequiredError,
   getConnectionStatus,
   listExternalEvents,
 } from "@/lib/integrations/google-calendar";
@@ -129,6 +131,17 @@ export function overlaps(
 export type BusyReason =
   | "ok"
   | "not-connected"
+  /**
+   * The grant is dead: Google refuses tokens it issued seconds earlier,
+   * so the retry cannot help and only a reconnect will. Split out of
+   * `calendar-error` because the two need opposite responses — one is a
+   * transient blip to ignore, the other is a page that stays dark until
+   * a human acts, and reporting both as "Google refused the calendar
+   * read" left nobody able to tell which they had.
+   */
+  | "grant-refused"
+  /** The refresh token itself is dead — no access token can be had. */
+  | "reconnect-required"
   | "calendar-error"
   | "session-read-error";
 
@@ -274,14 +287,24 @@ export async function getBuilderBusy(
       ],
     };
   } catch (e) {
+    // Named failures first. A dead grant and a dead refresh token both
+    // mean this page stays dark until somebody reconnects Google, and
+    // saying so is the difference between a Builder acting today and
+    // finding out from a prospect who gave up.
+    const reason: BusyReason =
+      e instanceof GoogleGrantRefusedError
+        ? "grant-refused"
+        : e instanceof GoogleReconnectRequiredError
+          ? "reconnect-required"
+          : "calendar-error";
     console.error(
-      `[availability] ${userProfileId}: calendar read failed — treating as fully busy:`,
+      `[availability] ${userProfileId}: calendar read failed (${reason}) — treating as fully busy:`,
       e,
     );
     return {
       intervals: wholeWindow,
       calendarReadable: false,
-      reason: "calendar-error",
+      reason,
       error: e instanceof Error ? e.message : String(e),
     };
   }
