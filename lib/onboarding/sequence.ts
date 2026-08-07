@@ -45,6 +45,166 @@ export type SequenceOutcome = {
   assessment: "sent" | "failed" | "skipped";
 };
 
+/**
+ * Run EXACTLY the next outstanding step, with no stagger, and report what
+ * happened.
+ *
+ * Called inline from the server action, where a Business Builder is
+ * watching. The reason it exists: a Netlify Background Function returns
+ * 202 before its handler runs, so handing off is not evidence that
+ * anything started — and when the hand-off silently failed, onboarding
+ * had NO path forward at all. A real client sat for a whole working day
+ * behind a spinner because the only way to advance the sequence was a
+ * function nobody could see.
+ *
+ * With this, the sequence is always completable by hand: press the button
+ * again and the next step runs in front of you, with its outcome on
+ * screen. The background function remains the thing that spaces the
+ * remaining steps out; it is no longer the only thing that can move them.
+ *
+ * Bounded by design — ONE step, one send, comfortably inside Netlify's
+ * ~26s synchronous ceiling. The stagger is what needs the background
+ * budget, not the sends themselves.
+ */
+export async function runNextOnboardingStep(
+  engagementId: string,
+): Promise<
+  | { ok: true; step: keyof SequenceOutcome | null; done: boolean }
+  | { ok: false; step: keyof SequenceOutcome; error: string }
+> {
+  const run = await withSystemContext(async (tx) => {
+    const [r] = await tx
+      .select()
+      .from(onboardingRuns)
+      .where(eq(onboardingRuns.engagementId, engagementId))
+      .limit(1);
+    return r ?? null;
+  });
+  if (!run) return { ok: false, step: "welcomeEmail", error: "Onboarding hasn't been started." };
+
+  const actor = await loadActor(run.startedByUserProfileId);
+  if (!actor)
+    return {
+      ok: false,
+      step: "welcomeEmail",
+      error: "The Business Builder who started this could not be resolved.",
+    };
+
+  if (!run.welcomeEmailSentAt) {
+    const r = await sendOnboardingEmail(engagementId, actor);
+    if (!r.ok) {
+      await recordError(engagementId, "welcomeEmailError", r.error);
+      return { ok: false, step: "welcomeEmail", error: r.error };
+    }
+    await stamp(engagementId, {
+      welcomeEmailSentAt: new Date(),
+      welcomeEmailError: null,
+    });
+    return { ok: true, step: "welcomeEmail", done: false };
+  }
+  if (!run.padSentAt) {
+    const r = await sendPaymentAuthorization(engagementId, actor);
+    if (!r.ok) {
+      await recordError(engagementId, "padError", r.error);
+      return { ok: false, step: "pad", error: r.error };
+    }
+    await stamp(engagementId, { padSentAt: new Date(), padError: null });
+    return { ok: true, step: "pad", done: false };
+  }
+  if (!run.portalInviteSentAt) {
+    const r = await sendPortalInvite(engagementId, actor);
+    if (!r.ok) {
+      await recordError(engagementId, "portalInviteError", r.error);
+      return { ok: false, step: "portalInvite", error: r.error };
+    }
+    await stamp(engagementId, {
+      portalInviteSentAt: new Date(),
+      portalInviteError: null,
+    });
+    return { ok: true, step: "portalInvite", done: false };
+  }
+  if (!run.assessmentSentAt && !run.completedAt) {
+    const r = await sendPersonProfileAssessment(engagementId, actor);
+    if (!r.ok) {
+      await recordError(engagementId, "assessmentError", r.error);
+      return { ok: false, step: "assessment", error: r.error };
+    }
+    // A missing assessment URL is a SKIP, not a failure — the run still
+    // completes and the reason goes on the record. Same rule as the
+    // staggered path; the two must not disagree about what "done" means.
+    await stamp(
+      engagementId,
+      r.skipped
+        ? {
+            assessmentError:
+              "No Person Profile link is set for the practice, so this step was skipped.",
+            completedAt: new Date(),
+          }
+        : {
+            assessmentSentAt: new Date(),
+            assessmentError: null,
+            completedAt: new Date(),
+          },
+    );
+    return { ok: true, step: "assessment", done: true };
+  }
+
+  return { ok: true, step: null, done: true };
+}
+
+/**
+ * Record that the background runner reached this run — or refused it.
+ *
+ * Called by the handler itself, because the hand-off's 202 says only that
+ * Netlify accepted the request. Never throws: a bookkeeping failure must
+ * not stop the onboarding it only observes.
+ */
+export async function markBackgroundPickup(
+  engagementId: string,
+  opts: { error?: string },
+): Promise<void> {
+  try {
+    await withSystemContext((tx) =>
+      tx
+        .update(onboardingRuns)
+        .set(
+          opts.error
+            ? { backgroundError: opts.error.slice(0, 500) }
+            : { backgroundStartedAt: new Date(), backgroundError: null },
+        )
+        .where(eq(onboardingRuns.engagementId, engagementId)),
+    );
+  } catch (e) {
+    console.error("[onboarding] could not record background pickup:", e);
+  }
+}
+
+async function loadActor(
+  startedByUserProfileId: string | null,
+): Promise<OnboardingActor | null> {
+  if (!startedByUserProfileId) return null;
+  const u = await withSystemContext(async (tx) => {
+    const [row] = await tx
+      .select({
+        id: userProfiles.id,
+        fullName: userProfiles.fullName,
+        email: userProfiles.email,
+        clerkUserId: userProfiles.clerkUserId,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, startedByUserProfileId))
+      .limit(1);
+    return row ?? null;
+  });
+  if (!u) return null;
+  return {
+    userProfileId: u.id,
+    fullName: u.fullName,
+    email: u.email,
+    clerkUserId: u.clerkUserId,
+  };
+}
+
 export async function runOnboardingSequence(
   engagementId: string,
 ): Promise<SequenceOutcome> {

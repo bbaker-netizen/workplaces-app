@@ -3,6 +3,7 @@ import { ensureUserProfile } from "@/lib/db/provisioning";
 import { listCoachActionItems } from "@/lib/db/queries/action-items";
 import { sortActionItems } from "@/components/action-items/sort";
 import { ActionItemListClient } from "@/components/action-items/ActionItemListClient";
+import { withReturnTo } from "@/lib/navigation/return-to";
 import {
   STATUSES_VISIBLE_TO_COACH,
   type ActionItemStatus,
@@ -28,7 +29,13 @@ export default async function CoachActionItemsPage() {
     revenueImpact: it.revenueImpact,
     marginImpact: it.marginImpact,
     engagementName: it.engagementName,
-    detailHref: `/business-builder/action-items/${it.id}`,
+    // Opened from HERE, so saving or deleting comes back here. Items
+    // opened from a client's own page carry that client instead, and the
+    // detail page falls back to the client when neither is given.
+    detailHref: withReturnTo(
+      `/business-builder/action-items/${it.id}`,
+      "/business-builder/action-items",
+    ),
   }));
 
   return (
@@ -41,7 +48,7 @@ export default async function CoachActionItemsPage() {
           Action items — all engagements
         </h1>
         <p className="font-sans text-muted-foreground max-w-md leading-relaxed">
-          Every action item across every active client, in one list.
+          Every action item across every active client. Filter by client to work one book at a time.
         </p>
       </header>
 

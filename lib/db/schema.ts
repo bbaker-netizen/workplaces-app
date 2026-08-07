@@ -4038,6 +4038,20 @@ export const onboardingRuns = pgTable(
     }),
     assessmentError: text("assessment_error"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    /**
+     * When we last handed off to the background function, and when that
+     * function actually picked the run up. A Netlify Background Function
+     * answers 202 BEFORE the handler runs, so the hand-off returning 202
+     * is not evidence of anything — see 0121. Without these two, "queued
+     * and never picked up" is indistinguishable from "running", and the
+     * panel spins for ever.
+     */
+    lastQueuedAt: timestamp("last_queued_at", { withTimezone: true }),
+    backgroundStartedAt: timestamp("background_started_at", {
+      withTimezone: true,
+    }),
+    /** A refusal the handler itself can name (bad secret, missing id). */
+    backgroundError: text("background_error"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

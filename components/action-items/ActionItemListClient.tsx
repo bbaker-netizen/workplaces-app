@@ -67,24 +67,52 @@ export function ActionItemListClient({
   nowMs?: number;
 }) {
   const [active, setActive] = useState<FilterValue>("all");
+  /**
+   * Which client's items to show. Added because the cross-client list is
+   * the only place a Business Builder can see everything, and that is
+   * exactly what makes one client's work impossible to find in it —
+   * "then it's mixed in with all the action items for every client and I
+   * lose the item". The status chips answer "what state", this answers
+   * "whose", and the two compose.
+   */
+  const [client, setClient] = useState<string>("all");
+
+  const clients = useMemo(() => {
+    const names = new Set<string>();
+    for (const it of items) if (it.engagementName) names.add(it.engagementName);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
+  // Counts follow the client filter, so switching to one client shows
+  // that client's status spread rather than the whole practice's — a
+  // count that doesn't match the list below it is worse than no count.
+  const byClient = useMemo(
+    () =>
+      client === "all"
+        ? items
+        : items.filter((it) => it.engagementName === client),
+    [items, client],
+  );
 
   const counts = useMemo(() => {
     const out: Record<FilterValue, number> = {
-      all: items.length,
+      all: byClient.length,
       draft: 0,
       open: 0,
       in_progress: 0,
       done: 0,
       blocked: 0,
     };
-    for (const it of items) out[it.status]++;
+    for (const it of byClient) out[it.status]++;
     return out;
-  }, [items]);
+  }, [byClient]);
 
   const visible = useMemo(
     () =>
-      active === "all" ? items : items.filter((it) => it.status === active),
-    [items, active],
+      active === "all"
+        ? byClient
+        : byClient.filter((it) => it.status === active),
+    [byClient, active],
   );
 
   // Group the filtered set into urgency buckets, preserving the server sort.
@@ -133,12 +161,36 @@ export function ActionItemListClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <FilterChips
-          options={statusOptions}
-          active={active}
-          counts={counts}
-          onChange={setActive}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          {/* Only where there is more than one client to choose between.
+              On a single-client list it would be a control with one
+              option, which reads as clutter. */}
+          {clients.length > 1 && (
+            <label className="flex items-center gap-2">
+              <span className="font-mono text-[11px] uppercase tracking-tbb-caps text-muted-foreground">
+                Client
+              </span>
+              <select
+                value={client}
+                onChange={(e) => setClient(e.target.value)}
+                className="bg-white border border-tbb-line rounded-md px-2.5 py-1.5 font-sans text-sm focus:outline-none focus:ring-2 focus:ring-tbb-blue"
+              >
+                <option value="all">All clients ({items.length})</option>
+                {clients.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <FilterChips
+            options={statusOptions}
+            active={active}
+            counts={counts}
+            onChange={setActive}
+          />
+        </div>
         {newItemHref && (
           <Link
             href={newItemHref}

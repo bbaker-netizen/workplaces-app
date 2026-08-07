@@ -4454,3 +4454,121 @@ confirmation URL and refresh it; force a refusal and see the sentence on
 screen AND the row under "Recent booking attempts" at
 /business-builder/scheduling; and after Jen reconnects, see her page
 report `ok` rather than `grant-refused`.
+
+## What was built — the 202 that meant nothing (2026-08-07)
+
+Jen, onboarding a real client: the spinner under "Start onboarding" had
+been going since the morning, the client had received nothing, and
+disconnecting and reconnecting Google changed none of it. Plus five
+things about action items that all turn out to be one thing. Migration
+`0121`.
+
+### A Netlify Background Function answers 202 before it runs
+
+That single fact is the whole bug. `enqueue` POSTed the function and
+treated 202 as proof the sequence had started — its own comment said
+"Background functions answer 202. Anything else means the sequence never
+started." The first half is true and the second half does not follow.
+
+Proven by POSTing the live function URL with a deliberately wrong bearer
+token and an empty body: **still 202**. The same for every other
+background function on the site. So a handler that returned 401 on a bad
+secret, 400 on a bad payload, or died on import was indistinguishable
+from one that ran perfectly, and `startOnboarding` reported success
+either way.
+
+Jen's run claimed at 14:29:41Z had every step column NULL, no error, and
+`updated_at` never moved off `started_at`. Nothing had run. The panel
+reads "a row with no `completed_at`" as "in flight" and said *"In
+progress — refresh to see where it's got to"*, which is an instruction
+to keep waiting for something that was never going to arrive. A client
+sat behind it for a working day.
+
+**The trap generalises:** an acknowledgement from a queue is not a
+result from the worker. Same family as every silent-cron entry in this
+file, except the thing reporting success is the platform rather than our
+own code.
+
+### The fix is that a human can always drive it
+
+`runNextOnboardingStep` runs EXACTLY the next outstanding step, with no
+stagger, and returns what happened. The server action calls it inline —
+one step is one send, comfortably inside Netlify's ~26s ceiling — and
+only then hands the remainder to the background function for the
+two-minute spacing.
+
+So the operator always gets a true answer about the step that just ran,
+and pressing the button again advances the next one **even if the
+background runner is dead**. That property is the point: before this,
+onboarding had exactly one path forward and no way to see that it was
+broken. The stagger still needs a background budget; it is no longer the
+only thing that can move the sequence.
+
+`markBackgroundPickup` stamps `background_started_at` as the handler's
+first act, so "queued and never picked up" stops looking like "running".
+The body is parsed BEFORE the auth check on purpose — knowing WHICH run
+was refused is what lets the refusal be written where a person reads it;
+the recorded text is fixed in code, never taken from the payload.
+
+The panel now distinguishes three states it used to collapse into one
+spinner: mid-flight, stalled (nothing for ten minutes — the steps are
+two minutes apart, so ten is well past credible), and failed on a step.
+All three carry the same button, because all three are fixed by sending
+the next step. `nowMs` comes from the server for the same reason
+`ActionItemListClient` takes it — a client component evaluating
+`Date.now()` renders one value on the server and another on hydration,
+and here it decides which sentence appears.
+
+Step 1 already falls back to the app's transactional sender when Gmail
+throws, so Jen's broken Google grant cannot block the onboarding email.
+
+### The action-item complaints were one complaint
+
+Jen listed five things: no way back to the client from an item; the item
+lost among every client's items; delete dumping her on the global list;
+no per-client view; and no way to tell a draft from an assigned item.
+The first three are the same defect — `cancelHref` and `successHref`
+were hard-coded to `/business-builder/action-items`, so every exit from
+an item page landed on the cross-client pile.
+
+`safeReturnTo` / `withReturnTo` carry the origin through as `?from=`.
+Validated, not trusted: a `from` that could leave the site would turn
+every save button into an open redirect, so anything not a same-site
+console path is discarded. **The fallback is the item's own client**,
+not the global list — an action item always belongs to somebody, and
+landing on 200 items across 18 clients after editing one is how you lose
+your place. A named "back to <client>" link sits above the title, which
+is the thing that was missing outright.
+
+The cross-client list gained a client picker. Its status counts follow
+that filter, because a count that disagrees with the list under it is
+worse than no count.
+
+Draft, unassigned and assigned now look different in the client's own
+list — an orange "Draft — needs review" pill, a quiet "Unassigned" one,
+and the assignee's name otherwise. Jen's reasoning, and it is right: a
+list where those look the same is a list you learn to ignore.
+
+**Not a bug, and worth saying:** action items ARE the deliverables since
+0109 merged the two tables. A commitment has no `deliverable_type`; one
+of the nine documents has one. So "provide offer letter templates"
+correctly reads as a one-off commitment rather than a deliverable, and a
+Claude-drafted document stays out of the Deliverables panel until it is
+published — deliberately, since that panel is client-visible.
+
+### Verified
+
+`tsc --noEmit` and `next lint` clean. `next build` compiles with 74
+prerender failures and 148 `Missing publishableKey`, zero errors of any
+other cause — the recorded baseline exactly. Migration 0121 applied
+against the LIVE database inside a rolled-back transaction, re-applied
+to prove idempotency, then rolled back; the real stalled run reads back
+with all three columns null, which is what puts it in the stalled branch
+rather than the spinner.
+
+**Not clicked in a browser.** The acceptance tests: open the stuck
+client and see "Stalled — handed off N hours ago" with a working "Send
+the next step now"; press it and watch the onboarding email actually
+send, or say why it cannot; open an action item from a client and come
+back to that client on save, delete and cancel; filter the cross-client
+list to one client; and see the Draft pill on an unreviewed item.

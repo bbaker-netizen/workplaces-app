@@ -27,6 +27,7 @@ import {
   checkOnboardingReadiness,
   type OnboardingBlocker,
 } from "@/lib/onboarding/preflight";
+import { runNextOnboardingStep } from "@/lib/onboarding/sequence";
 
 export type StartOnboardingResult =
   | { ok: true }
@@ -116,28 +117,12 @@ export async function startOnboarding(
     return { ok: false, error: "Couldn't start onboarding. Try again." };
   }
 
-  const handoff = await enqueue(engagementId);
-  if (handoff) {
-    // The run row exists but nothing was sent. Say so plainly and record
-    // it, rather than leaving a claimed run that looks in-flight forever.
-    await withSystemContext((tx) =>
-      tx
-        .update(onboardingRuns)
-        .set({ welcomeEmailError: handoff.slice(0, 500) })
-        .where(eq(onboardingRuns.engagementId, engagementId)),
-    );
-    revalidatePath(`/business-builder/engagements/${engagementId}`);
-    return { ok: false, error: handoff };
-  }
-
-  revalidatePath(`/business-builder/engagements/${engagementId}`);
-  return { ok: true };
+  return advance(engagementId);
 }
 
 /**
- * Re-run the steps that haven't landed. Same sequence, and it skips any
- * step with a timestamp, so a retry after a failure never re-sends what
- * already went.
+ * Re-run the steps that haven't landed. Skips any step with a timestamp,
+ * so a retry after a failure never re-sends what already went.
  */
 export async function resumeOnboarding(
   engagementId: string,
@@ -160,16 +145,55 @@ export async function resumeOnboarding(
   if (!run) return { ok: false, error: "Onboarding hasn't been started yet." };
   if (run.completedAt) return { ok: false, error: "Onboarding already finished." };
 
-  const handoff = await enqueue(engagementId);
-  if (handoff) return { ok: false, error: handoff };
+  return advance(engagementId);
+}
+
+/**
+ * Send the next outstanding step HERE, in front of the operator, then
+ * hand the rest to the background function for the stagger.
+ *
+ * **Why the first step no longer waits on the hand-off.** A Netlify
+ * Background Function answers 202 the moment the request is accepted,
+ * before its handler runs — so the old code's "202 means it started" was
+ * a check of nothing, and when the hand-off silently failed there was no
+ * other way to move the sequence at all. A real client sat behind a
+ * spinner for a working day. Now the operator always gets a true answer
+ * about the step that just ran, and pressing the button again advances
+ * the next one even if the background runner is dead.
+ *
+ * One step is one send — well inside Netlify's ~26s synchronous ceiling.
+ * The stagger is what needs a background budget, not the sending.
+ */
+async function advance(engagementId: string): Promise<StartOnboardingResult> {
+  const step = await runNextOnboardingStep(engagementId);
   revalidatePath(`/business-builder/engagements/${engagementId}`);
+  if (!step.ok) return { ok: false, error: step.error };
+  if (step.done) return { ok: true };
+
+  // More steps to go. The hand-off's failure is recorded but is NOT
+  // reported as a failure of the run — the step that just ran did send,
+  // and the operator can advance the rest by hand from the panel.
+  const handoff = await enqueue(engagementId);
+  if (handoff) {
+    await withSystemContext((tx) =>
+      tx
+        .update(onboardingRuns)
+        .set({ backgroundError: handoff.slice(0, 500) })
+        .where(eq(onboardingRuns.engagementId, engagementId)),
+    );
+    revalidatePath(`/business-builder/engagements/${engagementId}`);
+  }
   return { ok: true };
 }
 
 /**
- * Hand off to the background function. Returns an error string on
- * failure, null on success. Not exported — a `"use server"` module may
- * only export async server actions, and this must not be one.
+ * Hand off to the background function for the remaining, staggered steps.
+ * Returns an error string on failure, null on success. Not exported — a
+ * `"use server"` module may only export async server actions.
+ *
+ * NOTE: a 202 here means Netlify accepted the request, NOT that the
+ * handler ran. `onboarding_runs.background_started_at`, stamped by the
+ * handler itself, is the only evidence that it did.
  */
 async function enqueue(engagementId: string): Promise<string | null> {
   const baseUrl =
@@ -192,13 +216,22 @@ async function enqueue(engagementId: string): Promise<string | null> {
         body: JSON.stringify({ engagementId }),
       },
     );
-    // Background functions answer 202. Anything else means the sequence
-    // never started — say so rather than reporting it as running.
+    // A non-202 means Netlify did not even accept the request. A 202
+    // means it did — and NOTHING more; the handler has not run yet. Do
+    // not read success into it.
     if (resp.status !== 202 && !resp.ok) {
-      return `Couldn't start the onboarding sequence (HTTP ${resp.status}). Nothing was sent.`;
+      return `The onboarding runner didn't accept the hand-off (HTTP ${resp.status}). The remaining steps haven't been queued.`;
     }
   } catch (e) {
     return e instanceof Error ? e.message : String(e);
   }
+  // Stamped so the panel can say how long a run has been waiting to be
+  // picked up, and call it stalled rather than spinning for ever.
+  await withSystemContext((tx) =>
+    tx
+      .update(onboardingRuns)
+      .set({ lastQueuedAt: new Date() })
+      .where(eq(onboardingRuns.engagementId, engagementId)),
+  ).catch(() => {});
   return null;
 }
