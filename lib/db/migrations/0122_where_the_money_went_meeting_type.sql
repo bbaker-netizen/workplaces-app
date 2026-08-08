@@ -1,0 +1,23 @@
+-- A second bookable offer: "Where the money went".
+--
+-- Ninety minutes on the prospect's actual numbers — twelve months of
+-- bank statements and a P&L, read before the call. It has been sold for
+-- a while, but it lived on a Google appointment schedule outside this
+-- app, which made it Bruce's alone: a booking on it could not be routed
+-- to Jen, created no `bookings` row, no scheduling_link, and therefore
+-- nothing the funnel could count. Discovery has had all of that since
+-- Phase 3.8. This makes the second offer a first-class meeting type so
+-- it inherits the lot.
+--
+-- Only the enum value is added here. Everything that distinguishes the
+-- offer — its ninety minutes, and the documents the prospect has to send
+-- before the call — is per-link data or code in lib/booking/meeting-types.ts,
+-- so nothing else about the table needs to change.
+--
+-- `ADD VALUE` is allowed inside a transaction block from PostgreSQL 12
+-- (this database is 17) provided the new label is not USED in the same
+-- transaction. The migration runner sends each file as one blob, so this
+-- file deliberately contains exactly one statement and seeds no rows.
+-- The links themselves are created by scripts/setup-money-links.mjs.
+
+ALTER TYPE scheduling_meeting_type ADD VALUE IF NOT EXISTS 'where_the_money_went';

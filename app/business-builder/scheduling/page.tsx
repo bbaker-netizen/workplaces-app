@@ -70,13 +70,14 @@ export default async function SchedulingSettingsPage() {
         </h1>
         <p className="text-sm text-tbb-ink-3 max-w-2xl">
           Your own Calendly. Each link is a public page where someone picks
-          a time from the days and hours you set here. A discovery booking
-          creates a lead in the pipeline owned by you, and every live
-          discovery link is listed on{" "}
+          a time from the days and hours you set here. A discovery call or a
+          &ldquo;Where the money went&rdquo; booking creates a lead in the
+          pipeline owned by you, and every live link of either kind is listed
+          on{" "}
           <Link href="/book" className="underline hover:text-tbb-navy">
             the public booking page
           </Link>
-          .
+          . The two are independent — you can take one and not the other.
         </p>
       </header>
 

@@ -31,6 +31,12 @@ import {
 import { withSystemContext } from "@/lib/db/tenant";
 import { recordBookingAttempt } from "@/lib/booking/attempts";
 import { formatSlotLocal } from "@/lib/booking/format";
+import {
+  SCHEDULING_MEETING_TYPES,
+  createsProspect,
+  meetingType as meetingTypeDefinition,
+  type SchedulingMeetingType,
+} from "@/lib/booking/meeting-types";
 import { notifyBooking } from "@/lib/booking/notify";
 import { LEAD_SOURCE_CHANNELS } from "@/lib/pipeline/lead-source";
 import {
@@ -90,7 +96,10 @@ export type ActionResult<T = void> =
 
 /* -------------------------- create / edit a link -------------------------- */
 
-const meetingTypeEnum = z.enum(["discovery", "bbs", "ad_hoc"]);
+// Read from the offer catalogue rather than restated here — a type the
+// database accepts but this schema rejects is a link the console cannot
+// save, with a validation message that names no field.
+const meetingTypeEnum = z.enum(SCHEDULING_MEETING_TYPES);
 
 const createLinkSchema = z.object({
   slug: z
@@ -485,7 +494,14 @@ export async function listAvailableSlots(
   daysAhead = 14,
 ): Promise<
   ActionResult<{
-    link: { name: string; durationMinutes: number; description: string | null };
+    link: {
+      name: string;
+      durationMinutes: number;
+      description: string | null;
+      /** What this link sells. The booking page reads the offer's
+       *  pre-work off it — see lib/booking/meeting-types.ts. */
+      meetingType: SchedulingMeetingType;
+    };
     slots: AvailableSlot[];
     /**
      * False when the Builder's calendar could not be read, so the empty
@@ -611,6 +627,7 @@ export async function listAvailableSlots(
         name: link.name,
         durationMinutes: dur,
         description: link.description,
+        meetingType: link.meetingType,
       },
       slots,
       calendarReadable: busy.calendarReadable,
@@ -837,12 +854,16 @@ async function bookSlot(
       const bbsSessionId: string | null = null;
       let prospectId: string | null = null;
 
-      if (link.meetingType === "bbs") {
-        // BBS bookings don't auto-create until we know which engagement.
-        // The Coach manually creates the engagement ahead of time and
-        // shares the link in context. Phase 4 will allow per-engagement
-        // booking links.
-      } else if (link.meetingType === "discovery") {
+      // Asked of the offer catalogue rather than matched on the type
+      // here. Both PUBLIC offers — the discovery call and "Where the
+      // money went" — claim a lead owned by the link's Builder, and the
+      // rule below is long enough that a second copy of it for the
+      // second offer is how the two would quietly drift apart. A `bbs`
+      // link creates nothing (the Coach makes the engagement ahead of
+      // time and shares the link in context; per-engagement booking
+      // links are Phase 4), and an `ad_hoc` link creates nothing because
+      // the person booking is already known.
+      if (createsProspect(link.meetingType)) {
         // Match an existing lead on email before creating one. The public
         // intake webhook has always de-duplicated this way; bookings did
         // not, so a lead already in the pipeline who booked a call got a
@@ -896,7 +917,10 @@ async function bookSlot(
             // alerting the master admin and nobody else.
             ownerUserProfileId: link.coachUserProfileId,
             status: "meeting_scheduled",
-            leadSource: "Discovery booking",
+            // Which offer they took, not just "a booking" — the two
+            // convert differently and the pipeline should be able to
+            // say which one brought someone in.
+            leadSource: meetingTypeDefinition(link.meetingType).leadSourceLabel,
             source: data.source,
             firstSeenAt: new Date(),
             // They just booked — stamp the booked-session attribution date.
@@ -948,6 +972,7 @@ async function bookSlot(
       builderName: link.coachName ?? "your Business Builder",
       builderEmail: link.coachEmail ?? null,
       meetingName: link.name,
+      meetingType: link.meetingType,
       description: link.description,
       whenLocal: formatSlotLocal(requestedStart),
       durationMinutes: duration,

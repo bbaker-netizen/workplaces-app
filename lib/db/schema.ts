@@ -226,10 +226,18 @@ export const personProfileSourceEnum = pgEnum("person_profile_source", [
   "manual",
 ]);
 
+/**
+ * What a booking link sells. `where_the_money_went` was added by
+ * migration 0122 — Postgres appends new enum labels, so it sorts last on
+ * the type even though it is the second offer on the public page.
+ * Ordering, labels, and the rules each type carries live in
+ * lib/booking/meeting-types.ts.
+ */
 export const schedulingMeetingTypeEnum = pgEnum("scheduling_meeting_type", [
   "discovery",
   "bbs",
   "ad_hoc",
+  "where_the_money_went",
 ]);
 
 // ---------- Phase 2 audit log ----------

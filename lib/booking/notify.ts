@@ -19,6 +19,7 @@
  * confirmation; the visitor has already decided we are broken.
  */
 
+import { prepFor, type SchedulingMeetingType } from "@/lib/booking/meeting-types";
 import { withSystemContext } from "@/lib/db/tenant";
 import {
   loadInternalUsers,
@@ -38,6 +39,9 @@ export type BookingNotifyInput = {
   /** Where the visitor should write to reschedule. */
   builderEmail: string | null;
   meetingName: string;
+  /** Which offer was booked. Decides whether the messages carry a
+   *  pre-work block — see lib/booking/meeting-types.ts. */
+  meetingType: SchedulingMeetingType;
   description: string | null;
   /** Pre-formatted Mountain Time — the same string the visitor saw. */
   whenLocal: string;
@@ -68,6 +72,10 @@ export async function notifyBooking(input: BookingNotifyInput): Promise<void> {
     bookerCompany: input.bookerCompany,
     notes: input.notes,
     description: input.description,
+    // Resolved once for both messages. The booker is told what to send;
+    // the Builder is told what to expect, so a session with nothing
+    // attached is visible to them before they sit down to it.
+    prep: prepFor(input.meetingType),
   };
 
   try {

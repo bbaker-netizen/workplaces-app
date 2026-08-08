@@ -9,6 +9,7 @@
  */
 
 import { and, eq } from "drizzle-orm";
+import type { SchedulingMeetingType } from "@/lib/booking/meeting-types";
 import { bookings, schedulingLinks, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
 
@@ -19,6 +20,8 @@ export type BookingConfirmation = {
   /** First name only — enough to confirm it is theirs, no more. */
   bookerFirstName: string;
   meetingName: string;
+  /** Which offer they booked, so the page can repeat its pre-work. */
+  meetingType: SchedulingMeetingType;
   description: string | null;
   builderName: string;
   cancelled: boolean;
@@ -45,6 +48,7 @@ export async function getBookingConfirmation(
           bookerName: bookings.bookerName,
           cancelledAt: bookings.cancelledAt,
           meetingName: schedulingLinks.name,
+          meetingType: schedulingLinks.meetingType,
           description: schedulingLinks.description,
           builderName: userProfiles.fullName,
         })
@@ -68,6 +72,7 @@ export async function getBookingConfirmation(
       bookerFirstName:
         row.bookerName.trim().split(/\s+/)[0] || row.bookerName.trim(),
       meetingName: row.meetingName,
+      meetingType: row.meetingType,
       description: row.description,
       builderName: row.builderName ?? "your Business Builder",
       cancelled: row.cancelledAt !== null,

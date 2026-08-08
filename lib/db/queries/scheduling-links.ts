@@ -8,6 +8,7 @@
  */
 
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import type { SchedulingMeetingType } from "@/lib/booking/meeting-types";
 import { ensureUserProfile } from "@/lib/db/provisioning";
 import { bookings, schedulingLinks, userProfiles } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
@@ -17,7 +18,7 @@ export type SchedulingLinkRow = {
   slug: string;
   name: string;
   description: string | null;
-  meetingType: "discovery" | "bbs" | "ad_hoc";
+  meetingType: SchedulingMeetingType;
   durationMinutes: number;
   weekdays: number[];
   startMinute: number;
