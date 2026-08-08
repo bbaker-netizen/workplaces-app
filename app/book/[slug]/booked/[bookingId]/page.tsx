@@ -18,6 +18,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarCheck, Clock, User } from "lucide-react";
 import { formatSlotLocal } from "@/lib/booking/format";
+import { prepFor } from "@/lib/booking/meeting-types";
+import { PrepRequirementNotice } from "@/components/scheduling/PrepRequirementNotice";
 import { getBookingConfirmation } from "@/lib/db/queries/bookings";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,11 @@ export default async function BookingConfirmedPage({
 }) {
   const booking = await getBookingConfirmation(params.slug, params.bookingId);
   if (!booking) notFound();
+  // Repeated here as well as in the email. This is the page someone
+  // screenshots, and it is the page they come back to when they cannot
+  // find the email — so it has to answer "what was I supposed to send?"
+  // on its own. Not shown on a cancelled booking: nothing is owed.
+  const prep = booking.cancelled ? null : prepFor(booking.meetingType);
 
   return (
     <main className="min-h-screen bg-background py-12 px-6">
@@ -100,6 +107,13 @@ export default async function BookingConfirmedPage({
               before then.
             </p>
           </div>
+        )}
+
+        {prep && (
+          <PrepRequirementNotice
+            prep={prep}
+            footnote={`Send them to ${booking.builderName}, at the address on your confirmation email.`}
+          />
         )}
 
         <p className="font-mono text-[10px] uppercase tracking-tbb-caps text-muted-foreground text-center">

@@ -21,6 +21,10 @@
 
 import { DateTime } from "luxon";
 import type { EmailEnvelope } from "./send";
+import {
+  prepAsLines,
+  type PrepRequirement,
+} from "@/lib/booking/meeting-types";
 import type { DigestPayload } from "@/lib/ea/digest-data";
 import type { EngagementHoursReport } from "@/lib/ea/engagement-hours";
 import type { JobHeartbeat } from "@/lib/ea/job-runs";
@@ -2685,7 +2689,48 @@ export type BookingEmailInput = {
   notes: string | null;
   /** The link's own description, if the Builder wrote one. */
   description: string | null;
+  /**
+   * Documents the offer requires BEFORE the meeting, when it requires
+   * any. Comes from the offer catalogue rather than from the link's
+   * description, so it reads identically on both Business Builders'
+   * pages and cannot be edited away by accident.
+   */
+  prep?: PrepRequirement | null;
 };
+
+/**
+ * The pre-work block, in email markup.
+ *
+ * Given its own bordered box directly under the appointment, ahead of
+ * the description and the reschedule line. For "Where the money went"
+ * the documents are the session — a booking with nothing sent is ninety
+ * minutes nobody can use — so this is the one thing in the message the
+ * reader has to act on and it is not going at the bottom.
+ */
+function prepBlockHtml(prep: PrepRequirement, sendTo: string): string {
+  const items = prep.items
+    .map(
+      (i) =>
+        `<li style="margin:0 0 6px 0;">${escapeHtml(i)}</li>`,
+    )
+    .join("");
+  return `
+      <div style="margin:16px 0;padding:14px 16px;background:#FFFFFF;border:2px solid #2E4057;border-radius:8px;">
+        <div style="font-size:15px;font-weight:bold;color:#1A1A1A;margin:0 0 6px 0;">${escapeHtml(
+          prep.headline,
+        )}</div>
+        <p style="margin:0 0 10px 0;font-size:14px;line-height:1.6;color:#1A1A1A;">${escapeHtml(
+          prep.why,
+        )}</p>
+        <ul style="margin:0 0 10px 0;padding-left:20px;font-size:14px;line-height:1.6;color:#1A1A1A;">${items}</ul>
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#5A6470;">${escapeHtml(
+          prep.timing,
+        )} Send them to <a href="mailto:${escapeHtml(
+          sendTo,
+        )}" style="color:#2E4057;">${escapeHtml(sendTo)}</a>.</p>
+      </div>
+  `;
+}
 
 /**
  * To the person who just booked.
@@ -2720,6 +2765,7 @@ export function bookingConfirmationEmail(
         <div>${input.durationMinutes} minutes with ${escapeHtml(input.builderName)}</div>
         <div style="font-size:13px;color:#5A6470;">${escapeHtml(input.meetingName)}</div>
       </div>
+      ${input.prep ? prepBlockHtml(input.prep, contactAddress) : ""}
       ${descriptionBlock}
       <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;">${escapeHtml(
         input.builderName,
@@ -2737,6 +2783,12 @@ export function bookingConfirmationEmail(
     `${input.durationMinutes} minutes with ${input.builderName}`,
     input.meetingName,
     "",
+    // Same position as in the HTML — straight after the appointment,
+    // ahead of everything else. A plain-text reader must not have to
+    // scroll past the pleasantries to find what they have to send.
+    ...(input.prep
+      ? [...prepAsLines(input.prep), `Send them to ${contactAddress}.`, ""]
+      : []),
     input.description ? flattenMarkdown(input.description, 600) : null,
     input.description ? "" : null,
     `${input.builderName} will be in touch before then with the joining details.`,
@@ -2791,6 +2843,21 @@ export function bookingReceivedEmail(
         )}&gt;</div>
         ${companyLine}
       </div>
+      ${
+        /* One line, not the full block: the Builder does not need
+           instructing, they need to know what is owed and by when, so
+           that a session with nothing attached is visible before they
+           sit down to it. */
+        input.prep
+          ? `<p style="margin:0 0 12px 0;font-size:13px;color:#5A6470;">They were asked to send ${escapeHtml(
+              input.prep.items.length.toString(),
+            )} things before the call: ${escapeHtml(
+              input.prep.items
+                .map((i) => i.split("—")[0].trim().replace(/\.$/, ""))
+                .join("; "),
+            )}.</p>`
+          : ""
+      }
       ${notesBlock}
       ${
         url
@@ -2808,6 +2875,11 @@ export function bookingReceivedEmail(
     `What: ${input.meetingName}`,
     `Contact: ${input.bookerName} <${input.bookerEmail}>`,
     input.bookerCompany ? `Company: ${input.bookerCompany}` : null,
+    input.prep
+      ? `Asked to send first: ${input.prep.items
+          .map((i) => i.split("—")[0].trim().replace(/\.$/, ""))
+          .join("; ")}.`
+      : null,
     "",
     input.notes ? `They said:\n${flattenMarkdown(input.notes, 800)}` : null,
     input.notes ? "" : null,

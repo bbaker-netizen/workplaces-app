@@ -103,6 +103,11 @@ export type SweepResult = {
  * made for a named client, "any row" could hand a stranger a link that
  * has been turned off (dead page) or a client's Business Building
  * session link (wrong meeting entirely).
+ *
+ * Discovery specifically, now that there is a second PUBLIC offer: a
+ * cold draft asks for half an hour of conversation. Putting "Where the
+ * money went" in it would ask someone who has not replied yet to hand
+ * over twelve months of bank statements, which is not an opening move.
  */
 async function resolveBookingUrl(recipient: EaRecipient): Promise<string | null> {
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(

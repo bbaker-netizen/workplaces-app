@@ -27,6 +27,11 @@ import {
   deleteSchedulingLink,
   updateSchedulingLink,
 } from "@/lib/actions/scheduling";
+import {
+  MEETING_TYPE_LIST,
+  meetingType as meetingTypeDefinition,
+  type SchedulingMeetingType,
+} from "@/lib/booking/meeting-types";
 import type { SchedulingLinkRow } from "@/lib/db/queries/scheduling-links";
 
 /** ISO weekday numbers, which is what Luxon's `weekday` returns and what
@@ -41,27 +46,14 @@ const WEEKDAYS: ReadonlyArray<{ n: number; label: string; short: string }> = [
   { n: 7, label: "Sunday", short: "Sun" },
 ];
 
-const MEETING_TYPES: ReadonlyArray<{
-  value: "discovery" | "bbs" | "ad_hoc";
-  label: string;
-  hint: string;
-}> = [
-  {
-    value: "discovery",
-    label: "Discovery call",
-    hint: "Creates a lead in the pipeline, owned by whoever the link belongs to. These are the links listed on the public /book page.",
-  },
-  {
-    value: "bbs",
-    label: "Business Building session",
-    hint: "Shared in context with an existing client. Never appears on the public booking page.",
-  },
-  {
-    value: "ad_hoc",
-    label: "One-off meeting",
-    hint: "Sent to one person for one conversation. No lead is created.",
-  },
-];
+/**
+ * Read from the offer catalogue rather than restated here. This list had
+ * its own copy of the labels and hints, which meant a new offer had to
+ * be added in two places and the console was the one that got forgotten
+ * — a type the database accepts and the dropdown does not offer is a
+ * link only SQL can create.
+ */
+const MEETING_TYPES = MEETING_TYPE_LIST;
 
 function minutesToTime(m: number): string {
   const h = Math.floor(m / 60);
@@ -97,7 +89,7 @@ type Draft = {
   slug: string;
   name: string;
   description: string;
-  meetingType: "discovery" | "bbs" | "ad_hoc";
+  meetingType: SchedulingMeetingType;
   durationMinutes: number;
   weekdays: number[];
   startMinute: number;
@@ -112,7 +104,7 @@ function blankDraft(ownerId: string): Draft {
     name: "",
     description: "",
     meetingType: "discovery",
-    durationMinutes: 30,
+    durationMinutes: meetingTypeDefinition("discovery").defaultDurationMinutes,
     weekdays: [1, 2, 3, 4, 5],
     startMinute: 510,
     endMinute: 1080,
@@ -170,7 +162,7 @@ function LinkForm({
   saveLabel: string;
 }) {
   const [slugTouched, setSlugTouched] = useState(slugLocked);
-  const typeHint = MEETING_TYPES.find((t) => t.value === draft.meetingType)?.hint;
+  const typeHint = meetingTypeDefinition(draft.meetingType).consoleHint;
 
   return (
     <div className="space-y-4">
@@ -252,16 +244,28 @@ function LinkForm({
             className={inputClass}
             value={draft.meetingType}
             disabled={saving}
-            onChange={(e) =>
+            onChange={(e) => {
+              const next = e.target.value as Draft["meetingType"];
+              // Move the length to the new offer's default, but only
+              // when it is still sitting on the OLD offer's default —
+              // switching to "Where the money went" should land on
+              // ninety minutes without silently overwriting a length
+              // someone has deliberately chosen.
+              const wasDefault =
+                draft.durationMinutes ===
+                meetingTypeDefinition(draft.meetingType).defaultDurationMinutes;
               setDraft({
                 ...draft,
-                meetingType: e.target.value as Draft["meetingType"],
-              })
-            }
+                meetingType: next,
+                durationMinutes: wasDefault
+                  ? meetingTypeDefinition(next).defaultDurationMinutes
+                  : draft.durationMinutes,
+              });
+            }}
           >
             {MEETING_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
-                {t.label}
+                {t.consoleLabel}
               </option>
             ))}
           </select>
@@ -684,9 +688,8 @@ export function SchedulingLinksManager({
                       )}
 
                       <p className="font-sans text-xs text-tbb-ink-3">
-                        {MEETING_TYPES.find((t) => t.value === link.meetingType)
-                          ?.label ?? link.meetingType}{" "}
-                        · {link.durationMinutes} min ·{" "}
+                        {meetingTypeDefinition(link.meetingType).consoleLabel} ·{" "}
+                        {link.durationMinutes} min ·{" "}
                         {link.weekdays.length === 0
                           ? "No days set"
                           : WEEKDAYS.filter((d) =>
