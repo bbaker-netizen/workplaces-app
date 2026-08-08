@@ -83,6 +83,7 @@ import { EngagementArchiveButton } from "@/components/business-builder/Engagemen
 import { DeleteEngagementButton } from "@/components/business-builder/DeleteEngagementButton";
 import { EngagementRename } from "@/components/business-builder/EngagementRename";
 import { BulkAddProjects } from "@/components/projects/BulkAddProjects";
+import { withReturnTo } from "@/lib/navigation/return-to";
 
 export default async function EngagementDetailPage({
   params,
@@ -639,6 +640,7 @@ export default async function EngagementDetailPage({
             }))}
           />
         }
+        nowMs={Date.now()}
         run={
           onboardingRun
             ? {
@@ -652,6 +654,9 @@ export default async function EngagementDetailPage({
                 assessmentSentAt: onboardingRun.assessmentSentAt,
                 assessmentError: onboardingRun.assessmentError,
                 completedAt: onboardingRun.completedAt,
+                lastQueuedAt: onboardingRun.lastQueuedAt,
+                backgroundStartedAt: onboardingRun.backgroundStartedAt,
+                backgroundError: onboardingRun.backgroundError,
               }
             : null
         }
@@ -790,6 +795,7 @@ export default async function EngagementDetailPage({
                 key={p.id}
                 project={p}
                 actions={actionsByProject.get(p.id) ?? []}
+                engagementId={data.eng.id}
               />
             ))}
           </div>
@@ -829,7 +835,10 @@ export default async function EngagementDetailPage({
                     aria-hidden
                   />
                   <Link
-                    href={`/business-builder/action-items/${d.id}`}
+                    href={withReturnTo(
+                      `/business-builder/action-items/${d.id}`,
+                      `/business-builder/engagements/${data.eng.id}`,
+                    )}
                     className="font-bold text-tbb-navy hover:underline"
                   >
                     {d.title}
@@ -922,7 +931,7 @@ export default async function EngagementDetailPage({
           </header>
           <ul className="divide-y divide-tbb-line-soft px-5">
             {orphanActions.map((a) => (
-              <ActionRow key={a.id} action={a} />
+              <ActionRow key={a.id} action={a} engagementId={data.eng.id} />
             ))}
           </ul>
         </section>
@@ -934,9 +943,11 @@ export default async function EngagementDetailPage({
 function ProjectBlock({
   project,
   actions,
+  engagementId,
 }: {
   project: typeof projects.$inferSelect;
   actions: (typeof actionItems.$inferSelect)[];
+  engagementId: string;
 }) {
   return (
     <div className="px-5 py-4 space-y-3">
@@ -984,7 +995,7 @@ function ProjectBlock({
       ) : (
         <ul className="space-y-1.5 pl-6">
           {actions.map((a) => (
-            <ActionRow key={a.id} action={a} />
+            <ActionRow key={a.id} action={a} engagementId={engagementId} />
           ))}
         </ul>
       )}
@@ -994,32 +1005,74 @@ function ProjectBlock({
 
 function ActionRow({
   action,
+  engagementId,
+  assigneeName,
 }: {
   action: typeof actionItems.$inferSelect;
+  engagementId: string;
+  assigneeName?: string | null;
 }) {
   const done = action.status === "done";
+  /**
+   * Three states that used to look identical in this list: a machine
+   * DRAFT nobody has read, a published item with no owner, and real work
+   * assigned to a real person. Jen's point, and it is the right one — a
+   * list where those look the same is a list you learn to ignore.
+   *
+   * Draft is the loud one because it is the only state that needs an
+   * action from us before the client can see it at all.
+   */
+  const draft = action.status === "draft";
+  const unassigned = !draft && !done && !action.assigneeUserProfileId;
   return (
     <li className="py-2 flex items-start gap-2.5">
       {done ? (
         <CheckCircle2 className="w-4 h-4 text-tbb-success shrink-0 mt-0.5" aria-hidden />
+      ) : draft ? (
+        <Circle
+          className="w-4 h-4 text-tbb-orange-600 shrink-0 mt-0.5"
+          aria-hidden
+        />
       ) : (
         <Circle className="w-4 h-4 text-tbb-ink-3 shrink-0 mt-0.5" aria-hidden />
       )}
       <span className="flex-1 min-w-0">
-        <Link
-          href={`/business-builder/action-items/${action.id}`}
-          className={
-            "text-sm hover:underline " +
-            (done ? "line-through text-tbb-ink-3" : "text-tbb-navy")
-          }
-        >
-          {action.title}
-        </Link>
-        {action.dueDate && (
-          <span className="block text-[11px] text-tbb-ink-3">
-            Due {new Date(action.dueDate).toLocaleDateString()}
-          </span>
-        )}
+        <span className="flex items-center gap-1.5 flex-wrap">
+          {draft && (
+            <span className="inline-flex items-center text-[9px] font-bold uppercase tracking-tbb-caps px-1.5 py-0.5 rounded-pill border border-tbb-orange-600 bg-tbb-cream-50 text-tbb-orange-700">
+              Draft — needs review
+            </span>
+          )}
+          {unassigned && (
+            <span className="inline-flex items-center text-[9px] font-bold uppercase tracking-tbb-caps px-1.5 py-0.5 rounded-pill border border-tbb-line bg-white text-tbb-ink-3">
+              Unassigned
+            </span>
+          )}
+          <Link
+            // Carries the client, so saving, deleting or cancelling comes
+            // back HERE rather than dumping you in every client's items.
+            href={withReturnTo(
+              `/business-builder/action-items/${action.id}`,
+              `/business-builder/engagements/${engagementId}`,
+            )}
+            className={
+              "text-sm hover:underline " +
+              (done ? "line-through text-tbb-ink-3" : "text-tbb-navy")
+            }
+          >
+            {action.title}
+          </Link>
+        </span>
+        <span className="block text-[11px] text-tbb-ink-3">
+          {[
+            assigneeName ?? (draft || unassigned ? null : null),
+            action.dueDate
+              ? `Due ${new Date(action.dueDate).toLocaleDateString()}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
       </span>
     </li>
   );

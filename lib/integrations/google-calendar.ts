@@ -436,6 +436,31 @@ export function isGoogleAuthRejection(e: unknown): boolean {
 }
 
 /**
+ * Google refused a token we minted seconds earlier.
+ *
+ * Distinct from `GoogleReconnectRequiredError`, which means the REFRESH
+ * token is dead and no access token can be obtained at all. This one is
+ * stranger and, until it was induced, unnamed: the refresh SUCCEEDS —
+ * Google hands back a fresh access token and we store it — and the very
+ * next call with that token comes back 401. Every load then repeats the
+ * cycle, minting a new token and being refused again.
+ *
+ * Why it needs its own name. `withGoogleTokenRetry` treated "the first
+ * call 401'd" and "both calls 401'd" as the same event and rethrew the
+ * same message, so the caller could not tell a stale token that healed
+ * itself from a grant that refuses everything. Those need opposite
+ * responses: the first is nothing to act on, the second is dark pages
+ * until somebody reconnects Google, and nothing in the app could say so.
+ * Measured on a live Builder on 7 Aug — see the entry in CLAUDE.md.
+ */
+export class GoogleGrantRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GoogleGrantRefusedError";
+  }
+}
+
+/**
  * Run a Google call, and if the token is rejected mint a fresh one and
  * try exactly once more.
  *
@@ -490,9 +515,22 @@ export async function withGoogleTokenRetry<T>(
       throw new GoogleReconnectRequiredError(
         "Google rejected the stored token and no refreshed one could be minted.",
       );
-    // A second 401 is a real authorization problem, not a stale token —
-    // let it propagate rather than looping.
-    return await run(fresh);
+    // A second 401 is a real authorization problem, not a stale token, so
+    // it is NAMED rather than rethrown as another indistinguishable 401.
+    // The retry existing is not the same as the retry helping: when the
+    // refreshed token is refused too, no amount of retrying recovers the
+    // page and the only fix is a reconnect. Callers key off this to say
+    // that out loud instead of reporting a generic calendar error.
+    try {
+      return await run(fresh);
+    } catch (second) {
+      if (!isGoogleAuthRejection(second)) throw second;
+      throw new GoogleGrantRefusedError(
+        `Google refused a token minted seconds earlier, so this grant is dead rather than stale. ${
+          second instanceof Error ? second.message : String(second)
+        }`,
+      );
+    }
   }
 }
 

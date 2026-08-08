@@ -33,6 +33,10 @@ function explain(reason: string | null): string {
       return "Calendar read fine.";
     case "not-connected":
       return "No Google account is connected, so every time is treated as busy.";
+    case "grant-refused":
+      return "Google is refusing access tokens it issued seconds earlier — the connection is dead, not stale, and retrying cannot fix it. Reconnect Google.";
+    case "reconnect-required":
+      return "Google will no longer issue an access token at all — the connection has to be made again. Reconnect Google.";
     case "calendar-error":
       return "Google refused the calendar read, so every time is treated as busy.";
     case "session-read-error":

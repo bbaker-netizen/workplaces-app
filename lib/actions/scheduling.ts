@@ -29,6 +29,9 @@ import {
   type UserProfile,
 } from "@/lib/db/schema";
 import { withSystemContext } from "@/lib/db/tenant";
+import { recordBookingAttempt } from "@/lib/booking/attempts";
+import { formatSlotLocal } from "@/lib/booking/format";
+import { notifyBooking } from "@/lib/booking/notify";
 import { LEAD_SOURCE_CHANNELS } from "@/lib/pipeline/lead-source";
 import {
   getBuilderBusy,
@@ -436,14 +439,26 @@ async function recordAvailabilityOutcome(
         .select({
           ok: schedulingLinks.lastAvailabilityOk,
           reason: schedulingLinks.lastAvailabilityReason,
+          error: schedulingLinks.lastAvailabilityError,
           at: schedulingLinks.lastAvailabilityCheckedAt,
         })
         .from(schedulingLinks)
         .where(eq(schedulingLinks.id, linkId))
         .limit(1);
 
+      // The error text is part of "did the outcome change", not just the
+      // (ok, reason) pair. Keying only on those two meant a page whose
+      // reason stayed `calendar-error` while the underlying fault moved
+      // on kept reporting the FIRST error for up to an hour — which is
+      // exactly what happened while this incident was being traced: the
+      // operator-facing text described a fault that had already been
+      // replaced by a different one. A stale diagnosis is worse than
+      // none, because it is acted on.
+      const nextError = busy.error?.slice(0, 2000) ?? null;
       const changed =
-        prev?.ok !== busy.calendarReadable || prev?.reason !== busy.reason;
+        prev?.ok !== busy.calendarReadable ||
+        prev?.reason !== busy.reason ||
+        (prev?.error ?? null) !== nextError;
       const stale =
         !prev?.at || Date.now() - new Date(prev.at).getTime() > 3_600_000;
       if (!changed && !stale) return;
@@ -456,7 +471,7 @@ async function recordAvailabilityOutcome(
           lastAvailabilityReason: busy.reason,
           // Bounded: a provider can return a very long body, and this is
           // read on a console page, not stored for forensics.
-          lastAvailabilityError: busy.error?.slice(0, 2000) ?? null,
+          lastAvailabilityError: nextError,
         })
         .where(eq(schedulingLinks.id, linkId));
     });
@@ -578,9 +593,9 @@ export async function listAvailableSlots(
         if (slot > now && !overlaps(slotStartMs, slotEndMs, blocked)) {
           slots.push({
             startsAt: slot.toUTC().toISO() ?? "",
-            startsAtLocal: slot.toFormat(
-              "EEE LLL d, h:mm a 'MT'",
-            ),
+            // Shared formatter — the picker, the confirmation page and
+            // both emails must spell the same appointment the same way.
+            startsAtLocal: formatSlotLocal(slot.toJSDate()),
           });
         }
         m += dur;
@@ -618,16 +633,155 @@ const bookSchema = z.object({
   source: z.enum(LEAD_SOURCE_CHANNELS),
 });
 
+/**
+ * The visitor-facing sentence for a failure we could not name.
+ *
+ * A raw `e.message` here would be a Drizzle statement dump or a Google
+ * error body — meaningless to a stranger and a small disclosure besides.
+ * The real text goes to `booking_attempts.detail`, where the Builder can
+ * read it.
+ */
+const UNEXPECTED =
+  "Something went wrong on our side and the booking didn't go through. Nothing was taken from your calendar. Please try again, or email us and we'll book it by hand.";
+
+/**
+ * Book a slot from a public page.
+ *
+ * TOTAL BY CONSTRUCTION: every path returns an `ActionResult`, and the
+ * whole body sits under one catch. This matters more here than anywhere
+ * else in the app. A server action that THROWS rejects the promise the
+ * browser is awaiting, and the client's `await` inside `startTransition`
+ * then rejects with nothing rendered — which is precisely the "three
+ * attempts, no booking, no error" a Business Builder hit on 7 Aug. A
+ * public booking page must never be able to fail without saying so.
+ *
+ * Every attempt — booked, refused, or errored — writes a
+ * `booking_attempts` row. See migration 0120.
+ */
 export async function createBooking(
   input: z.input<typeof bookSchema>,
 ): Promise<ActionResult<{ bookingId: string }>> {
+  // Best-effort identity for the receipt, read from the RAW input so a
+  // row can still be written when validation is what failed.
+  const rawSlug =
+    typeof (input as { slug?: unknown })?.slug === "string"
+      ? ((input as { slug: string }).slug satisfies string)
+      : "(unknown)";
+  const rawEmail =
+    typeof (input as { bookerEmail?: unknown })?.bookerEmail === "string"
+      ? (input as { bookerEmail: string }).bookerEmail
+      : null;
+  const rawName =
+    typeof (input as { bookerName?: unknown })?.bookerName === "string"
+      ? (input as { bookerName: string }).bookerName
+      : null;
+
+  try {
+    return await bookSlot(input);
+  } catch (e) {
+    const detail = e instanceof Error ? e.stack || e.message : String(e);
+    console.error("[booking] createBooking threw:", e);
+    await recordBookingAttempt({
+      slug: rawSlug,
+      bookerName: rawName,
+      bookerEmail: rawEmail,
+      outcome: "error",
+      reason: "unhandled",
+      detail,
+    });
+    return { ok: false, error: UNEXPECTED };
+  }
+}
+
+async function bookSlot(
+  input: z.input<typeof bookSchema>,
+): Promise<ActionResult<{ bookingId: string }>> {
   const parsed = bookSchema.safeParse(input);
-  if (!parsed.success)
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input",
-    };
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid input";
+    await recordBookingAttempt({
+      slug:
+        typeof (input as { slug?: unknown })?.slug === "string"
+          ? (input as { slug: string }).slug
+          : "(unknown)",
+      outcome: "refused",
+      reason: "invalid-input",
+      detail: `${message} — ${parsed.error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ")}`,
+    });
+    return { ok: false, error: message };
+  }
   const data = parsed.data;
+  const requestedStart = new Date(data.startsAtUtc);
+
+  // Loaded once, up front, and reused for the pre-check, the write and
+  // the emails. The coach's name is joined here because the confirmation
+  // has to tell the visitor who they just booked with.
+  const [link] = await withSystemContext((tx) =>
+    tx
+      .select({
+        id: schedulingLinks.id,
+        orgId: schedulingLinks.orgId,
+        coachUserProfileId: schedulingLinks.coachUserProfileId,
+        coachName: userProfiles.fullName,
+        coachEmail: userProfiles.email,
+        slug: schedulingLinks.slug,
+        name: schedulingLinks.name,
+        description: schedulingLinks.description,
+        meetingType: schedulingLinks.meetingType,
+        durationMinutes: schedulingLinks.durationMinutes,
+        isActive: schedulingLinks.isActive,
+      })
+      .from(schedulingLinks)
+      .leftJoin(
+        userProfiles,
+        eq(userProfiles.id, schedulingLinks.coachUserProfileId),
+      )
+      .where(eq(schedulingLinks.slug, data.slug))
+      .limit(1),
+  );
+
+  const attemptBase = {
+    slug: data.slug,
+    orgId: link?.orgId ?? null,
+    schedulingLinkId: link?.id ?? null,
+    requestedStart: Number.isNaN(requestedStart.getTime())
+      ? null
+      : requestedStart,
+    bookerName: data.bookerName,
+    bookerEmail: data.bookerEmail,
+  };
+
+  /** Say no, on purpose, and leave a record saying which no it was. */
+  const refuse = async (
+    reason: string,
+    message: string,
+  ): Promise<ActionResult<{ bookingId: string }>> => {
+    await recordBookingAttempt({
+      ...attemptBase,
+      outcome: "refused",
+      reason,
+      detail: message,
+    });
+    return { ok: false, error: message };
+  };
+
+  if (!link || !link.isActive)
+    return refuse(
+      "link-unavailable",
+      "This booking page isn't taking bookings right now.",
+    );
+  if (Number.isNaN(requestedStart.getTime()))
+    return refuse("bad-time", "That time isn't valid. Pick another slot.");
+  if (requestedStart.getTime() < Date.now())
+    return refuse(
+      "time-passed",
+      "That time has already passed. Pick another slot.",
+    );
+
+  const duration = Number(link.durationMinutes ?? 0);
+  const requestedEnd = new Date(requestedStart.getTime() + duration * 60_000);
 
   // Re-check the calendar at the WRITE boundary, not just when the page
   // rendered. Filtering the picker is a courtesy — a tab left open since
@@ -636,60 +790,37 @@ export async function createBooking(
   //
   // Deliberately OUTSIDE the transaction below: a Google round trip
   // inside one pins a pooled Postgres connection for its whole duration.
-  const requestedStart = new Date(data.startsAtUtc);
-  if (!Number.isNaN(requestedStart.getTime())) {
-    const [preLink] = await withSystemContext((tx) =>
-      tx
-        .select({
-          coachUserProfileId: schedulingLinks.coachUserProfileId,
-          durationMinutes: schedulingLinks.durationMinutes,
-        })
-        .from(schedulingLinks)
-        .where(eq(schedulingLinks.slug, data.slug))
-        .limit(1),
-    );
-    if (preLink) {
-      const requestedEnd = new Date(
-        requestedStart.getTime() +
-          Number(preLink.durationMinutes ?? 0) * 60_000,
+  const busy = await getBuilderBusy(
+    link.coachUserProfileId,
+    requestedStart,
+    requestedEnd,
+  );
+  if (
+    overlaps(requestedStart.getTime(), requestedEnd.getTime(), busy.intervals)
+  ) {
+    // Two very different situations, and the visitor deserves to know
+    // which. A readable calendar with a clash means "pick another time".
+    // An UNREADABLE one means we are refusing every time on this page
+    // because we cannot see the Builder's diary — telling that visitor
+    // to pick another slot sends them round a loop where nothing will
+    // ever work. `getBuilderBusy` fails closed by blocking the whole
+    // window, so without this check the two are indistinguishable.
+    if (!busy.calendarReadable) {
+      return refuse(
+        `calendar-unreadable:${busy.reason}`,
+        "We can't check the calendar at the moment, so we can't confirm this time. Email us and we'll book it by hand.",
       );
-      const busy = await getBuilderBusy(
-        preLink.coachUserProfileId,
-        requestedStart,
-        requestedEnd,
-      );
-      if (
-        overlaps(
-          requestedStart.getTime(),
-          requestedEnd.getTime(),
-          busy.intervals,
-        )
-      ) {
-        return {
-          ok: false,
-          error: "That time is no longer free. Pick another slot.",
-        };
-      }
     }
+    return refuse(
+      "slot-taken",
+      "That time is no longer free. Pick another slot.",
+    );
   }
 
   try {
     const created = await withSystemContext(async (tx) => {
-      const [link] = await tx
-        .select()
-        .from(schedulingLinks)
-        .where(eq(schedulingLinks.slug, data.slug))
-        .limit(1);
-      if (!link || !link.isActive) throw new Error("Booking link unavailable.");
-
       // Idempotency: if someone else booked this exact slot, fail.
-      const startsAt = new Date(data.startsAtUtc);
-      if (Number.isNaN(startsAt.getTime())) {
-        throw new Error("That time isn't valid.");
-      }
-      if (startsAt.getTime() < Date.now()) {
-        throw new Error("That time has already passed. Pick another slot.");
-      }
+      const startsAt = requestedStart;
       const [existing] = await tx
         .select({ id: bookings.id })
         .from(bookings)
@@ -701,9 +832,7 @@ export async function createBooking(
           ),
         )
         .limit(1);
-      if (existing) {
-        throw new Error("That slot was just taken. Pick another.");
-      }
+      if (existing) return { taken: true as const };
 
       const bbsSessionId: string | null = null;
       let prospectId: string | null = null;
@@ -794,14 +923,54 @@ export async function createBooking(
           prospectId,
         })
         .returning({ id: bookings.id });
-      return row;
+      return { taken: false as const, id: row.id, prospectId };
     });
+
+    if (created.taken)
+      return refuse(
+        "slot-taken-race",
+        "That slot was just taken. Pick another.",
+      );
+
+    await recordBookingAttempt({
+      ...attemptBase,
+      outcome: "booked",
+      reason: link.meetingType,
+      bookingId: created.id,
+    });
+
+    // AFTER the commit, and never allowed to fail the booking. The time
+    // is genuinely held either way; an unsent confirmation is a smaller
+    // problem than a slot lost to a mail outage.
+    await notifyBooking({
+      orgId: link.orgId,
+      coachUserProfileId: link.coachUserProfileId,
+      builderName: link.coachName ?? "your Business Builder",
+      builderEmail: link.coachEmail ?? null,
+      meetingName: link.name,
+      description: link.description,
+      whenLocal: formatSlotLocal(requestedStart),
+      durationMinutes: duration,
+      bookerName: data.bookerName,
+      bookerEmail: data.bookerEmail,
+      bookerCompany: data.bookerCompany ?? null,
+      notes: data.notes ?? null,
+      prospectId: created.prospectId,
+    });
+
     revalidatePath("/business-builder/scheduling");
     return { ok: true, data: { bookingId: created.id } };
   } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    };
+    // Reached only by a genuine fault in the write — the refusals above
+    // all return before this point. The visitor gets a sentence they can
+    // act on; the real text goes to the receipt.
+    console.error("[booking] write failed:", e);
+    await recordBookingAttempt({
+      ...attemptBase,
+      outcome: "error",
+      reason: "write-failed",
+      detail: e instanceof Error ? e.stack || e.message : String(e),
+    });
+    return { ok: false, error: UNEXPECTED };
   }
 }

@@ -2659,3 +2659,164 @@ export function personProfileInviteEmail(
 
   return { to: input.to, subject, html, text };
 }
+
+/* ------------------------------ Bookings ------------------------------ */
+
+export type BookingEmailInput = {
+  to: string;
+  /** Who the visitor booked with. */
+  builderName: string;
+  /**
+   * The Builder's own address. Needed because the sender is
+   * `notifications@4workplaces.com`, which nobody watches — telling a
+   * visitor to "just reply" would send their reschedule into a void.
+   * Null falls back to the shared inbox rather than inventing one.
+   */
+  builderEmail: string | null;
+  /** The link's name, e.g. "Discovery call". */
+  meetingName: string;
+  /** Pre-formatted Mountain Time, e.g. "Tue Aug 25, 4:30 PM MT". */
+  whenLocal: string;
+  durationMinutes: number;
+  bookerName: string;
+  bookerEmail: string;
+  bookerCompany: string | null;
+  /** What the visitor typed into "anything we should know". */
+  notes: string | null;
+  /** The link's own description, if the Builder wrote one. */
+  description: string | null;
+};
+
+/**
+ * To the person who just booked.
+ *
+ * Deliberately does NOT promise a calendar invite or a video link: a
+ * booking writes a `bookings` row and nothing else — no Google event is
+ * created — so saying "check your calendar" would be a claim the system
+ * does not honour. It says what is true (the time is held, the Builder
+ * will send joining details) and carries the link's own description,
+ * which is where a Builder states how their meetings actually run.
+ */
+export function bookingConfirmationEmail(
+  input: BookingEmailInput,
+): EmailEnvelope {
+  const subject = `Confirmed: ${input.meetingName} with ${input.builderName} — ${input.whenLocal}`;
+  const firstName = input.bookerName.trim().split(/\s+/)[0] || input.bookerName;
+  const contactAddress = input.builderEmail ?? "info@4workplaces.com";
+
+  const descriptionBlock = input.description
+    ? `<p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;">${escapeHtml(
+        flattenMarkdown(input.description, 600),
+      )}</p>`
+    : "";
+
+  const html = shell({
+    preheader: `${input.whenLocal} · ${input.durationMinutes} minutes with ${input.builderName}.`,
+    heading: "Your time is booked",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;">Hi ${escapeHtml(firstName)} — that's in the diary.</p>
+      <div style="margin:16px 0;padding:14px 16px;background:#F5F1E8;border:1px solid #E8ECF1;border-radius:8px;font-size:15px;line-height:1.8;">
+        <div><strong>${escapeHtml(input.whenLocal)}</strong></div>
+        <div>${input.durationMinutes} minutes with ${escapeHtml(input.builderName)}</div>
+        <div style="font-size:13px;color:#5A6470;">${escapeHtml(input.meetingName)}</div>
+      </div>
+      ${descriptionBlock}
+      <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;">${escapeHtml(
+        input.builderName,
+      )} will be in touch before then with the joining details. If you need to move it or something has come up, email <a href="mailto:${escapeHtml(
+        contactAddress,
+      )}" style="color:#2E4057;">${escapeHtml(contactAddress)}</a>.</p>
+      <p style="margin:0;font-size:13px;color:#5A6470;">All times are Mountain Time.</p>
+    `,
+  });
+
+  const text = [
+    `Your time is booked.`,
+    "",
+    input.whenLocal,
+    `${input.durationMinutes} minutes with ${input.builderName}`,
+    input.meetingName,
+    "",
+    input.description ? flattenMarkdown(input.description, 600) : null,
+    input.description ? "" : null,
+    `${input.builderName} will be in touch before then with the joining details.`,
+    `If you need to move it, email ${contactAddress}.`,
+    "",
+    "All times are Mountain Time.",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  return { to: input.to, subject, html, text };
+}
+
+/**
+ * To the Business Builder whose time was just taken.
+ *
+ * Routed through `recipientsForProspect` by the caller, so it reaches the
+ * lead's owner and nobody else's inbox.
+ */
+export function bookingReceivedEmail(
+  input: BookingEmailInput & { prospectUrl: string | null },
+): EmailEnvelope {
+  const subject = `Booked: ${input.bookerName} — ${input.whenLocal}`;
+  const url = input.prospectUrl
+    ? input.prospectUrl.startsWith("http")
+      ? input.prospectUrl
+      : appUrl() + input.prospectUrl
+    : null;
+
+  const companyLine = input.bookerCompany
+    ? `<div><strong>Company:</strong> ${escapeHtml(input.bookerCompany)}</div>`
+    : "";
+  const notesBlock = input.notes
+    ? `<blockquote style="margin:16px 0;padding:12px 14px;border-left:3px solid #E87722;background:#FFF7EE;font-size:14px;line-height:1.5;color:#1A1A1A;">${escapeHtml(
+        flattenMarkdown(input.notes, 800),
+      )}</blockquote>`
+    : "";
+
+  const html = shell({
+    preheader: `${input.bookerName} booked ${input.whenLocal}.`,
+    heading: "Someone booked your time",
+    accent: "#E87722",
+    bodyHtml: `
+      <p style="margin:0 0 12px 0;"><strong>${escapeHtml(
+        input.bookerName,
+      )}</strong> took a slot through your booking page.</p>
+      <div style="margin:16px 0;padding:12px 14px;background:#F5F1E8;border:1px solid #E8ECF1;border-radius:8px;font-size:14px;line-height:1.7;">
+        <div><strong>When:</strong> ${escapeHtml(input.whenLocal)} · ${input.durationMinutes} min</div>
+        <div><strong>What:</strong> ${escapeHtml(input.meetingName)}</div>
+        <div><strong>Contact:</strong> ${escapeHtml(input.bookerName)} &lt;${escapeHtml(
+          input.bookerEmail,
+        )}&gt;</div>
+        ${companyLine}
+      </div>
+      ${notesBlock}
+      ${
+        url
+          ? `<p style="margin:0 0 12px 0;font-size:13px;color:#5A6470;">They're in the pipeline as a lead owned by you, at Meeting scheduled.</p>`
+          : `<p style="margin:0 0 12px 0;font-size:13px;color:#5A6470;">This link doesn't create a pipeline lead, so there is nothing to open — the time is simply held.</p>`
+      }
+    `,
+    ...(url ? { buttonHref: url, buttonLabel: "Open the lead" } : {}),
+  });
+
+  const text = [
+    `${input.bookerName} took a slot through your booking page.`,
+    "",
+    `When: ${input.whenLocal} (${input.durationMinutes} min)`,
+    `What: ${input.meetingName}`,
+    `Contact: ${input.bookerName} <${input.bookerEmail}>`,
+    input.bookerCompany ? `Company: ${input.bookerCompany}` : null,
+    "",
+    input.notes ? `They said:\n${flattenMarkdown(input.notes, 800)}` : null,
+    input.notes ? "" : null,
+    url
+      ? `Open the lead: ${url}`
+      : "This link doesn't create a pipeline lead, so there is nothing to open — the time is simply held.",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  return { to: input.to, subject, html, text };
+}

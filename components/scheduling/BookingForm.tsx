@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { createBooking } from "@/lib/actions/scheduling";
 import {
@@ -30,6 +31,27 @@ export function BookingForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  // Success is checked FIRST, ahead of the empty-slots state. The other
+  // order is what made a completed booking render as "no times available":
+  // booking a slot re-renders this page, and if that render came back with
+  // nothing available — a calendar that went unreadable, a last slot just
+  // taken — the early return fired and the confirmation never showed.
+  if (success) {
+    return (
+      <div className="border border-tbb-blue rounded-md bg-tbb-cream-50 p-6 text-center space-y-3">
+        <CheckCircle2 className="w-10 h-10 mx-auto text-tbb-navy" aria-hidden />
+        <p className="font-bold text-foreground text-2xl tracking-tight">
+          Booked.
+        </p>
+        <p className="font-sans text-sm text-foreground">
+          We&apos;ve got you down for {success}. Taking you to your
+          confirmation…
+        </p>
+      </div>
+    );
+  }
 
   if (slots.length === 0) {
     return (
@@ -54,20 +76,6 @@ export function BookingForm({
     );
   }
 
-  if (success) {
-    return (
-      <div className="border border-tbb-blue rounded-md bg-tbb-cream-50 p-6 text-center space-y-3">
-        <CheckCircle2 className="w-10 h-10 mx-auto text-tbb-navy" aria-hidden />
-        <p className="font-bold text-foreground text-2xl tracking-tight">
-          Booked.
-        </p>
-        <p className="font-sans text-sm text-foreground">
-          We&apos;ve got you down for {success}. Look for a confirmation in your inbox.
-        </p>
-      </div>
-    );
-  }
-
   const submit = () => {
     if (!picked) {
       setError("Pick a time first.");
@@ -83,19 +91,41 @@ export function BookingForm({
     }
     setError(null);
     startTransition(async () => {
-      const result = await createBooking({
-        slug,
-        startsAtUtc: picked,
-        bookerName: name.trim(),
-        bookerEmail: email.trim(),
-        bookerCompany: company.trim() || null,
-        notes: notes.trim() || null,
-        source,
-      });
-      if (!result.ok) setError(result.error);
-      else {
+      // The try/catch is the point. A server action that throws rejects
+      // this promise, and an unhandled rejection inside a transition
+      // renders NOTHING — no error, no confirmation, the form apparently
+      // just resetting. That is what three failed booking attempts looked
+      // like from the visitor's side on 7 Aug. `createBooking` is now
+      // total as well, so this is the second of two belts; if it ever
+      // fires again, something is throwing before the action is reached.
+      try {
+        const result = await createBooking({
+          slug,
+          startsAtUtc: picked,
+          bookerName: name.trim(),
+          bookerEmail: email.trim(),
+          bookerCompany: company.trim() || null,
+          notes: notes.trim() || null,
+          source,
+        });
+        if (!result) {
+          setError(
+            "We didn't hear back from the server, so we can't confirm this booking. Please try again.",
+          );
+          return;
+        }
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
         const slot = slots.find((s) => s.startsAt === picked);
         setSuccess(slot?.startsAtLocal ?? "your selected time");
+        router.push(`/book/${slug}/booked/${result.data.bookingId}`);
+      } catch (e) {
+        console.error("[booking] submit failed:", e);
+        setError(
+          "Something went wrong and we couldn't confirm the booking. Please try again, or email us and we'll book it by hand.",
+        );
       }
     });
   };

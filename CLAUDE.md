@@ -4281,3 +4281,294 @@ now lists both Builders where it listed nobody.
 own); create a second link and have the slug clash refuse with the plain
 sentence; visit `/book` and see both Builders; and run an onboarding
 where step 4 now sends the survey rather than recording a skip.
+
+## What was built — the booking that told nobody anything (2026-08-07)
+
+Bruce's live end-to-end test of /book: a successful booking sent no
+email to anyone; Jen's link failed three times in a row with no error on
+screen and no row anywhere; the page reset to the picker whether it
+worked or not; and PR #217's token retry was not saving the page.
+Migration `0120`.
+
+### A booking sent nothing, to anyone
+
+`createBooking` wrote rows and stopped. No confirmation to the person
+who had just given up a half hour, no alert to the Business Builder
+whose diary had just been taken. Confirmed against Gmail for the 08:21
+MT booking on 7 Aug: a `bookings` row, a `prospects` row, zero mail.
+
+`lib/booking/notify.ts` sends both, AFTER the commit and best-effort:
+the time is genuinely held either way, and an unsent confirmation is a
+smaller problem than a slot lost to a mail outage. The Builder's alert
+routes through `recipientsForProspect`, the same rule as the assessment
+and gone-quiet alerts, so it reaches the lead's owner and stays out of
+the other Builder's inbox.
+
+**Both bypass the working-hours window.** `sendEmail` DROPS an
+out-of-hours message rather than queueing it, so without the bypass a
+booking made at 8pm — which is exactly when people book — would reach
+nobody, ever, and the visitor would be told nothing on the one occasion
+they most need telling.
+
+The confirmation deliberately does NOT promise a calendar invite.
+Booking creates no Google event; it writes a row. "Check your calendar"
+would be a claim the system does not honour. **Worth building next, and
+deliberately not built here:** the booked slot never reaches either
+party's actual calendar.
+
+It also does not say "just reply to this email" — the sender is
+`notifications@4workplaces.com`, which nobody watches, so a reschedule
+would go into a void. It names the Builder's own address, falling back
+to the shared inbox rather than inventing one.
+
+### Three failed attempts left no trace anywhere
+
+Not one row, not one visible error. From the console it was
+indistinguishable from nobody having visited. That ambiguity, on a
+public revenue path, is the actual defect — and it is why the cause of
+Bruce's three failures still cannot be named from the outside.
+
+**`booking_attempts` (0120) is the receipt.** Every attempt writes one:
+booked, refused, or errored, with the sentence the visitor saw or the
+error text. `org_id` and `scheduling_link_id` are NULLABLE on purpose —
+an attempt against a slug that resolves to nothing has no org, and that
+is precisely the attempt worth keeping. Written OUTSIDE the booking
+transaction, because refusals unwind that transaction and a row written
+inside it would be rolled back by the very outcome it records. Never
+throws; same rule as `withHeartbeat`. Same doctrine as `ea_job_runs`
+(0088) and `meeting_draft_runs` (0115), both of which earned their keep
+within the hour.
+
+**`createBooking` is now total.** Every path returns an `ActionResult`
+and the whole body sits under one catch. This is the mechanism that
+turns a failure into silence: a server action that THROWS rejects the
+promise the browser is awaiting, and an unhandled rejection inside
+`startTransition` renders nothing at all — no error, no confirmation,
+the form apparently just resetting. The client got a matching try/catch
+as a second belt, and treats a missing result as a failure rather than
+as success.
+
+Refusals now say which refusal they are. The big one: a clash against an
+UNREADABLE calendar used to render as "that time is no longer free, pick
+another slot" — advice that sends the visitor round a loop where nothing
+can ever work, because `getBuilderBusy` fails closed by blocking the
+whole window. It now says we cannot check the calendar and to email
+instead.
+
+### The confirmation was as durable as the tab
+
+`BookingForm` checked `slots.length === 0` BEFORE `success`, so a
+booking made against a calendar that went unreadable a second later
+replaced the confirmation with "No times available" — success rendering
+as failure. Order swapped, and the real fix is that the confirmation is
+now a URL: `/book/[slug]/booked/[bookingId]`, server-rendered from the
+booking that actually persisted. It survives a refresh, can be returned
+to, and cannot be lost to a re-render. The slug is part of the lookup,
+not decoration, so a booking id pasted under another Builder's page
+resolves to nothing. It shows the booker's FIRST name only — a uuid is
+unguessable, but that is not a reason to put a stranger's contact
+details behind a shareable link.
+
+### The retry fires. It just cannot help.
+
+Bruce's reading — "whatever `listExternalEvents` does is not going
+through `withGoogleTokenRetry`" — was the right symptom and the wrong
+mechanism, and it was settled by inducing the fault rather than
+observing a working page.
+
+Method: plant a junk PLAINTEXT access token on a live Builder
+(`decryptSecret` passes anything without a `v1:` prefix through
+unchanged as legacy plaintext, so junk can be planted with no encryption
+key), leave the refresh token alone, set the expiry far out so the cache
+branch actually serves the junk, then load the public page and watch the
+row. **That trick is the general instrument for this class of fault.**
+
+Result: the retry fired — a fresh token was minted and stored
+mid-request — and the page STILL recorded the 401. Every subsequent load
+minted another fresh token and was refused again. Bruce's page,
+untouched, served its cached token and rendered normally throughout.
+
+So Google refuses access tokens it issued seconds earlier. The retry
+existing is not the same as the retry helping, and the app had no way to
+say which it had: both attempts throw `Google Calendar API 401`, so
+`withGoogleTokenRetry` rethrew an error indistinguishable from the first
+one and `getBuilderBusy` filed it as a generic `calendar-error`.
+
+`GoogleGrantRefusedError` names the second refusal, and `getBuilderBusy`
+maps it to reason `grant-refused` — "the connection is dead, not stale,
+retrying cannot fix it, reconnect Google" — alongside a new
+`reconnect-required` for a dead refresh token. Those need opposite
+responses from a generic calendar error and had been sharing its
+sentence.
+
+**This is not something the induced test created.** `ea_job_runs` shows
+`ea-inbox-sweep` failing with `Gmail API 401` for
+**bbaker@4workplaces.com** at 13:15Z and 14:15Z — before any of it, on
+the other Builder, on a different API, through a path that already had
+the retry. One live condition, two Builders, two APIs.
+
+**`recordAvailabilityOutcome` was withholding the error text.** Change
+detection keyed on `(ok, reason)` only, so a page whose reason stayed
+`calendar-error` while the underlying fault moved on kept reporting the
+FIRST error for up to an hour. That bit during this very investigation —
+the operator-facing text described a fault already replaced by another.
+A stale diagnosis is worse than none, because it is acted on. The error
+text is now part of the comparison.
+
+**Still unexplained, and stated rather than guessed:** why Google
+refuses freshly minted tokens for these grants. The fix here makes it
+NAME itself and point at the reconnect; it does not make it stop.
+
+### Left in this state, and Bruce needs to know
+
+**Jen's booking page is dark right now** and her Google connection needs
+reconnecting. Her page recorded `ok` at 14:22Z and has refused every
+load since the induced test at 14:38Z, minting and being refused a fresh
+token each time. Whether the junk plant tipped an already-failing grant
+over or merely exposed it cannot be proven from outside — the same
+refusal was independently present on Bruce's Gmail an hour and a half
+earlier. Either way the remedy is the same: Jen reconnects Google at
+Settings → Integrations.
+
+Test artefacts cleared as asked: the "TEST BOOKING - Bruce link"
+prospect and its Tue 25 Aug 4:30 PM MT booking are deleted (checked
+first against every table carrying a `prospect_id` — only the booking
+referenced it).
+
+### Verified
+
+`tsc --noEmit` and `next lint` clean. `next build` compiles with 74
+prerender failures and 148 `Missing publishableKey`, zero errors of any
+other cause — the recorded baseline exactly. Migration 0120 applied
+against the LIVE database inside a rolled-back transaction: columns,
+nullability, all three foreign keys (CASCADE on org, SET NULL on link
+and booking), RLS enabled with the tenant policy, grants to
+`workplaces_app`, a test insert — then re-applied to prove idempotency,
+then rolled back. Both emails rendered through their real templates and
+read end to end, including the no-lead variant.
+
+**Not clicked in a browser, and no booking email has actually been
+sent.** The acceptance tests: book through /book/bruce-baker and get a
+confirmation in the booker's inbox and an alert in Bruce's; land on the
+confirmation URL and refresh it; force a refusal and see the sentence on
+screen AND the row under "Recent booking attempts" at
+/business-builder/scheduling; and after Jen reconnects, see her page
+report `ok` rather than `grant-refused`.
+
+## What was built — the 202 that meant nothing (2026-08-07)
+
+Jen, onboarding a real client: the spinner under "Start onboarding" had
+been going since the morning, the client had received nothing, and
+disconnecting and reconnecting Google changed none of it. Plus five
+things about action items that all turn out to be one thing. Migration
+`0121`.
+
+### A Netlify Background Function answers 202 before it runs
+
+That single fact is the whole bug. `enqueue` POSTed the function and
+treated 202 as proof the sequence had started — its own comment said
+"Background functions answer 202. Anything else means the sequence never
+started." The first half is true and the second half does not follow.
+
+Proven by POSTing the live function URL with a deliberately wrong bearer
+token and an empty body: **still 202**. The same for every other
+background function on the site. So a handler that returned 401 on a bad
+secret, 400 on a bad payload, or died on import was indistinguishable
+from one that ran perfectly, and `startOnboarding` reported success
+either way.
+
+Jen's run claimed at 14:29:41Z had every step column NULL, no error, and
+`updated_at` never moved off `started_at`. Nothing had run. The panel
+reads "a row with no `completed_at`" as "in flight" and said *"In
+progress — refresh to see where it's got to"*, which is an instruction
+to keep waiting for something that was never going to arrive. A client
+sat behind it for a working day.
+
+**The trap generalises:** an acknowledgement from a queue is not a
+result from the worker. Same family as every silent-cron entry in this
+file, except the thing reporting success is the platform rather than our
+own code.
+
+### The fix is that a human can always drive it
+
+`runNextOnboardingStep` runs EXACTLY the next outstanding step, with no
+stagger, and returns what happened. The server action calls it inline —
+one step is one send, comfortably inside Netlify's ~26s ceiling — and
+only then hands the remainder to the background function for the
+two-minute spacing.
+
+So the operator always gets a true answer about the step that just ran,
+and pressing the button again advances the next one **even if the
+background runner is dead**. That property is the point: before this,
+onboarding had exactly one path forward and no way to see that it was
+broken. The stagger still needs a background budget; it is no longer the
+only thing that can move the sequence.
+
+`markBackgroundPickup` stamps `background_started_at` as the handler's
+first act, so "queued and never picked up" stops looking like "running".
+The body is parsed BEFORE the auth check on purpose — knowing WHICH run
+was refused is what lets the refusal be written where a person reads it;
+the recorded text is fixed in code, never taken from the payload.
+
+The panel now distinguishes three states it used to collapse into one
+spinner: mid-flight, stalled (nothing for ten minutes — the steps are
+two minutes apart, so ten is well past credible), and failed on a step.
+All three carry the same button, because all three are fixed by sending
+the next step. `nowMs` comes from the server for the same reason
+`ActionItemListClient` takes it — a client component evaluating
+`Date.now()` renders one value on the server and another on hydration,
+and here it decides which sentence appears.
+
+Step 1 already falls back to the app's transactional sender when Gmail
+throws, so Jen's broken Google grant cannot block the onboarding email.
+
+### The action-item complaints were one complaint
+
+Jen listed five things: no way back to the client from an item; the item
+lost among every client's items; delete dumping her on the global list;
+no per-client view; and no way to tell a draft from an assigned item.
+The first three are the same defect — `cancelHref` and `successHref`
+were hard-coded to `/business-builder/action-items`, so every exit from
+an item page landed on the cross-client pile.
+
+`safeReturnTo` / `withReturnTo` carry the origin through as `?from=`.
+Validated, not trusted: a `from` that could leave the site would turn
+every save button into an open redirect, so anything not a same-site
+console path is discarded. **The fallback is the item's own client**,
+not the global list — an action item always belongs to somebody, and
+landing on 200 items across 18 clients after editing one is how you lose
+your place. A named "back to <client>" link sits above the title, which
+is the thing that was missing outright.
+
+The cross-client list gained a client picker. Its status counts follow
+that filter, because a count that disagrees with the list under it is
+worse than no count.
+
+Draft, unassigned and assigned now look different in the client's own
+list — an orange "Draft — needs review" pill, a quiet "Unassigned" one,
+and the assignee's name otherwise. Jen's reasoning, and it is right: a
+list where those look the same is a list you learn to ignore.
+
+**Not a bug, and worth saying:** action items ARE the deliverables since
+0109 merged the two tables. A commitment has no `deliverable_type`; one
+of the nine documents has one. So "provide offer letter templates"
+correctly reads as a one-off commitment rather than a deliverable, and a
+Claude-drafted document stays out of the Deliverables panel until it is
+published — deliberately, since that panel is client-visible.
+
+### Verified
+
+`tsc --noEmit` and `next lint` clean. `next build` compiles with 74
+prerender failures and 148 `Missing publishableKey`, zero errors of any
+other cause — the recorded baseline exactly. Migration 0121 applied
+against the LIVE database inside a rolled-back transaction, re-applied
+to prove idempotency, then rolled back; the real stalled run reads back
+with all three columns null, which is what puts it in the stalled branch
+rather than the spinner.
+
+**Not clicked in a browser.** The acceptance tests: open the stuck
+client and see "Stalled — handed off N hours ago" with a working "Send
+the next step now"; press it and watch the onboarding email actually
+send, or say why it cannot; open an action item from a client and come
+back to that client on save, delete and cancel; filter the cross-client
+list to one client; and see the Draft pill on an unreviewed item.

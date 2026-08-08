@@ -2800,6 +2800,52 @@ export const bookings = pgTable(
 );
 
 /**
+ * `booking_attempts` — one row per attempt on a public /book page,
+ * written whether it works or not.
+ *
+ * `bookings` records what succeeded. Nothing recorded what didn't, so a
+ * visitor who tried and failed was indistinguishable from a visitor who
+ * never came. See 0120 for the incident that made that plain.
+ *
+ * `orgId` and `schedulingLinkId` are nullable: an attempt on a slug that
+ * resolves to nothing has no org, and that is exactly the attempt worth
+ * keeping.
+ */
+export const bookingAttempts = pgTable(
+  "booking_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").references(() => orgs.id, { onDelete: "cascade" }),
+    schedulingLinkId: uuid("scheduling_link_id").references(
+      () => schedulingLinks.id,
+      { onDelete: "set null" },
+    ),
+    slug: text("slug").notNull(),
+    requestedStart: timestamp("requested_start", { withTimezone: true }),
+    bookerName: text("booker_name"),
+    bookerEmail: text("booker_email"),
+    /** booked | refused | error. See 0120 for what each one means. */
+    outcome: text("outcome").notNull(),
+    reason: text("reason"),
+    detail: text("detail"),
+    bookingId: uuid("booking_id").references((): AnyPgColumn => bookings.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    linkIdx: index("booking_attempts_link_idx").on(
+      t.schedulingLinkId,
+      t.createdAt,
+    ),
+    createdIdx: index("booking_attempts_created_idx").on(t.createdAt),
+    orgIdx: index("booking_attempts_org_idx").on(t.orgId),
+  }),
+);
+
+/**
  * `channel_spend` — hand-entered marketing spend, one row per channel per
  * month. No ad-platform API: Bruce types in what he spent. Powers the
  * cost-per-booked-session and cost-per-client columns of the lead-source
@@ -3295,6 +3341,8 @@ export type SchedulingLink = typeof schedulingLinks.$inferSelect;
 export type NewSchedulingLink = typeof schedulingLinks.$inferInsert;
 export type Booking = typeof bookings.$inferSelect;
 export type NewBooking = typeof bookings.$inferInsert;
+export type BookingAttempt = typeof bookingAttempts.$inferSelect;
+export type NewBookingAttempt = typeof bookingAttempts.$inferInsert;
 export type SignatureEnvelope = typeof signatureEnvelopes.$inferSelect;
 export type NewSignatureEnvelope = typeof signatureEnvelopes.$inferInsert;
 export type SignatureSigner = typeof signatureSigners.$inferSelect;
@@ -3990,6 +4038,20 @@ export const onboardingRuns = pgTable(
     }),
     assessmentError: text("assessment_error"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    /**
+     * When we last handed off to the background function, and when that
+     * function actually picked the run up. A Netlify Background Function
+     * answers 202 BEFORE the handler runs, so the hand-off returning 202
+     * is not evidence of anything — see 0121. Without these two, "queued
+     * and never picked up" is indistinguishable from "running", and the
+     * panel spins for ever.
+     */
+    lastQueuedAt: timestamp("last_queued_at", { withTimezone: true }),
+    backgroundStartedAt: timestamp("background_started_at", {
+      withTimezone: true,
+    }),
+    /** A refusal the handler itself can name (bad secret, missing id). */
+    backgroundError: text("background_error"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

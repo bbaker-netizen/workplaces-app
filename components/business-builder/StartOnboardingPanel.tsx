@@ -68,6 +68,15 @@ export type OnboardingRunState = {
   assessmentSentAt: Date | null;
   assessmentError: string | null;
   completedAt: Date | null;
+  /**
+   * Hand-off bookkeeping. `backgroundStartedAt` is stamped by the runner
+   * itself — the hand-off's own 202 arrives before the handler runs, so
+   * it is not evidence of anything. Without these the panel cannot tell
+   * "still going" from "never arrived". See migration 0121.
+   */
+  lastQueuedAt: Date | null;
+  backgroundStartedAt: Date | null;
+  backgroundError: string | null;
 } | null;
 
 const STEPS = [
@@ -101,6 +110,7 @@ export function StartOnboardingPanel({
   blockers,
   run,
   established,
+  nowMs,
   setupFields = null,
   schedulePanel = null,
 }: {
@@ -141,6 +151,9 @@ export function StartOnboardingPanel({
    * that actually occurred.
    */
   established: boolean;
+  /** Server-rendered `Date.now()` — keeps the stall clock deterministic
+   *  across the server render and hydration. */
+  nowMs: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -188,6 +201,37 @@ export function StartOnboardingPanel({
    * it is mid-flight or stalled on an error, it is the one state that
    * needs the operator's eyes. Everything else can be collapsed.
    */
+  /**
+   * A run is STALLED when it has been waiting long enough that "still
+   * going" is no longer a credible reading.
+   *
+   * The steps are two minutes apart, so ten minutes without the next one
+   * landing means something is wrong — either the hand-off never reached
+   * the runner (`backgroundStartedAt` null, which is the case the 202
+   * used to hide) or the runner picked it up and died. Both leave the
+   * operator waiting on something that will never arrive, and both are
+   * fixed by the same button.
+   */
+  const STALL_AFTER_MS = 10 * 60 * 1000;
+  const lastMovement = run
+    ? Math.max(
+        new Date(run.backgroundStartedAt ?? run.startedAt).getTime(),
+        new Date(run.lastQueuedAt ?? run.startedAt).getTime(),
+      )
+    : 0;
+  // Server-rendered clock, same reason as `ActionItemListClient`: a
+  // client component evaluating Date.now() renders one value on the
+  // server and another on hydration, and this one decides which of two
+  // different sentences appears.
+  const stalledMs = run && !run.completedAt ? nowMs - lastMovement : 0;
+  const stalled = Boolean(
+    run && !run.completedAt && (run.backgroundError || stalledMs > STALL_AFTER_MS),
+  );
+  const stalledFor =
+    stalledMs > 90 * 60 * 1000
+      ? `${Math.round(stalledMs / 3_600_000)} hours`
+      : `${Math.max(1, Math.round(stalledMs / 60_000))} minutes`;
+
   const needsAttention = Boolean(run && !run.completedAt);
   const collapsible = !needsAttention && (Boolean(run?.completedAt) || established);
   const showFull = !collapsible || expanded;
@@ -417,31 +461,69 @@ export function StartOnboardingPanel({
             <Check className="w-3.5 h-3.5 inline mr-1" aria-hidden />
             Onboarding complete
           </p>
-        ) : anyFailure ? (
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={() =>
-              go(
-                resumeOnboarding,
-                "Resume onboarding? Only the steps that haven't been sent will run — nothing already delivered is re-sent.",
-              )
-            }
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Rocket className="w-3.5 h-3.5" aria-hidden />
-            )}
-            Resume onboarding
-          </button>
         ) : run ? (
-          <p className="text-xs text-tbb-ink-3">
-            <Loader2 className="w-3.5 h-3.5 inline mr-1 animate-spin" aria-hidden />
-            In progress — the remaining steps send a couple of minutes apart.
-            Refresh to see where it&apos;s got to.
-          </p>
+          /* A run that has not finished. Three states that used to render
+             as one endless spinner:
+
+               - genuinely mid-flight (picked up, recently),
+               - stalled (handed off, never picked up, or picked up and
+                 gone quiet), and
+               - failed on a step.
+
+             The old copy said "In progress … refresh to see where it's
+             got to" for all three, which is an instruction to keep
+             waiting for something that may never happen. A real client
+             sat behind it for a working day. Every one of them now
+             carries the same button, because pressing it sends the next
+             step here and now rather than asking a background job to. */
+          <div className="space-y-2">
+            {stalled ? (
+              <p className="text-xs text-tbb-danger">
+                <AlertTriangle
+                  className="w-3.5 h-3.5 inline mr-1"
+                  aria-hidden
+                />
+                {run.backgroundError
+                  ? run.backgroundError
+                  : `Stalled — the sequence was handed off ${stalledFor} ago and the runner never picked it up. Nothing further has been sent.`}
+              </p>
+            ) : anyFailure ? (
+              <p className="text-xs text-tbb-danger">
+                <AlertTriangle
+                  className="w-3.5 h-3.5 inline mr-1"
+                  aria-hidden
+                />
+                A step failed. Nothing after it has been sent.
+              </p>
+            ) : (
+              <p className="text-xs text-tbb-ink-3">
+                <Loader2
+                  className="w-3.5 h-3.5 inline mr-1 animate-spin"
+                  aria-hidden
+                />
+                In progress — the remaining steps send a couple of minutes
+                apart.
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() =>
+                go(
+                  resumeOnboarding,
+                  "Send the next outstanding step now? Anything already delivered is never re-sent.",
+                )
+              }
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-tbb-caps px-3 py-1.5 rounded-pill bg-tbb-blue text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Rocket className="w-3.5 h-3.5" aria-hidden />
+              )}
+              Send the next step now
+            </button>
+          </div>
         ) : (
           /* A disabled button with no explanation reads as broken. When
              it is blocked it says so on its face — a padlock, the word
